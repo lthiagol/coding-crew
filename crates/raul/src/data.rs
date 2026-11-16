@@ -28,6 +28,9 @@ pub enum Reason {
 }
 
 impl Reason {
+    /// Every reason, in the order of the tab.
+    pub const ALL: [Reason; 3] = [Reason::Approve, Reason::Review, Reason::Escalated];
+
     pub fn label(&self) -> &'static str {
         match self {
             Reason::Approve => "approve",

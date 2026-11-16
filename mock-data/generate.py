@@ -137,16 +137,16 @@ def pick(seq, index):
     return seq[index % len(seq)]
 
 
-def ts(day, hour):
-    return f"2026-11-{day:02d}T{hour:02d}:00Z"
+def ts(day, hour, minute=0):
+    return f"2026-11-{day:02d}T{hour:02d}:{minute:02d}Z"
 
 
-def evidence(index, by, session, day, hour, passed=True):
+def evidence(index, by, session, day, hour, passed=True, minute=0):
     return {
         "command": pick(VERIFICATIONS, index),
         "exit_code": 0 if passed else 1,
         "summary": f"{10 + index} passed; 0 failed" if passed else f"1 failed; {9 + index} passed",
-        "at": ts(day, hour),
+        "at": ts(day, hour, minute),
         "by": by,
         "session": session,
     }
@@ -179,33 +179,97 @@ def step(index, order, status, covers, files, deviation="", depends_on=None):
     }
 
 
-def finding(index, status="open", resolution="", resolved=""):
+def finding(index, created, status="open", resolution="", resolved=""):
     return {
         "id": f"FIND-{index:02d}",
         "severity": pick(SEVERITIES, index),
         "status": status,
         "description": pick(FINDINGS, index),
-        "created": ts(8, 10 + index),
+        "created": created,
         "resolved": resolved,
         "resolution": resolution,
         "comments": [],
     }
 
 
-def round_(n, kind, focus, reviewer, verdict, index, findings=None):
+def round_(n, kind, focus, reviewer, verdict, index, at, findings=None):
     return {
         "n": n,
         "kind": kind,
         "focus": focus,
         "reviewer": reviewer,
         "verdict": verdict,
-        "at": ts(9, 9 + n),
+        "at": at,
         "notes": pick(NOTES, index),
         "findings": findings or [],
     }
 
 
+def transition_note(index, author, body, at, note_id="NOTE-01"):
+    """A note dated at the moment the task entered its status.
+
+    The model has no separate event log, so a status transition records
+    its moment in a note.
+    """
+    return {
+        "id": note_id,
+        "author": author,
+        "body": body,
+        "at": at,
+    }
+
+
+def transition_moment(item):
+    """The moment the fixture entered the status it is in."""
+    status = item["status"]
+    if status == "draft":
+        return item["created"]
+    if status in ("groomed", "approved"):
+        prefix = "Groomed by" if status == "groomed" else "Approved by"
+        for note in reversed(item["notes"]):
+            if note["body"].startswith(prefix):
+                return note["at"]
+        raise ValueError(f"{item['id']} has no {prefix} transition note")
+    if status == "executing":
+        return item["claim"]["at"]
+    # Every other status is entered by its last review round.
+    return item["review"]["rounds"][-1]["at"]
+
+
+def event_stamps(item):
+    """Every dated event in the fixture's history."""
+    stamps = [item["created"], item["status_since"]]
+    claim = item.get("claim")
+    if claim:
+        stamps.append(claim["at"])
+    for overlay in item.get("overlays", {}).values():
+        if overlay:
+            stamps.append(overlay["at"])
+    for criterion in item.get("acceptance_criteria", []):
+        for evidence in criterion.get("evidence", []):
+            stamps.append(evidence["at"])
+    review = item.get("review", {})
+    for finding in review.get("findings", []):
+        stamps.append(finding["created"])
+        if finding["resolved"]:
+            stamps.append(finding["resolved"])
+        for comment in finding.get("comments", []):
+            stamps.append(comment["at"])
+    for round in review.get("rounds", []):
+        stamps.append(round["at"])
+    for question in item.get("questions", []):
+        stamps.append(question["raised_at"])
+        if question["resolved_at"]:
+            stamps.append(question["resolved_at"])
+    for note in item.get("notes", []):
+        stamps.append(note["at"])
+    return stamps
+
+
 def task(task_id, title, status, index, **overrides):
+    # `created` and `updated` are the two ends of the fixture's timeline:
+    # `updated` is moved to the latest event in `finalize` below.
+    created = ts(2 + index % 6, 9 + index % 8)
     item = {
         "schema_version": 1,
         "id": task_id,
@@ -213,9 +277,10 @@ def task(task_id, title, status, index, **overrides):
         "slug": slugify(title),
         "parent": None,
         "children": [],
-        "created": ts(2 + index % 6, 9 + index % 8),
-        "updated": ts(4 + index % 6, 10 + index % 8),
+        "created": created,
+        "updated": "",
         "status": status,
+        "status_since": "",
         "overlays": {},
         "claim": None,
         "planned_by": None,
@@ -230,6 +295,15 @@ def task(task_id, title, status, index, **overrides):
         "depends_on": [],
     }
     item.update(overrides)
+    return item
+
+
+def finalize(item):
+    """Stamp the status from the history and move the last write with it."""
+    item["status_since"] = transition_moment(item)
+    # The last write is the latest event in the fixture's history.
+    item["updated"] = max(event_stamps(item))
+    assert item["created"] <= item["status_since"] <= item["updated"], item["id"]
     return item
 
 
@@ -254,6 +328,26 @@ def build():
     for i in range(3):
         tid = next_id()
         ids.setdefault("groomed", []).append(tid)
+        groom_at = ts(6 + 2 * i, 9 + i)
+        notes = [
+            transition_note(
+                i + 3,
+                f"session-creator-{i + 1:02d}",
+                f"Groomed by session-creator-{i + 1:02d}: intent, scope and criteria written.",
+                groom_at,
+            )
+        ]
+        if i != 1:
+            # A later write, after the transition: the wait starts at the
+            # transition, not at the last write.
+            notes.append(
+                {
+                    "id": "NOTE-02",
+                    "author": f"session-creator-{i + 1:02d}",
+                    "body": pick(NOTES, i),
+                    "at": ts(7 + 2 * i, 10 + i),
+                }
+            )
         item = task(
             tid,
             pick(TITLES, i + 8),
@@ -266,6 +360,7 @@ def build():
                 "out_of_scope": [pick(PROBLEMS, i + 4)],
             },
             acceptance_criteria=[criterion(i)],
+            notes=notes,
         )
         if i == 1:
             item["overlays"] = {
@@ -297,6 +392,21 @@ def build():
                 step(i, 1, "pending", ["ACCEPT-01"], ["crates/core/src/task.rs"]),
                 step(i + 1, 2, "pending", ["ACCEPT-02"], ["crates/core/tests/task_model.rs"], depends_on=["STP-01"]),
             ],
+            notes=[
+                transition_note(
+                    i + 6,
+                    f"session-creator-{i + 1:02d}",
+                    f"Groomed by session-creator-{i + 1:02d}: intent, scope and criteria written.",
+                    ts(4 + i, 9),
+                ),
+                transition_note(
+                    i + 6,
+                    f"session-creator-{i + 1:02d}",
+                    f"Approved by session-creator-{i + 1:02d}: criteria covered, steps planned.",
+                    ts(5 + i, 16 + i),
+                    note_id="NOTE-02",
+                ),
+            ],
             depends_on=[ids["groomed"][i], ids["groomed"][(i + 1) % 3]],
         )
         if i == 1:
@@ -325,8 +435,20 @@ def build():
     for i in range(3):
         tid = next_id()
         ids.setdefault("executing", []).append(tid)
+        claim_day = 9 + i
         criteria = [
-            criterion(i, with_evidence=[evidence(i, f"runner-{i + 1:02d}", f"session-runner-{i + 1:02d}", 10, 12)]),
+            criterion(
+                i,
+                with_evidence=[
+                    evidence(
+                        i,
+                        f"runner-{i + 1:02d}",
+                        f"session-runner-{i + 1:02d}",
+                        claim_day,
+                        12,
+                    )
+                ],
+            ),
             criterion(i + 3),
         ]
         if i == 1:
@@ -344,8 +466,8 @@ def build():
             claim={
                 "by": f"runner-{i + 1:02d}",
                 "session": f"session-runner-{i + 1:02d}",
-                "at": ts(10, 9),
-                "lease_expires_at": ts(10, 17),
+                "at": ts(claim_day, 9),
+                "lease_expires_at": ts(claim_day, 17),
             },
             intent={"outcome": pick(OUTCOMES, i + 5), "problem": pick(PROBLEMS, i + 3)},
             scope={
@@ -364,7 +486,14 @@ def build():
                 )
             ],
             review={"max_rounds": 5, "rounds": [], "verdict": None, "findings": []},
-            notes=[{"id": "NOTE-01", "author": f"runner-{i + 1:02d}", "body": pick(NOTES, i), "at": ts(10, 13)}],
+            notes=[
+                {
+                    "id": "NOTE-01",
+                    "author": f"runner-{i + 1:02d}",
+                    "body": pick(NOTES, i),
+                    "at": ts(claim_day, 13),
+                }
+            ],
             depends_on=[ids["approved"][i], ids["approved"][(i + 2) % 3]],
         )
         tasks.append(item)
@@ -373,7 +502,10 @@ def build():
     for i in range(3):
         tid = next_id()
         ids.setdefault("code-review", []).append(tid)
-        findings = [finding(i + 1)]
+        review_day = 10 + i
+        claim_at = ts(review_day, 9)
+        round_at = ts(review_day, 16)
+        findings = [finding(i + 1, round_at)]
         item = task(
             tid,
             pick(TITLES, i + 5),
@@ -383,22 +515,54 @@ def build():
             claim={
                 "by": f"runner-{i + 1:02d}",
                 "session": f"session-runner-{i + 1:02d}",
-                "at": ts(11, 9),
-                "lease_expires_at": ts(11, 17),
+                "at": claim_at,
+                "lease_expires_at": ts(review_day, 18),
             },
             intent={"outcome": pick(OUTCOMES, i + 7), "problem": pick(PROBLEMS, i + 4)},
             scope={
                 "in_scope": [pick(ACTIONS, i + 3)],
                 "out_of_scope": [pick(PROBLEMS, i)],
             },
-            acceptance_criteria=[criterion(i, with_evidence=[evidence(i, f"runner-{i + 1:02d}", f"session-runner-{i + 1:02d}", 11, 16)])],
+            acceptance_criteria=[
+                criterion(
+                    i,
+                    with_evidence=[
+                        evidence(
+                            i,
+                            f"runner-{i + 1:02d}",
+                            f"session-runner-{i + 1:02d}",
+                            review_day,
+                            14,
+                        )
+                    ],
+                )
+            ],
             steps=[step(i, 1, "done", ["ACCEPT-01"], ["crates/core/tests/task_model.rs"])],
             review={
                 "max_rounds": 5,
-                "rounds": [round_(1, "self", "spec-compliance", f"runner-{i + 1:02d}", "changes-needed", i, ["FIND-01"])],
+                "rounds": [
+                    round_(
+                        1,
+                        "self",
+                        "spec-compliance",
+                        f"runner-{i + 1:02d}",
+                        "changes-needed",
+                        i,
+                        round_at,
+                        ["FIND-01"],
+                    )
+                ],
                 "verdict": None,
                 "findings": findings,
             },
+            notes=[
+                {
+                    "id": "NOTE-01",
+                    "author": f"runner-{i + 1:02d}",
+                    "body": pick(NOTES, i),
+                    "at": ts(review_day + 1, 9),
+                }
+            ],
             depends_on=[ids["executing"][i], ids["executing"][(i + 1) % 3]],
         )
         tasks.append(item)
@@ -407,6 +571,12 @@ def build():
     for i in range(3):
         tid = next_id()
         ids.setdefault("remediating", []).append(tid)
+        claim_day = 13 + i // 2
+        claim_hour = 9 + i % 2
+        evidence_hour = claim_hour + 4
+        self_hour = claim_hour + 6
+        external_hour = claim_hour + 8
+        external_at = ts(claim_day, external_hour)
         item = task(
             tid,
             pick(TITLES, i + 9),
@@ -416,24 +586,54 @@ def build():
             claim={
                 "by": f"runner-{i + 2:02d}",
                 "session": f"session-runner-{i + 2:02d}",
-                "at": ts(12, 9),
-                "lease_expires_at": ts(12, 17),
+                "at": ts(claim_day, claim_hour),
+                "lease_expires_at": ts(claim_day, external_hour),
             },
             intent={"outcome": pick(OUTCOMES, i + 2), "problem": pick(PROBLEMS, i + 5)},
             scope={
                 "in_scope": [pick(ACTIONS, i + 4)],
                 "out_of_scope": [pick(PROBLEMS, i + 1)],
             },
-            acceptance_criteria=[criterion(i, with_evidence=[evidence(i, f"runner-{i + 2:02d}", f"session-runner-{i + 2:02d}", 12, 13)])],
+            acceptance_criteria=[
+                criterion(
+                    i,
+                    with_evidence=[
+                        evidence(
+                            i,
+                            f"runner-{i + 2:02d}",
+                            f"session-runner-{i + 2:02d}",
+                            claim_day,
+                            evidence_hour,
+                        )
+                    ],
+                )
+            ],
             steps=[step(i, 1, "done", ["ACCEPT-01"], ["crates/core/tests/task_model.rs"])],
             review={
                 "max_rounds": 5,
                 "rounds": [
-                    round_(1, "self", "spec-compliance", f"runner-{i + 2:02d}", "ok", i),
-                    round_(2, "external", pick(FOCI, i + 1), f"reviewer-{i + 1:02d}", "changes-needed", i, ["FIND-01"]),
+                    round_(
+                        1,
+                        "self",
+                        "spec-compliance",
+                        f"runner-{i + 2:02d}",
+                        "ok",
+                        i,
+                        ts(claim_day, self_hour),
+                    ),
+                    round_(
+                        2,
+                        "external",
+                        pick(FOCI, i + 1),
+                        f"reviewer-{i + 1:02d}",
+                        "changes-needed",
+                        i,
+                        external_at,
+                        ["FIND-01"],
+                    ),
                 ],
                 "verdict": "changes-needed",
-                "findings": [finding(i + 1)],
+                "findings": [finding(i + 1, external_at)],
             },
             depends_on=[ids["code-review"][i], ids["code-review"][(i + 2) % 3]],
         )
@@ -443,12 +643,33 @@ def build():
     for i in range(3):
         tid = next_id()
         ids.setdefault("needs-human", []).append(tid)
-        rounds = [round_(1, "self", "spec-compliance", f"runner-{i + 3:02d}", "ok", i)]
+        claim_day = 14 + i
+        rounds = [
+            round_(
+                1,
+                "self",
+                "spec-compliance",
+                f"runner-{i + 3:02d}",
+                "ok",
+                i,
+                ts(claim_day, 5),
+            )
+        ]
         findings = []
         for n in range(2, 7):
-            findings.append(f"FIND-{n - 1:02d}")
+            at = ts(claim_day, 4 + n)
+            findings.append(finding(n - 1, at))
             rounds.append(
-                round_(n, "external", pick(FOCI, n), f"reviewer-{n - 1:02d}", "changes-needed", n, [f"FIND-{n - 1:02d}"])
+                round_(
+                    n,
+                    "external",
+                    pick(FOCI, n),
+                    f"reviewer-{n - 1:02d}",
+                    "changes-needed",
+                    n,
+                    at,
+                    [f"FIND-{n - 1:02d}"],
+                )
             )
         item = task(
             tid,
@@ -459,23 +680,43 @@ def build():
             claim={
                 "by": f"runner-{i + 3:02d}",
                 "session": f"session-runner-{i + 3:02d}",
-                "at": ts(13, 9),
-                "lease_expires_at": ts(13, 17),
+                "at": ts(claim_day, 1),
+                "lease_expires_at": ts(claim_day, 11),
             },
             intent={"outcome": pick(OUTCOMES, i + 4), "problem": pick(PROBLEMS, i + 6)},
             scope={
                 "in_scope": [pick(ACTIONS, i + 5)],
                 "out_of_scope": [pick(PROBLEMS, i + 2)],
             },
-            acceptance_criteria=[criterion(i, with_evidence=[evidence(i, f"runner-{i + 3:02d}", f"session-runner-{i + 3:02d}", 13, 17)])],
+            acceptance_criteria=[
+                criterion(
+                    i,
+                    with_evidence=[
+                        evidence(
+                            i,
+                            f"runner-{i + 3:02d}",
+                            f"session-runner-{i + 3:02d}",
+                            claim_day,
+                            3,
+                        )
+                    ],
+                )
+            ],
             steps=[step(i, 1, "done", ["ACCEPT-01"], ["crates/core/tests/task_model.rs"])],
             review={
                 "max_rounds": 5,
                 "rounds": rounds,
                 "verdict": "changes-needed",
-                "findings": [finding(n) for n in range(1, 6)],
+                "findings": findings,
             },
-            notes=[{"id": "NOTE-01", "author": f"reviewer-{5:02d}", "body": pick(NOTES, i), "at": ts(14, 18)}],
+            notes=[
+                {
+                    "id": "NOTE-01",
+                    "author": f"reviewer-{5:02d}",
+                    "body": pick(NOTES, i),
+                    "at": ts(claim_day, 12),
+                }
+            ],
             depends_on=[ids["remediating"][i], ids["remediating"][(i + 1) % 3]],
         )
         tasks.append(item)
@@ -488,9 +729,17 @@ def build():
         [ids["needs-human"][0], None],  # None: filled below with done[2]
         [None, None, None],  # filled below with done[1..3]
     ]
+    done_schedule = [
+        (ts(15, 12), (15, 14, 0), ts(15, 16), ts(15, 18)),
+        (ts(16, 11), (16, 12, 0), ts(16, 13), ts(16, 14)),
+        (ts(16, 15), (16, 16, 0), ts(16, 17), ts(16, 18)),
+        (ts(16, 19), (16, 19, 20), ts(16, 19, 40), ts(16, 20)),
+        (ts(16, 20, 10), (16, 20, 20), ts(16, 20, 30), ts(16, 20, 40)),
+    ]
     for i in range(5):
         tid = next_id()
         ids.setdefault("done", []).append(tid)
+        claim_at, (evidence_day, evidence_hour, evidence_minute), self_at, external_at = done_schedule[i]
         item = task(
             tid,
             pick(TITLES, i + 12),
@@ -500,21 +749,51 @@ def build():
             claim={
                 "by": f"runner-{i + 4:02d}",
                 "session": f"session-runner-{i + 4:02d}",
-                "at": ts(15, 9),
-                "lease_expires_at": ts(15, 17),
+                "at": claim_at,
+                "lease_expires_at": external_at,
             },
             intent={"outcome": pick(OUTCOMES, i + 6), "problem": pick(PROBLEMS, i)},
             scope={
                 "in_scope": [pick(ACTIONS, i + 6)],
                 "out_of_scope": [pick(PROBLEMS, i + 3)],
             },
-            acceptance_criteria=[criterion(i, with_evidence=[evidence(i, f"runner-{i + 4:02d}", f"session-runner-{i + 4:02d}", 15, 16)])],
+            acceptance_criteria=[
+                criterion(
+                    i,
+                    with_evidence=[
+                        evidence(
+                            i,
+                            f"runner-{i + 4:02d}",
+                            f"session-runner-{i + 4:02d}",
+                            evidence_day,
+                            evidence_hour,
+                            minute=evidence_minute,
+                        )
+                    ],
+                )
+            ],
             steps=[step(i, 1, "done", ["ACCEPT-01"], ["crates/core/tests/task_model.rs"])],
             review={
                 "max_rounds": 5,
                 "rounds": [
-                    round_(1, "self", "spec-compliance", f"runner-{i + 4:02d}", "ok", i),
-                    round_(2, "external", pick(FOCI, i), f"reviewer-{i + 5:02d}", "ok", i),
+                    round_(
+                        1,
+                        "self",
+                        "spec-compliance",
+                        f"runner-{i + 4:02d}",
+                        "ok",
+                        i,
+                        self_at,
+                    ),
+                    round_(
+                        2,
+                        "external",
+                        pick(FOCI, i),
+                        f"reviewer-{i + 5:02d}",
+                        "ok",
+                        i,
+                        external_at,
+                    ),
                 ],
                 "verdict": "ok",
                 "findings": [],
@@ -646,9 +925,28 @@ def build():
                     depends_on=["STP-01"],
                 ),
             ],
+            notes=[
+                transition_note(
+                    6,
+                    "session-creator-05",
+                    "Groomed by session-creator-05: intent, scope and criteria written.",
+                    ts(13, 10),
+                ),
+                transition_note(
+                    6,
+                    "session-creator-05",
+                    "Approved by session-creator-05: criteria covered, steps planned.",
+                    # After the dependency it waits for is done (TSK22).
+                    ts(16, 12),
+                    note_id="NOTE-02",
+                ),
+            ],
             depends_on=[done_ids[0]],
         )
     )
+
+    for task_item in tasks:
+        finalize(task_item)
 
     return tasks, items
 

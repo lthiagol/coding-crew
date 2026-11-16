@@ -6,8 +6,9 @@
   "parent": null,
   "children": [],
   "created": "2026-11-03T16:00Z",
-  "updated": "2026-11-05T17:00Z",
+  "updated": "2026-11-13T15:00Z",
   "status": "approved",
+  "status_since": "2026-11-06T17:00Z",
   "overlays": {
     "blocked": {
       "reason": "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium.",
@@ -97,7 +98,20 @@
     "findings": []
   },
   "questions": [],
-  "notes": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "session-creator-02",
+      "body": "Groomed by session-creator-02: intent, scope and criteria written.",
+      "at": "2026-11-05T09:00Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "session-creator-02",
+      "body": "Approved by session-creator-02: criteria covered, steps planned.",
+      "at": "2026-11-06T17:00Z"
+    }
+  ],
   "depends_on": [
     "TSK05",
     "TSK06"

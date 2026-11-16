@@ -6,14 +6,15 @@
   "parent": null,
   "children": [],
   "created": "2026-11-05T14:00Z",
-  "updated": "2026-11-07T15:00Z",
+  "updated": "2026-11-15T18:00Z",
   "status": "done",
+  "status_since": "2026-11-15T18:00Z",
   "overlays": {},
   "claim": {
     "by": "runner-04",
     "session": "session-runner-04",
-    "at": "2026-11-15T09:00Z",
-    "lease_expires_at": "2026-11-15T17:00Z"
+    "at": "2026-11-15T12:00Z",
+    "lease_expires_at": "2026-11-15T18:00Z"
   },
   "planned_by": "session-creator-04",
   "meta": {
@@ -46,7 +47,7 @@
           "command": "cargo test --workspace",
           "exit_code": 0,
           "summary": "10 passed; 0 failed",
-          "at": "2026-11-15T16:00Z",
+          "at": "2026-11-15T14:00Z",
           "by": "runner-04",
           "session": "session-runner-04"
         }
@@ -81,7 +82,7 @@
         "focus": "spec-compliance",
         "reviewer": "runner-04",
         "verdict": "ok",
-        "at": "2026-11-09T10:00Z",
+        "at": "2026-11-15T16:00Z",
         "notes": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
         "findings": []
       },
@@ -91,7 +92,7 @@
         "focus": "spec-compliance",
         "reviewer": "reviewer-05",
         "verdict": "ok",
-        "at": "2026-11-09T11:00Z",
+        "at": "2026-11-15T18:00Z",
         "notes": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
         "findings": []
       }

@@ -1,4 +1,4 @@
-use coding_lanes_core::{Status, Store, Task};
+use coding_lanes_core::{Status, Store, Task, parse_rfc3339};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -24,6 +24,302 @@ fn every_fixture_loads() {
 
     let ids: HashSet<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
     assert_eq!(ids.len(), tasks.len(), "task ids must be unique");
+}
+
+#[test]
+fn every_fixture_has_a_status_since_between_created_and_updated() {
+    for task in tasks() {
+        assert!(
+            !task.status_since.is_empty(),
+            "{} has no status_since",
+            task.id
+        );
+        let created = parse_rfc3339(&task.created)
+            .unwrap_or_else(|| panic!("{} has an unreadable created", task.id));
+        let since = parse_rfc3339(&task.status_since)
+            .unwrap_or_else(|| panic!("{} has an unreadable status_since", task.id));
+        let updated = parse_rfc3339(&task.updated)
+            .unwrap_or_else(|| panic!("{} has an unreadable updated", task.id));
+        assert!(
+            created <= since,
+            "{} entered its status before it was created",
+            task.id
+        );
+        assert!(
+            since <= updated,
+            "{} entered its status after its last write",
+            task.id
+        );
+    }
+}
+
+/// The moment a note records a status transition.
+fn transition_note_at(task: &Task, prefix: &str) -> String {
+    task.notes
+        .iter()
+        .rev()
+        .find(|note| note.body.starts_with(prefix))
+        .unwrap_or_else(|| panic!("{} has no {prefix} transition note", task.id))
+        .at
+        .clone()
+}
+
+/// The named event that entered the status a task is in.
+fn status_transition_event(task: &Task) -> String {
+    match task.status {
+        Status::Draft => task.created.clone(),
+        Status::Groomed => transition_note_at(task, "Groomed by"),
+        Status::Approved => transition_note_at(task, "Approved by"),
+        Status::Executing => task.claim.as_ref().expect("a claim").at.clone(),
+        Status::CodeReview | Status::Remediating | Status::NeedsHuman | Status::Done => task
+            .review
+            .rounds
+            .last()
+            .expect("a review round")
+            .at
+            .clone(),
+    }
+}
+
+/// Every lifecycle event, in the order the model has them: creation, the
+/// transitions a note records, the claim, the evidence, and the review
+/// rounds that assess it.
+fn lifecycle_events(task: &Task) -> Vec<String> {
+    let mut events = vec![task.created.clone()];
+    for note in &task.notes {
+        if note.body.starts_with("Groomed by") || note.body.starts_with("Approved by") {
+            events.push(note.at.clone());
+        }
+    }
+    if let Some(claim) = &task.claim {
+        events.push(claim.at.clone());
+    }
+    for criterion in &task.acceptance_criteria {
+        for evidence in &criterion.evidence {
+            events.push(evidence.at.clone());
+        }
+    }
+    for round in &task.review.rounds {
+        events.push(round.at.clone());
+    }
+    events
+}
+
+#[test]
+fn the_lifecycle_events_of_every_fixture_happen_in_order() {
+    for task in tasks() {
+        let events = lifecycle_events(&task);
+        let mut previous: Option<i64> = None;
+        for event in &events {
+            let at = parse_rfc3339(event)
+                .unwrap_or_else(|| panic!("{} has an unreadable event {event}", task.id));
+            if let Some(previous) = previous {
+                assert!(
+                    previous <= at,
+                    "{}: {event} happens before the event before it: {events:?}",
+                    task.id
+                );
+            }
+            previous = Some(at);
+        }
+    }
+}
+
+#[test]
+fn every_fixture_is_stamped_at_the_event_that_entered_its_status() {
+    for task in tasks() {
+        let since = parse_rfc3339(&task.status_since)
+            .unwrap_or_else(|| panic!("{} has an unreadable status_since", task.id));
+        let named = status_transition_event(&task);
+        let named = parse_rfc3339(&named).expect("the transition event");
+        assert_eq!(
+            since, named,
+            "{} is not stamped at the event that entered {:?}",
+            task.id, task.status
+        );
+    }
+}
+
+#[test]
+fn every_fixture_entered_its_status_after_the_phase_before_it() {
+    // `status_since` may not name a moment earlier than an event of the
+    // phase that came first: the claim and the evidence precede the review
+    // that assesses them, and a transition note precedes the date it makes.
+    for task in tasks() {
+        let since = parse_rfc3339(&task.status_since)
+            .unwrap_or_else(|| panic!("{} has an unreadable status_since", task.id));
+        let events = lifecycle_events(&task);
+        let named = status_transition_event(&task);
+        let at = events
+            .iter()
+            .rposition(|event| *event == named)
+            .unwrap_or_else(|| panic!("{}: {named} is not in its lifecycle", task.id));
+        for event in &events[..at] {
+            let moment = parse_rfc3339(event)
+                .unwrap_or_else(|| panic!("{} has an unreadable event {event}", task.id));
+            assert!(
+                moment <= since,
+                "{} entered its status at {} before {event}",
+                task.id,
+                task.status_since
+            );
+        }
+    }
+}
+
+#[test]
+fn no_fixture_stamps_the_day_after_it_was_created() {
+    // The fixture stamp used to be `created` plus a day, whatever the
+    // fixture's history said. This check fails for that derivation.
+    for task in tasks() {
+        let created = parse_rfc3339(&task.created).expect("created");
+        let since = parse_rfc3339(&task.status_since).expect("status_since");
+        assert_ne!(
+            since,
+            created + 86_400,
+            "{} still carries created plus a day",
+            task.id
+        );
+    }
+}
+
+#[test]
+fn the_self_review_round_put_tsk13_in_review() {
+    let tasks = tasks();
+    let task = tasks.iter().find(|task| task.id == "TSK13").expect("TSK13");
+    assert_eq!(task.status, Status::CodeReview);
+    assert_eq!(task.status_since, "2026-11-10T16:00Z");
+    assert_eq!(
+        task.status_since,
+        task.review.rounds.last().expect("a round").at
+    );
+    // The old generator stamped the day after creation.
+    assert_ne!(task.status_since, "2026-11-03T13:00Z");
+}
+
+#[test]
+fn the_fifth_external_round_escalated_tsk19() {
+    let tasks = tasks();
+    let task = tasks.iter().find(|task| task.id == "TSK19").expect("TSK19");
+    assert_eq!(task.status, Status::NeedsHuman);
+    assert_eq!(task.external_rounds(), 5);
+    assert_eq!(task.status_since, "2026-11-14T10:00Z");
+    assert_eq!(
+        task.status_since,
+        task.review.rounds.last().expect("a round").at
+    );
+    // The old generator stamped the day after creation.
+    assert_ne!(task.status_since, "2026-11-03T11:00Z");
+}
+
+#[test]
+fn every_fixture_was_last_written_at_its_latest_event() {
+    for task in tasks() {
+        let updated = parse_rfc3339(&task.updated).expect("updated");
+        let latest = event_stamps(&task)
+            .iter()
+            .map(|stamp| {
+                parse_rfc3339(stamp)
+                    .unwrap_or_else(|| panic!("{} has an unreadable event {stamp}", task.id))
+            })
+            .max()
+            .expect("an event");
+        assert_eq!(
+            updated, latest,
+            "{} was last written at {} but its latest event is later",
+            task.id, task.updated
+        );
+    }
+}
+
+/// Every dated event in a fixture's history.
+fn event_stamps(task: &Task) -> Vec<String> {
+    let mut stamps = vec![task.created.clone(), task.status_since.clone()];
+    if let Some(claim) = &task.claim {
+        stamps.push(claim.at.clone());
+    }
+    for overlay in [
+        &task.overlays.blocked,
+        &task.overlays.deferred,
+        &task.overlays.cancelled,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        stamps.push(overlay.at.clone());
+    }
+    for criterion in &task.acceptance_criteria {
+        for evidence in &criterion.evidence {
+            stamps.push(evidence.at.clone());
+        }
+    }
+    for round in &task.review.rounds {
+        stamps.push(round.at.clone());
+    }
+    for finding in &task.review.findings {
+        stamps.push(finding.created.clone());
+        if !finding.resolved.is_empty() {
+            stamps.push(finding.resolved.clone());
+        }
+        for comment in &finding.comments {
+            if !comment.at.is_empty() {
+                stamps.push(comment.at.clone());
+            }
+        }
+    }
+    for note in &task.notes {
+        stamps.push(note.at.clone());
+    }
+    for question in &task.questions {
+        stamps.push(question.raised_at.clone());
+        if !question.resolved_at.is_empty() {
+            stamps.push(question.resolved_at.clone());
+        }
+    }
+    stamps
+}
+
+#[test]
+fn the_human_lane_fixtures_do_not_fall_back_to_created_or_updated() {
+    // The Needs you tab measures the wait from status_since. In the human
+    // lane the three stamps are distinct, so a rendered wait can only come
+    // from status_since: not from the age of the task, not from the age of
+    // the last write.
+    let human_lane = [Status::Groomed, Status::CodeReview, Status::NeedsHuman];
+    for task in tasks()
+        .into_iter()
+        .filter(|t| human_lane.contains(&t.status))
+    {
+        assert_ne!(
+            task.status_since, task.created,
+            "{} waits since it was created",
+            task.id
+        );
+        assert_ne!(
+            task.status_since, task.updated,
+            "{} waits since its last write",
+            task.id
+        );
+    }
+}
+
+#[test]
+fn the_fixtures_of_a_phase_enter_it_at_different_moments() {
+    // The rows of a group are read together: every fixture of a phase
+    // carries its own status_since, so no two rows of a group show the
+    // same wait.
+    for status in [Status::Groomed, Status::CodeReview, Status::NeedsHuman] {
+        let fixtures = by_status(status);
+        let stamps: HashSet<&str> = fixtures
+            .iter()
+            .map(|task| task.status_since.as_str())
+            .collect();
+        assert_eq!(
+            stamps.len(),
+            fixtures.len(),
+            "two fixtures of {status:?} entered it at the same moment"
+        );
+    }
 }
 
 #[test]

@@ -8,8 +8,9 @@
     "TSK28"
   ],
   "created": "2026-11-02T15:00Z",
-  "updated": "2026-11-04T16:00Z",
+  "updated": "2026-11-05T16:00Z",
   "status": "approved",
+  "status_since": "2026-11-05T16:00Z",
   "overlays": {},
   "claim": null,
   "planned_by": "session-creator-01",
@@ -93,7 +94,20 @@
     "findings": []
   },
   "questions": [],
-  "notes": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "session-creator-01",
+      "body": "Groomed by session-creator-01: intent, scope and criteria written.",
+      "at": "2026-11-04T09:00Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "session-creator-01",
+      "body": "Approved by session-creator-01: criteria covered, steps planned.",
+      "at": "2026-11-05T16:00Z"
+    }
+  ],
   "depends_on": [
     "TSK04",
     "TSK05"

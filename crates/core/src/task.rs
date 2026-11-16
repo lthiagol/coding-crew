@@ -31,6 +31,9 @@ pub struct Task {
     pub updated: String,
     #[serde(default)]
     pub status: Status,
+    /// When the task entered the status it is in.
+    #[serde(default)]
+    pub status_since: String,
     #[serde(default)]
     pub overlays: Overlays,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -77,6 +80,7 @@ impl Task {
             promoted_from: None,
             created: crate::now_rfc3339(),
             updated: crate::now_rfc3339(),
+            status_since: crate::now_rfc3339(),
             status: Status::Draft,
             overlays: Overlays::default(),
             claim: None,

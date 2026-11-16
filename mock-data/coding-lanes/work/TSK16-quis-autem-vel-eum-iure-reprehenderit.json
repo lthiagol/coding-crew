@@ -6,14 +6,15 @@
   "parent": null,
   "children": [],
   "created": "2026-11-05T16:00Z",
-  "updated": "2026-11-07T17:00Z",
+  "updated": "2026-11-13T17:00Z",
   "status": "remediating",
+  "status_since": "2026-11-13T17:00Z",
   "overlays": {},
   "claim": {
     "by": "runner-02",
     "session": "session-runner-02",
-    "at": "2026-11-12T09:00Z",
-    "lease_expires_at": "2026-11-12T17:00Z"
+    "at": "2026-11-13T09:00Z",
+    "lease_expires_at": "2026-11-13T17:00Z"
   },
   "planned_by": "session-creator-02",
   "meta": {
@@ -46,7 +47,7 @@
           "command": "cargo test --workspace",
           "exit_code": 0,
           "summary": "10 passed; 0 failed",
-          "at": "2026-11-12T13:00Z",
+          "at": "2026-11-13T13:00Z",
           "by": "runner-02",
           "session": "session-runner-02"
         }
@@ -81,7 +82,7 @@
         "focus": "spec-compliance",
         "reviewer": "runner-02",
         "verdict": "ok",
-        "at": "2026-11-09T10:00Z",
+        "at": "2026-11-13T15:00Z",
         "notes": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
         "findings": []
       },
@@ -91,7 +92,7 @@
         "focus": "edge-cases",
         "reviewer": "reviewer-01",
         "verdict": "changes-needed",
-        "at": "2026-11-09T11:00Z",
+        "at": "2026-11-13T17:00Z",
         "notes": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
         "findings": [
           "FIND-01"
@@ -105,7 +106,7 @@
         "severity": "medium",
         "status": "open",
         "description": "Incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam, quis nostrud.",
-        "created": "2026-11-08T11:00Z",
+        "created": "2026-11-13T17:00Z",
         "resolved": "",
         "resolution": "",
         "comments": []

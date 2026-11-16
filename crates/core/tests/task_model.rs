@@ -306,20 +306,71 @@ fn five_external_rounds_escalate_to_a_human() {
 }
 
 #[test]
+fn a_transition_stamps_the_moment_the_status_began() {
+    let mut task = groomed_task();
+    task.status_since = "2020-01-01T00:00:00Z".to_string();
+    transition(
+        &mut task,
+        Event::Groom,
+        &creator(),
+        &TransitionContext::default(),
+    )
+    .unwrap();
+    assert_eq!(task.status, coding_lanes_core::Status::Groomed);
+    assert_ne!(task.status_since, "2020-01-01T00:00:00Z");
+}
+
+#[test]
+fn an_overlay_does_not_move_the_status_stamp() {
+    // A write that does not change the status does not move the moment
+    // the task entered it: the wait goes on.
+    let mut task = groomed_task();
+    transition(
+        &mut task,
+        Event::Groom,
+        &creator(),
+        &TransitionContext::default(),
+    )
+    .unwrap();
+    task.status_since = "2020-01-01T00:00:00Z".to_string();
+    task.updated = "2020-01-01T00:00:00Z".to_string();
+    transition(
+        &mut task,
+        Event::Block,
+        &creator(),
+        &TransitionContext {
+            reason: Some("waiting for the plan"),
+            ..TransitionContext::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(task.status_since, "2020-01-01T00:00:00Z");
+    assert_ne!(task.updated, "2020-01-01T00:00:00Z");
+}
+
+#[test]
 fn store_round_trips_tasks() {
     let dir = std::env::temp_dir().join("coding-lanes-store-test");
     let _ = std::fs::remove_dir_all(&dir);
     let store = Store::new(&dir);
 
-    let task = store.create("Add lane filtering").unwrap();
+    let mut task = store.create("Add lane filtering").unwrap();
     assert_eq!(task.id, "TSK01");
     assert_eq!(task.status, coding_lanes_core::Status::Draft);
+    task.status_since = "2026-11-13T12:00:00Z".to_string();
+    store.save(&task).unwrap();
 
     let second = store.create("Second task").unwrap();
     assert_eq!(second.id, "TSK02");
 
     assert_eq!(store.list().unwrap().len(), 2);
     assert_eq!(store.load("TSK02").unwrap().title, "Second task");
+
+    // The moment the task entered its status survives the save and the load.
+    assert_eq!(
+        store.load("TSK01").unwrap().status_since,
+        "2026-11-13T12:00:00Z"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

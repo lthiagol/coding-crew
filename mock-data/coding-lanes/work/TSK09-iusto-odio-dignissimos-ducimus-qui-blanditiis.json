@@ -6,8 +6,9 @@
   "parent": null,
   "children": [],
   "created": "2026-11-04T09:00Z",
-  "updated": "2026-11-06T10:00Z",
+  "updated": "2026-11-14T09:00Z",
   "status": "approved",
+  "status_since": "2026-11-07T18:00Z",
   "overlays": {},
   "claim": {
     "by": "runner-09",
@@ -96,7 +97,20 @@
     "findings": []
   },
   "questions": [],
-  "notes": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "session-creator-03",
+      "body": "Groomed by session-creator-03: intent, scope and criteria written.",
+      "at": "2026-11-06T09:00Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "session-creator-03",
+      "body": "Approved by session-creator-03: criteria covered, steps planned.",
+      "at": "2026-11-07T18:00Z"
+    }
+  ],
   "depends_on": [
     "TSK06",
     "TSK04"

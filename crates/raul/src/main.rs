@@ -4,6 +4,7 @@
 
 mod app;
 mod data;
+mod needs;
 mod overview;
 mod path;
 mod tabs;

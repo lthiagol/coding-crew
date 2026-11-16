@@ -6,14 +6,15 @@
   "parent": null,
   "children": [],
   "created": "2026-11-03T10:00Z",
-  "updated": "2026-11-05T11:00Z",
+  "updated": "2026-11-16T20:40Z",
   "status": "done",
+  "status_since": "2026-11-16T20:40Z",
   "overlays": {},
   "claim": {
     "by": "runner-08",
     "session": "session-runner-08",
-    "at": "2026-11-15T09:00Z",
-    "lease_expires_at": "2026-11-15T17:00Z"
+    "at": "2026-11-16T20:10Z",
+    "lease_expires_at": "2026-11-16T20:40Z"
   },
   "planned_by": "session-creator-08",
   "meta": {
@@ -46,7 +47,7 @@
           "command": "cargo test --workspace",
           "exit_code": 0,
           "summary": "14 passed; 0 failed",
-          "at": "2026-11-15T16:00Z",
+          "at": "2026-11-16T20:20Z",
           "by": "runner-08",
           "session": "session-runner-08"
         }
@@ -81,7 +82,7 @@
         "focus": "spec-compliance",
         "reviewer": "runner-08",
         "verdict": "ok",
-        "at": "2026-11-09T10:00Z",
+        "at": "2026-11-16T20:30Z",
         "notes": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
         "findings": []
       },
@@ -91,7 +92,7 @@
         "focus": "design",
         "reviewer": "reviewer-09",
         "verdict": "ok",
-        "at": "2026-11-09T11:00Z",
+        "at": "2026-11-16T20:40Z",
         "notes": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
         "findings": []
       }

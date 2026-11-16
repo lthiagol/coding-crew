@@ -149,6 +149,7 @@ pub fn transition(
         return Err(TransitionError::Gate("task is cancelled".into()));
     }
 
+    let before = task.status;
     match event {
         Event::Groom => {
             expect_status(task, Status::Draft, event)?;
@@ -297,7 +298,12 @@ pub fn transition(
         }
     }
 
-    task.updated = crate::now_rfc3339();
+    let now = crate::now_rfc3339();
+    if task.status != before {
+        // The task entered another status: the wait in this one begins now.
+        task.status_since = now.clone();
+    }
+    task.updated = now;
     Ok(())
 }
 

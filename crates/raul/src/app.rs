@@ -10,6 +10,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
 
 use crate::data::Work;
+use crate::needs;
 use crate::overview;
 use crate::path;
 use crate::tabs::Tab;
@@ -96,6 +97,7 @@ impl App {
         frame.render_widget(self.tab_bar(rows[1].width), rows[1]);
         match self.tab {
             Tab::Overview => overview::render(frame, rows[2], work, &self.theme),
+            Tab::NeedsYou => needs::render(frame, rows[2], work, &self.theme),
             Tab::Path => path::render(frame, rows[2], work, &self.theme),
             tab => frame.render_widget(placeholder(tab, &self.theme), rows[2]),
         }

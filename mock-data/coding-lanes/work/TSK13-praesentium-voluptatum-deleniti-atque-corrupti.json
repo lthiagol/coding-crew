@@ -6,14 +6,15 @@
   "parent": null,
   "children": [],
   "created": "2026-11-02T13:00Z",
-  "updated": "2026-11-04T14:00Z",
+  "updated": "2026-11-11T09:00Z",
   "status": "code-review",
+  "status_since": "2026-11-10T16:00Z",
   "overlays": {},
   "claim": {
     "by": "runner-01",
     "session": "session-runner-01",
-    "at": "2026-11-11T09:00Z",
-    "lease_expires_at": "2026-11-11T17:00Z"
+    "at": "2026-11-10T09:00Z",
+    "lease_expires_at": "2026-11-10T18:00Z"
   },
   "planned_by": "session-creator-01",
   "meta": {
@@ -46,7 +47,7 @@
           "command": "cargo test --workspace",
           "exit_code": 0,
           "summary": "10 passed; 0 failed",
-          "at": "2026-11-11T16:00Z",
+          "at": "2026-11-10T14:00Z",
           "by": "runner-01",
           "session": "session-runner-01"
         }
@@ -81,7 +82,7 @@
         "focus": "spec-compliance",
         "reviewer": "runner-01",
         "verdict": "changes-needed",
-        "at": "2026-11-09T10:00Z",
+        "at": "2026-11-10T16:00Z",
         "notes": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
         "findings": [
           "FIND-01"
@@ -95,7 +96,7 @@
         "severity": "medium",
         "status": "open",
         "description": "Incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam, quis nostrud.",
-        "created": "2026-11-08T11:00Z",
+        "created": "2026-11-10T16:00Z",
         "resolved": "",
         "resolution": "",
         "comments": []
@@ -103,7 +104,14 @@
     ]
   },
   "questions": [],
-  "notes": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-01",
+      "body": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
+      "at": "2026-11-11T09:00Z"
+    }
+  ],
   "depends_on": [
     "TSK10",
     "TSK11"

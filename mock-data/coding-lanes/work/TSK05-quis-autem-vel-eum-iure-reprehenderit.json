@@ -8,6 +8,7 @@
   "created": "2026-11-06T13:00Z",
   "updated": "2026-11-08T14:00Z",
   "status": "groomed",
+  "status_since": "2026-11-08T10:00Z",
   "overlays": {
     "blocked": {
       "reason": "Incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam, quis nostrud.",
@@ -55,6 +56,13 @@
     "findings": []
   },
   "questions": [],
-  "notes": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "session-creator-02",
+      "body": "Groomed by session-creator-02: intent, scope and criteria written.",
+      "at": "2026-11-08T10:00Z"
+    }
+  ],
   "depends_on": []
 }

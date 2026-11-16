@@ -6,14 +6,15 @@
   "parent": null,
   "children": [],
   "created": "2026-11-03T14:00Z",
-  "updated": "2026-11-05T15:00Z",
+  "updated": "2026-11-12T09:00Z",
   "status": "code-review",
+  "status_since": "2026-11-11T16:00Z",
   "overlays": {},
   "claim": {
     "by": "runner-02",
     "session": "session-runner-02",
     "at": "2026-11-11T09:00Z",
-    "lease_expires_at": "2026-11-11T17:00Z"
+    "lease_expires_at": "2026-11-11T18:00Z"
   },
   "planned_by": "session-creator-02",
   "meta": {
@@ -46,7 +47,7 @@
           "command": "cargo test -p coding-lanes-core",
           "exit_code": 0,
           "summary": "11 passed; 0 failed",
-          "at": "2026-11-11T16:00Z",
+          "at": "2026-11-11T14:00Z",
           "by": "runner-02",
           "session": "session-runner-02"
         }
@@ -81,7 +82,7 @@
         "focus": "spec-compliance",
         "reviewer": "runner-02",
         "verdict": "changes-needed",
-        "at": "2026-11-09T10:00Z",
+        "at": "2026-11-11T16:00Z",
         "notes": "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip.",
         "findings": [
           "FIND-01"
@@ -95,7 +96,7 @@
         "severity": "high",
         "status": "open",
         "description": "Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-        "created": "2026-11-08T12:00Z",
+        "created": "2026-11-11T16:00Z",
         "resolved": "",
         "resolution": "",
         "comments": []
@@ -103,7 +104,14 @@
     ]
   },
   "questions": [],
-  "notes": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-02",
+      "body": "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip.",
+      "at": "2026-11-12T09:00Z"
+    }
+  ],
   "depends_on": [
     "TSK11",
     "TSK12"
