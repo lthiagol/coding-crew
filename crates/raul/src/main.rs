@@ -10,7 +10,7 @@ mod path;
 mod tabs;
 mod theme;
 
-use std::io::Stdout;
+use std::io::{Stdout, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
@@ -20,17 +20,31 @@ use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
+use ratatui::backend::{CrosstermBackend, TestBackend};
+use ratatui::buffer::{Buffer, CellWidth};
 
 use app::{Action, App};
 use coding_lanes_core::store::{DATA_DIR, WORK_DIR};
 use data::Work;
 use theme::{Preset, Theme};
 
-const USAGE: &str = "usage: raul [--theme dark|terminal] [work-folder]";
+const USAGE: &str =
+    "usage: raul [--theme dark|terminal] [--render --plain [--width N] [--height N]] [work-folder]";
+/// The columns of a plain render when --width is not given.
+const DEFAULT_WIDTH: u16 = 100;
+/// The rows of a plain render when --height is not given.
+const DEFAULT_HEIGHT: u16 = 40;
+/// The largest width or height a plain render accepts. The buffer is
+/// `width × height` cells, so an unbounded pair can ask for more memory than
+/// the machine has and abort.
+const MAX_DIMENSION: u16 = 1000;
 
 fn main() -> Result<()> {
     let options = parse_args(std::env::args().skip(1))?;
+
+    if options.render {
+        return render_plain(options);
+    }
 
     let mut terminal = setup()?;
     let result = run(&mut terminal, options);
@@ -45,6 +59,12 @@ struct Options {
     root: PathBuf,
     /// The colours of the window.
     theme: Theme,
+    /// Print the screen as text and exit.
+    render: bool,
+    /// The columns of a plain render.
+    width: u16,
+    /// The rows of a plain render.
+    height: u16,
 }
 
 /// The work folder to read and the colours to paint it with.
@@ -55,6 +75,10 @@ struct Options {
 fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     let mut root: Option<PathBuf> = None;
     let mut preset = Preset::Dark;
+    let mut render = false;
+    let mut plain = false;
+    let mut width = DEFAULT_WIDTH;
+    let mut height = DEFAULT_HEIGHT;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-h" | "--help" => {
@@ -70,14 +94,50 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
             other if other.starts_with("--theme=") => {
                 preset = preset_of(&other["--theme=".len()..])?;
             }
+            "--render" => render = true,
+            "--plain" => plain = true,
+            "--width" => {
+                let Some(value) = args.next() else {
+                    bail!("--width needs a number\n{USAGE}");
+                };
+                width = dimension("--width", &value)?;
+            }
+            other if other.starts_with("--width=") => {
+                width = dimension("--width", &other["--width=".len()..])?;
+            }
+            "--height" => {
+                let Some(value) = args.next() else {
+                    bail!("--height needs a number\n{USAGE}");
+                };
+                height = dimension("--height", &value)?;
+            }
+            other if other.starts_with("--height=") => {
+                height = dimension("--height", &other["--height=".len()..])?;
+            }
             other if other.starts_with('-') => bail!("unknown option {other}\n{USAGE}"),
             other => root = Some(PathBuf::from(other)),
         }
     }
+    // The two flags are one mode: one without the other would ask for a
+    // render that is not plain, or a plain text that is not a render.
+    if render != plain {
+        bail!("--render and --plain go together\n{USAGE}");
+    }
     Ok(Options {
         root: root.unwrap_or_else(discover),
         theme: Theme::preset(preset),
+        render,
+        width,
+        height,
     })
+}
+
+/// A positive dimension of a plain render, up to `MAX_DIMENSION`.
+fn dimension(flag: &str, value: &str) -> Result<u16> {
+    match value.parse::<u16>() {
+        Ok(number) if number > 0 && number <= MAX_DIMENSION => Ok(number),
+        _ => bail!("{flag} needs a positive number up to {MAX_DIMENSION}, not {value}\n{USAGE}"),
+    }
 }
 
 /// The preset of a name.
@@ -130,6 +190,51 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
         }
     }
     Ok(())
+}
+
+/// Print the screen as text and exit.
+///
+/// No terminal is set up: the screen is drawn into a `TestBackend` buffer,
+/// which is converted to plain UTF-8 instead of being painted on a terminal.
+fn render_plain(options: Options) -> Result<()> {
+    let app = App::new(options.root, options.theme);
+    let work = Work::load(&app.root);
+    let mut terminal = Terminal::new(TestBackend::new(options.width, options.height))?;
+    terminal.draw(|frame| app.draw(frame, &work))?;
+    let text = plain_text(terminal.backend().buffer());
+    let mut stdout = std::io::stdout();
+    stdout.write_all(text.as_bytes())?;
+    stdout.flush()?;
+    Ok(())
+}
+
+/// The buffer as plain text: one row per line, no paint, and no trailing
+/// spaces that carry no information.
+///
+/// A symbol that takes more than one column is emitted once, and the
+/// continuation cells ratatui reset behind it are skipped: the terminal gives
+/// the symbol its columns already.
+///
+/// Every row ends with a newline, so the output has a stable final newline.
+fn plain_text(buffer: &Buffer) -> String {
+    let area = *buffer.area();
+    let mut text = String::new();
+    for y in 0..area.height {
+        let mut row = String::new();
+        let mut skip = 0u16;
+        for x in 0..area.width {
+            let Some(cell) = buffer.cell((x, y)) else {
+                continue;
+            };
+            if skip == 0 {
+                row.push_str(cell.symbol());
+            }
+            skip = skip.max(cell.cell_width()).saturating_sub(1);
+        }
+        text.push_str(row.trim_end_matches(' '));
+        text.push('\n');
+    }
+    text
 }
 
 fn setup() -> Result<Terminal<CrosstermBackend<Stdout>>> {
@@ -212,5 +317,92 @@ mod tests {
         let error =
             parse_args(["--theme".to_string()].into_iter()).expect_err("a theme needs a name");
         assert!(error.to_string().contains("--theme"), "{error}");
+    }
+
+    #[test]
+    fn the_render_mode_is_two_flags_in_either_order() {
+        for args in [["--render", "--plain"], ["--plain", "--render"]] {
+            let options = parse_args(args.map(String::from).into_iter())
+                .unwrap_or_else(|error| panic!("{args:?}: {error}"));
+            assert!(options.render, "{args:?}");
+        }
+    }
+
+    #[test]
+    fn either_render_flag_alone_is_refused() {
+        for flag in ["--render", "--plain"] {
+            let error = parse_args([flag.to_string()].into_iter())
+                .expect_err("a render flag alone is not a mode");
+            assert!(error.to_string().contains("go together"), "{error}");
+        }
+    }
+
+    #[test]
+    fn the_plain_render_is_100_by_40_by_default() {
+        let options =
+            parse_args(["--render", "--plain"].map(String::from).into_iter()).expect("the options");
+        assert_eq!((options.width, options.height), (100, 40));
+    }
+
+    #[test]
+    fn the_plain_render_takes_a_width_and_a_height() {
+        for args in [
+            vec!["--render", "--plain", "--width", "60", "--height", "20"],
+            vec!["--plain", "--width=60", "--render", "--height=20"],
+        ] {
+            let options = parse_args(args.into_iter().map(String::from)).expect("the options");
+            assert_eq!((options.width, options.height), (60, 20));
+        }
+    }
+
+    #[test]
+    fn a_dimension_is_capped_at_1000() {
+        let width = parse_args(
+            ["--render", "--plain", "--width", "1000"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .expect("1000 columns");
+        assert_eq!((width.width, width.height), (1000, DEFAULT_HEIGHT));
+        let height = parse_args(
+            ["--render", "--plain", "--height", "1000"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .expect("1000 rows");
+        assert_eq!((height.width, height.height), (DEFAULT_WIDTH, 1000));
+        for flag in ["--width", "--height"] {
+            for value in ["1001", "65535"] {
+                let error = parse_args(
+                    ["--render", "--plain", flag, value]
+                        .map(String::from)
+                        .into_iter(),
+                )
+                .expect_err("a dimension over the cap is refused");
+                assert!(error.to_string().contains(flag), "{error}");
+                assert!(error.to_string().contains("1000"), "{error}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_dimension_must_be_a_positive_number() {
+        for (flag, value) in [("--width", "0"), ("--height", "0"), ("--width", "wide")] {
+            let error = parse_args(
+                ["--render", "--plain", flag, value]
+                    .map(String::from)
+                    .into_iter(),
+            )
+            .expect_err("a dimension must be positive");
+            assert!(error.to_string().contains(flag), "{error}");
+            assert!(error.to_string().contains("positive"), "{error}");
+        }
+        let error = parse_args(
+            ["--render", "--plain", "--width"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .expect_err("a dimension needs a value");
+        assert!(error.to_string().contains("--width"), "{error}");
     }
 }

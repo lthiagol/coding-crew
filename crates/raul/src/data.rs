@@ -9,6 +9,10 @@ use std::path::{Path, PathBuf};
 
 use coding_lanes_core::{Item, ItemKind, Status, Task};
 
+#[cfg(test)]
+#[path = "../tests/support/mod.rs"]
+mod support;
+
 /// A file that could not be read. The rest of the folder still renders.
 #[derive(Debug, Clone)]
 pub struct ReadError {
@@ -66,11 +70,17 @@ impl Work {
             work.missing = true;
             return work;
         };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
+        // read_dir order is the filesystem's, not the folder's: the same work
+        // folder must render the same bytes wherever it is copied. The file
+        // name is unique per record, so ordering the entries by it first lets
+        // the stable id sort below keep that order inside a duplicate id.
+        let mut paths: Vec<PathBuf> = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("json"))
+            .collect();
+        paths.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+        for path in paths {
             let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
                 continue;
             };
@@ -104,6 +114,9 @@ impl Work {
         }
         work.tasks.sort_by(|a, b| a.id.cmp(&b.id));
         work.items.sort_by(|a, b| a.id.cmp(&b.id));
+        // The message breaks the file-name tie, so the error order is total.
+        work.errors
+            .sort_by(|a, b| a.file.cmp(&b.file).then_with(|| a.error.cmp(&b.error)));
         work
     }
 
@@ -440,5 +453,46 @@ mod tests {
         let work = Work::load(Path::new("/nowhere/coding-lanes/work"));
         assert!(work.missing);
         assert!(work.is_empty());
+    }
+
+    #[test]
+    fn duplicate_ids_keep_the_file_name_order() {
+        // The files are created in name order, and both ext4 and tmpfs hand
+        // the same four names back in a different order. Only the loader's
+        // pre-parse name sort can give the order asserted here.
+        let dir = std::env::temp_dir().join(format!("raul-duplicate-load-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a work folder");
+        for (name, contents) in support::DUPLICATE_ID_FILES {
+            fs::write(dir.join(name), contents).expect("writing a duplicate-id file");
+        }
+        let work = Work::load(&dir);
+        let tasks: Vec<(&str, &str)> = work
+            .tasks
+            .iter()
+            .map(|task| (task.id.as_str(), task.title.as_str()))
+            .collect();
+        let items: Vec<(&str, &str)> = work
+            .items
+            .iter()
+            .map(|item| (item.id.as_str(), item.title.as_str()))
+            .collect();
+        assert_eq!(tasks, vec![("TSK01", "Alpha task"), ("TSK01", "Beta task")]);
+        assert_eq!(items, vec![("ITM01", "Alpha item"), ("ITM01", "Beta item")]);
+        assert!(work.errors.is_empty(), "{:?}", work.errors);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unreadable_files_are_ordered_by_name() {
+        // The files are created in a different order from their names, and
+        // read_dir hands back whatever order the filesystem keeps.
+        let work = Work::load(&support::malformed_work("unreadable-order"));
+        let files: Vec<&str> = work
+            .errors
+            .iter()
+            .map(|error| error.file.as_str())
+            .collect();
+        assert_eq!(files, support::NAME_ORDER);
     }
 }
