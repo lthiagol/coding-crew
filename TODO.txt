@@ -82,8 +82,14 @@ WHERE WE ARE
   exits 0, and prints the same bytes across runs and filesystems. The real
   Overview output is compared with crates/raul/tests/snapshots/overview.txt.
   The gate is green: 196 Rust tests and 91 script assertions.
-  Next unit after that: the lease fix in core, then the store discovery, the
-  Backlog tab, and the markdown view.
+  Unit closed: the lease fix in core. One clean build and review round.
+  Claim::lease_expired now compares parsed RFC 3339 instants, so a lease
+  written without seconds expires on the minute it says; offsets compare as
+  instants, an empty lease never expires, a malformed nonempty lease expires,
+  and an invalid now cannot establish expiry. The gate is green: 202 Rust
+  tests and 91 script assertions.
+  Next unit after that: the store discovery in core, the Backlog tab, and the
+  markdown view.
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
       the fork parent
@@ -179,10 +185,6 @@ OPEN
   it. One rule belongs in core, next to the store it defines: a function that
   finds the work folder of the nearest project. Should be closed before talita
   lands, since the two tools would then disagree about the same project.
-  crates/core: Claim::lease_expired compares timestamps as strings, and a
-  lease written without seconds looks live for up to a minute. Reported in
-  every review round since the first and never fixed, because core was out
-  of scope for the raul rounds. Its own unit.
   The journal: activity.json exists in the model but its event kinds are not
   defined, so the Overview has no activity block and there is no Activity tab.
   The autopilot: the orchestrator role has no job yet.

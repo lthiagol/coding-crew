@@ -589,7 +589,7 @@ work is in `TODO.txt`.
 |---|---|
 | `kind` and `promoted_from` on the task | `crates/core/src/task.rs` — `TaskKind`, `Task::is_small_task` |
 | the small-task step exemption | `crates/core/src/lifecycle.rs` — `criteria.covered`, `steps.done_when_present` and `steps.settled` are skipped for a small task |
-| the claim lease | `Claim::lease_expired`; the `approved → executing` gate refuses an expired lease. **Still wrong**: it compares the timestamps as strings, and a lease written without seconds reads live for up to a minute |
+| the claim lease | `Claim::lease_expired` compares RFC 3339 instants; an empty lease never expires, a valid lease expires at or after its instant, and a malformed nonempty lease is treated as expired. The `approved → executing` gate refuses an expired lease |
 | the rename cleanup | `Store::save` removes the file the task had under an older name |
 | the work folder path | the store reads `coding-lanes/work/`, as [ADR 0002](../../decisions/0002-work-folder.md) decides |
 | smaller tasks (`ITM*`) | `crates/core/src/item.rs` — shaping, dismissal, promotion; `Store::promote_item` writes the item first |
