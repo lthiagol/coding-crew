@@ -161,7 +161,7 @@ config file, so each pane gets one:
     "builder": {
       "mode": "primary",
       "description": "Implements one unit of work",
-      "model": "minimax-coding-plan/MiniMax-M3.1-Flash-tuned"
+      "model": "deepseek/deepseek-flash#high"
     }
   }
 }
@@ -177,11 +177,11 @@ herdr pane run <PANE> env OPENCODE_CONFIG=flow/builder.json opencode --standalon
 shared server ignores a client's `OPENCODE_CONFIG`. The cost is one server
 per pane.
 
-The config **merges** with the global one, so the role file holds only the
-agent and the global file holds the models.
+The config **merges** with the global one, and the role file names the agent
+and its model directly, so each pane runs the model its role config holds.
 
 **What this buys**: the state is authoritative, and each role runs the model
-and the effort its config names.
+and the variant its config names.
 
 ## What herdr can tell us, and what it cannot
 
@@ -257,57 +257,61 @@ the Orchestration workspace holds the work.
 
 ## Models
 
-The reviewer must not run the same model *and the same reasoning effort* as
-the builder. Different lenses surface uncorrelated bugs — the same rule the
-project's own review rounds follow.
+The reviewer must not run the builder's model. Different lenses surface
+uncorrelated bugs — the same rule the project's own review rounds follow. The
+two role models are different families; that difference, not a variant, is
+what separates the lenses.
 
-| role | model | effort |
+| role | model | variant |
 |---|---|---|
 | Orchestrator | the session's own model | — |
-| Builder | `minimax-coding-plan/tuned-builder` | `medium` |
-| Reviewer | `minimax-coding-plan/tuned-review` | `high` |
+| Builder | `deepseek/deepseek-flash` | `high` |
+| Reviewer | `minimax-coding-plan/MiniMax-M3` | `thinking` |
 
-The two aliases live in the user's global opencode config, next to the tuned
-model they came from: `tuned-builder` and `tuned-review` are both the same
-upstream model with **one variant each**, so the effort travels with the
-model and never has to be selected in a session.
+The two variants do not order against each other. `high` is an effort level on
+`deepseek/deepseek-flash` (`none`, `low`, `high`, `max`); `thinking` is a
+reasoning toggle on `minimax-coding-plan/MiniMax-M3` (`none`, `thinking`).
+`high` says how hard the model works; `thinking` only that it reasons. Neither
+name says the reviewer works deeper.
+
+Both roles name a direct model ID and its variant: the builder runs
+`deepseek/deepseek-flash#high` and the reviewer
+`minimax-coding-plan/MiniMax-M3#thinking`. The variant travels in the model
+string, so it is fixed by the role config and never has to be selected in a
+session.
 
 The role configs that name them live in the repository, under `flow/`:
 
 ```
-flow/builder.json     default_agent builder  →  tuned-builder#medium
-flow/reviewer.json    default_agent reviewer →  tuned-review#high
+flow/builder.json     default_agent builder  →  deepseek/deepseek-flash#high
+flow/reviewer.json    default_agent reviewer →  minimax-coding-plan/MiniMax-M3#thinking
 ```
 
-The reviewer thinks harder than the builder on the same model. A different
-model family would separate them further — the `opencode/*` family is there
-(`deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `longcat-2.5-free`,
-`mimo-v2.6-flash-free`, `nemotron-3.5-super-vl-free`, `iceman-free`,
-`inkling-2-small-free`, `flint-40b-free`, `minimax-m3.1-flash-free`,
-`beam-free`, `big-pickle`) — but the same model at a higher effort is the
-cheaper separation, and it is what the flow uses today.
-
-**Three things the config does not do**, each measured on the wire through a
+**Two things the config does not do**, each measured on the wire through a
 logging proxy:
 
 - A model's own `options.output_config.effort` is **ignored** — the catalog's
-  default wins — so the effort has to be named as a variant.
-- **A model with several variants does not carry the selection.** With the
-  tuned model's five variants, the TUI shows `· medium` and the request sends
-  `medium`, whatever the model string says — `#high` included, in the legacy
-  map shape and in the V2 array shape alike. **One variant per model is what
-  makes it work**, and that is why the roles have aliases.
+  default wins — so the variant has to be named in the model string.
 - The provider's base-URL key in this config shape is **`api`**, not
   `baseURL`. The wrong key is ignored silently and the request goes to the
   real provider — which looks exactly like the variant being dropped.
 
-Other active models, when a role needs a different lens:
-`minimax-coding-plan/MiniMax-M3.1-Flash-tuned#low`, `#xhigh`, `#max`,
-`minimax-coding-plan/MiniMax-M3#thinking`, and the `opencode/*` family
+**A model with several variants still carries the selection — measured on
+opencode v2.3.0.** Both role models carry more than one variant, and each pane
+ran the one its model string names: the builder recorded `variant: high`, the
+reviewer `variant: thinking`. Re-check this when opencode is upgraded: an
+earlier opencode dropped the selection for a multi-variant model — the TUI
+showed `· medium` and the request sent `medium`, whatever the model string
+said — which is why the roles once ran one-variant aliases. The aliases are
+gone; the check is what remains.
+
+Other catalog models, when a role needs a different lens:
+`deepseek/deepseek-v4-pro#high`, and the `opencode/*` family
 (`deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `longcat-2.5-free`,
 `mimo-v2.6-flash-free`, `nemotron-3.5-super-vl-free`, `iceman-free`,
 `inkling-2-small-free`, `flint-40b-free`, `minimax-m3.1-flash-free`,
-`beam-free`, `big-pickle`).
+`beam-free`, `big-pickle`). These come from the catalog, so the flow depends
+on no entry in a global opencode config.
 
 ## Loop mechanics
 
@@ -485,9 +489,9 @@ through it.
 2. **Orchestrator's role** — designs first (the human approves when the change
    is architectural), opens the Orchestration workspace, starts a builder in a
    fresh tab there, verifies claims independently, opens a fresh-context
-   reviewer in a fresh tab on a different reasoning effort, decides on
-   findings (fix rounds, up to 5), commits after a clean review, and updates
-   the project's records.
+   reviewer in a fresh tab on a different model family, with its own reasoning
+   variant, decides on findings (fix rounds, up to 5), commits after a clean
+   review, and updates the project's records.
 3. **Escalation ladder** — review/fix capped at 5 rounds per unit;
    unresolved findings after that go to the human. Ambiguous product decisions
    go to the human immediately; the orchestrator decides within the approved
