@@ -33,9 +33,12 @@ build-talita: ## Build talita only
 run raul: ## Run raul (TUI) on the mock data
 	$(CARGO) run -p $(RAUL_PKG) -- mock-data/coding-lanes/work
 
-.PHONY: test
+.PHONY: test test-scripts
 test: ## Run the test suite
 	$(CARGO) test --workspace
+
+test-scripts: ## Run the shell script tests
+	bash scripts/test-herdr-wake.sh
 
 .PHONY: fmt fmt-check
 fmt: ## Format the code
@@ -49,7 +52,7 @@ lint: ## Run clippy with warnings as errors
 	$(CARGO) clippy --all-targets -- -D warnings
 
 .PHONY: check ci
-check: fmt-check lint test ## The gate: fmt, clippy, tests
+check: fmt-check lint test test-scripts ## The gate: fmt, clippy, tests, script tests
 ci: check ## Alias for check
 
 .PHONY: doc

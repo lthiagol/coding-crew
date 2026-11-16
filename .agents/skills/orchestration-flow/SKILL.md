@@ -90,6 +90,8 @@ when coding-lanes runs its own work, the findings belong inside the task.
 ## Herdr mechanics
 
 All multi-agent work runs through Herdr, in the orchestrator's own workspace.
+Commands that start with `scripts/` are relative to the repository root; run
+them from there.
 
 | what | command |
 |---|---|
@@ -99,8 +101,8 @@ All multi-agent work runs through Herdr, in the orchestrator's own workspace.
 | open a tab | `herdr tab create --workspace <ID> --label "<label>" --cwd <dir> --no-focus` |
 | split a pane | `herdr pane split <PANE> --direction right --ratio 0.5 --cwd <dir>` |
 | start an agent in a pane | `herdr pane run <PANE> env OPENCODE_CONFIG=<role-config> opencode --standalone` |
-| wait for an agent to settle | `herdr agent wait <PANE> --until idle --timeout 1800000` |
-| send a prompt | `herdr agent prompt <PANE> "<prompt>"` — text and Enter as one ordered submission |
+| dispatch a prompt and wake when the turn completes | `scripts/herdr-wake.sh <PANE> "<prompt>" --timeout 1800` — waits for a settled baseline, retries `agent_not_found`, submits one line, then waits for `completion_seq` to advance or a working turn to settle twice; the timeout bounds the whole command, including every herdr call and the final pane read |
+| send a report without waiting | `herdr agent prompt <ORCHESTRATOR-PANE> "<report>"` — no `--wait`; text and Enter as one ordered submission |
 | read a pane | `herdr pane read <PANE> --lines 40` |
 | close a tab | `herdr tab close <TAB_ID>` |
 
@@ -108,41 +110,106 @@ All multi-agent work runs through Herdr, in the orchestrator's own workspace.
 orchestrator's own workspace. See the next section.
 
 `herdr pane send-text` types literally: a newline inside the text submits
-early and strands the rest in the input box.
+early and strands the rest in the input box. `scripts/herdr-wake.sh` flattens
+CR, LF, tab and form feed to spaces, so the prompt it dispatches is always one
+line and cannot move focus or clear the input.
 
 ### A kickoff that lands
 
-Use `herdr agent prompt`:
+Dispatch through the tested wake command:
 
 ```sh
-herdr agent prompt <PANE> "<the kickoff, one line>"
+scripts/herdr-wake.sh <PANE> "<the kickoff, one line>" --timeout 1800
 ```
 
-Text and the encoded Enter go as **one ordered submission**, and herdr
-reports success only after both were written. There is no enter to forget and
-no window in which the text sits unsubmitted — the two failures this
-replaces.
+It waits for herdr to recognise the agent (`agent_not_found` is *not ready*,
+not a failure, and is retried until the timeout) and for two consecutive
+`idle|done` reads before capturing the baseline. Two reads close the window
+where the next turn has started but herdr still reports the previous state.
+It then submits the prompt with `herdr agent prompt` (text and the encoded
+Enter go as one ordered submission), flattens CR/LF/tab/form feed so the text
+cannot submit early or move focus, and polls `herdr agent get`. It prints the
+final pane output and exits:
 
-**`--wait` works here.** Herdr's opencode integration installs a pane-local
-TUI plugin (`herdr integration install opencode`), and the plugin reports the
-agent's lifecycle state authoritatively. `herdr agent explain` then says
-`screen_detection_skip_reason: full_lifecycle_hook_authority` — herdr is not
-reading the screen, the agent is telling it.
+| exit | meaning |
+|---|---|
+| 0 | the turn completed: `completion_seq` advanced, or a working turn settled twice without advancing it (fallback) |
+| 2 | the agent is blocked |
+| 3 | the whole-command bound expired |
+| 4 | usage error, or a Herdr failure other than `agent_not_found` |
 
-So the wake signal is herdr's state:
+Exit 0 normally prints the final pane output on stdout. The final
+`herdr pane read` runs under the budget left in the command. If that read
+fails or no budget remains, the wake, blocked or timeout exit is kept, the
+missing output is reported on stderr, and stdout stays empty — a failed or
+skipped read does not change the exit.
 
-```sh
-herdr agent wait <PANE> --until idle --timeout 1800000
-```
+Herdr's `unknown` status means an agent is present but Herdr cannot classify
+it confidently; it does not prove completion. The command keeps waiting and
+the whole-command bound ends the wait (exit 3); it never treats `unknown` as
+a wake or as a settled baseline.
 
-The agent still reports, in the other direction, and the orchestrator reads
-the summary after the wait:
+`--timeout` is a hard bound in seconds for the whole command, including a
+hung `herdr agent get`, `herdr agent prompt`, or final `herdr pane read`; the
+default is 1800. Every Herdr call runs under the budget left at that point.
+`--interval` is the poll interval; the default is 1. If the pane is already
+working, the command waits for that turn to settle before capturing the
+baseline. It reads the pane with `herdr pane read --source recent-unwrapped`
+so soft wraps do not break logical lines; `--lines N` changes how much it
+prints. The command needs bash, python3, herdr, and `timeout` and `sleep`
+from coreutils.
+
+Do not replace the wake with `herdr agent wait --until idle`: on herdr 0.9.5
+it can run to its full timeout after the agent already finished (see the defect
+record below).
+
+The agent reports in the other direction with `herdr agent prompt` and no
+`--wait`, because the orchestrator is busy and the summary must not block it:
 
 ```sh
 herdr agent prompt <orchestrator-pane> "done: <one-line summary>"
 ```
 
-No `--wait` there: the orchestrator is busy, and the summary must not block it.
+### Versioned defect record
+
+Re-check this on every herdr upgrade.
+
+| component | version | observed |
+|---|---|---|
+| herdr | 0.9.5 | `agent wait <PANE> --until idle --timeout 120000` missed a turn that finished in 4–8 seconds and ran the full 120 seconds |
+| opencode | 2.3.0 | the regular TUI lifecycle hook reported the pane idle or done while the wait still hung |
+
+**`completion_seq` on herdr 0.9.5.** Herdr's schema describes it as the
+current idle transition completed work, independently of who has viewed it.
+It is absent while a turn runs and advances when an idle transition completes
+work. The script captures the baseline from settled work, then treats a
+present sequence greater than that baseline as the completion signal. A null
+baseline means no earlier completed turn, so any later sequence is a wake.
+
+**Working-to-settled fallback.** A turn can end early — the agent stops
+mid-thought — and may not advance `completion_seq`. If the script observed
+`working` after dispatch and the pane then settles `idle|done` twice in a row
+without the sequence advancing, it exits 0 and says `settled after working
+without completion_seq advancing` on stderr. Two reads match the baseline
+rule: a single idle can be a transient mid-turn and must not wake. A pane
+that never reached `working` is not a completion; it times out. `unknown`
+resets the settled count because it does not prove completion.
+
+**Blocked precedence.** `blocked` is checked before completion. An agent that
+finishes a turn and then raises a question or approval satisfies both; the
+script exits 2 and prints the pane output when the budget allows, because a
+blocked agent needs the orchestrator. It never reports that turn as an
+ordinary wake.
+
+The script's test is `scripts/test-herdr-wake.sh`, run from the repository
+root. It puts a fake `herdr` on `PATH`, needs no live session, and covers
+readiness, baseline settling, blocked precedence, prompt flattening, the
+one-line prompt, `unknown`, timeout bounds including a hanging `agent get`,
+`agent prompt`, and final `pane read`, unwrapped pane reads, and the two-read
+fallback. It bounds every case with `timeout` so a missing script timeout
+fails instead of hanging. The fake writes herdr's error JSON to stderr and
+exits 1, like herdr 0.9.5. `make test-scripts` runs it; `make ci` includes it,
+and CI runs `make ci`.
 
 ### The pane recipe
 
@@ -186,8 +253,8 @@ and the variant its config names.
 ## What herdr can tell us, and what it cannot
 
 Herdr recognises an agent and watches its terminal output to decide whether
-it is `working`, `idle`, `blocked` or `done`. The rules live in a per-agent
-manifest — for opencode, they look for `esc to interrupt`,
+it is `working`, `idle`, `blocked`, `done` or `unknown`. The rules live in a
+per-agent manifest — for opencode, they look for `esc to interrupt`,
 `press esc to interrupt`, a line matching `.*opencode.*esc interrupt`, or a
 progress bar of four or more blocks.
 
@@ -198,8 +265,10 @@ it is working, waiting or finished.
 
 | what | use it for |
 |---|---|
-| `herdr agent prompt <PANE> "<text>"` | the way to submit — one ordered submission, text and Enter together |
-| `herdr agent wait <PANE> --until idle --timeout MS` | block until the agent settles — the wake signal |
+| `scripts/herdr-wake.sh <PANE> "<text>" --timeout SECONDS` | the dispatch and wake path — waits for two settled reads, retries `agent_not_found`, flattens the prompt, polls `agent get` until `completion_seq` advances or a working turn settles twice, prints the final pane output; `SECONDS` bounds the whole command |
+| `herdr agent prompt <PANE> "<text>"` | submit without waiting — one ordered submission, text and Enter together; used for reports to the orchestrator |
+| `herdr agent get <PANE>` | the agent's state and `completion_seq`; what the wake command polls |
+| `herdr agent wait <PANE> --until idle --timeout MS` | diagnosis only on herdr 0.9.5 — it can miss a fast turn; not the wake signal |
 | `herdr pane read <PANE> --lines N` | what the agent is actually showing, and its report |
 | `herdr agent explain <PANE>` | why herdr thinks an agent is in that state — the rule it matched, or the fallback |
 | `herdr agent list` | the agents and their states, with a `state_change_seq` counter |
@@ -318,19 +387,27 @@ on no entry in a global opencode config.
 1. **The orchestrator designs and decides.** It decides what the unit of work
    is, creates the Orchestration workspace (once per loop), and opens a tab in
    it for the builder.
-2. **The orchestrator submits the kickoff**, then waits for the agent to
-   settle with `herdr agent wait <PANE> --until idle --timeout 1800000`.
-   **Waking mechanism:** every working agent ends its session by prompting
-   **the orchestrator pane only** — address it by pane ID
-   (`herdr pane send-text <orchestrator-pane-id> "done: <one-line summary>"`
-   then `herdr pane send-keys <orchestrator-pane-id> enter`; the pane ID comes
-   from the kickoff). The literal name `orchestrator` is not registered, so
-   addressing it by name fails. Idle is safe and no polling is needed.
-   **Fallback:** if the prompt fails because the pane or session churned, look
-   the orchestrator's pane up again with `herdr pane current` and retry once;
-   if that also fails, idle with the summary visible in the terminal output —
-   the orchestrator recovers verdicts from terminal output on the next
-   check-in.
+2. **The orchestrator submits the kickoff and waits with the tested command:**
+   `scripts/herdr-wake.sh <PANE> "<kickoff>" --timeout 1800`. Exit 0 means
+   `completion_seq` advanced or a working turn settled, and the final pane
+   output is printed when the budget allows; exit 2 is blocked, 3 is the
+   whole-command bound, 4 is a usage or Herdr failure. `agent_not_found` is
+   retried as not-ready, two
+   consecutive settled reads set the baseline, and `unknown` never counts as
+   completion. Do not use
+   `herdr agent wait --until idle` as the wake signal (defect record above).
+   **Waking mechanism:** every working agent ends by reporting to **the
+   orchestrator pane only** —
+   `herdr agent prompt <orchestrator-pane-id> "done: <one-line summary>"`, with
+   no `--wait`; the pane ID comes from the kickoff. The literal name
+   `orchestrator` is not registered, so addressing it by name fails. The
+   orchestrator's wait ends when the wake command returns, not when the report
+   arrives.
+   **Fallback:** if the report prompt fails because the pane or session
+   churned, look the orchestrator's pane up again with `herdr pane current`
+   and retry once; if that also fails, idle with the summary visible in the
+   terminal output — the orchestrator recovers verdicts from terminal output
+   on the next check-in.
 3. **On wake**, the orchestrator reads the agent's summary, then decides and
    opens the next role in a **fresh tab and pane**. Only the orchestrator
    decides transitions — never the agents.
@@ -356,6 +433,22 @@ before anything was built. Only real build-and-review rounds count.
 
 ## Prompt templates
 
+The orchestrator submits each kickoff below with the tested command, run
+from the repository root:
+
+```sh
+scripts/herdr-wake.sh <PANE> "<the template text, substitutions made>" --timeout 1800
+```
+
+The command flattens CR, LF, tab and form feed to spaces, so a block-quoted
+template below is dispatched as one line. It returns when `completion_seq`
+advances or a working turn settles twice, and prints the final pane output
+when the budget allows, so the orchestrator reads the report after it returns.
+The report line at the end of each template is sent
+by the agent with `herdr agent prompt <orchestrator-pane> "<report>"` and no
+`--wait`; do not use the wake command for a report to the orchestrator,
+because it would wait for the orchestrator's turn to complete.
+
 **Builder kickoff:**
 
 > Your role: builder.
@@ -374,11 +467,11 @@ before anything was built. Only real build-and-review rounds count.
 > Your task: `<the unit of work>`. Do not start other work. Finish the whole
 > unit before you report — if you are done with a part, move to the next part
 > rather than stopping. Run the project's
-> gate before you report. Finish by sending
-> `herdr pane send-text <orchestrator-pane> "done: <one-line summary>"` and then
-> `herdr pane send-keys <orchestrator-pane> enter`, and check with
-> `herdr pane read <orchestrator-pane> --lines 5` that the text left the input
-> box before you finish.
+> gate before you report. Finish by reporting to the orchestrator pane with
+> `herdr agent prompt <orchestrator-pane> "done: <one-line summary>"` (no
+> `--wait`), and check with `herdr pane read <orchestrator-pane> --lines 5`
+> that the text left the input box before you finish. The orchestrator is
+> already waiting on your `completion_seq`.
 
 **Reviewer kickoff:**
 
@@ -402,11 +495,12 @@ before anything was built. Only real build-and-review rounds count.
 > cover, say so and name the fixture that would cover it.
 > Findings carry severity and location. Do not modify code.
 > Write the findings to `<path-to-this-round-findings>`.
-> Finish with a verdict (`ok` or `changes-needed`) by sending
-> `herdr pane send-text <orchestrator-pane> "VERDICT: <ok|changes-needed> ..."`
-> and then `herdr pane send-keys <orchestrator-pane> enter`, and check with
-> `herdr pane read <orchestrator-pane> --lines 5` that the text left the input
-> box before you finish.
+> Finish with a verdict (`ok` or `changes-needed`) by reporting to the
+> orchestrator pane with
+> `herdr agent prompt <orchestrator-pane> "VERDICT: <ok|changes-needed> ..."`
+> and no `--wait`; check with `herdr pane read <orchestrator-pane> --lines 5`
+> that the text left the input box before you finish. The orchestrator is
+> already waiting on your `completion_seq`.
 
 **Fixer kickoff** (a builder on its second round):
 
@@ -415,11 +509,11 @@ before anything was built. Only real build-and-review rounds count.
 > `BLOCKED: <question>; options: ...; recommendation: ...` and report to the orchestrator.
 > Read AGENTS.md, the project's docs, and the findings at
 > `<path-to-findings>`. Fix every finding — the closed ones stay closed.
-> Re-run the project's gate. Finish by sending
-> `herdr pane send-text <orchestrator-pane> "done: <one-line summary>"` and then
-> `herdr pane send-keys <orchestrator-pane> enter`, and check with
-> `herdr pane read <orchestrator-pane> --lines 5` that the text left the input
-> box before you finish.
+> Re-run the project's gate. Finish by reporting to the orchestrator pane with
+> `herdr agent prompt <orchestrator-pane> "done: <one-line summary>"` (no
+> `--wait`), and check with `herdr pane read <orchestrator-pane> --lines 5`
+> that the text left the input box before you finish. The orchestrator is
+> already waiting on your `completion_seq`.
 
 ## Clarifications and stalls
 
@@ -429,7 +523,8 @@ ask-the-user prompt stalls the agent forever.
 - **Never use the ask-the-user tool** in a dispatched agent. If something is
   ambiguous, stop and end the reply with a single line:
   `BLOCKED: <the question>; options: <A / B / C>; my recommendation: <X>`.
-  Then prompt the orchestrator pane with that line.
+  Then report it to the orchestrator pane with
+  `herdr agent prompt <orchestrator-pane> "<the line>"` and no `--wait`.
 - **The orchestrator decides.** It answers from the docs, or asks the human
   through its own ask tool — always stating its recommended option first —
   then re-prompts the same agent with the answer, or opens a fresh one with
@@ -439,11 +534,13 @@ ask-the-user prompt stalls the agent forever.
 
   | what the pane shows | what it means | what to do |
   |---|---|---|
-  | reasoning that stops mid-thought, files half changed | the turn ended early | **nudge it to continue** — `herdr agent prompt <PANE> "Continue the unit. ... Do not stop mid-work: if you are done with a part, move to the next part before reporting."` |
+  | reasoning that stops mid-thought, files half changed | the turn ended early | **nudge it to continue** — `scripts/herdr-wake.sh <PANE> "Continue the unit. ... Do not stop mid-work: if you are done with a part, move to the next part before reporting." --timeout 1800` |
   | nothing at all, no files touched | the turn never started | restart it with the task |
 
   A turn that ends on a design decision — "let me settle on this
-  definitively" — and then stops is the first kind, not a crash.
+  definitively" — and then stops is the first kind, not a crash. The wake
+  command's fallback returns that early-ended turn promptly (exit 0,
+  `settled after working`); the nudge then starts a new turn.
 
 ## Rules for the orchestrator
 
