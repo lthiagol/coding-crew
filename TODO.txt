@@ -75,7 +75,15 @@ WHERE WE ARE
   the fixture tree byte for byte. The colour decision: docs/tui/theme.md is
   authoritative - approve and review use semantic.human, escalated uses
   semantic.error.
-  Next unit after that: the Backlog tab, then the markdown view.
+  Unit closed: raul --render --plain. Five build and review rounds closed the
+  wide-grapheme column, filesystem ordering, duplicate-id tie-break, custom
+  dimension coverage, and allocation bound. The command prints deterministic
+  plain text without a terminal, takes bounded --width and --height options,
+  exits 0, and prints the same bytes across runs and filesystems. The real
+  Overview output is compared with crates/raul/tests/snapshots/overview.txt.
+  The gate is green: 196 Rust tests and 91 script assertions.
+  Next unit after that: the lease fix in core, then the store discovery, the
+  Backlog tab, and the markdown view.
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
       the fork parent
@@ -178,10 +186,12 @@ OPEN
   The journal: activity.json exists in the model but its event kinds are not
   defined, so the Overview has no activity block and there is no Activity tab.
   The autopilot: the orchestrator role has no job yet.
-  A render mode for raul: raul --render --plain prints the current screen as
-  text and exits. It is how a prototype is captured and how a snapshot test is
-  written. maitre does the same with maitre --render --plain, and it is what
-  made its prototypes honest: captured output, not a drawing.
+  The plain-render review left low follow-ups, none blocking: the duplicate-id
+  loader test can be made less filesystem-sensitive with more pairs; --width
+  and --height are accepted and ignored outside render mode; the black-box
+  width measure uses a hand-rolled table instead of unicode-width; some test
+  fixtures leave temp folders; and the new flags are documented only in
+  --help.
   The Autopilot tab is the only raul tab whose design is not settled. Pilot it
   the way maitre did its layout: two or three variants in terminal text, the
   winner built, the rest kept as the record of what was compared. The ideas
@@ -196,7 +206,7 @@ OPEN
     the order lives on the tool's side, not in the project's data;
     the crew is runtime state, and only the runtime has it.
   A pty harness in the repo, scripts/pty-sweep.py, and snapshot tests of the
-  rendered screens. The render mode above is the first half of this.
+  rendered screens. The plain render mode is done; this is the rest.
   The theme catalog: Catppuccin (latte, frappe, macchiato, mocha), Dracula
   (dracula, alucard) and Nord (nord, nord-light). The light variants are
   deferred with the light theme, until the user says otherwise. The values come from each
