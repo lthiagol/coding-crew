@@ -229,10 +229,22 @@ pub struct Claim {
 impl Claim {
     /// Whether the lease has expired at `now`.
     ///
-    /// Timestamps are UTC, fixed width and RFC 3339, so they compare as
-    /// strings. An empty lease never expires.
+    /// The stamps are RFC 3339 instants, compared as instants, not as text:
+    /// the zone is read, so equivalent readings in different offsets agree.
+    /// An empty lease never expires. A nonempty lease that is not a stamp is
+    /// treated as expired, so it cannot hold a task forever. A `now` that is
+    /// not a stamp establishes nothing, so the lease stays live.
     pub fn lease_expired(&self, now: &str) -> bool {
-        !self.lease_expires_at.is_empty() && self.lease_expires_at.as_str() < now
+        if self.lease_expires_at.is_empty() {
+            return false;
+        }
+        let Some(lease) = crate::parse_rfc3339(&self.lease_expires_at) else {
+            return true;
+        };
+        match crate::parse_rfc3339(now) {
+            Some(now) => now >= lease,
+            None => false,
+        }
     }
 }
 
@@ -564,4 +576,61 @@ pub struct Note {
     pub body: String,
     #[serde(default)]
     pub at: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn claim(lease: &str) -> Claim {
+        Claim {
+            by: "runner-1".to_string(),
+            session: None,
+            at: "2026-11-07T12:00:00Z".to_string(),
+            lease_expires_at: lease.to_string(),
+        }
+    }
+
+    #[test]
+    fn an_empty_lease_never_expires() {
+        assert!(!claim("").lease_expired("2999-01-01T00:00:00Z"));
+    }
+
+    #[test]
+    fn a_lease_expires_on_the_instant_it_names() {
+        let claim = claim("2026-11-07T13:00:00Z");
+        assert!(!claim.lease_expired("2026-11-07T12:59:59Z"));
+        assert!(claim.lease_expired("2026-11-07T13:00:00Z"));
+        assert!(claim.lease_expired("2026-11-07T13:00:01Z"));
+    }
+
+    #[test]
+    fn a_lease_without_seconds_expires_on_the_minute_it_says() {
+        let claim = claim("2026-11-07T13:00Z");
+        assert!(!claim.lease_expired("2026-11-07T12:59:59Z"));
+        assert!(claim.lease_expired("2026-11-07T13:00:00Z"));
+        assert!(claim.lease_expired("2026-11-07T13:00:30Z"));
+    }
+
+    #[test]
+    fn offsets_name_the_same_instant() {
+        // 15:00+02:00 and 08:00-05:00 are both 13:00Z.
+        let ahead = claim("2026-11-07T15:00:00+02:00");
+        let behind = claim("2026-11-07T08:00:00-05:00");
+        assert!(!ahead.lease_expired("2026-11-07T12:59:59Z"));
+        assert!(ahead.lease_expired("2026-11-07T13:00:00Z"));
+        assert!(!behind.lease_expired("2026-11-07T12:59:59Z"));
+        assert!(behind.lease_expired("2026-11-07T13:00:00Z"));
+    }
+
+    #[test]
+    fn a_malformed_lease_is_expired() {
+        assert!(claim("not a stamp").lease_expired("2026-11-07T13:00:00Z"));
+    }
+
+    #[test]
+    fn a_malformed_now_leaves_the_lease_live() {
+        assert!(!claim("2026-11-07T13:00:00Z").lease_expired("not a stamp"));
+        assert!(!claim("2026-11-07T13:00:00Z").lease_expired(""));
+    }
 }
