@@ -1,9 +1,9 @@
 coding-lanes - orchestration state
 
-updated 2026-11-14 by the orchestrator
+updated 2026-11-16 by the orchestrator
 branch main, remote https://github.com/lthiagol/coding-lanes.git
 gate is make ci: cargo fmt --all -- --check, cargo clippy --all-targets -- -D warnings,
-cargo test --workspace
+cargo test --workspace, bash scripts/test-herdr-wake.sh
 
 SCOPE
   raul only: the TUI shell and its tabs, built against the mock data in
@@ -52,6 +52,15 @@ WHERE WE ARE
   construction. All three are fixed, and the tree is the shape of
   docs/tui/screens.md. The lesson held: pin the numbers before the first
   review round, and check that the check can fail.
+  Unit closed: the flow's role models. The builder runs DeepSeek V4.1 Flash
+  with the high variant; the reviewer runs MiniMax M3 with thinking. The
+  direct model IDs carry their variants on opencode 2.3.0, confirmed by live
+  panes and by the model catalog.
+  Unit closed: the Herdr wake signal. Four build and review rounds replaced
+  herdr agent wait --until idle with scripts/herdr-wake.sh: it captures
+  completion_seq before dispatch, sends one-line prompts, and waits on a hard
+  command bound. The script has 91 assertions in the gate, and a live smoke
+  test dispatched a builder and returned on completion.
   Unit in flight: the Needs you tab - the human lane. Round one reviewed
   changes-needed with four findings: the age column measured the tasks last
   write rather than the wait, and the builder had added a sentence to the
@@ -161,14 +170,18 @@ OPEN
   into crates/engine with the upstream commit recorded, a VENDORED.md of
   deviations and a sync script. Still open: which fields are rendered as
   markdown and which are escaped.
-  The panes now run the regular opencode, not mini: herdr's opencode
-  integration reports the agent's own state, so herdr agent wait --until idle
-  is the wake signal and a stall is visible. The panes start with
-  OPENCODE_CONFIG=flow/builder.json or flow/reviewer.json and --standalone, so
-  the role config is read. The models are the aliases tuned-builder and
-  tuned-review in the global opencode config: the same upstream model, one
-  variant each, because a model with several variants does not carry the
-  selected effort into the TUI.
+  The panes run the regular opencode, not mini, with
+  OPENCODE_CONFIG=flow/builder.json or flow/reviewer.json and --standalone,
+  so the role config is read. The builder is
+  deepseek/deepseek-flash#high; the reviewer is
+  minimax-coding-plan/MiniMax-M3#thinking. Herdr's agent wait --until idle is
+  broken on herdr 0.9.5: it missed turns that finished in 4-8 seconds and
+  waited for its whole timeout. The flow uses scripts/herdr-wake.sh instead.
+  The wake script's low follow-ups are non-blocking: bash SECONDS gives a
+  timeout budget that is off by up to a second; a killed pane read can leave
+  partial stdout; a non-JSON Herdr failure loses its message; a Herdr warning
+  on stderr can break the merged JSON parse; and the test's wall-clock
+  windows can flake on a loaded CI runner.
   The builders may add or edit the mock data when a finding needs data the
   fixtures do not have - through mock-data/generate.py, and the generator must
   keep reproducing the committed tree byte for byte.
