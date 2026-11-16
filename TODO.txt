@@ -61,48 +61,42 @@ WHERE WE ARE
   completion_seq before dispatch, sends one-line prompts, and waits on a hard
   command bound. The script has 91 assertions in the gate, and a live smoke
   test dispatched a builder and returned on completion.
-  Unit in flight: the Needs you tab - the human lane. Round one reviewed
-  changes-needed with four findings: the age column measured the tasks last
-  write rather than the wait, and the builder had added a sentence to the
-  spec asserting an equivalence the model does not support; the not-shown
-  announcement could cut a count off from its reason and used the opposite
-  count order to every other count in raul; the wait test read the wall clock
-  twice and could fail spuriously; and an empty announcement rendered a blank
-  line while a reason with a zero count vanished.
-  The decision on the age column: measure the wait. The task gains a
-  status_since, set on every transition, and the spec sentence goes. The
-  builder may not write the replacement - the spec is the orchestrators.
-  Round two closed F1 to F4 and the review found four more:
-    N1 the fixtures carry no status_since, so every row falls back and the
-    column shows the age of the task rather than the wait
-    N2 the announcement count and the header count share a shape and mean
-    different things - escalated · 3 beside escalated · 2
-    N3 nothing pinned status_since across a save and a load
-    N4 parse_timestamp reads fixed byte positions and ignores the zone, so
-    a stamp with an offset is read as UTC
-  The decision on N1 was made: the fixtures carry status_since, and the
-  model doc now states the fallback rule - a file written before the field
-  existed falls back to created, and the wait it names is a lower bound.
-  ROUND THREE IS STOPPED MID-WAY, and the working tree holds it. The
-  session ended there because the round was too big. Where it got to:
-    DONE - N4: crates/core/src/clock.rs grew a parse_rfc3339 that reads
-      the zone, with the day arithmetic
-    DONE - N3: crates/core/tests/task_model.rs asserts status_since across
-      the save and the load
-    HALF - N2: the announcement was being rewritten to take counts
-      instead of the missing rows, and the tree does not compile - one
-      error, crates/raul/src/needs.rs:180, where the call site still
-      passes &[Missing; 3] and the new signature wants &[usize; 3]
-    NOT STARTED - N1: mock-data/generate.py has no status_since yet, so
-      the fixtures still carry no wait
-  The next session starts here: one builder round for N2 alone - finish
-  the announcement and get the tree compiling - then N1, then the review.
-  The tree does not compile now. That is the one thing to fix first.
-  IMPORTANT for the next session: the working tree holds this unreviewed
-  change. Do not commit it until a review says ok, and stage it by name -
-  crates/raul, crates/core/tests/mock_data.rs, mock-data. Never git add -A:
-  it sweeps another agent's in-flight work into the commit. That happened
-  twice here.
+  Unit in flight: the Needs you tab - the human lane. Five build and review
+  rounds are spent and the working tree holds the unit. Round five reviewed
+  changes-needed, so the five-round budget is spent and the human must
+  approve another round before work continues. The Orchestration workspace
+  wE is open; the round-five findings are at
+  /tmp/opencode/review-needs-you/round5-findings.md.
+  What is closed:
+    - the age column measures the wait from status_since, with created as the
+      documented lower-bound fallback
+    - the clock is read once, status_since survives save and load, and
+      parse_rfc3339 reads the zone
+    - every fixture carries status_since; the generated history follows the
+      model's phase order, status_since names the transition, updated is the
+      latest write, and waits differ across a group
+    - the announcement counts omitted tasks, uses a shape distinct from the
+      header total, names every reason including zero, keeps hidden in a
+      narrow pane, and paints reason names and counts by the theme
+  Two low findings remain:
+    F1 in the cut-announcement path, an exactly full row is rebuilt as one
+      dim span, so the reason loses its slot and the count loses text.strong
+    F2 the leap-second rule checks the stamp's local date and time instead
+      of the UTC instant, so an offset accepts a false second and refuses a
+      real one
+  The gate is green: 178 Rust tests and 91 script assertions. The generator
+  reproduces the fixture tree byte for byte. The next approved work is one
+  narrow builder and review round for F1, then one for F2; the flow keeps
+  findings in different layers in different rounds.
+  IMPORTANT: the working tree holds this unreviewed change. Do not commit it
+  until a review says ok. Stage by name - crates/core/src/clock.rs,
+  crates/core/src/lib.rs, crates/core/src/lifecycle.rs,
+  crates/core/src/task.rs, crates/core/tests/mock_data.rs,
+  crates/core/tests/task_model.rs, crates/raul/src/app.rs,
+  crates/raul/src/data.rs, crates/raul/src/main.rs,
+  crates/raul/src/needs.rs, mock-data/generate.py, and the generated
+  mock-data tree. Never git add -A: it sweeps another agent's in-flight work
+  into the commit. That happened twice here.
   Next unit after that: the Backlog tab, then the markdown view.
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
