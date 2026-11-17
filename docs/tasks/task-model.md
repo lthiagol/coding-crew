@@ -591,5 +591,5 @@ work is in `TODO.txt`.
 | the small-task step exemption | `crates/core/src/lifecycle.rs` — `criteria.covered`, `steps.done_when_present` and `steps.settled` are skipped for a small task |
 | the claim lease | `Claim::lease_expired` compares RFC 3339 instants; an empty lease never expires, a valid lease expires at or after its instant, and a malformed nonempty lease is treated as expired. The `approved → executing` gate refuses an expired lease |
 | the rename cleanup | `Store::save` removes the file the task had under an older name |
-| the work folder path | the store reads `coding-lanes/work/`, as [ADR 0002](../../decisions/0002-work-folder.md) decides |
+| the work folder path | the store reads `coding-lanes/work/`, as [ADR 0002](../../decisions/0002-work-folder.md) decides; [ADR 0010](../../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-lanes/` folder |
 | smaller tasks (`ITM*`) | `crates/core/src/item.rs` — shaping, dismissal, promotion; `Store::promote_item` writes the item first |

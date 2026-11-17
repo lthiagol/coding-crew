@@ -209,7 +209,8 @@ Every view above is computed from the task files.
 | state | what raul shows |
 |---|---|
 | empty | "no tasks yet" in the pane, not a blank screen |
-| no work folder | "no coding-lanes folder found" with the path it looked in |
+| no project | "no coding-lanes folder found" with the path it looked in |
+| no work folder | "this project has no work folder" with the path it looked in |
 | unreadable file | the file name and the error; the rest of the list still renders |
 | stale | the list is read from disk on every redraw; a changed file shows up on the next redraw |
 
