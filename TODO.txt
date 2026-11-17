@@ -100,7 +100,15 @@ WHERE WE ARE
   promoted items stay visible as such; short panes announce hidden rows;
   fixed columns are never cut; and Unicode titles are cut on grapheme
   boundaries. The gate is green: 247 Rust tests and 91 script assertions.
-  Next unit after that: the markdown projection, then the detail pane.
+  Unit closed: the markdown projection in core. Four build and review rounds.
+  task_to_markdown is one pure interface with no terminal or clock; the
+  document carries the ten detail-pane sections in order; fixed fields stay
+  literal while free text keeps its markdown; reverse dependencies and child
+  progress come from the context; and a committed snapshot pins the complete
+  output. The title is a label and is escaped. The gate is green: 269 Rust
+  tests and 91 script assertions.
+  Next unit after that: vendor leaf's engine, then bridge the slots, then the
+  detail pane.
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
       the fork parent
@@ -126,7 +134,8 @@ DONE
   subtasks. Eight statuses, three overlays, the gates that move a task
   between them, the roles and the session boundaries, evidence with derived
   criterion status, smaller tasks with shaping and one-way promotion, and a
-  store of one file per work unit with atomic writes.
+  store of one file per work unit with atomic writes. A task projects to
+  markdown through one pure, terminal-free interface.
   Docs: task model, smaller tasks, roles, vocabulary, the raul screen spec,
   and ten decision records.
   Skills: four vendored from upstream under .agents/skills, and
@@ -176,11 +185,13 @@ OPEN
   reads the clock three times; the leap-second rule does not check the year;
   and the span-by-span cut path is currently unreachable.
   The detail pane, and with it the markdown view. ADR 0009 says the record
-  stays JSON and the display is markdown: the projection task to markdown
-  lives in crates/core and is pure, the renderer is leaf's engine vendored
+  stays JSON and the display is markdown. The pure task-to-markdown projection
+  is done in crates/core. The renderer is leaf's engine, still to be vendored
   into crates/engine with the upstream commit recorded, a VENDORED.md of
-  deviations and a sync script. Still open: which fields are rendered as
-  markdown and which are escaped.
+  deviations and a sync script. The projection review left one engine-unit
+  question: how leaf's table parser renders backslashes inside code spans. Its
+  snapshot uses a synthetic fixture; a real mock-data task belongs in the
+  detail-pane unit.
   The panes run the regular opencode, not mini, with
   OPENCODE_CONFIG=flow/builder.json or flow/reviewer.json and --standalone,
   so the role config is read. The builder is

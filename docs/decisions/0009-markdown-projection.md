@@ -57,8 +57,9 @@ tested without a terminal, and it is the piece other surfaces will need.
   A field that changes shape has to change the projection too.
 - Vendoring carries the maintenance cost: the upstream copy has to be
   re-synced, and the deviations have to be kept honest.
-- A task's free text is rendered as markdown, so a stray `#` or a fence in a
-  title changes the rendering. Fields that must not be interpreted are escaped.
+- A task's free text is rendered as markdown, so a stray `#` or a fence in
+  prose changes the rendering. The title is a label, not prose, and is escaped
+  like the other fields that must not be interpreted.
 
 ### Follow-up
 
@@ -68,5 +69,5 @@ tested without a terminal, and it is the piece other surfaces will need.
 - The escaping rule is decided, and it is what the screens spec already
   implies: **the free text is markdown in its own right** — the intent, the
   criterion descriptions, the notes, the smaller task's body — and **the
-  fields that must not be interpreted are escaped**: ids, statuses, kinds,
-  timestamps, and the verification commands, which are code and not prose.
+  fields that must not be interpreted are escaped**: the title, ids, statuses,
+  kinds, timestamps, and the verification commands, which are code and not prose.

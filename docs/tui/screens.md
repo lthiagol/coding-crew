@@ -170,12 +170,12 @@ The document carries the task's sections, in reading order:
 
 | section | shows |
 |---|---|
-| header | id, title, status, overlays, claim, priority, effort, tags |
+| header | id, title, kind, status, overlays, claim, priority, effort, tags |
 | intent | outcome and problem |
 | scope | in and out |
 | acceptance criteria | each: description, verification, status, evidence, deferral |
 | steps | each: action, done_when, status, deviation |
-| review | the rounds — kind, focus, verdict, findings — and the findings' threads |
+| review | the budget and verdict, the rounds — kind, focus, verdict, findings — and the findings' threads |
 | questions | open and resolved |
 | notes | what the execution learned |
 | dependencies | what it waits on, what waits on it |
@@ -185,7 +185,8 @@ The projection is the shape, not the wording: headings per section, tables for
 the criteria and the rounds, lists for the steps and the findings, and the
 verification commands as code. The task's own free text — the intent, the
 criterion descriptions, the notes — is markdown in its own right and is
-rendered as such; fields that must not be interpreted are escaped.
+rendered as such; the title is a label and is escaped like the other fields
+that must not be interpreted.
 
 Nothing in the detail pane is editable in v1. raul reads.
 
