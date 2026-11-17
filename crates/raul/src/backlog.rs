@@ -1,0 +1,1545 @@
+//! The Backlog tab: what is not a task yet.
+//!
+//! The smaller tasks and the draft tasks, in one list. The groups are
+//! derived from the model — ideas, then small tasks, then drafts — and are
+//! never stored.
+
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Paragraph, Wrap};
+
+use coding_lanes_core::{Item, ItemKind, ItemStatus, Status, Task};
+
+use crate::data::Work;
+use crate::theme::{Theme, block_title_style, phase_style};
+
+/// The columns the border of the block takes.
+const BORDER: usize = 2;
+/// The gap between two columns.
+const GAP: usize = 2;
+
+/// A group of the backlog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroupKind {
+    /// Ideas: a hunch, not work yet.
+    Ideas,
+    /// Small tasks: a feature or a bug.
+    SmallTasks,
+    /// Draft tasks: a task that has not been groomed.
+    Drafts,
+}
+
+impl GroupKind {
+    /// Every group, in the order of the tab.
+    pub const ALL: [GroupKind; 3] = [GroupKind::Ideas, GroupKind::SmallTasks, GroupKind::Drafts];
+
+    /// The heading of the group.
+    pub fn label(&self) -> &'static str {
+        match self {
+            GroupKind::Ideas => "IDEAS",
+            GroupKind::SmallTasks => "SMALL TASKS",
+            GroupKind::Drafts => "DRAFTS",
+        }
+    }
+}
+
+/// A row of the backlog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Row {
+    /// The id: `ITM01` or `TSK01`.
+    pub id: String,
+    /// What it is: `idea`, `feature`, `bug` or `draft`.
+    pub kind: String,
+    /// The title.
+    pub title: String,
+    /// The work, when it is known.
+    pub scope: Option<String>,
+    /// `open`, `dismissed`, `promoted` or `draft`.
+    pub state: String,
+    /// A draft or a settled item: the row may be dimmed.
+    pub settled: bool,
+}
+
+/// A group of rows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Group {
+    /// Which group it is.
+    pub kind: GroupKind,
+    /// The rows, sorted by id.
+    pub rows: Vec<Row>,
+}
+
+/// The three groups of the backlog, in the order of the tab.
+///
+/// The groups are always there, so a count of zero is a fact too. The rows
+/// are derived from the model: the item's kind, and the task's status.
+pub fn groups(work: &Work) -> [Group; 3] {
+    let mut ideas = Vec::new();
+    let mut small_tasks = Vec::new();
+    let mut drafts = Vec::new();
+    for item in &work.items {
+        let row = item_row(item);
+        match item.kind {
+            ItemKind::Idea => ideas.push(row),
+            ItemKind::Feature | ItemKind::Bug => small_tasks.push(row),
+        }
+    }
+    for task in &work.tasks {
+        if task.status == Status::Draft {
+            drafts.push(task_row(task));
+        }
+    }
+    let mut groups = [
+        Group {
+            kind: GroupKind::Ideas,
+            rows: ideas,
+        },
+        Group {
+            kind: GroupKind::SmallTasks,
+            rows: small_tasks,
+        },
+        Group {
+            kind: GroupKind::Drafts,
+            rows: drafts,
+        },
+    ];
+    for group in &mut groups {
+        group.rows.sort_by(|one, other| one.id.cmp(&other.id));
+    }
+    groups
+}
+
+/// A smaller task, as the backlog holds it.
+fn item_row(item: &Item) -> Row {
+    Row {
+        id: item.id.clone(),
+        kind: item.kind.as_str().to_string(),
+        title: item.title.clone(),
+        scope: scope_text(&item.scope),
+        state: item.status.as_str().to_string(),
+        settled: item.status != ItemStatus::Open,
+    }
+}
+
+/// A draft task, as the backlog holds it.
+fn task_row(task: &Task) -> Row {
+    Row {
+        id: task.id.clone(),
+        kind: "draft".to_string(),
+        title: task.title.clone(),
+        scope: scope_text(&task.scope.in_scope),
+        state: Status::Draft.as_str().to_string(),
+        settled: true,
+    }
+}
+
+/// The scope, when it is known.
+fn scope_text(scope: &[String]) -> Option<String> {
+    let known: Vec<&str> = scope
+        .iter()
+        .map(String::as_str)
+        .filter(|part| !part.trim().is_empty())
+        .collect();
+    (!known.is_empty()).then(|| known.join(", "))
+}
+
+/// Draw the tab.
+pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
+    let block = Block::bordered()
+        .title("backlog")
+        .title_style(block_title_style(theme))
+        .border_style(theme.chrome.border);
+    if let Some(missing) = work.missing {
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::from(Span::styled(missing.headline(), theme.semantic.error)),
+                Line::from(Span::styled(
+                    format!("looked in {}", work.root.display()),
+                    theme.text.dim,
+                )),
+            ])
+            .wrap(Wrap { trim: true })
+            .block(block),
+            area,
+        );
+        return;
+    }
+    let groups = groups(work);
+    if groups.iter().all(|group| group.rows.is_empty()) {
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled("no backlog yet", theme.text.dim))).block(block),
+            area,
+        );
+        return;
+    }
+    let width = usize::from(area.width).saturating_sub(BORDER);
+    let height = usize::from(area.height).saturating_sub(BORDER);
+    frame.render_widget(
+        Paragraph::new(lines(&groups, width, height, theme))
+            .wrap(Wrap { trim: false })
+            .block(block),
+        area,
+    );
+}
+
+/// The columns of a row: the fixed ones, and the two that give way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Columns {
+    id: bool,
+    kind: bool,
+    state: bool,
+    scope: bool,
+}
+
+/// The candidates, in the order the columns give way.
+///
+/// The title and the scope are what the reader is here for: the id, the
+/// kind and the state give way first, whole.
+const CANDIDATES: [Columns; 5] = [
+    Columns {
+        id: true,
+        kind: true,
+        state: true,
+        scope: true,
+    },
+    Columns {
+        id: true,
+        kind: false,
+        state: true,
+        scope: true,
+    },
+    Columns {
+        id: true,
+        kind: false,
+        state: false,
+        scope: true,
+    },
+    Columns {
+        id: false,
+        kind: false,
+        state: false,
+        scope: true,
+    },
+    Columns {
+        id: false,
+        kind: false,
+        state: false,
+        scope: false,
+    },
+];
+
+/// The width of the id column: the widest id.
+fn id_width(groups: &[Group]) -> usize {
+    groups
+        .iter()
+        .flat_map(|group| group.rows.iter())
+        .map(|row| text_width(&row.id))
+        .max()
+        .unwrap_or(0)
+}
+
+/// The width of the kind column: the widest kind.
+fn kind_width(groups: &[Group]) -> usize {
+    groups
+        .iter()
+        .flat_map(|group| group.rows.iter())
+        .map(|row| text_width(&row.kind))
+        .max()
+        .unwrap_or(0)
+}
+
+/// The width of the state column: the widest state.
+fn state_width(groups: &[Group]) -> usize {
+    groups
+        .iter()
+        .flat_map(|group| group.rows.iter())
+        .map(|row| text_width(&row.state))
+        .max()
+        .unwrap_or(0)
+}
+
+/// The lines of the tab.
+///
+/// Everything fits at the default size, and there is nothing to announce.
+/// On a short pane the announcement comes first: a row or a header is only
+/// left out when the lines that say so are on screen. A group is never
+/// silently absent — it is either shown, header and rows, or named in the
+/// announcement with the number of its rows that are hidden.
+fn lines(groups: &[Group], width: usize, height: usize, theme: &Theme) -> Vec<Line<'static>> {
+    if height == 0 {
+        return Vec::new();
+    }
+    let metrics = Metrics {
+        id: id_width(groups),
+        kind: kind_width(groups),
+        state: state_width(groups),
+    };
+    let wanted: usize = groups.iter().map(|group| 1 + group.rows.len()).sum();
+    if wanted <= height {
+        return all_lines(groups, width, metrics, theme);
+    }
+    // Some line does not fit. The rows give way to the announcement: the
+    // first layout whose whole announcement fits wins, and the rows take
+    // what is left. When even the shortest announcement fills the pane,
+    // the announcement alone is shown, so no omission goes unsaid.
+    let mut shortest: Option<(Vec<Line<'static>>, Vec<Line<'static>>)> = None;
+    for capacity in (0..=height).rev() {
+        let (rows, omitted) = layout_groups(groups, capacity, width, metrics, theme);
+        let room = height.saturating_sub(rows.len());
+        let (said, cut) = announcement(&omitted, width, room, theme);
+        if cut {
+            shortest = Some((rows, said));
+            continue;
+        }
+        let mut out = rows;
+        out.extend(said);
+        return out;
+    }
+    let (mut out, said) = shortest.expect("a capacity of zero");
+    out.extend(said);
+    out
+}
+
+/// Every group, header and rows, in the order of the tab.
+fn all_lines(
+    groups: &[Group],
+    width: usize,
+    metrics: Metrics,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
+    let mut out = Vec::new();
+    for group in groups {
+        out.push(header(group, width, theme));
+        for row in &group.rows {
+            out.push(row_line(row, width, metrics, theme));
+        }
+    }
+    out
+}
+
+/// The rows of the tab that fit in `capacity` lines, and how many rows of
+/// each group are left out of them.
+///
+/// The groups keep their order: the header of a group, then its rows. A
+/// header's count is the whole group; the omitted count is what the
+/// announcement says instead, and the two are meant to differ. A group
+/// whose header does not fit is not shown at all, and every one of its
+/// rows is left out of view.
+fn layout_groups(
+    groups: &[Group],
+    capacity: usize,
+    width: usize,
+    metrics: Metrics,
+    theme: &Theme,
+) -> (Vec<Line<'static>>, [usize; 3]) {
+    let mut out = Vec::new();
+    let mut omitted = [0usize; 3];
+    let mut used = 0usize;
+    for (index, group) in groups.iter().enumerate() {
+        if used + 1 > capacity {
+            omitted[index] = group.rows.len();
+            continue;
+        }
+        out.push(header(group, width, theme));
+        used += 1;
+        let shown = (capacity - used).min(group.rows.len());
+        for row in group.rows.iter().take(shown) {
+            out.push(row_line(row, width, metrics, theme));
+        }
+        used += shown;
+        if shown < group.rows.len() {
+            omitted[index] = group.rows.len() - shown;
+        }
+    }
+    (out, omitted)
+}
+
+/// The widths of the fixed columns.
+#[derive(Debug, Clone, Copy)]
+struct Metrics {
+    id: usize,
+    kind: usize,
+    state: usize,
+}
+
+/// How a row is laid out in the pane.
+#[derive(Debug, Clone, Copy)]
+struct Layout {
+    /// The columns that are shown.
+    columns: Columns,
+    /// The width of the title.
+    title: usize,
+    /// The width of the scope.
+    scope: usize,
+}
+
+/// The layout of a row: the first candidate that leaves the fixed columns
+/// whole and room for the title and the scope.
+fn layout(row: &Row, width: usize, metrics: Metrics) -> Layout {
+    let title = text_width(&row.title);
+    let scope = row.scope.as_deref().map(text_width).unwrap_or(0);
+    for mut columns in CANDIDATES {
+        if row.scope.is_none() {
+            columns.scope = false;
+        }
+        let (fixed, gaps) = fixed_width(columns, metrics);
+        let flex = 1 + usize::from(columns.scope);
+        if fixed + gaps + flex > width {
+            continue;
+        }
+        let available = width - fixed - gaps;
+        // A fixed column is kept only when the title and the scope still
+        // fit whole: otherwise it gives way, so they are not cut to make
+        // room for it.
+        let has_fixed = columns.id || columns.kind || columns.state;
+        if has_fixed && title + scope > available {
+            continue;
+        }
+        let (title_width, scope_width) = flex_widths(title, scope, available, columns.scope);
+        return Layout {
+            columns,
+            title: title_width,
+            scope: scope_width,
+        };
+    }
+    Layout {
+        columns: Columns {
+            id: false,
+            kind: false,
+            state: false,
+            scope: false,
+        },
+        title: width,
+        scope: 0,
+    }
+}
+
+/// The width of the fixed columns, and the gaps between every column.
+fn fixed_width(columns: Columns, metrics: Metrics) -> (usize, usize) {
+    let mut fixed = 0;
+    let mut count: usize = 1; // the title is always there
+    if columns.id {
+        fixed += metrics.id;
+        count += 1;
+    }
+    if columns.kind {
+        fixed += metrics.kind;
+        count += 1;
+    }
+    if columns.state {
+        fixed += metrics.state;
+        count += 1;
+    }
+    if columns.scope {
+        count += 1;
+    }
+    (fixed, GAP * count.saturating_sub(1))
+}
+
+/// The width of the title and the scope in the room left.
+///
+/// Both keep room: the scope takes at most half, and the title takes the
+/// rest. A column that does not fit is cut with an ellipsis; the fixed
+/// columns are never cut.
+fn flex_widths(title: usize, scope: usize, available: usize, has_scope: bool) -> (usize, usize) {
+    if !has_scope {
+        return (available.min(title), 0);
+    }
+    if title + scope <= available {
+        return (title, scope);
+    }
+    let mut scope_width = scope.min(available / 2);
+    let mut title_width = title.min(available - scope_width);
+    let leftover = available - title_width - scope_width;
+    // The title is first in the reading order: it takes the leftover first,
+    // and the scope gets what remains of its own text.
+    let to_title = leftover.min(title - title_width);
+    title_width += to_title;
+    let leftover = leftover - to_title;
+    scope_width += leftover.min(scope - scope_width);
+    (title_width, scope_width)
+}
+
+/// A row: the id, the kind, the title, the scope and the state.
+fn row_line(row: &Row, width: usize, metrics: Metrics, theme: &Theme) -> Line<'static> {
+    if width == 0 {
+        return Line::from("");
+    }
+    let layout = layout(row, width, metrics);
+    let row_style = if row.settled {
+        theme.text.dim
+    } else {
+        theme.text.normal
+    };
+    let title_style = theme.text.strong;
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    if layout.columns.id {
+        spans.push(Span::styled(pad(&row.id, metrics.id), row_style));
+    }
+    if layout.columns.kind {
+        push_gap(&mut spans);
+        spans.push(Span::styled(pad(&row.kind, metrics.kind), row_style));
+    }
+    push_gap(&mut spans);
+    spans.push(Span::styled(
+        pad(&cut_to(&row.title, layout.title), layout.title),
+        title_style,
+    ));
+    if layout.columns.scope
+        && let Some(scope) = &row.scope
+    {
+        push_gap(&mut spans);
+        spans.push(Span::styled(cut_to(scope, layout.scope), row_style));
+    }
+    if layout.columns.state {
+        push_gap(&mut spans);
+        spans.push(Span::styled(pad(&row.state, metrics.state), row_style));
+    }
+    // The row is padded as it is built; trim the trailing padding that
+    // carries no information.
+    trim_trailing(&mut spans);
+    Line::from(spans)
+}
+
+/// Add the gap between two columns.
+fn push_gap(spans: &mut Vec<Span<'static>>) {
+    if !spans.is_empty() {
+        spans.push(Span::raw(" ".repeat(GAP)));
+    }
+}
+
+/// Remove the trailing spaces of the last span.
+fn trim_trailing(spans: &mut Vec<Span<'static>>) {
+    let Some(last) = spans.last_mut() else {
+        return;
+    };
+    let trimmed = last.content.trim_end_matches(' ').to_string();
+    if trimmed != last.content.as_ref() {
+        last.content = trimmed.into();
+    }
+    while spans.last().is_some_and(|span| span.content.is_empty()) {
+        spans.pop();
+    }
+}
+
+/// The style of a group's label.
+///
+/// A label carries the same fact as the rows under it: the drafts are the
+/// `draft` phase, whose slot is `text.dim`, so the heading is dim too.
+fn group_style(kind: GroupKind, theme: &Theme) -> Style {
+    match kind {
+        GroupKind::Ideas | GroupKind::SmallTasks => theme.text.normal,
+        GroupKind::Drafts => phase_style(theme, Status::Draft),
+    }
+}
+
+/// The header of a group: its name and the count of its rows.
+///
+/// The count is `text.strong`, as every count is. It is never cut; when the
+/// pane is too narrow for the whole header, the name gives way.
+fn header(group: &Group, width: usize, theme: &Theme) -> Line<'static> {
+    let count = group.rows.len().to_string();
+    let label = group.kind.label();
+    let style = group_style(group.kind, theme);
+    let separator = " · ";
+    let fixed = text_width(separator) + text_width(&count);
+    if width >= text_width(label) + fixed {
+        return Line::from(vec![
+            Span::styled(label.to_string(), style),
+            Span::styled(separator.to_string(), theme.text.dim),
+            Span::styled(count, theme.text.strong),
+        ]);
+    }
+    if width > fixed {
+        let room = width - fixed;
+        return Line::from(vec![
+            Span::styled(cut_to(label, room), style),
+            Span::styled(separator.to_string(), theme.text.dim),
+            Span::styled(count, theme.text.strong),
+        ]);
+    }
+    if width >= text_width(&count) {
+        return Line::from(Span::styled(count, theme.text.strong));
+    }
+    Line::from(Span::styled(cut_to(label, width), style))
+}
+
+/// How a piece of the announcement is painted.
+#[derive(Debug, Clone, Copy)]
+enum Paint {
+    /// A group name: the same slot its header uses.
+    Group(GroupKind),
+    /// A count, as every count in raul.
+    Strong,
+    /// The bracket, the word `hidden`, the separator, the lead-in.
+    Dim,
+}
+
+/// A piece of the announcement: its text and how it is painted.
+#[derive(Debug, Clone)]
+struct Said {
+    spans: Vec<(String, Paint)>,
+}
+
+impl Said {
+    fn new(text: impl Into<String>, paint: Paint) -> Self {
+        Said {
+            spans: vec![(text.into(), paint)],
+        }
+    }
+
+    fn width(&self) -> usize {
+        self.spans.iter().map(|(text, _)| text_width(text)).sum()
+    }
+}
+
+/// The lines that say what is not shown.
+///
+/// The count here is the number of *rows left out of view*, not the group's
+/// total — the header owns that — so an entry has a shape of its own: the
+/// group, then the count in brackets with the word `hidden`. It never takes
+/// the header's `group · total` shape, and every group is named, including
+/// a group with nothing hidden.
+///
+/// A whole entry is kept: a group is never cut from its count. When the
+/// packed entries do not fit in `room`, a compact one-line form names every
+/// group and count if the width allows it; otherwise the total is said,
+/// rather than showing a partial list that could read as the whole truth.
+fn announcement(
+    omitted: &[usize; 3],
+    width: usize,
+    room: usize,
+    theme: &Theme,
+) -> (Vec<Line<'static>>, bool) {
+    let entries: Vec<Said> = GroupKind::ALL
+        .iter()
+        .enumerate()
+        .map(|(index, kind)| entry(*kind, omitted[index], width))
+        .collect();
+    let rows = pack(&entries, width);
+    if rows.len() <= room {
+        return (paint(rows, theme), false);
+    }
+    if room > 0
+        && let Some(compact) = compact(omitted, width)
+    {
+        return (paint(vec![compact], theme), false);
+    }
+    if room == 0 {
+        return (Vec::new(), true);
+    }
+    (summary(omitted, width, theme), true)
+}
+
+/// A group and the number of its rows that are hidden.
+///
+/// The full entry is `label (count hidden)`. On a narrow row the label gives
+/// way first, but the count and the word stay with it; only a row narrower
+/// than `count hidden` loses the label, and only a row narrower than
+/// `hidden` itself loses the count.
+fn entry(kind: GroupKind, count: usize, width: usize) -> Said {
+    let label = kind.label();
+    let count = count.to_string();
+    let full = format!("{label} ({count} hidden)");
+    if text_width(&full) <= width {
+        return Said {
+            spans: vec![
+                (label.to_string(), Paint::Group(kind)),
+                (" (".to_string(), Paint::Dim),
+                (count, Paint::Strong),
+                (" hidden)".to_string(), Paint::Dim),
+            ],
+        };
+    }
+    // The parentheses are the first thing to give way: the whole label is
+    // kept when it can be.
+    let bare = format!("{label} {count} hidden");
+    if text_width(&bare) <= width {
+        return Said {
+            spans: vec![
+                (label.to_string(), Paint::Group(kind)),
+                (" ".to_string(), Paint::Dim),
+                (count, Paint::Strong),
+                (" hidden".to_string(), Paint::Dim),
+            ],
+        };
+    }
+    let tail = format!(" {count} hidden");
+    if text_width(&tail) < width {
+        let room = width - text_width(&tail);
+        return Said {
+            spans: vec![
+                (cut_to(label, room), Paint::Group(kind)),
+                (" ".to_string(), Paint::Dim),
+                (count, Paint::Strong),
+                (" hidden".to_string(), Paint::Dim),
+            ],
+        };
+    }
+    let counted = format!("{count} hidden");
+    if text_width(&counted) <= width {
+        return Said {
+            spans: vec![(count, Paint::Strong), (" hidden".to_string(), Paint::Dim)],
+        };
+    }
+    Said::new(cut_to("hidden", width), Paint::Dim)
+}
+
+/// The compact form: every group and its hidden count on one line.
+///
+/// The shape is `group count, group count, group count hidden`: distinct
+/// from the header's `group · total`, and the word `hidden` is kept. The
+/// lead-in is used when it fits, and dropped when it does not.
+fn compact(omitted: &[usize; 3], width: usize) -> Option<Said> {
+    for prefix in [true, false] {
+        let said = compact_line(omitted, prefix);
+        if said.width() <= width {
+            return Some(said);
+        }
+    }
+    None
+}
+
+fn compact_line(omitted: &[usize; 3], prefix: bool) -> Said {
+    let mut spans = Vec::new();
+    if prefix {
+        spans.push(("not shown: ".to_string(), Paint::Dim));
+    }
+    for (index, kind) in GroupKind::ALL.iter().enumerate() {
+        if index > 0 {
+            spans.push((", ".to_string(), Paint::Dim));
+        }
+        spans.push((kind.label().to_string(), Paint::Group(*kind)));
+        spans.push((" ".to_string(), Paint::Dim));
+        spans.push((omitted[index].to_string(), Paint::Strong));
+    }
+    spans.push((" hidden".to_string(), Paint::Dim));
+    Said { spans }
+}
+
+/// The total, for a pane too small for every group name.
+fn summary(omitted: &[usize; 3], width: usize, theme: &Theme) -> Vec<Line<'static>> {
+    let total: usize = omitted.iter().sum();
+    let counted = format!("{total} hidden");
+    let with_lead = format!("not shown: {counted}");
+    if text_width(&with_lead) <= width {
+        return vec![Line::from(vec![
+            Span::styled("not shown: ".to_string(), theme.text.dim),
+            Span::styled(total.to_string(), theme.text.strong),
+            Span::styled(" hidden".to_string(), theme.text.dim),
+        ])];
+    }
+    if text_width(&counted) <= width {
+        return vec![Line::from(vec![
+            Span::styled(total.to_string(), theme.text.strong),
+            Span::styled(" hidden".to_string(), theme.text.dim),
+        ])];
+    }
+    let word = cut_to("hidden", width);
+    if word.is_empty() {
+        Vec::new()
+    } else {
+        vec![Line::from(Span::styled(word, theme.text.dim))]
+    }
+}
+
+/// The entries, packed into rows of at most `width` columns.
+///
+/// An entry is never broken over two rows, so a group is never cut from its
+/// count.
+fn pack(entries: &[Said], width: usize) -> Vec<Said> {
+    let prefix = Said::new("not shown: ", Paint::Dim);
+    let mut rows: Vec<Said> = Vec::new();
+    let mut current = Said { spans: Vec::new() };
+    for entry in entries {
+        if entry.width() == 0 {
+            continue;
+        }
+        if current.width() == 0 {
+            let lead = rows.is_empty() && prefix.width() + entry.width() <= width;
+            if lead {
+                current.spans.extend(prefix.spans.clone());
+            }
+            current.spans.extend(entry.spans.clone());
+            continue;
+        }
+        if current.width() + 2 + entry.width() <= width {
+            current.spans.push((", ".to_string(), Paint::Dim));
+            current.spans.extend(entry.spans.clone());
+        } else {
+            rows.push(Said {
+                spans: std::mem::take(&mut current.spans),
+            });
+            current.spans.extend(entry.spans.clone());
+        }
+    }
+    if current.width() > 0 {
+        rows.push(current);
+    }
+    rows
+}
+
+/// The announcement's lines, each span painted by its role.
+fn paint(rows: Vec<Said>, theme: &Theme) -> Vec<Line<'static>> {
+    rows.into_iter()
+        .map(|said| {
+            Line::from(
+                said.spans
+                    .into_iter()
+                    .map(|(text, paint)| {
+                        let style = match paint {
+                            Paint::Group(kind) => group_style(kind, theme),
+                            Paint::Strong => theme.text.strong,
+                            Paint::Dim => theme.text.dim,
+                        };
+                        Span::styled(text, style)
+                    })
+                    .collect::<Vec<Span<'static>>>(),
+            )
+        })
+        .collect()
+}
+
+/// The text, cut to `width` columns.
+fn cut_to(text: &str, width: usize) -> String {
+    if text_width(text) <= width {
+        return text.to_string();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    let head = head_to(text, width - 1);
+    format!("{head}…")
+}
+
+/// The longest head of `text` that fits in `budget` columns.
+///
+/// A grapheme is the smallest piece a terminal draws: cutting on scalars
+/// can leave a dangling joiner or a combining mark behind, so the cut is on
+/// the grapheme boundaries ratatui draws with.
+fn head_to(text: &str, budget: usize) -> String {
+    let span = Span::raw(text.to_string());
+    let mut used = 0;
+    let mut head = String::new();
+    for grapheme in span.styled_graphemes(Style::default()) {
+        let width = text_width(grapheme.symbol);
+        if used + width > budget {
+            break;
+        }
+        used += width;
+        head.push_str(grapheme.symbol);
+    }
+    head
+}
+
+/// The text, padded to `width` columns.
+fn pad(text: &str, width: usize) -> String {
+    let length = text_width(text);
+    if length >= width {
+        return text.to_string();
+    }
+    format!("{text}{}", " ".repeat(width - length))
+}
+
+/// The terminal columns a text takes.
+fn text_width(text: &str) -> usize {
+    Span::raw(text.to_string()).width()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use ratatui::style::Color;
+
+    use super::*;
+    use crate::theme::Preset;
+
+    fn mock_work() -> Work {
+        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-lanes/work"))
+    }
+
+    fn theme() -> Theme {
+        Theme::preset(Preset::Dark)
+    }
+
+    /// Draw the tab and return the rows it shows.
+    fn draw(work: &Work, width: u16, height: u16) -> Vec<String> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
+        terminal
+            .draw(|frame| render(frame, frame.area(), work, &theme()))
+            .expect("drawing the backlog");
+        let buffer = terminal.backend().buffer();
+        let area = *buffer.area();
+        (0..area.height)
+            .map(|y| {
+                (0..area.width)
+                    .map(|x| buffer.cell((x, y)).map(|cell| cell.symbol()).unwrap_or(" "))
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    /// Draw the tab and return every cell, with its colour.
+    fn draw_cells(work: &Work, width: u16, height: u16) -> Vec<Vec<(char, Color)>> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
+        terminal
+            .draw(|frame| render(frame, frame.area(), work, &theme()))
+            .expect("drawing the backlog");
+        let buffer = terminal.backend().buffer();
+        let area = *buffer.area();
+        (0..area.height)
+            .map(|y| {
+                (0..area.width)
+                    .map(|x| {
+                        let cell = buffer.cell((x, y)).expect("a cell");
+                        (cell.symbol().chars().next().unwrap_or(' '), cell.fg)
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// The text of some lines.
+    fn text_of(lines: &[Line<'_>]) -> String {
+        lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
+    /// The lines of the tab that are wider than the pane.
+    ///
+    /// The check the width test is made of: it must be able to fail.
+    fn too_wide(lines: &[Line<'_>], width: usize) -> Vec<String> {
+        lines
+            .iter()
+            .filter(|line| line.width() > width)
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    /// A work folder with the tasks and items given.
+    fn work_of(tasks: Vec<Task>, items: Vec<Item>) -> Work {
+        Work {
+            root: PathBuf::new(),
+            tasks,
+            items,
+            errors: Vec::new(),
+            missing: None,
+        }
+    }
+
+    /// A row as the test expects it.
+    fn row(
+        id: &str,
+        kind: &str,
+        title: &str,
+        scope: Option<&str>,
+        state: &str,
+        settled: bool,
+    ) -> Row {
+        Row {
+            id: id.to_string(),
+            kind: kind.to_string(),
+            title: title.to_string(),
+            scope: scope.map(str::to_string),
+            state: state.to_string(),
+            settled,
+        }
+    }
+
+    #[test]
+    fn the_groups_and_the_fixture_rows_are_pinned() {
+        let work = mock_work();
+        let groups = groups(&work);
+        assert_eq!(
+            [groups[0].kind, groups[1].kind, groups[2].kind],
+            GroupKind::ALL,
+            "the three groups are in the order of the tab"
+        );
+        assert_eq!(groups[0].rows.len(), 1, "ideas");
+        assert_eq!(groups[1].rows.len(), 4, "small tasks");
+        assert_eq!(groups[2].rows.len(), 5, "drafts");
+        assert_eq!(
+            groups[0].rows,
+            vec![row(
+                "ITM01",
+                "idea",
+                "Lorem ipsum dolor sit amet",
+                None,
+                "open",
+                false,
+            )]
+        );
+        assert_eq!(
+            groups[1].rows,
+            vec![
+                row(
+                    "ITM02",
+                    "feature",
+                    "Tempor incididunt ut labore et dolore",
+                    Some("the lorem pane"),
+                    "open",
+                    false,
+                ),
+                row(
+                    "ITM03",
+                    "bug",
+                    "Quis nostrud exercitation ullamco laboris",
+                    Some("the lorem list"),
+                    "open",
+                    false,
+                ),
+                row(
+                    "ITM04",
+                    "feature",
+                    "Sed do eiusmod tempor incididunt",
+                    None,
+                    "dismissed",
+                    true,
+                ),
+                row(
+                    "ITM05",
+                    "bug",
+                    "Duis aute irure dolor in reprehenderit",
+                    Some("the lorem button"),
+                    "promoted",
+                    true,
+                ),
+            ]
+        );
+        assert_eq!(
+            groups[2].rows,
+            vec![
+                row(
+                    "TSK01",
+                    "draft",
+                    "At vero eos et accusamus et iusto odio",
+                    None,
+                    "draft",
+                    true,
+                ),
+                row(
+                    "TSK02",
+                    "draft",
+                    "Totam rem aperiam eaque ipsa quae ab illo",
+                    None,
+                    "draft",
+                    true,
+                ),
+                row(
+                    "TSK03",
+                    "draft",
+                    "Ut enim ad minim veniam quis nostrud",
+                    None,
+                    "draft",
+                    true,
+                ),
+                row(
+                    "TSK27",
+                    "draft",
+                    "Duis aute irure dolor in reprehenderit",
+                    Some("the lorem button"),
+                    "draft",
+                    true,
+                ),
+                row(
+                    "TSK28",
+                    "draft",
+                    "Temporibus autem quibusdam et aut officiis",
+                    None,
+                    "draft",
+                    true,
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_dismissed_and_a_promoted_item_are_visible_as_such() {
+        let rows = draw(&mock_work(), 100, 40).join("\n");
+        let dismissed = rows
+            .lines()
+            .find(|line| line.contains("ITM04"))
+            .unwrap_or_else(|| panic!("no dismissed row: {rows}"));
+        assert!(dismissed.contains("dismissed"), "{dismissed}");
+        let promoted = rows
+            .lines()
+            .find(|line| line.contains("ITM05"))
+            .unwrap_or_else(|| panic!("no promoted row: {rows}"));
+        assert!(promoted.contains("promoted"), "{promoted}");
+    }
+
+    #[test]
+    fn every_draft_task_is_in_the_backlog_and_no_other_task_is() {
+        let work = mock_work();
+        let groups = groups(&work);
+        let shown: Vec<&str> = groups[2].rows.iter().map(|row| row.id.as_str()).collect();
+        let drafts: Vec<&str> = work
+            .tasks
+            .iter()
+            .filter(|task| task.status == Status::Draft)
+            .map(|task| task.id.as_str())
+            .collect();
+        assert_eq!(shown, drafts);
+        for task in &work.tasks {
+            if task.status != Status::Draft {
+                assert!(
+                    !shown.contains(&task.id.as_str()),
+                    "{} is not a draft",
+                    task.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_rows_are_sorted_by_id_within_their_group() {
+        let groups = groups(&mock_work());
+        for group in groups {
+            let ids: Vec<&str> = group.rows.iter().map(|row| row.id.as_str()).collect();
+            let mut sorted = ids.clone();
+            sorted.sort_unstable();
+            assert_eq!(ids, sorted, "{:?}", group.kind);
+        }
+    }
+
+    #[test]
+    fn the_groups_have_the_shape_of_the_spec() {
+        let text = draw(&mock_work(), 100, 40).join("\n");
+        assert!(text.contains("IDEAS · 1"), "{text}");
+        assert!(text.contains("SMALL TASKS · 4"), "{text}");
+        assert!(text.contains("DRAFTS · 5"), "{text}");
+        let ideas = text.find("IDEAS").expect("the ideas heading");
+        let small = text.find("SMALL TASKS").expect("the small tasks heading");
+        let drafts = text.find("DRAFTS").expect("the drafts heading");
+        assert!(ideas < small && small < drafts, "{text}");
+    }
+
+    #[test]
+    fn a_wide_row_shows_every_column() {
+        let text = draw(&mock_work(), 100, 40).join("\n");
+        let row = text
+            .lines()
+            .find(|line| line.contains("ITM04"))
+            .unwrap_or_else(|| panic!("no ITM04 row: {text}"));
+        assert!(row.contains("feature"), "{row}");
+        assert!(row.contains("Sed do eiusmod tempor incididunt"), "{row}");
+        assert!(row.contains("dismissed"), "{row}");
+        let row = text
+            .lines()
+            .find(|line| line.contains("TSK27"))
+            .unwrap_or_else(|| panic!("no TSK27 row: {text}"));
+        assert!(row.contains("the lorem button"), "{row}");
+        assert!(row.contains("draft"), "{row}");
+    }
+
+    #[test]
+    fn the_empty_backlog_says_so() {
+        let mut task = Task::new("TSK01", "a task");
+        task.status = Status::Approved;
+        for work in [Work::default(), work_of(vec![task], Vec::new())] {
+            let text = draw(&work, 40, 10).join("\n");
+            assert!(text.contains("no backlog yet"), "{text}");
+            assert!(!text.contains("IDEAS"), "{text}");
+        }
+    }
+
+    #[test]
+    fn no_built_line_is_wider_than_the_pane() {
+        let work = mock_work();
+        let groups = groups(&work);
+        for width in 1..=120 {
+            for height in 1..=40 {
+                let lines = lines(&groups, width, height, &theme());
+                assert!(
+                    too_wide(&lines, width).is_empty(),
+                    "{width}x{height}: {:?}",
+                    too_wide(&lines, width)
+                );
+                assert!(
+                    lines.len() <= height,
+                    "{width}x{height}: {} lines",
+                    lines.len()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_width_check_can_fail() {
+        let wide = vec![Line::from(Span::raw("x".repeat(41)))];
+        assert_eq!(too_wide(&wide, 40).len(), 1);
+        let exact = vec![Line::from(Span::raw("x".repeat(40)))];
+        assert!(too_wide(&exact, 40).is_empty());
+    }
+
+    #[test]
+    fn a_narrow_row_drops_whole_columns() {
+        let work = mock_work();
+        let groups = groups(&work);
+        let metrics = Metrics {
+            id: id_width(&groups),
+            kind: kind_width(&groups),
+            state: state_width(&groups),
+        };
+        for width in 1..=120 {
+            let built = lines(&groups, width, 40, &theme());
+            let mut at = 0;
+            for group in &groups {
+                if group.rows.is_empty() {
+                    continue;
+                }
+                at += 1; // the header
+                for row in &group.rows {
+                    let text = built[at]
+                        .spans
+                        .iter()
+                        .map(|span| span.content.as_ref())
+                        .collect::<String>();
+                    at += 1;
+                    let layout = layout(row, width, metrics);
+                    // A fixed column is shown whole, or not at all.
+                    if layout.columns.id {
+                        assert!(text.starts_with(&row.id), "{width}: {text:?}");
+                    }
+                    if layout.columns.kind {
+                        let start = if layout.columns.id {
+                            metrics.id + GAP
+                        } else {
+                            0
+                        };
+                        assert!(
+                            text[start..].starts_with(&row.kind),
+                            "{width}: a cut kind: {text:?}"
+                        );
+                    }
+                    if layout.columns.state {
+                        assert!(
+                            text.trim_end().ends_with(&row.state),
+                            "{width}: a cut state: {text:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_title_and_the_scope_keep_their_room() {
+        // The kind and the state give way, whole, before the title and the
+        // scope are cut: at this width the id, the title and the scope are
+        // still whole.
+        let groups = groups(&mock_work());
+        let text = text_of(&lines(&groups, 70, 40, &theme()));
+        let row = text
+            .lines()
+            .find(|line| line.contains("ITM02"))
+            .unwrap_or_else(|| panic!("no ITM02 row: {text}"));
+        assert!(
+            row.contains("Tempor incididunt ut labore et dolore"),
+            "{row}"
+        );
+        assert!(row.contains("the lorem pane"), "{row}");
+        assert!(!row.contains("feature"), "{row}");
+        // Narrower still: the id gives way before the title and the scope,
+        // which keep their room.
+        let text = text_of(&lines(&groups, 58, 40, &theme()));
+        assert!(!text.contains("ITM02"), "{text}");
+        assert!(text.contains("Tempor incidid"), "{text}");
+        assert!(text.contains("the lorem pane"), "{text}");
+        let row = text
+            .lines()
+            .find(|line| line.contains("Tempor incidid"))
+            .expect("the smallest row");
+        assert!(!row.contains("feature"), "{row}");
+    }
+
+    #[test]
+    fn a_narrow_row_cuts_the_title_and_the_scope_and_nothing_else() {
+        let groups = groups(&mock_work());
+        for width in 4..=40 {
+            let lines = lines(&groups, width, 40, &theme());
+            for line in &lines {
+                let text = line
+                    .spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>();
+                for part in ["ITM", "TSK", "feature", "dismissed", "promoted"] {
+                    if text.contains(part) {
+                        assert!(!text.contains(&format!("{part}…")), "{width}: {text:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_counts_are_strong_and_the_titles_use_the_title_treatment() {
+        let theme = theme();
+        let groups = groups(&mock_work());
+        let lines = lines(&groups, 100, 40, &theme);
+        for (heading, count) in [("IDEAS", "1"), ("SMALL TASKS", "4"), ("DRAFTS", "5")] {
+            let header = lines
+                .iter()
+                .find(|line| {
+                    line.spans
+                        .iter()
+                        .any(|span| span.content.as_ref() == heading)
+                })
+                .unwrap_or_else(|| panic!("no {heading} header"));
+            let counted = header
+                .spans
+                .iter()
+                .find(|span| span.content.as_ref() == count)
+                .unwrap_or_else(|| panic!("no {heading} count"));
+            assert_eq!(counted.style, theme.text.strong, "{heading}");
+        }
+        let title = groups[0].rows[0].title.clone();
+        let title_span = lines
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .find(|span| span.content.as_ref() == title)
+            .unwrap_or_else(|| panic!("no title span"));
+        assert_eq!(title_span.style, theme.text.strong);
+    }
+
+    #[test]
+    fn a_draft_or_settled_row_is_dim() {
+        let theme = theme();
+        let groups = groups(&mock_work());
+        let lines = lines(&groups, 100, 40, &theme);
+        let text_of_line = |line: &Line<'_>| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        };
+        let settled = lines
+            .iter()
+            .find(|line| text_of_line(line).contains("ITM05"))
+            .expect("the promoted row");
+        assert!(
+            settled
+                .spans
+                .iter()
+                .any(|span| span.style == theme.text.dim),
+            "the settled row is not dim"
+        );
+    }
+
+    #[test]
+    fn a_missing_folder_says_so_and_names_the_path() {
+        let work = Work::load(Path::new("/nowhere/coding-lanes/work"));
+        let text = draw(&work, 60, 12).join("\n");
+        assert!(text.contains("no coding-lanes folder found"), "{text}");
+        assert!(
+            text.contains("looked in /nowhere/coding-lanes/work"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn every_row_is_on_screen_at_the_default_size() {
+        let work = mock_work();
+        let text = draw(&work, 100, 40).join("\n");
+        for group in groups(&work) {
+            for row in group.rows {
+                assert!(text.contains(&row.id), "{} is missing", row.id);
+            }
+        }
+    }
+
+    #[test]
+    fn a_zero_count_group_keeps_its_header() {
+        // The three groups are derived facts: an empty one is still a fact,
+        // and its header is shown whenever the pane has the room.
+        let work = work_of(Vec::new(), vec![Item::new("ITM01", "only an idea")]);
+        let text = draw(&work, 100, 40).join("\n");
+        assert!(text.contains("IDEAS · 1"), "{text}");
+        assert!(text.contains("SMALL TASKS · 0"), "{text}");
+        assert!(text.contains("DRAFTS · 0"), "{text}");
+        let ideas = text.find("IDEAS · 1").expect("the ideas header");
+        let small = text
+            .find("SMALL TASKS · 0")
+            .expect("the small tasks header");
+        let drafts = text.find("DRAFTS · 0").expect("the drafts header");
+        assert!(ideas < small && small < drafts, "{text}");
+    }
+
+    #[test]
+    fn the_default_size_announces_nothing() {
+        let text = draw(&mock_work(), 100, 40).join("\n");
+        assert!(!text.contains("hidden"), "{text}");
+        assert!(!text.contains("not shown"), "{text}");
+    }
+
+    #[test]
+    fn a_short_pane_announces_every_group_and_its_hidden_rows() {
+        // At 30x8 the pane holds three lines of content. The announcement
+        // names the small tasks and the drafts, whose rows do not fit, and
+        // the ideas group even though it hid nothing.
+        let text = draw(&mock_work(), 30, 8).join("\n");
+        assert!(text.contains("not shown"), "{text}");
+        for entry in [
+            "IDEAS (0 hidden)",
+            "SMALL TASKS (4 hidden)",
+            "DRAFTS (5 hidden)",
+        ] {
+            assert!(text.contains(entry), "{entry} is missing: {text}");
+        }
+        // The announcement is not the header's shape: no ` · ` in its row.
+        let announced = text
+            .lines()
+            .find(|line| line.contains("(0 hidden)"))
+            .unwrap_or_else(|| panic!("no announcement: {text}"));
+        assert!(!announced.contains(" · "), "{announced}");
+        assert!(!announced.contains("· 1"), "{announced}");
+    }
+
+    #[test]
+    fn the_announcement_counts_the_hidden_rows_and_not_the_group_total() {
+        // At 100x10 the DRAFTS header holds the whole group's count, and
+        // the announcement says what is left out of view instead.
+        let text = draw(&mock_work(), 100, 10).join("\n");
+        assert!(text.contains("DRAFTS (5 hidden)"), "{text}");
+        assert!(!text.contains("DRAFTS · 5"), "{text}");
+    }
+
+    #[test]
+    fn every_height_that_omits_a_row_says_so() {
+        let work = mock_work();
+        let groups = groups(&work);
+        let wanted: usize = groups.iter().map(|group| 1 + group.rows.len()).sum();
+        for height in 1..=wanted + 2 {
+            let built = lines(&groups, 100, height, &theme());
+            let text = text_of(&built);
+            if wanted > height {
+                assert!(text.contains("hidden"), "{height}: {text}");
+                for group in &groups {
+                    assert!(
+                        text.contains(group.kind.label()),
+                        "{height}: {} is missing: {text}",
+                        group.kind.label()
+                    );
+                }
+            } else {
+                assert!(!text.contains("hidden"), "{height}: {text}");
+            }
+        }
+    }
+
+    /// The colour of the first cell of `needle` on a row.
+    fn colour_at<'a>(row: &'a [(char, Color)], needle: &str) -> Option<&'a Color> {
+        let chars: Vec<char> = row.iter().map(|(symbol, _)| *symbol).collect();
+        let needle: Vec<char> = needle.chars().collect();
+        let start = chars
+            .windows(needle.len())
+            .position(|window| window == needle.as_slice())?;
+        row.get(start).map(|(_, colour)| colour)
+    }
+
+    #[test]
+    fn the_draft_heading_is_painted_with_the_draft_phase_slot() {
+        // The heading and the rows under it are the same fact: the draft
+        // phase, which is `text.dim`. The count stays `text.strong`.
+        let theme = theme();
+        let dim = theme.text.dim.fg.expect("the dim colour");
+        let strong = theme.text.strong.fg.expect("the strong colour");
+        assert_ne!(
+            theme.text.normal.fg,
+            Some(dim),
+            "the test cannot tell normal from dim"
+        );
+        let cells = draw_cells(&mock_work(), 100, 40);
+        let row = cells
+            .iter()
+            .find(|row| {
+                let text: String = row.iter().map(|(symbol, _)| *symbol).collect();
+                text.contains("DRAFTS") && text.contains("· 5")
+            })
+            .unwrap_or_else(|| panic!("no DRAFTS header"));
+        assert_eq!(
+            colour_at(row, "DRAFTS"),
+            Some(&dim),
+            "the draft heading is not dim"
+        );
+        let count = row
+            .iter()
+            .map(|(symbol, _)| *symbol)
+            .collect::<Vec<char>>()
+            .windows(3)
+            .position(|window| window == ['·', ' ', '5'].as_slice())
+            .map(|at| row[at + 2].1)
+            .expect("the DRAFTS count");
+        assert_eq!(count, strong, "the draft count is not strong");
+    }
+
+    /// The title fixture: one wide, one combining and one joined grapheme.
+    const GRAPHEME_TITLE: &str = "é👩‍💻e\u{0301}界abc";
+
+    /// Whether `prefix` is a whole number of graphemes at the start of
+    /// `text`, by the same grapheme iterator ratatui draws with.
+    fn is_grapheme_prefix(prefix: &str, text: &str) -> bool {
+        let span = Span::raw(text.to_string());
+        let mut built = String::new();
+        if built == prefix {
+            return true;
+        }
+        for grapheme in span.styled_graphemes(Style::default()) {
+            built.push_str(grapheme.symbol);
+            if built == prefix {
+                return true;
+            }
+        }
+        built == prefix
+    }
+
+    #[test]
+    fn a_wide_combining_and_joined_title_is_cut_on_grapheme_boundaries() {
+        // The measured width is pinned, so a change in the width table is
+        // the test's problem rather than a silent one.
+        assert_eq!(text_width(GRAPHEME_TITLE), 9, "the fixture measures");
+        // The scalar cut kept the woman and the joiner and dropped the
+        // laptop; the grapheme cut keeps the emoji whole.
+        assert_eq!(cut_to(GRAPHEME_TITLE, 4), "é👩‍💻…");
+        assert_eq!(cut_to(GRAPHEME_TITLE, 3), "é…");
+        for width in 1..=text_width(GRAPHEME_TITLE) {
+            let cut = cut_to(GRAPHEME_TITLE, width);
+            let head = cut.strip_suffix('…').unwrap_or(&cut);
+            assert!(
+                is_grapheme_prefix(head, GRAPHEME_TITLE),
+                "{width}: {cut:?} cuts a grapheme"
+            );
+        }
+        let mut item = Item::new("ITM01", GRAPHEME_TITLE);
+        item.scope = vec![GRAPHEME_TITLE.to_string()];
+        let work = work_of(Vec::new(), vec![item]);
+        let groups = groups(&work);
+        for width in 1..=120 {
+            let built = lines(&groups, width, 40, &theme());
+            assert!(
+                too_wide(&built, width).is_empty(),
+                "{width}: {:?}",
+                too_wide(&built, width)
+            );
+        }
+    }
+}

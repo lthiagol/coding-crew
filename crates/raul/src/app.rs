@@ -9,6 +9,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
 
+use crate::backlog;
 use crate::data::Work;
 use crate::needs;
 use crate::overview;
@@ -99,6 +100,7 @@ impl App {
             Tab::Overview => overview::render(frame, rows[2], work, &self.theme),
             Tab::NeedsYou => needs::render(frame, rows[2], work, &self.theme),
             Tab::Path => path::render(frame, rows[2], work, &self.theme),
+            Tab::Backlog => backlog::render(frame, rows[2], work, &self.theme),
             tab => frame.render_widget(placeholder(tab, &self.theme), rows[2]),
         }
         frame.render_widget(self.footer(rows[3].width), rows[3]);
@@ -500,6 +502,21 @@ mod tests {
             assert!(text.contains(tab.label()), "{tab:?} is missing");
         }
         assert!(text.contains("switch tab"), "{text}");
+    }
+
+    #[test]
+    fn the_backlog_tab_is_built() {
+        let rows = render(
+            &window(&Theme::preset(Preset::Dark), Tab::Backlog, false),
+            100,
+            40,
+        )
+        .0;
+        let text = rows.join("\n");
+        assert!(text.contains("IDEAS · 1"), "{text}");
+        assert!(text.contains("SMALL TASKS · 4"), "{text}");
+        assert!(text.contains("DRAFTS · 5"), "{text}");
+        assert!(!text.contains("not built yet"), "{text}");
     }
 
     /// Every screen the window can show.

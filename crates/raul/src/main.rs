@@ -3,6 +3,7 @@
 //! raul reads a work folder and shows it. It writes nothing.
 
 mod app;
+mod backlog;
 mod data;
 mod needs;
 mod overview;
