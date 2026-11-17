@@ -303,6 +303,162 @@ fn either_flag_alone_is_refused() {
     }
 }
 
+/// The task id whose title the detail tests show.
+const DETAIL_TASK: &str = "TSK13";
+
+/// The title of the detail task.
+fn detail_title() -> String {
+    let source = repo_root().join(WORK).join(Path::new(
+        "TSK13-praesentium-voluptatum-deleniti-atque-corrupti.json",
+    ));
+    let json = fs::read_to_string(&source).expect("the detail task fixture");
+    let task: serde_json::Value = serde_json::from_str(&json).expect("the fixture parses");
+    task["title"].as_str().expect("a title").to_string()
+}
+
+#[test]
+fn the_detail_renders_the_record_close_up() {
+    let output = run(&[
+        "--render",
+        "--plain",
+        "--detail",
+        DETAIL_TASK,
+        "--width",
+        "100",
+        "--height",
+        "40",
+        WORK,
+    ]);
+    assert!(output.status.success(), "raul failed: {output:?}");
+    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    let rows: Vec<&str> = text.lines().collect();
+    assert_eq!(rows.len(), 40, "the render did not take --height");
+    // The header: the id and the title, both on screen.
+    assert!(text.contains(DETAIL_TASK), "{text}");
+    assert!(text.contains(&detail_title()), "{text}");
+    // The body is the placeholder, not a blank screen.
+    assert!(text.contains("the document is the next unit"), "{text}");
+    // The footer says what the pane does.
+    assert!(text.contains("esc") && text.contains("close"), "{text}");
+    // The pane is full screen: the window under it is not on display.
+    assert!(!text.contains("Autopilot"), "{text}");
+    assert!(!text.contains("Overview"), "{text}");
+}
+
+#[test]
+fn the_detail_is_bounded_by_the_dimensions() {
+    let title = detail_title();
+    let output = run(&[
+        "--render",
+        "--plain",
+        "--detail",
+        DETAIL_TASK,
+        "--width",
+        "30",
+        "--height",
+        "12",
+        WORK,
+    ]);
+    assert!(output.status.success(), "raul failed: {output:?}");
+    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    let rows: Vec<&str> = text.lines().collect();
+    assert_eq!(rows.len(), 12, "the render did not take --height");
+    for (number, row) in rows.iter().enumerate() {
+        let measured = display_width(row);
+        assert!(
+            measured <= 30,
+            "row {number} is {measured} columns wide, not at most 30: {row:?}"
+        );
+    }
+    // The title is cut, and the cut is marked: a part of it is never
+    // shown as if it were the whole one.
+    assert!(
+        rows.iter().any(|row| row.contains('…')),
+        "no cut is marked: {text}"
+    );
+    assert!(
+        !text.contains(&title),
+        "the whole title is shown where it does not fit: {text}"
+    );
+    assert!(text.contains(DETAIL_TASK), "{text}");
+}
+
+/// A work folder holding one task whose title is `count` joined `é`
+/// graphemes: two scalars each, one column each.
+fn combining_title_work() -> PathBuf {
+    let title = "e\u{0301}".repeat(30);
+    let source = repo_root()
+        .join(WORK)
+        .join("TSK29-lorem-ipsum-dolor-sit-amet.json");
+    let task = fs::read_to_string(&source)
+        .expect("the task the title is built from")
+        .replace("\"TSK29\"", "\"TSK01\"")
+        .replace("\"Lorem ipsum dolor sit amet\"", &format!("\"{title}\""))
+        .replace(
+            "\"depends_on\": [\n    \"TSK22\"\n  ]",
+            "\"depends_on\": []",
+        );
+    let dir = std::env::temp_dir().join(format!("raul-combining-title-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).expect("a work folder");
+    fs::write(dir.join("TSK01-combining.json"), task).expect("writing the task");
+    dir
+}
+
+#[test]
+fn a_combining_title_is_cut_on_grapheme_boundaries() {
+    // The header holds more graphemes than the pane has columns for: the
+    // cut keeps whole graphemes. A scalar cut would leave a dangling
+    // combining mark behind, and the check can fail on one.
+    let dir = combining_title_work();
+    let work = dir.to_str().expect("the work folder is UTF-8");
+    let output = run(&[
+        "--render", "--plain", "--detail", "TSK01", "--width", "30", "--height", "12", work,
+    ]);
+    assert!(output.status.success(), "raul failed: {output:?}");
+    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    for (number, row) in text.lines().enumerate() {
+        for grapheme in ratatui::text::Span::raw(row.to_string())
+            .styled_graphemes(ratatui::style::Style::default())
+        {
+            assert_ne!(
+                grapheme.symbol, "\u{0301}",
+                "row {number} cut a grapheme: {row:?}"
+            );
+        }
+    }
+    assert!(text.contains('…'), "no cut is marked: {text}");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_unknown_detail_id_is_refused_before_rendering() {
+    let output = run(&[
+        "--render", "--plain", "--detail", "TSK99", "--width", "100", "--height", "40", WORK,
+    ]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "an unknown id did not exit 1: {output:?}"
+    );
+    assert!(output.stdout.is_empty(), "a screen was printed: {output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("TSK99"), "{stderr}");
+}
+
+#[test]
+fn the_detail_flag_needs_the_render_mode() {
+    let output = run(&["--detail", DETAIL_TASK, WORK]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "--detail without the render mode exited 0: {output:?}"
+    );
+    assert!(output.stdout.is_empty(), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--detail"), "{stderr}");
+}
+
 #[test]
 fn a_dimension_over_1000_is_refused_before_rendering() {
     for (flag, value) in [

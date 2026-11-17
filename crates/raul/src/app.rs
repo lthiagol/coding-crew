@@ -11,6 +11,7 @@ use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
 
 use crate::backlog;
 use crate::data::Work;
+use crate::detail::{self, Detail};
 use crate::needs;
 use crate::overview;
 use crate::path;
@@ -30,6 +31,10 @@ pub struct App {
     pub root: PathBuf,
     /// The active tab.
     pub tab: Tab,
+    /// The row selected on the active tab, when the tab has rows.
+    pub selection: Option<String>,
+    /// The open detail pane, when one is open.
+    pub detail: Option<Detail>,
     /// The help overlay is open.
     pub help: bool,
     /// The colours of the window.
@@ -42,15 +47,30 @@ impl App {
         Self {
             root,
             tab: Tab::Overview,
+            selection: None,
+            detail: None,
             help: false,
             theme,
         }
     }
 
     /// Handle a key. Returns what the window does next.
-    pub fn on_key(&mut self, key: KeyEvent) -> Action {
+    pub fn on_key(&mut self, key: KeyEvent, work: &Work) -> Action {
         if key.kind != KeyEventKind::Press {
             return Action::Redraw;
+        }
+        if self.detail.is_some() {
+            // The pane is modal: the keys its footer names are the only
+            // ones that do something, and every other key is left alone.
+            return match key.code {
+                KeyCode::Esc => {
+                    self.close_detail();
+                    Action::Redraw
+                }
+                KeyCode::Char('q') => Action::Quit,
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Action::Quit,
+                _ => Action::Redraw,
+            };
         }
         if self.help {
             self.help = false;
@@ -67,19 +87,48 @@ impl App {
                 self.help = true;
                 Action::Redraw
             }
+            KeyCode::Enter => {
+                // Enter opens the row that is selected, or the tab's first
+                // row: the pane opens from every tab that has rows, and
+                // nowhere else.
+                if let Some(id) = self.open_target(work) {
+                    self.selection = Some(id.clone());
+                    self.detail = Some(Detail::opened(id, self.tab, self.selection.clone()));
+                }
+                Action::Redraw
+            }
             KeyCode::Char(digit @ '1'..='6') => {
-                self.tab = Tab::from_index(digit as usize - '1' as usize);
-                Action::Redraw
+                self.go_to(Tab::from_index(digit as usize - '1' as usize))
             }
-            KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => {
-                self.tab = self.tab.next();
-                Action::Redraw
-            }
+            KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => self.go_to(self.tab.next()),
             KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h') => {
-                self.tab = self.tab.previous();
-                Action::Redraw
+                self.go_to(self.tab.previous())
             }
             _ => Action::Redraw,
+        }
+    }
+
+    /// Switch to a tab. The selection starts over: the first row of the
+    /// tab is the one enter opens.
+    fn go_to(&mut self, tab: Tab) -> Action {
+        self.tab = tab;
+        self.selection = None;
+        Action::Redraw
+    }
+
+    /// The record enter opens: the selected row, or the tab's first row.
+    fn open_target(&self, work: &Work) -> Option<String> {
+        let ids = rows_of(work, self.tab)?;
+        let selected = self.selection.clone().filter(|id| ids.contains(id));
+        selected.or_else(|| ids.into_iter().next())
+    }
+
+    /// Close the detail pane and return to the tab, and the selection, it
+    /// came from.
+    fn close_detail(&mut self) {
+        if let Some(detail) = self.detail.take() {
+            self.tab = detail.tab;
+            self.selection = detail.selection;
         }
     }
 
@@ -103,7 +152,13 @@ impl App {
             Tab::Backlog => backlog::render(frame, rows[2], work, &self.theme),
             tab => frame.render_widget(placeholder(tab, &self.theme), rows[2]),
         }
-        frame.render_widget(self.footer(rows[3].width), rows[3]);
+        if let Some(detail) = &self.detail {
+            // The pane covers the whole window: its own footer is the one
+            // on display, and the help overlay waits behind it.
+            detail::render(frame, area, work, detail, &self.theme);
+            return;
+        }
+        frame.render_widget(self.footer(rows[3].width, work), rows[3]);
 
         if self.help {
             render_help(frame, area, &self.theme);
@@ -201,8 +256,9 @@ impl App {
     /// The footer: the keys that do something on this tab.
     ///
     /// A terminal too narrow for every key keeps the keys that matter most,
-    /// and no key is ever cut in half.
-    fn footer(&self, width: u16) -> Line<'static> {
+    /// and no key is ever cut in half. Enter is named only where it opens:
+    /// a tab without rows never offers it.
+    fn footer(&self, width: u16, work: &Work) -> Line<'static> {
         let key = self.theme.chrome.key;
         let label = self.theme.chrome.footer;
         let space = || Span::raw("   ");
@@ -231,19 +287,32 @@ impl App {
                 ],
                 false,
             ),
-            (
-                3,
+        ];
+        let mut next = 3;
+        if rows_of(work, self.tab).is_some_and(|ids| !ids.is_empty()) {
+            parts.push((
+                next,
                 vec![
                     space(),
-                    Span::styled(" ? ", key),
-                    Span::styled(" help", label),
+                    Span::styled(" enter ", key),
+                    Span::styled(" open", label),
                 ],
                 true,
-            ),
-        ];
+            ));
+            next += 1;
+        }
+        parts.push((
+            next,
+            vec![
+                space(),
+                Span::styled(" ? ", key),
+                Span::styled(" help", label),
+            ],
+            true,
+        ));
         if self.help {
             parts.push((
-                4,
+                next + 1,
                 vec![
                     space(),
                     Span::styled(" esc ", key),
@@ -252,33 +321,54 @@ impl App {
                 true,
             ));
         }
-        // The keys that matter most are kept; the rest only if they fit.
-        let mut chosen = vec![false; parts.len()];
-        let mut used = 0usize;
-        for matters in [true, false] {
-            for (index, (_, spans, needed)) in parts.iter().enumerate() {
-                if *needed != matters {
-                    continue;
-                }
-                let columns = spans
-                    .iter()
-                    .map(|span| span.content.chars().count())
-                    .sum::<usize>();
-                if used + columns <= usize::from(width) {
-                    chosen[index] = true;
-                    used += columns;
-                }
+        footer_line(parts, width)
+    }
+}
+
+/// The footer line: the parts that fit, the ones that matter most first.
+pub(crate) fn footer_line(
+    parts: Vec<(usize, Vec<Span<'static>>, bool)>,
+    width: u16,
+) -> Line<'static> {
+    // The keys that matter most are kept; the rest only if they fit.
+    let mut chosen = vec![false; parts.len()];
+    let mut used = 0usize;
+    for matters in [true, false] {
+        for (index, (_, spans, needed)) in parts.iter().enumerate() {
+            if *needed != matters {
+                continue;
+            }
+            let columns = spans
+                .iter()
+                .map(|span| span.content.chars().count())
+                .sum::<usize>();
+            if used + columns <= usize::from(width) {
+                chosen[index] = true;
+                used += columns;
             }
         }
-        let mut order: Vec<usize> = (0..parts.len()).collect();
-        order.sort_by_key(|index| parts[*index].0);
-        let mut spans = Vec::new();
-        for index in order {
-            if chosen[index] {
-                spans.extend(parts[index].1.clone());
-            }
+    }
+    let mut order: Vec<usize> = (0..parts.len()).collect();
+    order.sort_by_key(|index| parts[*index].0);
+    let mut spans = Vec::new();
+    for index in order {
+        if chosen[index] {
+            spans.extend(parts[index].1.clone());
         }
-        Line::from(spans)
+    }
+    Line::from(spans)
+}
+
+/// The rows a tab holds, when it holds rows the detail pane can open.
+///
+/// The Overview is a summary, not a list: it has no rows to open. The
+/// Autopilot and the Settings tabs are placeholders.
+fn rows_of(work: &Work, tab: Tab) -> Option<Vec<String>> {
+    match tab {
+        Tab::NeedsYou => Some(needs::row_ids(work, &coding_lanes_core::now_rfc3339())),
+        Tab::Path => Some(path::row_ids(work)),
+        Tab::Backlog => Some(backlog::row_ids(work)),
+        Tab::Overview | Tab::Autopilot | Tab::Settings => None,
     }
 }
 
@@ -581,5 +671,129 @@ mod tests {
             .flatten()
             .any(|paint| paint.modifier != Modifier::empty());
         assert!(attributes, "the terminal preset paints no attributes");
+    }
+
+    /// A press of the key, as the terminal sends it.
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::from(code)
+    }
+
+    /// The tabs the detail pane opens from, and the tabs it does not.
+    fn reachability() -> Vec<(Tab, bool)> {
+        vec![
+            (Tab::Overview, false),
+            (Tab::NeedsYou, true),
+            (Tab::Path, true),
+            (Tab::Backlog, true),
+            (Tab::Autopilot, false),
+            (Tab::Settings, false),
+        ]
+    }
+
+    #[test]
+    fn enter_opens_the_row_and_esc_returns_to_it() {
+        // Enter on a row opens the task as a full-screen overlay; esc
+        // returns to the tab and the selection it came from; enter again
+        // reopens.
+        let work = mock_work();
+        for (tab, opens) in reachability() {
+            let mut app = app();
+            app.tab = tab;
+            if !opens {
+                app.on_key(key(KeyCode::Enter), &work);
+                assert!(
+                    app.detail.is_none(),
+                    "{tab:?}: the pane opened where it does not"
+                );
+                continue;
+            }
+            app.on_key(key(KeyCode::Enter), &work);
+            let detail = app
+                .detail
+                .as_ref()
+                .unwrap_or_else(|| panic!("{tab:?}: the pane did not open"));
+            assert_eq!(detail.tab, tab, "{tab:?}");
+            let id = detail.id.clone();
+            app.on_key(key(KeyCode::Esc), &work);
+            assert!(app.detail.is_none(), "{tab:?}: the pane did not close");
+            assert_eq!(app.tab, tab, "{tab:?}: esc did not return to the tab");
+            assert_eq!(
+                app.selection.as_deref(),
+                Some(id.as_str()),
+                "{tab:?}: esc did not return to the selection"
+            );
+            app.on_key(key(KeyCode::Enter), &work);
+            assert_eq!(
+                app.detail.as_ref().expect("reopened").id,
+                id,
+                "{tab:?}: enter did not reopen the record"
+            );
+        }
+    }
+
+    #[test]
+    fn the_selection_it_came_from_is_returned_to() {
+        let work = mock_work();
+        let mut app = app();
+        app.tab = Tab::Backlog;
+        let ids = rows_of(&work, Tab::Backlog).expect("rows");
+        assert!(ids.len() >= 2, "{ids:?}");
+        app.selection = Some(ids[1].clone());
+        app.on_key(key(KeyCode::Enter), &work);
+        assert_eq!(
+            app.detail.as_ref().expect("opened").id,
+            ids[1],
+            "enter opened another row than the one selected"
+        );
+        app.on_key(key(KeyCode::Esc), &work);
+        assert_eq!(
+            app.selection.as_deref(),
+            Some(ids[1].as_str()),
+            "esc did not return to the selection it came from"
+        );
+    }
+
+    #[test]
+    fn enter_opens_nothing_without_rows() {
+        // A folder with nothing in it: the row tabs have no rows either,
+        // and enter does nothing anywhere.
+        let work = Work::load(Path::new("/nowhere/coding-lanes/work"));
+        for (tab, _) in reachability() {
+            let mut app = app();
+            app.tab = tab;
+            app.on_key(key(KeyCode::Enter), &work);
+            assert!(app.detail.is_none(), "{tab:?}: the pane opened");
+        }
+    }
+
+    #[test]
+    fn the_footer_offers_open_only_where_a_row_can_open() {
+        // The footer never names a key that does nothing.
+        for (tab, offers) in reachability() {
+            let rows = render(&window(&Theme::preset(Preset::Dark), tab, false), 100, 20).0;
+            let footer = rows.last().expect("a footer row").trim_end().to_string();
+            assert_eq!(
+                footer.contains("enter") && footer.contains("open"),
+                offers,
+                "{tab:?}: {footer}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_footer_says_close_while_the_pane_is_open() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Path, false);
+        app.on_key(key(KeyCode::Enter), &work);
+        let rows = render(&app, 100, 20).0;
+        let footer = rows.last().expect("a footer row").trim_end().to_string();
+        assert!(
+            footer.contains("esc") && footer.contains("close"),
+            "{footer}"
+        );
+        assert!(
+            !(footer.contains("enter") && footer.contains("open")),
+            "{footer}: enter has already opened"
+        );
     }
 }

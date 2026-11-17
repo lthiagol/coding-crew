@@ -25,7 +25,7 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 |---|---|
 | tab bar | the six tabs; `1`–`6`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` |
 | content pane | the active tab's rows; `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` |
-| detail pane | `enter` on a row opens the task; split or full screen; `esc` returns |
+| detail pane | `enter` on a row opens the task as a full-screen overlay; `esc` returns to the tab and the selection it came from, and `enter` again reopens |
 | footer | contextual keys for the active tab — never a key that does nothing |
 
 The detail pane is not a tab: it is the same task seen close up, and it opens

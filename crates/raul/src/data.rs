@@ -154,6 +154,22 @@ impl Work {
         self.tasks.iter().find(|task| task.id == id)
     }
 
+    /// One smaller task by id.
+    pub fn item(&self, id: &str) -> Option<&Item> {
+        self.items.iter().find(|item| item.id == id)
+    }
+
+    /// The title of a record by id — a task or a smaller task.
+    ///
+    /// The detail pane opens from the Backlog too, and the backlog holds
+    /// both. The title is looked up again on every redraw, so a changed
+    /// file shows up on the next one.
+    pub fn record_title(&self, id: &str) -> Option<String> {
+        self.task(id)
+            .map(|task| task.title.clone())
+            .or_else(|| self.item(id).map(|item| item.title.clone()))
+    }
+
     /// Tasks per status, in the order of the lifecycle.
     pub fn status_counts(&self) -> Vec<(Status, usize)> {
         STATUSES

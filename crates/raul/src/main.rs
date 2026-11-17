@@ -5,10 +5,12 @@
 mod app;
 mod backlog;
 mod data;
+mod detail;
 mod needs;
 mod overview;
 mod path;
 mod tabs;
+mod text;
 mod theme;
 
 use std::io::{Stdout, Write};
@@ -28,10 +30,10 @@ use app::{Action, App};
 use coding_lanes_core::store::{DATA_DIR, WORK_DIR};
 use coding_lanes_core::{Store, StoreError};
 use data::{Missing, Work};
+use detail::Detail;
 use theme::{Preset, Theme};
 
-const USAGE: &str =
-    "usage: raul [--theme dark|terminal] [--render --plain [--width N] [--height N]] [work-folder]";
+const USAGE: &str = "usage: raul [--theme dark|terminal] [--render --plain [--width N] [--height N] [--detail TASK-ID]] [work-folder]";
 /// The columns of a plain render when --width is not given.
 const DEFAULT_WIDTH: u16 = 100;
 /// The rows of a plain render when --height is not given.
@@ -69,6 +71,8 @@ struct Options {
     width: u16,
     /// The rows of a plain render.
     height: u16,
+    /// The record the detail pane shows, in render mode.
+    detail: Option<String>,
 }
 
 /// The work folder to read and the colours to paint it with.
@@ -83,6 +87,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     let mut plain = false;
     let mut width = DEFAULT_WIDTH;
     let mut height = DEFAULT_HEIGHT;
+    let mut detail: Option<String> = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-h" | "--help" => {
@@ -118,6 +123,15 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
             other if other.starts_with("--height=") => {
                 height = dimension("--height", &other["--height=".len()..])?;
             }
+            "--detail" => {
+                let Some(id) = args.next() else {
+                    bail!("--detail needs a task id\n{USAGE}");
+                };
+                detail = Some(id);
+            }
+            other if other.starts_with("--detail=") => {
+                detail = Some(other["--detail=".len()..].to_string());
+            }
             other if other.starts_with('-') => bail!("unknown option {other}\n{USAGE}"),
             other => root = Some(PathBuf::from(other)),
         }
@@ -126,6 +140,16 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     // render that is not plain, or a plain text that is not a render.
     if render != plain {
         bail!("--render and --plain go together\n{USAGE}");
+    }
+    // The detail pane is reachable deterministically through the plain
+    // render: the flag has nothing to change in the interactive window.
+    if detail.is_some() && !render {
+        bail!("--detail works with --render --plain\n{USAGE}");
+    }
+    if let Some(id) = &detail
+        && id.trim().is_empty()
+    {
+        bail!("--detail needs a task id\n{USAGE}");
     }
     let (root, reason) = match root {
         Some(root) => {
@@ -141,6 +165,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
         render,
         width,
         height,
+        detail,
     })
 }
 
@@ -215,7 +240,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
 
         if let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
-            && app.on_key(key) == Action::Quit
+            && app.on_key(key, &work) == Action::Quit
         {
             break;
         }
@@ -227,9 +252,18 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
 ///
 /// No terminal is set up: the screen is drawn into a `TestBackend` buffer,
 /// which is converted to plain UTF-8 instead of being painted on a terminal.
+///
+/// With `--detail`, the screen is the detail pane over the whole window,
+/// bounded by the same dimensions.
 fn render_plain(options: Options) -> Result<()> {
-    let app = App::new(options.root, options.theme);
+    let mut app = App::new(options.root, options.theme);
     let work = Work::load_missing(&app.root, options.reason);
+    if let Some(id) = &options.detail {
+        if work.record_title(id).is_none() {
+            bail!("--detail: no record {id} in {}", app.root.display());
+        }
+        app.detail = Some(Detail::opened(id.clone(), app.tab, None));
+    }
     let mut terminal = Terminal::new(TestBackend::new(options.width, options.height))?;
     terminal.draw(|frame| app.draw(frame, &work))?;
     let text = plain_text(terminal.backend().buffer());
@@ -485,5 +519,44 @@ mod tests {
         )
         .expect_err("a dimension needs a value");
         assert!(error.to_string().contains("--width"), "{error}");
+    }
+
+    #[test]
+    fn the_detail_flag_names_the_record() {
+        for args in [
+            vec!["--render", "--plain", "--detail", "TSK13"],
+            vec!["--plain", "--detail=TSK13", "--render"],
+        ] {
+            let options = parse_args(args.into_iter().map(String::from)).expect("the options");
+            assert_eq!(options.detail.as_deref(), Some("TSK13"));
+        }
+    }
+
+    #[test]
+    fn the_detail_flag_needs_the_render_mode() {
+        let error = parse_args(["--detail", "TSK13"].map(String::from).into_iter())
+            .expect_err("the flag is a render-mode flag");
+        assert!(error.to_string().contains("--detail"), "{error}");
+        assert!(error.to_string().contains("--render"), "{error}");
+    }
+
+    #[test]
+    fn the_detail_flag_needs_an_id() {
+        for args in [
+            vec!["--render", "--plain", "--detail"],
+            vec!["--render", "--plain", "--detail="],
+            vec!["--render", "--plain", "--detail", " "],
+        ] {
+            let error = parse_args(args.into_iter().map(String::from))
+                .expect_err("the flag needs a task id");
+            assert!(error.to_string().contains("--detail"), "{error}");
+        }
+    }
+
+    #[test]
+    fn the_default_render_has_no_detail() {
+        let options =
+            parse_args(["--render", "--plain"].map(String::from).into_iter()).expect("the options");
+        assert!(options.detail.is_none());
     }
 }

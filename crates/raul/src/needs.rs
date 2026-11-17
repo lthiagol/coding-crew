@@ -97,6 +97,16 @@ pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
     );
 }
 
+/// The ids of the tab's rows, in the order they are shown.
+///
+/// The detail pane opens from this tab: the rows are what it can open.
+pub fn row_ids(work: &Work, now: &str) -> Vec<String> {
+    groups(work, now)
+        .into_iter()
+        .flat_map(|group| group.rows.into_iter().map(|row| row.id))
+        .collect()
+}
+
 /// The groups of the human lane: every reason, and the tasks that wait
 /// for it.
 ///

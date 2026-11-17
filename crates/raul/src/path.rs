@@ -307,6 +307,23 @@ fn blocked(work: &Work, now: &str) -> BranchView {
     }
 }
 
+/// The ids of the tree's rows, in the order they are drawn: the spine,
+/// then the branches.
+///
+/// The detail pane opens from this tab: the rows are what it can open.
+pub fn row_ids(work: &Work) -> Vec<String> {
+    let tree = tree(work);
+    let mut ids: Vec<String> = tree.spine.iter().map(|entry| entry.id.clone()).collect();
+    ids.extend(
+        tree.branches
+            .iter()
+            .flat_map(|view| view.groups.iter())
+            .flat_map(|group| group.rows.iter())
+            .map(|entry| entry.id.clone()),
+    );
+    ids
+}
+
 /// Draw the tab.
 pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
     let block = Block::bordered()

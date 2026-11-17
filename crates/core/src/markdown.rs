@@ -681,7 +681,11 @@ fn longest_backtick_run(value: &str) -> usize {
 }
 
 /// Escape a value so markdown cannot interpret it.
-fn escape_literal(value: &str) -> String {
+///
+/// The rule the projection holds for every field that must not be
+/// interpreted. The detail pane's header labels its record by the same
+/// rule, so a title cannot open markdown wherever it is shown.
+pub fn escape_literal(value: &str) -> String {
     let text = oneline(value).trim().to_string();
     let mut out = String::with_capacity(text.len());
     for ch in text.chars() {
