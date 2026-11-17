@@ -114,8 +114,22 @@ WHERE WE ARE
   VENDORED.md. sync.sh checks the pinned upstream and refuses to erase
   semantic deviations silently. The gate is green: 468 Rust tests and 91
   script assertions.
-  Next unit after that: bridge the eighteen slots onto the engine theme, then
-  the detail pane.
+  Unit closed: the coding-lanes code-review skill. Three build and review
+  rounds adapted mattpocock/skills' two-axis review for this project. A first
+  review opens fresh CODE and SPEC reviewers in parallel; fix rounds use a
+  delta review over prior findings and changed hunks; low findings are
+  follow-ups rather than another round; reviewers run targeted probes while
+  the orchestrator owns the full gate and round verdict. A round snapshot
+  makes the delta executable. The isolated gate was green: 468 Rust tests and
+  144 script assertions.
+  Unit in flight: the theme bridge. Two review rounds. The first found three
+  medium defects in contrast, search readability, and side coverage; the
+  second closed them and left six low findings, so its verdict remains
+  changes-needed. The working tree holds the bridge. It is paused at the
+  human's request while the review process was adjusted; the findings are at
+  /tmp/opencode/review-theme-bridge/round2-findings.md. Do not resume the
+  product sequence until the human says.
+  Next unit after that: finish the theme bridge, then the detail pane.
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
       the fork parent
@@ -145,7 +159,8 @@ DONE
   markdown through one pure, terminal-free interface.
   Docs: task model, smaller tasks, roles, vocabulary, the raul screen spec,
   and ten decision records.
-  Skills: four vendored from upstream under .agents/skills, and
+  Skills: four vendored from upstream under .agents/skills, code-review
+  adapted from mattpocock/skills for the two-axis build-loop review, and
   orchestration-flow for the build loop itself.
   Engine: leaf 1.29.2's markdown modules vendored into crates/engine with a
   pinned commit, checksummed deviation ledger, safe sync script, and ported
