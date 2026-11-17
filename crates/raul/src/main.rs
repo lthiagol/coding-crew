@@ -25,7 +25,8 @@ use ratatui::buffer::{Buffer, CellWidth};
 
 use app::{Action, App};
 use coding_lanes_core::store::{DATA_DIR, WORK_DIR};
-use data::Work;
+use coding_lanes_core::{Store, StoreError};
+use data::{Missing, Work};
 use theme::{Preset, Theme};
 
 const USAGE: &str =
@@ -57,6 +58,8 @@ fn main() -> Result<()> {
 struct Options {
     /// The work folder to read.
     root: PathBuf,
+    /// Why the folder is not there, when it is not.
+    reason: Missing,
     /// The colours of the window.
     theme: Theme,
     /// Print the screen as text and exit.
@@ -123,8 +126,16 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     if render != plain {
         bail!("--render and --plain go together\n{USAGE}");
     }
+    let (root, reason) = match root {
+        Some(root) => {
+            let reason = reason_at(&root);
+            (root, reason)
+        }
+        None => locate_current()?,
+    };
     Ok(Options {
-        root: root.unwrap_or_else(discover),
+        root,
+        reason,
         theme: Theme::preset(preset),
         render,
         width,
@@ -148,38 +159,57 @@ fn preset_of(name: &str) -> Result<Preset> {
     })
 }
 
-/// The work folder of the project in the current directory.
-///
-/// The store is discovered, not configured: the nearest ancestor that holds
-/// a `coding-lanes/work` folder is the one. A `coding-lanes` folder without
-/// a `work` folder is not a store, so the search walks on. When there is no
-/// store at all, the folder that was looked for is returned — raul then says
-/// so instead of reading the wrong place.
-fn discover() -> PathBuf {
-    let Ok(current) = std::env::current_dir() else {
-        return PathBuf::new();
-    };
-    discover_from(&current).unwrap_or_else(|| current.join(DATA_DIR).join(WORK_DIR))
+/// The work folder of the project in the current directory, and why it is
+/// absent when it is.
+fn locate_current() -> Result<(PathBuf, Missing)> {
+    let current = std::env::current_dir()
+        .map_err(|error| anyhow::anyhow!("reading the current directory: {error}"))?;
+    locate(&current)
 }
 
-/// The nearest ancestor of `start` that holds a work folder.
-fn discover_from(start: &Path) -> Option<PathBuf> {
-    let mut dir = Some(start.to_path_buf());
-    while let Some(current) = dir {
-        let candidate = current.join(DATA_DIR).join(WORK_DIR);
-        if candidate.is_dir() {
-            return Some(candidate);
+/// The work folder of the nearest project at or above `start`, and why it is
+/// absent when it is.
+///
+/// The rule is the store's. When the nearest project has no `work/`, its own
+/// path is the one shown. With no `coding-lanes/` anywhere, the path looked
+/// for is `start/coding-lanes/work`.
+fn locate(start: &Path) -> Result<(PathBuf, Missing)> {
+    located(start, Store::discover_work(start))
+}
+
+/// The folder and the reason, from the result of the store's discovery.
+fn located(start: &Path, found: Result<Store, StoreError>) -> Result<(PathBuf, Missing)> {
+    match found {
+        Ok(store) => Ok((store.root().to_path_buf(), Missing::NoWork)),
+        Err(StoreError::NoWorkFolder(data)) => Ok((data.join(WORK_DIR), Missing::NoWork)),
+        Err(StoreError::NoDataFolder) => {
+            Ok((start.join(DATA_DIR).join(WORK_DIR), Missing::NoFolder))
         }
-        dir = current.parent().map(Path::to_path_buf);
+        // Discovery returns only the two errors above. Any other error is
+        // not a missing folder, and is not swallowed as one.
+        Err(other) => Err(anyhow::anyhow!("finding the work folder: {other}")),
     }
-    None
+}
+
+/// Why a work folder given on the command line is not there.
+fn reason_at(root: &Path) -> Missing {
+    match root.parent() {
+        Some(data)
+            if data.file_name().and_then(|name| name.to_str()) == Some(DATA_DIR)
+                && data.is_dir() =>
+        {
+            Missing::NoWork
+        }
+        _ => Missing::NoFolder,
+    }
 }
 
 /// The window loop. The folder is read again on every redraw.
 fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> Result<()> {
+    let reason = options.reason;
     let mut app = App::new(options.root, options.theme);
     loop {
-        let work = Work::load(&app.root);
+        let work = Work::load_missing(&app.root, reason);
         terminal.draw(|frame| app.draw(frame, &work))?;
 
         if let Event::Key(key) = event::read()?
@@ -198,7 +228,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
 /// which is converted to plain UTF-8 instead of being painted on a terminal.
 fn render_plain(options: Options) -> Result<()> {
     let app = App::new(options.root, options.theme);
-    let work = Work::load(&app.root);
+    let work = Work::load_missing(&app.root, options.reason);
     let mut terminal = Terminal::new(TestBackend::new(options.width, options.height))?;
     terminal.draw(|frame| app.draw(frame, &work))?;
     let text = plain_text(terminal.backend().buffer());
@@ -267,11 +297,18 @@ mod tests {
     #[test]
     fn the_discovery_needs_a_work_folder() {
         let dir = scratch_dir("discovery");
-        // A coding-lanes folder without a work folder is not a store.
+        // A coding-lanes folder without a work folder is the project, and its
+        // own work folder is the one reported missing.
         fs::create_dir_all(dir.join(DATA_DIR)).expect("a data folder");
-        assert_eq!(discover_from(&dir), None);
+        assert_eq!(
+            locate(&dir).expect("a location"),
+            (dir.join(DATA_DIR).join(WORK_DIR), Missing::NoWork)
+        );
         fs::create_dir_all(dir.join(DATA_DIR).join(WORK_DIR)).expect("a work folder");
-        assert_eq!(discover_from(&dir), Some(dir.join(DATA_DIR).join(WORK_DIR)));
+        assert_eq!(
+            locate(&dir).expect("a location"),
+            (dir.join(DATA_DIR).join(WORK_DIR), Missing::NoWork)
+        );
     }
 
     #[test]
@@ -281,15 +318,58 @@ mod tests {
         let deep = dir.join("crates").join("raul");
         fs::create_dir_all(&deep).expect("a nested folder");
         assert_eq!(
-            discover_from(&deep),
-            Some(dir.join(DATA_DIR).join(WORK_DIR))
+            locate(&deep).expect("a location"),
+            (dir.join(DATA_DIR).join(WORK_DIR), Missing::NoWork)
         );
     }
 
     #[test]
-    fn without_a_store_the_folder_that_was_looked_for_is_used() {
-        let dir = scratch_dir("discovery-none");
-        assert_eq!(discover_from(&dir), None, "there is no work folder here");
+    fn a_project_without_work_does_not_borrow_an_ancestor() {
+        let ancestor = scratch_dir("discovery-ancestor");
+        fs::create_dir_all(ancestor.join(DATA_DIR).join(WORK_DIR)).expect("the ancestor's work");
+        let project = ancestor.join("project");
+        fs::create_dir_all(project.join(DATA_DIR)).expect("a data folder without work");
+        let deep = project.join("src");
+        fs::create_dir_all(&deep).expect("a nested folder");
+        assert_eq!(
+            locate(&deep).expect("a location"),
+            (project.join(DATA_DIR).join(WORK_DIR), Missing::NoWork),
+            "the nearest project's work folder is the one shown as missing"
+        );
+    }
+
+    #[test]
+    fn without_a_project_the_folder_looked_for_is_named() {
+        // The folder is built from the start, without a walk: a coding-lanes
+        // folder above the temporary directory cannot change it.
+        let start = Path::new("/nowhere/project/src");
+        assert_eq!(
+            located(start, Err(StoreError::NoDataFolder)).expect("a location"),
+            (start.join(DATA_DIR).join(WORK_DIR), Missing::NoFolder)
+        );
+    }
+
+    #[test]
+    fn a_missing_project_folder_is_named_by_the_discovery() {
+        let data = PathBuf::from("/nowhere/project/coding-lanes");
+        assert_eq!(
+            located(
+                Path::new("/nowhere/project/src"),
+                Err(StoreError::NoWorkFolder(data.clone()))
+            )
+            .expect("a location"),
+            (data.join(WORK_DIR), Missing::NoWork)
+        );
+    }
+
+    #[test]
+    fn any_other_discovery_error_is_not_a_missing_folder() {
+        let error = located(
+            Path::new("/nowhere/project/src"),
+            Err(StoreError::Item("a broken store".into())),
+        )
+        .expect_err("not a missing folder");
+        assert!(error.to_string().contains("a broken store"), "{error}");
     }
 
     #[test]

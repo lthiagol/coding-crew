@@ -10,7 +10,7 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 
 use coding_lanes_core::Status;
 
-use crate::data::{Reason, Work};
+use crate::data::{Missing, Reason, Work};
 use crate::theme::{Theme, block_title_style, phase_style, reason_style};
 
 /// Below this width the blocks are stacked in one column.
@@ -22,8 +22,8 @@ const LABEL_WIDTH: usize = 12;
 
 /// Draw the tab.
 pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
-    if work.missing {
-        render_missing(frame, area, work, theme);
+    if let Some(missing) = work.missing {
+        render_missing(frame, area, work, missing, theme);
         return;
     }
     if work.is_empty() {
@@ -38,13 +38,10 @@ pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
 }
 
 /// There is no work folder.
-fn render_missing(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
+fn render_missing(frame: &mut Frame, area: Rect, work: &Work, missing: Missing, theme: &Theme) {
     frame.render_widget(
         Paragraph::new(vec![
-            Line::from(Span::styled(
-                "no coding-lanes folder found",
-                theme.semantic.error,
-            )),
+            Line::from(Span::styled(missing.headline(), theme.semantic.error)),
             Line::from(Span::styled(
                 format!("looked in {}", work.root.display()),
                 theme.text.dim,
@@ -1074,6 +1071,39 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("a scratch folder");
         dir
+    }
+
+    /// A work folder that is not there, for the given reason.
+    fn missing_work(reason: Missing) -> Work {
+        Work {
+            root: std::path::PathBuf::from("/nowhere/project/coding-lanes/work"),
+            tasks: Vec::new(),
+            items: Vec::new(),
+            errors: Vec::new(),
+            missing: Some(reason),
+        }
+    }
+
+    #[test]
+    fn without_a_project_the_screen_says_none_was_found() {
+        let text = draw(&missing_work(Missing::NoFolder), 100, 10).join("\n");
+        assert!(text.contains("no coding-lanes folder found"), "{text}");
+        assert!(
+            text.contains("looked in /nowhere/project/coding-lanes/work"),
+            "{text}"
+        );
+        assert!(!text.contains("no work folder"), "{text}");
+    }
+
+    #[test]
+    fn a_project_without_work_says_so_and_names_the_path() {
+        let text = draw(&missing_work(Missing::NoWork), 100, 10).join("\n");
+        assert!(text.contains("this project has no work folder"), "{text}");
+        assert!(
+            text.contains("looked in /nowhere/project/coding-lanes/work"),
+            "{text}"
+        );
+        assert!(!text.contains("no coding-lanes folder found"), "{text}");
     }
 
     #[test]

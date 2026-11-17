@@ -313,13 +313,10 @@ pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
         .title("path tree")
         .title_style(block_title_style(theme))
         .border_style(theme.chrome.border);
-    if work.missing {
+    if let Some(missing) = work.missing {
         frame.render_widget(
             Paragraph::new(vec![
-                Line::from(Span::styled(
-                    "no coding-lanes folder found",
-                    theme.semantic.error,
-                )),
+                Line::from(Span::styled(missing.headline(), theme.semantic.error)),
                 Line::from(Span::styled(
                     format!("looked in {}", work.root.display()),
                     theme.text.dim,
@@ -1014,6 +1011,7 @@ mod tests {
     use ratatui::backend::TestBackend;
 
     use super::*;
+    use crate::data::Missing;
 
     fn mock_work() -> Work {
         Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-lanes/work"))
@@ -1459,6 +1457,26 @@ mod tests {
         let rows = draw(&Work::load(Path::new("/nowhere/coding-lanes/work")), 60, 12);
         let text = text_of(&rows);
         assert!(text.contains("no coding-lanes folder found"), "{text}");
+        assert!(
+            text.contains("looked in /nowhere/coding-lanes/work"),
+            "{text}"
+        );
+        assert!(!text.contains("no work folder"), "{text}");
+    }
+
+    #[test]
+    fn a_project_without_work_says_so_and_names_the_path() {
+        let work = Work::load_missing(
+            Path::new("/nowhere/project/coding-lanes/work"),
+            Missing::NoWork,
+        );
+        let text = text_of(&draw(&work, 100, 10));
+        assert!(text.contains("this project has no work folder"), "{text}");
+        assert!(
+            text.contains("looked in /nowhere/project/coding-lanes/work"),
+            "{text}"
+        );
+        assert!(!text.contains("no coding-lanes folder found"), "{text}");
     }
 
     /// Draw the tab and return every cell, with its colour.

@@ -44,6 +44,25 @@ impl Reason {
     }
 }
 
+/// Why there is no work folder to read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Missing {
+    /// No `coding-lanes` folder was found at or above the start.
+    NoFolder,
+    /// The nearest project has a `coding-lanes` folder, but no work folder.
+    NoWork,
+}
+
+impl Missing {
+    /// The sentence the screens print.
+    pub fn headline(self) -> &'static str {
+        match self {
+            Missing::NoFolder => "no coding-lanes folder found",
+            Missing::NoWork => "this project has no work folder",
+        }
+    }
+}
+
 /// The work folder, as it is on disk.
 #[derive(Debug, Default)]
 pub struct Work {
@@ -51,23 +70,29 @@ pub struct Work {
     pub tasks: Vec<Task>,
     pub items: Vec<Item>,
     pub errors: Vec<ReadError>,
-    /// The folder is not there.
-    pub missing: bool,
+    /// Why the folder is not there, when it is not.
+    pub missing: Option<Missing>,
 }
 
 impl Work {
     /// Read the folder. A file that does not parse is reported, not fatal.
+    #[cfg(test)]
     pub fn load(root: &Path) -> Self {
+        Self::load_missing(root, Missing::NoFolder)
+    }
+
+    /// Read the folder, saying why it is absent when it is.
+    pub fn load_missing(root: &Path, reason: Missing) -> Self {
         let mut work = Work {
             root: root.to_path_buf(),
             ..Work::default()
         };
         if !root.is_dir() {
-            work.missing = true;
+            work.missing = Some(reason);
             return work;
         }
         let Ok(entries) = fs::read_dir(root) else {
-            work.missing = true;
+            work.missing = Some(reason);
             return work;
         };
         // read_dir order is the filesystem's, not the folder's: the same work
@@ -297,7 +322,7 @@ mod tests {
             tasks,
             items: Vec::new(),
             errors: Vec::new(),
-            missing: false,
+            missing: None,
         }
     }
 
@@ -319,7 +344,7 @@ mod tests {
     #[test]
     fn reads_the_mock_folder() {
         let work = mock_work();
-        assert!(!work.missing);
+        assert!(work.missing.is_none());
         assert_eq!(work.tasks.len(), 29);
         assert_eq!(work.items.len(), 5);
         assert!(work.errors.is_empty());
@@ -451,8 +476,21 @@ mod tests {
     #[test]
     fn a_missing_folder_is_not_an_error() {
         let work = Work::load(Path::new("/nowhere/coding-lanes/work"));
-        assert!(work.missing);
+        assert_eq!(work.missing, Some(Missing::NoFolder));
         assert!(work.is_empty());
+    }
+
+    #[test]
+    fn a_missing_folder_keeps_the_reason_it_is_missing() {
+        let work = Work::load_missing(
+            Path::new("/nowhere/project/coding-lanes/work"),
+            Missing::NoWork,
+        );
+        assert_eq!(work.missing, Some(Missing::NoWork));
+        assert_eq!(
+            work.missing.expect("a reason").headline(),
+            "this project has no work folder"
+        );
     }
 
     #[test]
