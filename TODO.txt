@@ -122,14 +122,19 @@ WHERE WE ARE
   the orchestrator owns the full gate and round verdict. A round snapshot
   makes the delta executable. The isolated gate was green: 468 Rust tests and
   144 script assertions.
-  Unit in flight: the theme bridge. Two review rounds. The first found three
-  medium defects in contrast, search readability, and side coverage; the
-  second closed them and left six low findings, so its verdict remains
-  changes-needed. The working tree holds the bridge. It is paused at the
-  human's request while the review process was adjusted; the findings are at
-  /tmp/opencode/review-theme-bridge/round2-findings.md. Do not resume the
-  product sequence until the human says.
-  Next unit after that: finish the theme bridge, then the detail pane.
+  Unit closed: the theme bridge. Three rounds. Our eighteen slots map onto
+  leaf's MarkdownTheme: all 47 fields named once, the five background fields
+  derived in the test from the engine's own sources, both presets, palette
+  containment, and the doc's table pinned against the code. The one-palette
+  promise stops at MarkdownTheme: syntect's code tokens stay a third palette
+  the detail-pane unit must handle. The search is not offered in either
+  preset and the doc says why for both; its 1.26:1 figure is pinned by test.
+  The gate is green: 475 Rust tests and 144 script assertions.
+  Next unit: the detail pane (plan 14-15).
+  The delta review left one low follow-up: the search-figure assertion lives
+  in only_the_engines_background_fields_take_a_slot_background, a test named
+  for background fields; move it to the contrast-figures test or split it
+  out.
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
       the fork parent
@@ -179,6 +184,14 @@ HAPPENED
   were worth it: they found that a count could be silently cut at a width
   where the screen looked fine, that the tab bar could be cut in half, and
   that the title line could read "coding-lane".
+  The theme bridge's fix round ran builder and reviewer both on
+  opencode-go/glm-5.3-flash#high, a human-ordered test of one model family
+  for both roles. The builder fixed six findings in 11 minutes and ran its
+  own mutation check; the reviewer spent 4.5 minutes, replayed the mutation
+  that escaped round 2, and confirmed it now fails. The rule that roles run
+  different model families stays; the test showed the flow does not depend
+  on it.
+
   Three mistakes of the orchestrator, all of them committed into history: git
   add -A swept a builder's uncommitted work into a docs commit before it was
   reviewed; a kickoff prompt was left sitting in an input box because enter
