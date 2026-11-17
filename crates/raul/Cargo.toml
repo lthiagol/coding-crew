@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 coding-lanes-core.workspace = true
+coding-lanes-engine.workspace = true
 anyhow.workspace = true
 crossterm.workspace = true
 # `Paragraph::line_count` asks ratatui how tall a paragraph will be, so the

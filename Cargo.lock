@@ -280,6 +280,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "coding-lanes-core",
+ "coding-lanes-engine",
  "crossterm",
  "ratatui",
  "serde_json",

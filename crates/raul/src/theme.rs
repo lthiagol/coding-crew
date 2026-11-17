@@ -5,7 +5,8 @@
 //! a phase names a slot, never a colour.
 
 use coding_lanes_core::Status;
-use ratatui::style::{Modifier, Style};
+use coding_lanes_engine::MarkdownTheme;
+use ratatui::style::{Color, Modifier, Style};
 
 use crate::data::Reason;
 
@@ -206,6 +207,94 @@ impl Theme {
             Slot::SemanticInfo => self.semantic.info,
             Slot::SemanticHuman => self.semantic.human,
             Slot::SemanticAgent => self.semantic.agent,
+        }
+    }
+
+    /// The markdown engine's theme, mapped onto our slots.
+    ///
+    /// The engine has its own palettes; raul does not use them. Every field
+    /// takes its slot's foreground, or the slot's background for a field that
+    /// paints one. A slot with no colour in the preset becomes `Color::Reset`,
+    /// so the terminal preset names no colour at all.
+    ///
+    /// The promise stops at `MarkdownTheme`: the engine paints code tokens
+    /// with syntect's own theme, which this mapping does not reach. And
+    /// `MarkdownTheme` carries colours only, so the terminal preset leaves
+    /// every document field `Reset` and only the engine's own modifiers
+    /// distinguish the roles.
+    #[allow(dead_code)] // The detail pane's first caller.
+    pub fn markdown_theme(&self) -> MarkdownTheme {
+        let fg = |slot: Slot| self.slot(slot).fg.unwrap_or(Color::Reset);
+        let bg = |slot: Slot| self.slot(slot).bg.unwrap_or(Color::Reset);
+        MarkdownTheme {
+            // A search hit takes the selection's background, but the engine
+            // keeps the searched span's own foreground: the mapping cannot
+            // make the hit readable, so search is not offered in the dark
+            // document until a readable pairing exists.
+            search_highlight_bg: bg(Slot::TextSelected),
+            search_match_bg: bg(Slot::TextSelected),
+            // Code: the gutter and the label are document words, so they
+            // take the text grade; the frame is a border; inline code is
+            // raised prose.
+            code_gutter: fg(Slot::TextDim),
+            code_frame: fg(Slot::ChromeBorder),
+            code_label: fg(Slot::TextDim),
+            inline_code_fg: fg(Slot::TextStrong),
+            inline_code_bg: bg(Slot::ChromeBorder),
+            // Quotes, rules, tables and blockquote markers are chrome.
+            blockquote_marker: fg(Slot::ChromeBorder),
+            blockquote_text: fg(Slot::TextDim),
+            rule: fg(Slot::ChromeBorder),
+            table_border: fg(Slot::ChromeBorder),
+            table_separator: fg(Slot::ChromeBorder),
+            table_header: fg(Slot::TextStrong),
+            table_cell: fg(Slot::TextNormal),
+            // Lists: a deliberate text hierarchy, one step dimmer each time,
+            // but a document word never drops below the text grade.
+            list_level_1: fg(Slot::TextNormal),
+            list_level_2: fg(Slot::TextDim),
+            list_level_3: fg(Slot::TextDim),
+            ordered_list: fg(Slot::TextNormal),
+            // Headings: the brightest title down to the dimmest step.
+            heading_1: fg(Slot::ChromeTitle),
+            heading_2: fg(Slot::TextStrong),
+            heading_3: fg(Slot::TextNormal),
+            heading_4: fg(Slot::TextDim),
+            heading_other: fg(Slot::TextDim),
+            heading_underline: fg(Slot::ChromeBorder),
+            // Links are neutral information, never a lane.
+            link_icon: fg(Slot::SemanticInfo),
+            link_text: fg(Slot::SemanticInfo),
+            link_hover: fg(Slot::SemanticInfo),
+            // Ordinary and strong prose.
+            text: fg(Slot::TextNormal),
+            strong_text: fg(Slot::TextStrong),
+            // LaTeX and Mermaid are prose with the code family's chrome.
+            latex_inline_fg: fg(Slot::TextStrong),
+            latex_inline_bg: bg(Slot::ChromeBorder),
+            latex_block_fg: fg(Slot::TextStrong),
+            mermaid_keyword: fg(Slot::TextStrong),
+            mermaid_arrow: fg(Slot::ChromeBorder),
+            mermaid_label: fg(Slot::TextNormal),
+            mermaid_block_fg: fg(Slot::TextDim),
+            // A mark is the selection: its background is the selection's
+            // background and its foreground is the selection's own, the
+            // pair the palette records.
+            mark_fg: fg(Slot::TextSelected),
+            mark_bg: bg(Slot::TextSelected),
+            // Tasks.
+            task_checked: fg(Slot::SemanticOk),
+            task_unchecked: fg(Slot::TextDim),
+            // Alerts, one semantic slot each. The warning and the failure
+            // never share a slot; importance is information, not a lane.
+            alert_note: fg(Slot::SemanticInfo),
+            alert_tip: fg(Slot::SemanticOk),
+            alert_important: fg(Slot::SemanticInfo),
+            alert_warning: fg(Slot::SemanticWarn),
+            alert_caution: fg(Slot::SemanticError),
+            // Footnotes: the reference is information, the note is secondary.
+            footnote_ref: fg(Slot::SemanticInfo),
+            footnote_text: fg(Slot::TextDim),
         }
     }
 }
@@ -455,10 +544,162 @@ mod tests {
     /// The palettes doc: the source of truth for the dark palette.
     const PALETTES: &str = include_str!("../../../docs/tui/palettes.md");
 
+    /// The theme doc: the source of truth for the engine mapping.
+    const THEME: &str = include_str!("../../../docs/tui/theme.md");
+
+    /// The engine's markdown sources: the authority for which fields it
+    /// paints with a background.
+    const ENGINE_SOURCES: [&str; 18] = [
+        include_str!("../../../crates/engine/src/markdown/blocks.rs"),
+        include_str!("../../../crates/engine/src/markdown/fences.rs"),
+        include_str!("../../../crates/engine/src/markdown/footnotes.rs"),
+        include_str!("../../../crates/engine/src/markdown/frontmatter.rs"),
+        include_str!("../../../crates/engine/src/markdown/highlight.rs"),
+        include_str!("../../../crates/engine/src/markdown/latex.rs"),
+        include_str!("../../../crates/engine/src/markdown/links.rs"),
+        include_str!("../../../crates/engine/src/markdown/lists.rs"),
+        include_str!("../../../crates/engine/src/markdown/markers.rs"),
+        include_str!("../../../crates/engine/src/markdown/mermaid.rs"),
+        include_str!("../../../crates/engine/src/markdown/mod.rs"),
+        include_str!("../../../crates/engine/src/markdown/spans.rs"),
+        include_str!("../../../crates/engine/src/markdown/syntax.rs"),
+        include_str!("../../../crates/engine/src/markdown/table_layout.rs"),
+        include_str!("../../../crates/engine/src/markdown/tables.rs"),
+        include_str!("../../../crates/engine/src/markdown/toc.rs"),
+        include_str!("../../../crates/engine/src/markdown/width.rs"),
+        include_str!("../../../crates/engine/src/markdown/wrapping.rs"),
+    ];
+
     /// The tolerance of the neutral, in channels of 255.
     ///
     /// The doc states it; the test below holds the two together.
     const NEUTRAL_TOLERANCE: u8 = 48;
+
+    /// The engine's theme fields, the slot each maps to, and whether the
+    /// field paints a background.
+    ///
+    /// The engine exposes no reflection, so this list is the coverage of the
+    /// 47 fields: a field added upstream has to be added here and in the doc.
+    const ENGINE_SLOTS: [(&str, Slot, bool); 47] = [
+        ("search_highlight_bg", Slot::TextSelected, true),
+        ("search_match_bg", Slot::TextSelected, true),
+        ("code_gutter", Slot::TextDim, false),
+        ("blockquote_marker", Slot::ChromeBorder, false),
+        ("list_level_1", Slot::TextNormal, false),
+        ("list_level_2", Slot::TextDim, false),
+        ("list_level_3", Slot::TextDim, false),
+        ("ordered_list", Slot::TextNormal, false),
+        ("table_border", Slot::ChromeBorder, false),
+        ("table_separator", Slot::ChromeBorder, false),
+        ("table_header", Slot::TextStrong, false),
+        ("table_cell", Slot::TextNormal, false),
+        ("heading_1", Slot::ChromeTitle, false),
+        ("heading_2", Slot::TextStrong, false),
+        ("heading_3", Slot::TextNormal, false),
+        ("heading_4", Slot::TextDim, false),
+        ("heading_other", Slot::TextDim, false),
+        ("heading_underline", Slot::ChromeBorder, false),
+        ("code_frame", Slot::ChromeBorder, false),
+        ("code_label", Slot::TextDim, false),
+        ("inline_code_fg", Slot::TextStrong, false),
+        ("inline_code_bg", Slot::ChromeBorder, true),
+        ("rule", Slot::ChromeBorder, false),
+        ("link_icon", Slot::SemanticInfo, false),
+        ("link_text", Slot::SemanticInfo, false),
+        ("link_hover", Slot::SemanticInfo, false),
+        ("blockquote_text", Slot::TextDim, false),
+        ("text", Slot::TextNormal, false),
+        ("strong_text", Slot::TextStrong, false),
+        ("latex_inline_fg", Slot::TextStrong, false),
+        ("latex_inline_bg", Slot::ChromeBorder, true),
+        ("latex_block_fg", Slot::TextStrong, false),
+        ("mermaid_keyword", Slot::TextStrong, false),
+        ("mermaid_arrow", Slot::ChromeBorder, false),
+        ("mermaid_label", Slot::TextNormal, false),
+        ("mermaid_block_fg", Slot::TextDim, false),
+        ("mark_fg", Slot::TextSelected, false),
+        ("mark_bg", Slot::TextSelected, true),
+        ("task_checked", Slot::SemanticOk, false),
+        ("task_unchecked", Slot::TextDim, false),
+        ("alert_note", Slot::SemanticInfo, false),
+        ("alert_tip", Slot::SemanticOk, false),
+        ("alert_important", Slot::SemanticInfo, false),
+        ("alert_warning", Slot::SemanticWarn, false),
+        ("alert_caution", Slot::SemanticError, false),
+        ("footnote_ref", Slot::SemanticInfo, false),
+        ("footnote_text", Slot::TextDim, false),
+    ];
+
+    /// The engine fields it consumes with `.bg()`.
+    ///
+    /// The vendored engine paints these five with a background, and every
+    /// other field with a foreground: `markers.rs` and `spans.rs` pair
+    /// `mark_fg` with `mark_bg` and `inline_code_fg`/`latex_inline_fg` with
+    /// their `_bg`, `highlight.rs` paints `search_highlight_bg` and
+    /// `search_match_bg`, and `table_layout.rs` paints the same three pairs.
+    /// The test below derives the set from the engine's own sources, so it
+    /// is a fact and not a copy of the mapping's assumption.
+    const ENGINE_BACKGROUND_FIELDS: [&str; 5] = [
+        "search_highlight_bg",
+        "search_match_bg",
+        "inline_code_bg",
+        "latex_inline_bg",
+        "mark_bg",
+    ];
+
+    /// Every field of an engine theme, with the flag that says whether it
+    /// paints a background.
+    fn engine_fields(theme: &MarkdownTheme) -> [(&'static str, Color, bool); 47] {
+        [
+            ("search_highlight_bg", theme.search_highlight_bg, true),
+            ("search_match_bg", theme.search_match_bg, true),
+            ("code_gutter", theme.code_gutter, false),
+            ("blockquote_marker", theme.blockquote_marker, false),
+            ("list_level_1", theme.list_level_1, false),
+            ("list_level_2", theme.list_level_2, false),
+            ("list_level_3", theme.list_level_3, false),
+            ("ordered_list", theme.ordered_list, false),
+            ("table_border", theme.table_border, false),
+            ("table_separator", theme.table_separator, false),
+            ("table_header", theme.table_header, false),
+            ("table_cell", theme.table_cell, false),
+            ("heading_1", theme.heading_1, false),
+            ("heading_2", theme.heading_2, false),
+            ("heading_3", theme.heading_3, false),
+            ("heading_4", theme.heading_4, false),
+            ("heading_other", theme.heading_other, false),
+            ("heading_underline", theme.heading_underline, false),
+            ("code_frame", theme.code_frame, false),
+            ("code_label", theme.code_label, false),
+            ("inline_code_fg", theme.inline_code_fg, false),
+            ("inline_code_bg", theme.inline_code_bg, true),
+            ("rule", theme.rule, false),
+            ("link_icon", theme.link_icon, false),
+            ("link_text", theme.link_text, false),
+            ("link_hover", theme.link_hover, false),
+            ("blockquote_text", theme.blockquote_text, false),
+            ("text", theme.text, false),
+            ("strong_text", theme.strong_text, false),
+            ("latex_inline_fg", theme.latex_inline_fg, false),
+            ("latex_inline_bg", theme.latex_inline_bg, true),
+            ("latex_block_fg", theme.latex_block_fg, false),
+            ("mermaid_keyword", theme.mermaid_keyword, false),
+            ("mermaid_arrow", theme.mermaid_arrow, false),
+            ("mermaid_label", theme.mermaid_label, false),
+            ("mermaid_block_fg", theme.mermaid_block_fg, false),
+            ("mark_fg", theme.mark_fg, false),
+            ("mark_bg", theme.mark_bg, true),
+            ("task_checked", theme.task_checked, false),
+            ("task_unchecked", theme.task_unchecked, false),
+            ("alert_note", theme.alert_note, false),
+            ("alert_tip", theme.alert_tip, false),
+            ("alert_important", theme.alert_important, false),
+            ("alert_warning", theme.alert_warning, false),
+            ("alert_caution", theme.alert_caution, false),
+            ("footnote_ref", theme.footnote_ref, false),
+            ("footnote_text", theme.footnote_text, false),
+        ]
+    }
 
     /// Every phase of the lifecycle and the slot the spec gives it.
     fn phases() -> [(Status, Slot); 8] {
@@ -1104,5 +1345,388 @@ mod tests {
         }
         assert_eq!(Preset::parse("light"), None);
         assert_eq!(Preset::parse(""), None);
+    }
+
+    #[test]
+    fn every_markdown_field_maps_to_its_slot() {
+        for preset in Preset::ALL {
+            let theme = Theme::preset(preset);
+            let markdown = theme.markdown_theme();
+            let fields = engine_fields(&markdown);
+            assert_eq!(
+                fields.len(),
+                ENGINE_SLOTS.len(),
+                "{} leaves a field outside the doc's list",
+                preset.name()
+            );
+            for ((field, actual, background), (expected_field, slot, expected_background)) in
+                fields.iter().zip(ENGINE_SLOTS.iter())
+            {
+                assert_eq!(field, expected_field, "the two field lists disagree");
+                assert_eq!(
+                    background, expected_background,
+                    "{field} paints a side the doc does not name"
+                );
+                let expected = if *background {
+                    theme.slot(*slot).bg.unwrap_or(Color::Reset)
+                } else {
+                    theme.slot(*slot).fg.unwrap_or(Color::Reset)
+                };
+                assert_eq!(
+                    *actual,
+                    expected,
+                    "{} paints {field} from the wrong side of {}",
+                    preset.name(),
+                    slot.name()
+                );
+            }
+        }
+    }
+
+    /// The slot a field maps to.
+    fn slot_of(field: &str) -> Slot {
+        ENGINE_SLOTS
+            .iter()
+            .find(|(name, _, _)| *name == field)
+            .map(|(_, slot, _)| *slot)
+            .unwrap_or_else(|| panic!("{field} is not in the mapping"))
+    }
+
+    /// The theme fields a line names, in order.
+    fn theme_refs(line: &'static str) -> Vec<&'static str> {
+        let mut refs = Vec::new();
+        let mut rest = line;
+        while let Some(i) = rest.find("theme.") {
+            rest = &rest[i + 6..];
+            let field = rest
+                .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .next()
+                .unwrap_or("");
+            if !field.is_empty() {
+                refs.push(field);
+            }
+        }
+        refs
+    }
+
+    /// The fields a `.bg(` argument is bound to: either `theme.field`
+    /// itself, or a local binding the engine routes it through — a
+    /// `let line_bg = theme.search_highlight_bg;`, or one place of a
+    /// `let (fg, bg) = match ..` whose arms bind theme fields positionally.
+    fn bound_fields(source: &'static str, ident: &str) -> Vec<&'static str> {
+        let single = format!("let {ident} = theme.");
+        if let Some(i) = source.find(&single) {
+            let field = source[i + single.len()..]
+                .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .next()
+                .unwrap_or("");
+            assert!(!field.is_empty(), ".bg({ident}) is bound to no field");
+            return vec![field];
+        }
+        let anchor = source
+            .match_indices("let (")
+            .map(|(i, _)| i)
+            .find(|&i| {
+                let close = source[i..].find(')').expect("a let-tuple closes");
+                source[i + 5..i + close]
+                    .split(',')
+                    .any(|name| name.trim() == ident)
+            })
+            .unwrap_or_else(|| panic!(".bg({ident}) is bound nowhere"));
+        let close = source[anchor..].find(')').expect("a let-tuple closes");
+        let names: Vec<&str> = source[anchor + 5..anchor + close]
+            .split(',')
+            .map(str::trim)
+            .collect();
+        let place = names
+            .iter()
+            .position(|name| *name == ident)
+            .expect("the tuple holds the identifier");
+        let mut fields = Vec::new();
+        for arm in source.lines().filter(|line| line.contains("=> (")) {
+            let refs = theme_refs(arm);
+            assert_eq!(
+                refs.len(),
+                names.len(),
+                "an arm of the .bg({ident}) tuple binds {} fields",
+                names.len()
+            );
+            fields.push(refs[place]);
+        }
+        assert!(!fields.is_empty(), ".bg({ident}) is bound to no field");
+        fields
+    }
+
+    /// The fields the engine paints with `.bg(`, derived from its markdown
+    /// sources.
+    fn engine_bg_fields_from_sources() -> Vec<&'static str> {
+        let mut fields = Vec::new();
+        for source in ENGINE_SOURCES {
+            for (i, _) in source.match_indices(".bg(") {
+                let rest = &source[i + 4..];
+                let close = rest.find(')').expect(".bg( closes");
+                let arg = rest[..close].trim();
+                if let Some(field) = arg.strip_prefix("theme.") {
+                    fields.push(field);
+                } else {
+                    fields.extend(bound_fields(source, arg));
+                }
+            }
+        }
+        fields
+    }
+
+    #[test]
+    fn only_the_engines_background_fields_take_a_slot_background() {
+        // The engine paints five fields with `.bg()` and the other 42 with a
+        // foreground. The five are named here, so a field moved to the wrong
+        // side cannot pass by moving both of the mapping's lists with it —
+        // and the five are derived from the engine's own sources, so the
+        // list is not a copy of the same assumption either.
+        let mut derived = engine_bg_fields_from_sources();
+        derived.sort_unstable();
+        derived.dedup();
+        let mut from_sources = ENGINE_BACKGROUND_FIELDS.to_vec();
+        from_sources.sort_unstable();
+        assert_eq!(
+            derived, from_sources,
+            "the engine paints a background on fields other than the five"
+        );
+        for preset in Preset::ALL {
+            let theme = Theme::preset(preset);
+            let markdown = theme.markdown_theme();
+            let mut backgrounds = Vec::new();
+            for (field, color, paints_background) in engine_fields(&markdown) {
+                let slot = slot_of(field);
+                let expected = ENGINE_BACKGROUND_FIELDS.contains(&field);
+                assert_eq!(
+                    paints_background,
+                    expected,
+                    "{} paints {field} on a side the engine does not use",
+                    preset.name()
+                );
+                let side = if expected {
+                    theme.slot(slot).bg
+                } else {
+                    theme.slot(slot).fg
+                };
+                assert_eq!(
+                    color,
+                    side.unwrap_or(Color::Reset),
+                    "{} paints {field} from the wrong side of {}",
+                    preset.name(),
+                    slot.name()
+                );
+                if expected {
+                    backgrounds.push(field);
+                }
+            }
+            assert_eq!(
+                backgrounds,
+                ENGINE_BACKGROUND_FIELDS.to_vec(),
+                "{} does not paint exactly the five background fields with a background",
+                preset.name()
+            );
+        }
+        // The doc states the hit's ratio; recompute it from the palette, so
+        // a changed foreground or a changed selection leaves the figure
+        // stale here rather than in the prose.
+        let search = THEME
+            .split_once("**The search is not offered")
+            .expect("the theme doc records the search limitation")
+            .1;
+        let figure = ratio_in(
+            search
+                .split_once("reads at ")
+                .expect("the search paragraph states the hit's ratio")
+                .1,
+        )
+        .expect("the search paragraph states a ratio");
+        let theme = Theme::preset(Preset::Dark);
+        let computed = contrast(
+            theme
+                .slot(Slot::TextNormal)
+                .fg
+                .expect("text.normal names a foreground"),
+            theme
+                .slot(Slot::TextSelected)
+                .bg
+                .expect("the selection names a background"),
+        );
+        assert!(
+            (computed - figure).abs() < 0.05,
+            "the search hit reads at {computed:.2}:1, and the doc says {figure}:1"
+        );
+    }
+
+    #[test]
+    fn a_mark_is_the_selection_pair() {
+        // The engine paints a mark as mark_fg on mark_bg, the only pair the
+        // mapping splits across two slots. Both halves are text.selected: the
+        // pair the palette records at 9.7:1.
+        for preset in Preset::ALL {
+            let theme = Theme::preset(preset);
+            let selected = theme.slot(Slot::TextSelected);
+            let markdown = theme.markdown_theme();
+            assert_eq!(
+                markdown.mark_fg,
+                selected.fg.unwrap_or(Color::Reset),
+                "{} paints a mark's foreground from another slot",
+                preset.name()
+            );
+            assert_eq!(
+                markdown.mark_bg,
+                selected.bg.unwrap_or(Color::Reset),
+                "{} paints a mark's background from another slot",
+                preset.name()
+            );
+        }
+        let theme = Theme::preset(Preset::Dark);
+        let selected = theme.slot(Slot::TextSelected);
+        let ratio = contrast(
+            selected.fg.expect("the selection names a foreground"),
+            selected.bg.expect("the selection names a background"),
+        );
+        assert!(
+            ratio >= 4.5,
+            "a marked word reads at {ratio:.1}:1, and a word needs 4.5:1"
+        );
+    }
+
+    #[test]
+    fn the_terminal_markdown_theme_names_no_colour() {
+        // The terminal preset has no colour in any slot: every engine field
+        // is Reset, which is the terminal's own paint.
+        let theme = Theme::preset(Preset::Terminal);
+        for (field, color, background) in engine_fields(&theme.markdown_theme()) {
+            let slot = ENGINE_SLOTS
+                .iter()
+                .find(|(name, _, _)| *name == field)
+                .map(|(_, slot, _)| *slot)
+                .unwrap_or_else(|| panic!("{field} is not in the mapping"));
+            if background {
+                assert_eq!(
+                    theme.slot(slot).bg,
+                    None,
+                    "{field}'s slot names a background in the terminal preset"
+                );
+            } else {
+                assert_eq!(
+                    theme.slot(slot).fg,
+                    None,
+                    "{field}'s slot names a foreground in the terminal preset"
+                );
+            }
+            assert_eq!(
+                color,
+                Color::Reset,
+                "{field} names a colour the terminal preset does not have"
+            );
+        }
+    }
+
+    #[test]
+    fn the_dark_markdown_theme_stays_inside_the_slots() {
+        // Every colour the engine is handed is a colour one of the eighteen
+        // slots already paints with: no leaf palette leaks in.
+        let theme = Theme::preset(Preset::Dark);
+        let mut palette = Vec::new();
+        for slot in Slot::ALL {
+            let style = theme.slot(slot);
+            palette.extend(style.fg);
+            palette.extend(style.bg);
+        }
+        let mut painted = 0;
+        for (field, color, _) in engine_fields(&theme.markdown_theme()) {
+            if color == Color::Reset {
+                continue;
+            }
+            painted += 1;
+            assert!(
+                palette.contains(&color),
+                "{field} paints {color:?}, which is not one of the eighteen slots"
+            );
+        }
+        assert!(
+            painted >= 40,
+            "the engine paints only {painted} fields from the palette"
+        );
+    }
+
+    /// The rows of the engine mapping table in the theme doc: the field, the
+    /// slot and the rationale.
+    fn engine_doc_rows() -> Vec<(String, String, String)> {
+        let section = THEME
+            .split_once("## The markdown engine")
+            .expect("the theme doc has a markdown engine section")
+            .1;
+        let section = section
+            .split_once("\n## ")
+            .map_or(section, |(head, _)| head);
+        let mut rows = Vec::new();
+        for line in section.lines() {
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            if cells.len() < 4 || !cells[1].starts_with('`') || !cells[2].starts_with('`') {
+                continue;
+            }
+            rows.push((
+                cells[1].trim_matches('`').to_string(),
+                cells[2].trim_matches('`').to_string(),
+                cells[3].to_string(),
+            ));
+        }
+        rows
+    }
+
+    #[test]
+    fn the_engine_mapping_in_the_doc_is_the_one_in_the_code() {
+        let rows = engine_doc_rows();
+        assert_eq!(
+            rows.len(),
+            ENGINE_SLOTS.len(),
+            "the doc lists {} fields and the engine has {}",
+            rows.len(),
+            ENGINE_SLOTS.len()
+        );
+        for (field, slot, _) in ENGINE_SLOTS {
+            let (doc_slot, why) = rows
+                .iter()
+                .find(|(doc_field, _, _)| doc_field == field)
+                .map(|(_, slot, why)| (slot, why))
+                .unwrap_or_else(|| panic!("{field} is missing from the doc"));
+            assert_eq!(
+                doc_slot,
+                slot.name(),
+                "{field} maps to {doc_slot} in the doc and {} in the code",
+                slot.name()
+            );
+            assert!(!why.is_empty(), "{field}'s row states no rationale");
+        }
+        for (field, _, _) in &rows {
+            assert!(
+                ENGINE_SLOTS.iter().any(|(known, _, _)| known == field),
+                "{field} is in the doc and not in the code"
+            );
+        }
+    }
+
+    #[test]
+    fn the_markdown_alerts_use_the_semantic_slots() {
+        let slot = |field: &str| {
+            ENGINE_SLOTS
+                .iter()
+                .find(|(name, _, _)| *name == field)
+                .map(|(_, slot, _)| *slot)
+                .unwrap_or_else(|| panic!("{field} is not in the mapping"))
+        };
+        assert_eq!(slot("alert_note"), Slot::SemanticInfo);
+        assert_eq!(slot("alert_tip"), Slot::SemanticOk);
+        assert_eq!(slot("alert_important"), Slot::SemanticInfo);
+        assert_eq!(slot("alert_warning"), Slot::SemanticWarn);
+        assert_eq!(slot("alert_caution"), Slot::SemanticError);
+        // A warning and a failure are never painted alike.
+        assert_ne!(slot("alert_warning"), slot("alert_caution"));
+        assert_ne!(slot("alert_warning"), Slot::SemanticError);
+        assert_ne!(slot("alert_caution"), Slot::SemanticWarn);
     }
 }
