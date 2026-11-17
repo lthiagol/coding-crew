@@ -39,6 +39,8 @@ test: ## Run the test suite
 
 test-scripts: ## Run the shell script tests
 	bash scripts/test-herdr-wake.sh
+	bash scripts/test-review-snapshot.sh
+	bash scripts/test-sync.sh
 
 .PHONY: fmt fmt-check
 fmt: ## Format the code

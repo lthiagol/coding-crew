@@ -1,6 +1,6 @@
 ---
 name: Orchestration Flow
-description: Three agents, one flow — the orchestrator session takes the human's requests and decides, dispatching builder and reviewer panes through Herdr, each an opencode instance on its own model. Load this when running a build loop in this repository.
+description: Three agents, one flow — the orchestrator session takes the human's requests and decides, dispatching builder and two-axis reviewer panes through Herdr, each an opencode instance on its own model. Load this when running a build loop in this repository.
 metadata:
   opencode/autoinvoke: false
 ---
@@ -42,9 +42,9 @@ matters from them is copied into `TODO.txt` before the round is closed.
 
 | Agent | Where it runs | Does | Never does |
 |---|---|---|---|
-| **Orchestrator** | the human's session — where the request is typed, and where every agent reports back | Designs; decides every transition; opens the panes; verifies claims by re-running the gate; commits after a clean review | **Edits code, tests or scripts itself** — even small ones. Any code change goes to a builder, then a reviewer. Runs no long builds |
+| **Orchestrator** | the human's session — where the request is typed, and where every agent reports back | Designs; decides every transition; opens the panes; runs the full gate; commits after a clean review | **Edits code, tests or scripts itself** — even small ones. Any code change goes to a builder, then a reviewer. Runs no product work |
 | **Builder** | its own pane, in its own tab | Implements exactly the kickoff; runs the project's gate; reports to the orchestrator | Commits; starts other work; prompts other agents; decides next steps |
-| **Reviewer** | its own pane, in its own tab | Reviews the change against the kickoff and the project's rules; writes findings; gives a verdict. May run **targeted** commands to check a claim | Modifies code or docs; commits; prompts other agents; runs long builds |
+| **Reviewer** | its own pane, in its own tab — two panes for a first review (CODE, SPEC), one for a delta review | Reviews one axis (CODE or SPEC) against the kickoff and the project's rules, or re-checks the prior findings and the changed hunks in a delta review; writes its findings; runs **targeted probes** | Modifies code or docs; commits; prompts other agents; runs the full gate or long builds; gives the round verdict |
 
 The orchestrator is the only agent the human talks to, and the only one the
 others report to. It is the session that decides what happens next.
@@ -54,11 +54,14 @@ These three mirror the project's roles — `orchestrator`, `runner`, `reviewer`
 `runner`, and there is no separate fixer: a builder on its second round is
 the fixer.
 
+The review itself is [code-review](../code-review/SKILL.md): the CODE and SPEC
+axes, the findings shape, the probe budget, and the delta review.
+
 ## Topology: hub-and-spoke
 
-The orchestrator session is the hub. The builder and the reviewer never talk to
-each other — **every agent replies only to the orchestrator**, and the
-orchestrator alone decides what happens next (open a reviewer pane, send
+The orchestrator session is the hub. Builders and reviewers never talk to each
+other — **every agent replies only to the orchestrator**, and the
+orchestrator alone decides what happens next (open reviewer panes, send
 findings to a builder, ask the human). An agent must never prompt another
 agent's pane.
 
@@ -71,18 +74,31 @@ wrote the code never fixes it (the session that produced the code is not the
 session that repairs it), and a reviewer that reviews the change from a fresh
 context re-derives it instead of accepting the builder's account of it.
 
-The findings file is the thread between the rounds:
+The findings files and snapshots are the thread between the rounds:
 
-| round | findings file |
-|---|---|
-| 1 | `/tmp/opencode/review1/round1-findings.md` |
-| 2 | `/tmp/opencode/review2/round2-findings.md` |
-| N | `/tmp/opencode/review<N>/round<N>-findings.md` |
+| round | axis files | merged file | snapshot |
+|---|---|---|---|
+| 1 | `/tmp/opencode/review1/round1-code-findings.md`, `/tmp/opencode/review1/round1-spec-findings.md` | `/tmp/opencode/review1/round1-findings.md` | `/tmp/opencode/review1/round1-snapshot/` |
+| fix N | `/tmp/opencode/review<N>/round<N>-delta-findings.md` | `/tmp/opencode/review<N>/round<N>-findings.md` | `/tmp/opencode/review<N>/round<N>-snapshot/`, delta `/tmp/opencode/review<N>/round<N>-delta.diff` |
 
-The reviewer writes the file; the next builder reads it, and the next reviewer
-reads it to verify every finding was closed. That is better than memory: a
-reviewer with memory can be talked into accepting a rename as a fix, while a
-reviewer reading the finding on disk re-checks it.
+The orchestrator takes the snapshot after the builder reports and before either
+review pane opens: `scripts/review-snapshot.sh /tmp/opencode/review<N>/round<N>-snapshot`.
+A fix round also generates
+`scripts/review-snapshot.sh --diff <previous-snapshot> <current-snapshot> > /tmp/opencode/review<N>/round<N>-delta.diff`.
+The snapshot copies the changed and untracked files and records the changed,
+added, and deleted paths in `manifest.txt`; `--diff` prints the manifest
+changes and the file-tree diff. The script never stages or edits anything.
+That is the delta baseline: `git diff` still holds round 1's change alongside
+the fix.
+
+Each axis reviewer writes its own file. The orchestrator merges the axis files
+into the round's merged file and decides the verdict; the next builder reads the
+merged file, and the next delta reviewer verifies every finding in it. A `low`
+finding is recorded there and does not open a round.
+
+The files are better than memory: a reviewer with memory can be talked into
+accepting a rename as a fix, while a reviewer reading the finding on disk
+re-checks it.
 
 For now the findings live in `/tmp`, outside the repository. That is a stopgap:
 when coding-lanes runs its own work, the findings belong inside the task.
@@ -320,9 +336,11 @@ the Orchestration workspace holds the work.
 
 ## Naming
 
-- Tabs: `build-<topic>`, `review-<topic>` (e.g. `build-m1-engine`,
-  `review-m1-engine`).
-- Agents: `[a-z][a-z0-9_-]{0,31}` — e.g. `builder-m1`, `reviewer-m1`.
+- Tabs: `build-<topic>`, `review-<topic>-code`, `review-<topic>-spec`,
+  `review-<topic>-delta` (e.g. `build-m1-engine`,
+  `review-m1-engine-code`, `review-m1-engine-spec`).
+- Agents: `[a-z][a-z0-9_-]{0,31}` — e.g. `builder-m1`, `reviewer-m1-code`,
+  `reviewer-m1-spec`, `reviewer-m1-delta`.
 
 ## Models
 
@@ -330,6 +348,10 @@ The reviewer must not run the builder's model. Different lenses surface
 uncorrelated bugs — the same rule the project's own review rounds follow. The
 two role models are different families; that difference, not a variant, is
 what separates the lenses.
+
+A first review's CODE and SPEC panes and a fix round's delta pane all run the
+reviewer model. The axes are independent by context, not by model: each pane
+gets a fresh session and its own findings file.
 
 | role | model | variant |
 |---|---|---|
@@ -408,28 +430,45 @@ on no entry in a global opencode config.
    and retry once; if that also fails, idle with the summary visible in the
    terminal output — the orchestrator recovers verdicts from terminal output
    on the next check-in.
-3. **On wake**, the orchestrator reads the agent's summary, then decides and
-   opens the next role in a **fresh tab and pane**. Only the orchestrator
-   decides transitions — never the agents.
-4. **The orchestrator verifies** by re-running the gate itself — an agent's
-   claim that the gate passed is not evidence.
-5. **After a clean review** the orchestrator commits and updates the project's
-   records. On findings, it opens a fresh builder tab in the same workspace
-   with the findings. Close the tab when the round is done; keep the
-   workspace for the next round.
+3. **On wake**, the orchestrator reads the agent's summary, then decides.
+   Before opening any review pane it snapshots the round:
+   `scripts/review-snapshot.sh /tmp/opencode/review<N>/round<N>-snapshot`. On a
+   fix round it also writes the delta:
+   `scripts/review-snapshot.sh --diff <previous-snapshot> <current-snapshot> > /tmp/opencode/review<N>/round<N>-delta.diff`.
+   The script reads git and copies files; it never stages or edits.
+4. **The orchestrator verifies** by running the full `make ci` gate before the
+   review and again before the commit — an agent's claim that the gate passed is
+   not evidence. Reviewers run only targeted probes. The review brief carries
+   the command, its exit status, and the log path
+   (`/tmp/opencode/review<N>/gate.log`), so the reviewer reads the result
+   without rerunning it.
+5. **The orchestrator opens the next role** in a **fresh tab and pane**. A first
+   review opens **two reviewer panes at once** — one CODE, one SPEC — each with
+   its own findings file. A fix round opens **one delta reviewer**. Only the
+   orchestrator decides transitions — never the agents.
+6. **On both axis reports**, the orchestrator merges them into the round's
+   findings file and decides one `ok` / `changes-needed` verdict. `low` findings
+   are recorded; they do not open another round.
+7. **After a clean review** the orchestrator commits and updates the project's
+   records. On findings, it opens a fresh builder tab in the same workspace with
+   the merged findings. Close the tab when the round is done; keep the workspace
+   for the next round.
 
-**Every round is builder → reviewer.** Nothing a builder produces is reviewed
-by the builder, and nothing is committed without a review round — not a
-one-line fix, not a rename. The review is the gate, not a courtesy.
+**Every round is builder → review.** A first review has two reviewers, CODE and
+SPEC, in parallel; a fix round has one delta reviewer. Nothing a builder
+produces is reviewed by the builder, and nothing is committed without a review
+round — not a one-line fix, not a rename. The review is the gate, not a
+courtesy.
 
-**The budget is five rounds.** Round 1 is builder → reviewer. Each
-`changes-needed` verdict starts a new round. Round 5 is the last one: if it
-comes back `changes-needed`, the orchestrator stops, keeps the workspace
-open, and asks the human — with the findings, the rounds, and what it would
-change next.
+**The budget is five build-and-fix cycles.** Round 1 is builder → first review;
+its two axis panes spend one round together. Each `changes-needed` verdict
+starts a new round: builder → delta reviewer. Round 5 is the last one: if it
+comes back `changes-needed`, the orchestrator stops, keeps the workspace open,
+and asks the human — with the findings, the rounds, and what it would change
+next.
 
 A round the builder ends `BLOCKED` does not spend one of the five: it ended
-before anything was built. Only real build-and-review rounds count.
+before anything was built. Only real build-and-fix cycles count.
 
 ## Prompt templates
 
@@ -448,6 +487,11 @@ The report line at the end of each template is sent
 by the agent with `herdr agent prompt <orchestrator-pane> "<report>"` and no
 `--wait`; do not use the wake command for a report to the orchestrator,
 because it would wait for the orchestrator's turn to complete.
+
+A first review submits the CODE and SPEC kickoffs to two panes started
+together. A fix round submits the delta kickoff to one fresh pane. The round
+snapshot supplies `<path-to-round-snapshot>` in the two first-review kickoffs and
+`<path-to-current-snapshot>` in the delta kickoff.
 
 **Builder kickoff:**
 
@@ -473,31 +517,95 @@ because it would wait for the orchestrator's turn to complete.
 > that the text left the input box before you finish. The orchestrator is
 > already waiting on your `completion_seq`.
 
-**Reviewer kickoff:**
+**CODE reviewer kickoff** (one of the two first-review panes):
 
-> Your role: reviewer.
+> Your role: reviewer on the CODE axis.
 > Autonomous: never use the ask tool; if blocked, end with
 > `BLOCKED: <question>; options: ...; recommendation: ...` and report to the orchestrator.
-> Read AGENTS.md and the project's docs it points to. TODO.txt is the
-> orchestrator's: read it, do not write it. This is review round
-> <N> of at most 5.
-> If there is a previous round, read its findings at `<path-to-previous-findings>`
-> and check that every one of them is closed — a renamed fix is not a closed
-> finding.
-> Review the change against the kickoff and the project's rules — not against
-> the builder's own summary.
-> Review the code. Try to break it by reading it and by reasoning about it —
-> different inputs, edge cases, adversarial paths.
-> Run the regular checks — the project's gate: fmt, clippy, tests. Do not build
-> ad-hoc harnesses and do not sweep the size space; a check that needs a
-> special harness belongs in the repo as its own unit, not in a review round.
-> If a finding is about how the screen behaves on data the fixtures do not
-> cover, say so and name the fixture that would cover it.
-> Findings carry severity and location. Do not modify code.
-> Write the findings to `<path-to-this-round-findings>`.
-> Finish with a verdict (`ok` or `changes-needed`) by reporting to the
-> orchestrator pane with
-> `herdr agent prompt <orchestrator-pane> "VERDICT: <ok|changes-needed> ..."`
+> Read AGENTS.md and the project's docs it points to, and
+> .agents/skills/code-review/SKILL.md. TODO.txt is the orchestrator's: read it,
+> do not write it. This is review round <N> of at most 5.
+> Read the unit kickoff and done-when at `<path-to-kickoff>`.
+> The round snapshot is at `<path-to-round-snapshot>`.
+> Review the uncommitted diff (`git status`, `git diff --stat`, `git diff`)
+> against the kickoff and the project's rules — not against the builder's own
+> summary.
+> Your axis is CODE: correctness, regressions, unsafe behaviour, data loss,
+> error handling, test adequacy, and concrete maintainability defects. The
+> repository's standards override generic smells; a baseline smell is a finding
+> only when it names a concrete defect.
+> The orchestrator ran the gate: `make ci`, exit <status>, log at
+> `<path-to-gate-log>`. Read that result; do not run the gate again. Run only
+> the targeted probe a concrete suspicion needs — no mutation or size-space
+> sweeps, no repeated upstream comparisons, no speculative attacks.
+> Findings carry axis, severity, location, consequence, and evidence. `low`
+> findings are recorded but do not block. Write about 400 words to
+> `<path-to-code-findings>`. Do not modify code.
+> Report to the orchestrator pane with
+> `herdr agent prompt <orchestrator-pane> "CODE: <n> blocking, <n> low"` and no
+> `--wait`; check with `herdr pane read <orchestrator-pane> --lines 5` that the
+> text left the input box before you finish. The orchestrator is already waiting
+> on your `completion_seq`.
+
+**SPEC reviewer kickoff** (the other first-review pane, opened at the same
+time):
+
+> Your role: reviewer on the SPEC axis.
+> Autonomous: never use the ask tool; if blocked, end with
+> `BLOCKED: <question>; options: ...; recommendation: ...` and report to the orchestrator.
+> Read AGENTS.md and the project's docs it points to, and
+> .agents/skills/code-review/SKILL.md. TODO.txt is the orchestrator's: read it,
+> do not write it. This is review round <N> of at most 5.
+> Read the unit kickoff and done-when at `<path-to-kickoff>`, and the scope
+> boundary with it.
+> The round snapshot is at `<path-to-round-snapshot>`.
+> Review the uncommitted diff (`git status`, `git diff --stat`, `git diff`)
+> against the kickoff and the project's rules — not against the builder's own
+> summary.
+> Your axis is SPEC: requirements missing or partial, scope creep, and
+> requirements that look implemented but whose implementation looks wrong.
+> Quote the kickoff line for each finding.
+> The orchestrator ran the gate: `make ci`, exit <status>, log at
+> `<path-to-gate-log>`. Read that result; do not run the gate again. Run only
+> the targeted probe a concrete suspicion needs — no mutation or size-space
+> sweeps, no repeated upstream comparisons, no speculative attacks.
+> Findings carry axis, severity, location, consequence, and evidence. `low`
+> findings are recorded but do not block. Write about 400 words to
+> `<path-to-spec-findings>`. Do not modify code.
+> Report to the orchestrator pane with
+> `herdr agent prompt <orchestrator-pane> "SPEC: <n> blocking, <n> low"` and no
+> `--wait`; check with `herdr pane read <orchestrator-pane> --lines 5` that the
+> text left the input box before you finish. The orchestrator is already waiting
+> on your `completion_seq`.
+
+**Delta reviewer kickoff** (a fix round, one fresh pane):
+
+> Your role: delta reviewer.
+> Autonomous: never use the ask tool; if blocked, end with
+> `BLOCKED: <question>; options: ...; recommendation: ...` and report to the orchestrator.
+> Read AGENTS.md and the project's docs it points to, and
+> .agents/skills/code-review/SKILL.md. TODO.txt is the orchestrator's: read it,
+> do not write it. This is review round <N> of at most 5.
+> Read the unit kickoff and done-when at `<path-to-kickoff>`, and the scope
+> boundary with it.
+> Read the previous round's findings at `<path-to-previous-findings>` and check
+> that every one of them is closed — a renamed fix is not a closed finding.
+> The previous builder round is snapshotted at `<path-to-previous-snapshot>`,
+> this round at `<path-to-current-snapshot>`, and the delta (manifest changes
+> plus file-tree diff) is at `<path-to-delta-diff>`. `git diff` still holds the
+> first round's change, so read the delta instead. Read only the hunks in that
+> delta, plus the lines they touch. Unchanged code that was clean stays clean.
+> The orchestrator ran the gate: `make ci`, exit <status>, log at
+> `<path-to-gate-log>`. Read that result; do not run the gate again. Run the
+> targeted probe that proves each fix.
+> New defects in the changed hunks are findings. Each finding keeps its origin
+> axis (`code` or `spec`); `delta` is the report section, not a third axis.
+> Quote the kickoff line for a SPEC finding.
+> Findings carry axis, severity, location, consequence, and evidence. `low`
+> findings are recorded but do not block. Write about 400 words to
+> `<path-to-delta-findings>`. Do not modify code.
+> Report to the orchestrator pane with
+> `herdr agent prompt <orchestrator-pane> "DELTA: <n> prior open, <n> new blocking, <n> low"`
 > and no `--wait`; check with `herdr pane read <orchestrator-pane> --lines 5`
 > that the text left the input box before you finish. The orchestrator is
 > already waiting on your `completion_seq`.
@@ -507,8 +615,10 @@ because it would wait for the orchestrator's turn to complete.
 > Your role: builder.
 > Autonomous: never use the ask tool; if blocked, end with
 > `BLOCKED: <question>; options: ...; recommendation: ...` and report to the orchestrator.
-> Read AGENTS.md, the project's docs, and the findings at
-> `<path-to-findings>`. Fix every finding — the closed ones stay closed.
+> Read AGENTS.md, the project's docs, and the merged findings at
+> `<path-to-findings>`. Fix every finding — the closed ones stay closed. The
+> next round is a delta review over these findings and the hunks you change, not
+> a fresh scan, so fix the defect rather than the area around it.
 > Re-run the project's gate. Finish by reporting to the orchestrator pane with
 > `herdr agent prompt <orchestrator-pane> "done: <one-line summary>"` (no
 > `--wait`), and check with `herdr pane read <orchestrator-pane> --lines 5`
@@ -544,22 +654,38 @@ ask-the-user prompt stalls the agent forever.
 
 ## Rules for the orchestrator
 
-- Never run long builds in the orchestrator pane; delegate.
+- Never run product builds in the orchestrator pane; delegate. Its one heavy
+  command is the full `make ci` gate.
 - One active builder at a time, unless the units of work are independent — then
   parallel tabs, each with its own unit of work.
-- **Everything a builder produces gets a reviewer round.** No exceptions.
+- **Everything a builder produces gets a review.** A first review is two fresh
+  panes, CODE and SPEC, opened together with separate findings files; a fix
+  round is one fresh delta reviewer. No exceptions.
 - **One finding per round when the findings touch different layers.** A round
   that changes the fixtures, the model, a test and a rendering at once is
   three rounds wearing one coat — the builder spends the round arguing with
   its own half-finished refactor and lands the unit broken. Give it the
   smallest finding first.
-- **At most 5 rounds** of builder and reviewer per unit of work. Round 5 comes
-  back `changes-needed` → stop and ask the human.
-- **The orchestrator runs the gate itself** before opening a reviewer round. An
-  agent's claim that the gate passed is not evidence.
-- **The reviewer runs the project's gate** — fmt, clippy, tests — and reads the
-  code. No ad-hoc harnesses, no exhaustive sweeps, no long builds, no edits.
-  A check worth repeating belongs in the repo as its own unit.
+- **At most 5 build-and-fix rounds** per unit of work. The two axis panes of a
+  first review spend one round together. Round 5 comes back `changes-needed` →
+  stop and ask the human.
+- **Low findings do not open a round.** Record them in the merged findings file
+  and carry them as follow-ups; a round that costs a build-and-fix cycle is for
+  a blocking finding.
+- **The orchestrator runs the full `make ci` itself** before opening the review
+  and again before the commit. An agent's claim that the gate passed is not
+  evidence. The review brief carries the command, its exit status, and the log
+  path (`/tmp/opencode/review<N>/gate.log`).
+- **Snapshot every builder round.** `scripts/review-snapshot.sh
+  /tmp/opencode/review<N>/round<N>-snapshot` after the builder reports and
+  before any review pane opens. A fix round also writes
+  `scripts/review-snapshot.sh --diff <previous> <current> > /tmp/opencode/review<N>/round<N>-delta.diff`.
+  The delta reviewer reads that diff; `git diff` cannot separate the fix from
+  round 1's change.
+- **Reviewers run targeted probes only** — the one test, command, or edge case a
+  concrete suspicion needs — and read the code. No full gate, no ad-hoc
+  harnesses, no exhaustive sweeps, no long builds, no edits. A check worth
+  repeating belongs in the repo as its own unit.
 - No code ships unreviewed: every changed file is covered by a review round
   before the unit is done.
 - The orchestrator commits after a clean review. Agents never commit or push.
@@ -585,10 +711,12 @@ through it.
    orchestrator designs, decides, and delegates.
 2. **Orchestrator's role** — designs first (the human approves when the change
    is architectural), opens the Orchestration workspace, starts a builder in a
-   fresh tab there, verifies claims independently, opens a fresh-context
-   reviewer in a fresh tab on a different model family, with its own reasoning
-   variant, decides on findings (fix rounds, up to 5), commits after a clean
-   review, and updates the project's records.
+   fresh tab there, runs the full gate, then opens two fresh-context reviewer
+   panes in parallel — CODE and SPEC — on a different model family with its own
+   reasoning variant. It merges their findings, decides the verdict, and sends
+   a clean round to commit. A `changes-needed` verdict starts a fix round: a
+   fresh builder, then one fresh delta reviewer. Up to 5 build-and-fix rounds;
+   it commits after a clean review and updates the project's records.
 3. **Escalation ladder** — review/fix capped at 5 rounds per unit;
    unresolved findings after that go to the human. Ambiguous product decisions
    go to the human immediately; the orchestrator decides within the approved

@@ -11,12 +11,21 @@ never write the code.
 | the reviewer | is | is not |
 |---|---|---|
 | | the actor that moves a task out of `code-review` | a second runner |
-| | the one who opens findings and gives the verdict | the author of the fix |
+| | the one who opens findings and gives the task verdict | the author of the fix |
 | | independent of the session that planned the task | the session that planned the task |
 | | allowed to spend a round | allowed to spend an unlimited number of rounds |
 
 The role owns one section: `review`. It opens findings; the **runner** resolves
 them. A role may not write another role's section.
+
+This document owns the task record: the `review` section, its findings, its
+focus, and the **task verdict** — whether the task may move out of
+`code-review`. The adapted
+[code-review](../../.agents/skills/code-review/SKILL.md) skill governs the
+build loop's code-diff process: the review surface, the CODE and SPEC axes, the
+probe budget, and the delta review. The build loop's **round verdict** belongs
+to the orchestrator. The task verdict and the round verdict are different
+records; do not conflate them, and do not write the other role's record.
 
 ## What you are given
 
@@ -59,11 +68,13 @@ different lenses instead of repeating the same check.
 | `spec-compliance` | does the change do exactly what the task said, and nothing outside `scope`? |
 | `edge-cases` | what happens at the boundaries — empty, one, many, malformed, concurrent? |
 | `security` | what could an untrusted input or a hostile caller reach? |
-| `empirical` | does the evidence actually show it? Re-run the commands; do not trust the summary |
+| `empirical` | does the evidence actually show it? Run the targeted command that proves it; do not trust the summary |
 | `design` | does it fit the codebase's seams, or is it a new shape bolted on? |
 
 Pick the focus the previous round did not. The point of a focus is that a
-second round reading the same lens finds nothing new.
+second round reading the same lens finds nothing new. The focus is what the
+round records; the axes are how the diff is read, and a first review runs both
+CODE and SPEC.
 
 Round fields:
 
@@ -113,6 +124,8 @@ one consequence.
 | rule | |
 |---|---|
 | The model has no separate anchor field | the file, function or command goes in `description` |
+| The model has no separate axis or evidence field | name the axis (`code` or `spec`) and the evidence in `description` |
+| A `low` finding does not force another round | record it as a follow-up; the task verdict turns on a blocking finding |
 | A `fixed` finding records **what** was fixed | |
 | A `dismissed` finding records **why** it is not worth fixing | |
 | The outcome is written once | the second writer is refused. A dismissal that overwrote a fix would erase the record of the work that was done |
@@ -157,6 +170,12 @@ Two values. Nothing else.
 The verdict is about the **task**, not about the implementer. `changes-needed`
 is a normal outcome of a review; it is not a failure of the runner.
 
+This is the **task verdict**, written by the reviewer in the task's `review`
+section. The build loop's **round verdict** is the orchestrator's: an axis
+reports findings and counts, the orchestrator merges them into the round's
+record, and the task record gets the task verdict. The two live in different
+records and are not interchangeable.
+
 ## What a verdict is checked against
 
 | gate | checks | applies to |
@@ -174,21 +193,16 @@ is a normal outcome of a review; it is not a failure of the runner.
 `review.verdict` is set by the round. A verdict of `ok` with an open finding is
 refused; a verdict of `changes-needed` with no finding is refused.
 
-## How to review
+## Reading the change
 
-1. **Read the task first.** The criteria, the scope, the out-of-scope. The
-   question is not "is this good code" but "is this the task, done".
-2. **Check the evidence.** For each criterion: the command, the exit code, the
-   summary. `exit 0` with an empty summary proves nothing. Re-run the command
-   when the focus is `empirical`.
-3. **Read the deviations.** A `deviation` on a step says the runner took a
-   different path. It may be better than the plan; it must be recorded.
-4. **Read the diff against the scope.** Work outside `scope.in_scope` is a
-   finding, even when it is good work.
-5. **Pick a focus** that the previous round did not use.
-6. **Open findings, one problem each.** A finding names where, what, and the
-   consequence.
-7. **Give the verdict.** `ok` or `changes-needed`. Nothing else.
+Read the task record before the diff: the criteria, the scope, the evidence for
+each criterion, and any `deviation` on a step. `exit 0` with an empty summary
+proves nothing. Then follow
+[code-review](../../.agents/skills/code-review/SKILL.md) for the diff surface,
+the two axes, the targeted probes, and the delta review.
+
+Record what this document owns: the round, its focus, the findings, and the
+verdict.
 
 ## The CLI surface
 
