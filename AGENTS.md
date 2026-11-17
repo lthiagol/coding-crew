@@ -26,6 +26,7 @@ superpowers.
 ## Repo
 
 - `crates/core` — shared model.
+- `crates/engine` — vendored leaf markdown engine for raul's detail document.
 - `crates/talita` — talita; package `coding-lanes-talita`, binary `talita`.
   Off-limits until instructed.
 - `flow/` — the orchestration role configs: `builder.json` and `reviewer.json`.
