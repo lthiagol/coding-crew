@@ -135,6 +135,26 @@ WHERE WE ARE
   in only_the_engines_background_fields_take_a_slot_background, a test named
   for background fields; move it to the contrast-figures test or split it
   out.
+  Unit closed: the detail pane: the shell. One clean round. enter on a row
+  opens the task as a full-screen overlay - the spec's split-or-full fork is
+  decided, full screen, and recorded in docs/tui/screens.md; esc returns to
+  the tab and the selection it came from; enter reopens; it opens from Path,
+  Needs you and Backlog and nowhere else. The header labels id and escaped
+  title - core escape_literal is now pub, one escaping rule for the
+  projection and the shell; the title sits on text.strong, the id on
+  text.normal, and text.selected stays unused for unit 15.
+  raul --render --plain --detail TASK-ID is bounded by --width and --height;
+  a long title is cut on grapheme boundaries. The gate is green: 499 Rust
+  tests and 144 script assertions.
+  The review left three low follow-ups, none blocking:
+    - needs.rs, path.rs and overview.rs still hold private cut_to/pad
+      copies that cut on scalar boundaries; the tabs' own cut paths should
+      move to crates/raul/src/text.rs
+    - app.rs reads a fresh now per key press while needs::render computes
+      its own: two instants in one frame; one now per frame, passed through
+    - the render test's combining-title fixture replaces exact JSON bytes
+      without asserting the replacement matched
+  Next unit: the detail pane: the document (plan 15).
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
       the fork parent
