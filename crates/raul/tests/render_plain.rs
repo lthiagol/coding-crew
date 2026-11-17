@@ -144,6 +144,43 @@ fn the_overview_render_matches_the_snapshot() {
     }
 }
 
+/// The detail pane of a real mock-data task, as the snapshot records it.
+fn detail_snapshot() -> Output {
+    run(&[
+        "--render",
+        "--plain",
+        "--detail",
+        DETAIL_TASK,
+        "--width",
+        "100",
+        "--height",
+        "40",
+        WORK,
+    ])
+}
+
+fn detail_snapshot_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots/detail.txt")
+}
+
+#[test]
+fn the_detail_render_matches_the_snapshot() {
+    // The snapshot is a real mock-data task, not a synthetic one: the
+    // document the command prints is asserted byte for byte against the
+    // committed file, so any change to the projection, the engine or the
+    // pane shows up here first.
+    let output = detail_snapshot();
+    assert!(output.status.success(), "raul failed: {output:?}");
+    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    let snapshot = fs::read_to_string(detail_snapshot_path()).expect("the detail snapshot");
+    assert_eq!(
+        text, snapshot,
+        "the detail render differs from tests/snapshots/detail.txt"
+    );
+    assert!(!text.contains('\u{1b}'), "the render carries ANSI escapes");
+    assert!(text.ends_with('\n'), "the render has no final newline");
+}
+
 #[test]
 fn two_runs_print_the_same_bytes() {
     let first = overview();
@@ -336,8 +373,9 @@ fn the_detail_renders_the_record_close_up() {
     // The header: the id and the title, both on screen.
     assert!(text.contains(DETAIL_TASK), "{text}");
     assert!(text.contains(&detail_title()), "{text}");
-    // The body is the placeholder, not a blank screen.
-    assert!(text.contains("the document is the next unit"), "{text}");
+    // The body is the document: the first sections are on display.
+    assert!(text.contains("Header"), "{text}");
+    assert!(text.contains("Intent"), "{text}");
     // The footer says what the pane does.
     assert!(text.contains("esc") && text.contains("close"), "{text}");
     // The pane is full screen: the window under it is not on display.

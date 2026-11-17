@@ -89,6 +89,13 @@ with fenced code therefore shows syntect's palette alongside ours, and the
 detail-pane unit must either avoid syntax highlighting or handle syntect's
 theme deliberately.
 
+The detail pane handles it deliberately: the code tokens pair with the
+pairing that sentence names — the engine's own default, `base16-ocean.dark`
+— and the pairing is the same in both of raul's presets. There is no
+avoiding it: an empty syntax set panics, and a scope-less syntect theme
+paints the tokens black. The engine's code tokens are the one paint the
+presets do not change.
+
 A field that paints a **foreground** takes its slot's foreground. A field that
 paints a **background** takes its slot's background. `MarkdownTheme` carries
 colours only: no slot and no attributes reach it. A slot with no colour in the

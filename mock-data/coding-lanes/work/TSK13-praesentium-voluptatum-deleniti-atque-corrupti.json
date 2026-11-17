@@ -40,7 +40,7 @@
     {
       "id": "ACCEPT-01",
       "description": "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque.",
-      "verification": "cargo test --workspace",
+      "verification": "cargo test -p coding-lanes-core | grep detail",
       "status": "pending",
       "evidence": [
         {
@@ -108,7 +108,7 @@
     {
       "id": "NOTE-01",
       "author": "runner-01",
-      "body": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
+      "body": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe. The ==key finding== is marked for the next round.",
       "at": "2026-11-11T09:00Z"
     }
   ],

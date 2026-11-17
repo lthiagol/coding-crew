@@ -190,6 +190,11 @@ that must not be interpreted.
 
 Nothing in the detail pane is editable in v1. raul reads.
 
+The pane scrolls: `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` move through a
+document taller than the pane, and the footer names the keys that work
+while it is open. Scrolling back to the top shows the document as the
+unscrolled view shows it.
+
 ## Derived, never stored
 
 Every view above is computed from the task files.
@@ -213,6 +218,7 @@ Every view above is computed from the task files.
 | no project | "no coding-lanes folder found" with the path it looked in |
 | no work folder | "this project has no work folder" with the path it looked in |
 | unreadable file | the file name and the error; the rest of the list still renders |
+| smaller task | "the smaller task \<id\> has no document yet" in the detail pane, not the task it is not |
 | stale | the list is read from disk on every redraw; a changed file shows up on the next redraw |
 
 ## Rendering a screen as text

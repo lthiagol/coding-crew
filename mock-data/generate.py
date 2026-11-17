@@ -565,6 +565,17 @@ def build():
             ],
             depends_on=[ids["executing"][i], ids["executing"][(i + 1) % 3]],
         )
+        if i == 0:
+            # The detail pane's fixture. Its note carries a ==mark==, so the
+            # document paints text.selected on free text, and its criterion's
+            # verification carries a shell pipe, so the criteria table holds
+            # a code span with an escaped pipe in it.
+            item["notes"][0]["body"] += (
+                " The ==key finding== is marked for the next round."
+            )
+            item["acceptance_criteria"][0]["verification"] = (
+                "cargo test -p coding-lanes-core | grep detail"
+            )
         tasks.append(item)
 
     # remediating — external round with changes-needed, findings open.

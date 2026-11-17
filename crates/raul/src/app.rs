@@ -59,7 +59,7 @@ impl App {
         if key.kind != KeyEventKind::Press {
             return Action::Redraw;
         }
-        if self.detail.is_some() {
+        if let Some(detail) = self.detail.as_mut() {
             // The pane is modal: the keys its footer names are the only
             // ones that do something, and every other key is left alone.
             return match key.code {
@@ -69,6 +69,32 @@ impl App {
                 }
                 KeyCode::Char('q') => Action::Quit,
                 KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Action::Quit,
+                // The scroll keys: the content pane's bindings, named in
+                // the pane's footer.
+                KeyCode::Up | KeyCode::Char('k') => {
+                    detail.scroll_rows(-1);
+                    Action::Redraw
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    detail.scroll_rows(1);
+                    Action::Redraw
+                }
+                KeyCode::PageUp => {
+                    detail.scroll_pages(-1);
+                    Action::Redraw
+                }
+                KeyCode::PageDown => {
+                    detail.scroll_pages(1);
+                    Action::Redraw
+                }
+                KeyCode::Char('g') => {
+                    detail.scroll_to_top();
+                    Action::Redraw
+                }
+                KeyCode::Char('G') => {
+                    detail.scroll_to_bottom();
+                    Action::Redraw
+                }
                 _ => Action::Redraw,
             };
         }
@@ -133,7 +159,7 @@ impl App {
     }
 
     /// Draw the window.
-    pub fn draw(&self, frame: &mut Frame, work: &Work) {
+    pub fn draw(&mut self, frame: &mut Frame, work: &Work) {
         let area = frame.area();
         let rows = Layout::vertical([
             Constraint::Length(1),
@@ -152,9 +178,11 @@ impl App {
             Tab::Backlog => backlog::render(frame, rows[2], work, &self.theme),
             tab => frame.render_widget(placeholder(tab, &self.theme), rows[2]),
         }
-        if let Some(detail) = &self.detail {
+        if let Some(detail) = self.detail.as_mut() {
             // The pane covers the whole window: its own footer is the one
-            // on display, and the help overlay waits behind it.
+            // on display, and the help overlay waits behind it. The pane
+            // takes the mutable detail: the draw clamps its scroll to the
+            // document and measures the page the next keys move by.
             detail::render(frame, area, work, detail, &self.theme);
             return;
         }
@@ -482,7 +510,7 @@ mod tests {
 
     /// Draw the window and return what it shows: the rows, and the paint
     /// of every cell.
-    fn render(app: &App, width: u16, height: u16) -> (Vec<String>, Vec<Vec<Paint>>) {
+    fn render(app: &mut App, width: u16, height: u16) -> (Vec<String>, Vec<Vec<Paint>>) {
         let work = mock_work();
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
@@ -518,8 +546,8 @@ mod tests {
 
     /// Draw the window with a theme and return the rows it shows.
     fn draw_with(theme: &Theme, width: u16, height: u16) -> Vec<String> {
-        let app = window(theme, Tab::Overview, false);
-        render(&app, width, height).0
+        let mut app = window(theme, Tab::Overview, false);
+        render(&mut app, width, height).0
     }
 
     /// Draw the window and return the rows it shows.
@@ -597,7 +625,7 @@ mod tests {
     #[test]
     fn the_backlog_tab_is_built() {
         let rows = render(
-            &window(&Theme::preset(Preset::Dark), Tab::Backlog, false),
+            &mut window(&Theme::preset(Preset::Dark), Tab::Backlog, false),
             100,
             40,
         )
@@ -622,13 +650,13 @@ mod tests {
         for (tab, help) in screens() {
             for (width, height) in [(100, 20), (60, 16), (40, 12)] {
                 let dark = render(
-                    &window(&Theme::preset(Preset::Dark), tab, help),
+                    &mut window(&Theme::preset(Preset::Dark), tab, help),
                     width,
                     height,
                 )
                 .0;
                 let terminal = render(
-                    &window(&Theme::preset(Preset::Terminal), tab, help),
+                    &mut window(&Theme::preset(Preset::Terminal), tab, help),
                     width,
                     height,
                 )
@@ -642,9 +670,14 @@ mod tests {
     #[test]
     fn the_presets_differ_in_paint() {
         for (tab, help) in screens() {
-            let dark = render(&window(&Theme::preset(Preset::Dark), tab, help), 100, 20).1;
+            let dark = render(
+                &mut window(&Theme::preset(Preset::Dark), tab, help),
+                100,
+                20,
+            )
+            .1;
             let terminal = render(
-                &window(&Theme::preset(Preset::Terminal), tab, help),
+                &mut window(&Theme::preset(Preset::Terminal), tab, help),
                 100,
                 20,
             )
@@ -661,7 +694,7 @@ mod tests {
         // In the terminal preset the colours are the terminal's: what
         // tells the presets apart is the attributes.
         let terminal = render(
-            &window(&Theme::preset(Preset::Terminal), Tab::Overview, false),
+            &mut window(&Theme::preset(Preset::Terminal), Tab::Overview, false),
             100,
             20,
         )
@@ -770,7 +803,12 @@ mod tests {
     fn the_footer_offers_open_only_where_a_row_can_open() {
         // The footer never names a key that does nothing.
         for (tab, offers) in reachability() {
-            let rows = render(&window(&Theme::preset(Preset::Dark), tab, false), 100, 20).0;
+            let rows = render(
+                &mut window(&Theme::preset(Preset::Dark), tab, false),
+                100,
+                20,
+            )
+            .0;
             let footer = rows.last().expect("a footer row").trim_end().to_string();
             assert_eq!(
                 footer.contains("enter") && footer.contains("open"),
@@ -785,7 +823,7 @@ mod tests {
         let work = mock_work();
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Path, false);
         app.on_key(key(KeyCode::Enter), &work);
-        let rows = render(&app, 100, 20).0;
+        let rows = render(&mut app, 100, 20).0;
         let footer = rows.last().expect("a footer row").trim_end().to_string();
         assert!(
             footer.contains("esc") && footer.contains("close"),

@@ -284,6 +284,7 @@ dependencies = [
  "crossterm",
  "ratatui",
  "serde_json",
+ "syntect",
 ]
 
 [[package]]

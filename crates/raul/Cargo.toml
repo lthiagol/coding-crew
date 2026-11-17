@@ -20,3 +20,6 @@ crossterm.workspace = true
 # Overview measures its text the way ratatui draws it.
 ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }
 serde_json.workspace = true
+# The syntect types the engine's assets are named with: raul pairs the
+# document's code tokens with the engine's own syntect theme.
+syntect.workspace = true

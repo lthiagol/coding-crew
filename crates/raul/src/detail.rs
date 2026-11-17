@@ -1,4 +1,4 @@
-//! The detail pane: the record, close up.
+//! The detail pane: the record, close up, as a document.
 //!
 //! Enter on a row opens the record the row holds as a full-screen overlay;
 //! esc returns to the tab and the selection it came from, and enter again
@@ -6,17 +6,28 @@
 //! Backlog — and nowhere else: the Overview is a summary, not a list, and
 //! Autopilot and Settings are placeholders.
 //!
-//! The document is the next unit: the body is a placeholder until then.
-//! The scroll keys are the document unit's work too, and are not built
-//! here.
+//! The body is the record projected to markdown
+//! ([ADR 0009](../../../docs/decisions/0009-markdown-projection.md)) and
+//! rendered through the vendored leaf engine, painted by the theme's
+//! `markdown_theme` — one palette. The document is not editable: raul
+//! reads. The pane scrolls — `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` move
+//! through a document taller than the pane — and its footer names the keys
+//! that work while it is open.
+
+use std::sync::OnceLock;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
+use ratatui::widgets::{Block, Clear, Paragraph};
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
 
 use coding_lanes_core::escape_literal;
+use coding_lanes_engine::{
+    ThemePreset, parse_markdown_with_width, syntax_set, syntect_theme, theme_set,
+};
 
 use crate::app::footer_line;
 use crate::data::Work;
@@ -24,10 +35,34 @@ use crate::tabs::Tab;
 use crate::text::{cut_to, text_width};
 use crate::theme::{Theme, block_title_style};
 
-/// The body while the document is not built.
-const BODY: &str = "the document is the next unit";
+/// The syntect assets, loaded once per process.
+///
+/// The syntax set compiles hundreds of syntaxes; loading it in a draw loop
+/// would stall every frame. The document is parsed again on every redraw —
+/// the work folder is read again on every redraw too — so the parse has to
+/// stay cheap, and it does once the assets are in.
+static SYNTAX: OnceLock<SyntaxSet> = OnceLock::new();
+static THEMES: OnceLock<ThemeSet> = OnceLock::new();
 
-/// The open pane: the record it shows, and where it came from.
+/// The syntax set and the syntect theme the document's code tokens pair
+/// with.
+///
+/// Every field of `MarkdownTheme` is mapped onto the eighteen slots — one
+/// palette — and this is the one paint outside that promise, handled
+/// deliberately. The engine paints the tokens of a fenced code block with
+/// syntect's own theme, and no parameter of the vendored engine turns that
+/// off: an empty scope-less syntect theme paints the tokens black, and an
+/// empty syntax set panics looking for plain text. So the pane pairs the
+/// code tokens with the pairing the theme file already names — the engine's
+/// own default, `base16-ocean.dark` — the same in both of raul's presets.
+fn syntect() -> (&'static SyntaxSet, &'static syntect::highlighting::Theme) {
+    let syntax = SYNTAX.get_or_init(syntax_set);
+    let themes = THEMES.get_or_init(theme_set);
+    (syntax, syntect_theme(ThemePreset::default(), themes))
+}
+
+/// The open pane: the record it shows, where it came from, and how far
+/// through the document it has scrolled.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Detail {
     /// The id of the record the pane shows.
@@ -36,17 +71,56 @@ pub struct Detail {
     pub tab: Tab,
     /// The row selected on that tab, so esc returns to it.
     pub selection: Option<String>,
+    /// The first row of the document that is on display.
+    ///
+    /// A key moves it; the render clamps it to the document, so a document
+    /// that shrank between two redraws never shows past its end.
+    pub scroll: u16,
+    /// The rows of the document the pane last showed: a page, the distance
+    /// `pgup` and `pgdn` move.
+    pub page: u16,
 }
 
 impl Detail {
-    /// The pane a row opened.
+    /// The pane a row opened, at the top of the document.
     pub fn opened(id: String, tab: Tab, selection: Option<String>) -> Self {
-        Self { id, tab, selection }
+        Self {
+            id,
+            tab,
+            selection,
+            scroll: 0,
+            page: 0,
+        }
+    }
+
+    /// Scroll by rows: down on a positive count, up on a negative one.
+    pub fn scroll_rows(&mut self, rows: isize) {
+        self.scroll = clamp_scroll(self.scroll as isize + rows);
+    }
+
+    /// Scroll by pages: the rows the pane last showed.
+    pub fn scroll_pages(&mut self, pages: isize) {
+        self.scroll_rows(pages * (self.page.max(1) as isize));
+    }
+
+    /// Scroll to the top of the document.
+    pub fn scroll_to_top(&mut self) {
+        self.scroll = 0;
+    }
+
+    /// Scroll to the bottom of the document; the render clamps it.
+    pub fn scroll_to_bottom(&mut self) {
+        self.scroll = u16::MAX;
     }
 }
 
+/// A scroll offset that is never negative and never overflows.
+fn clamp_scroll(offset: isize) -> u16 {
+    offset.clamp(0, u16::MAX as isize) as u16
+}
+
 /// Draw the pane over the whole window.
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, detail: &Detail, theme: &Theme) {
+pub fn render(frame: &mut Frame, area: Rect, work: &Work, detail: &mut Detail, theme: &Theme) {
     let rows = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(area);
     let width = usize::from(rows[0].width).saturating_sub(2);
     // The pane covers the whole window: what is under it is not on
@@ -55,33 +129,68 @@ pub fn render(frame: &mut Frame, area: Rect, work: &Work, detail: &Detail, theme
     let block = Block::bordered()
         .title(header_labels(detail, work, width, theme))
         .border_style(theme.chrome.border_focus);
+    let lines = document_lines(work, detail, width, theme);
+    // The scroll is clamped to the document, and the page is what the pane
+    // actually holds: the next pgup/pgdn moves by the rows on display.
+    let visible = usize::from(rows[0].height).saturating_sub(2);
+    let scroll = usize::from(detail.scroll).min(lines.len().saturating_sub(visible));
+    detail.scroll = u16::try_from(scroll).unwrap_or(u16::MAX);
+    detail.page = u16::try_from(visible).unwrap_or(u16::MAX);
     frame.render_widget(
-        Paragraph::new(body_line(work, detail, width, theme))
-            .wrap(Wrap { trim: false })
-            .block(block),
+        Paragraph::new(lines)
+            .block(block)
+            .scroll((u16::try_from(scroll).unwrap_or(u16::MAX), 0)),
         rows[0],
     );
     frame.render_widget(footer(rows[1].width, theme), rows[1]);
 }
 
-/// The body of the pane: one line, until the document is built.
+/// The document the pane shows: the record projected to markdown, rendered
+/// through the vendored engine at the pane's own width.
 ///
 /// The record is looked up again on every redraw. A record that left the
-/// folder is said, not a blank screen.
-fn body_line(work: &Work, detail: &Detail, width: usize, theme: &Theme) -> Line<'static> {
-    match work.record_title(&detail.id) {
-        Some(_) => Line::from(Span::styled(cut_to(BODY, width), theme.text.normal)),
-        None => Line::from(Span::styled(
-            cut_to(
-                &format!(
-                    "the record {} is not in the work folder",
-                    escape_literal(&detail.id)
-                ),
-                width,
-            ),
-            theme.text.dim,
-        )),
+/// folder is said, not a blank screen; a smaller task is said to be one,
+/// not shown as the task it is not.
+fn document_lines(work: &Work, detail: &Detail, width: usize, theme: &Theme) -> Vec<Line<'static>> {
+    if width == 0 {
+        return Vec::new();
     }
+    let Some(task) = work.task(&detail.id) else {
+        let line = if work.item(&detail.id).is_some() {
+            format!(
+                "the smaller task {} has no document yet",
+                escape_literal(&detail.id)
+            )
+        } else {
+            format!(
+                "the record {} is not in the work folder",
+                escape_literal(&detail.id)
+            )
+        };
+        // A notice is said quietly: both take `text.dim`, the paint the
+        // doc gives the empty state and other secondary text.
+        return vec![Line::from(Span::styled(
+            cut_to(&line, width),
+            theme.text.dim,
+        ))];
+    };
+    // The projection reads the whole work folder as its context: the
+    // reverse dependencies and the children's progress are the project's
+    // own facts.
+    let markdown = coding_lanes_core::task_to_markdown(task, &work.tasks);
+    let (syntax, paired) = syntect();
+    parse_markdown_with_width(
+        &markdown,
+        syntax,
+        paired,
+        width,
+        &theme.markdown_theme(),
+        // The document is not a file view: no file-mode offsets, and no
+        // line numbers on the fenced verification commands.
+        false,
+        false,
+    )
+    .lines
 }
 
 /// The block's title: the id and the title of the record, both labels.
@@ -157,10 +266,14 @@ fn cut_labels(labels: Vec<Span<'static>>, width: usize) -> Line<'static> {
 ///
 /// Every other key is left alone while the pane is open, so none of them
 /// is named: not the tabs, not help, and not enter — it opens, and it has
-/// opened.
+/// opened. The scroll keys are named; `footer_line` first-fits the
+/// optional parts in index order — pgup/pgdn, then g/G, then `↑↓` — so a
+/// narrowing footer gives up the single rows first, then the ends, the
+/// page keys last.
 fn footer(width: u16, theme: &Theme) -> Line<'static> {
     let key = theme.chrome.key;
     let label = theme.chrome.footer;
+    let space = || Span::raw("   ");
     let parts = vec![
         (
             0,
@@ -170,11 +283,38 @@ fn footer(width: u16, theme: &Theme) -> Line<'static> {
         (
             1,
             vec![
-                Span::raw("   "),
+                space(),
                 Span::styled(" esc ", key),
                 Span::styled(" close", label),
             ],
             true,
+        ),
+        (
+            2,
+            vec![
+                space(),
+                Span::styled(" pgup/pgdn ", key),
+                Span::styled(" page", label),
+            ],
+            false,
+        ),
+        (
+            3,
+            vec![
+                space(),
+                Span::styled(" g/G ", key),
+                Span::styled(" top/bottom", label),
+            ],
+            false,
+        ),
+        (
+            4,
+            vec![
+                space(),
+                Span::styled(" ↑↓ ", key),
+                Span::styled(" scroll", label),
+            ],
+            false,
         ),
     ];
     footer_line(parts, width)
@@ -206,6 +346,18 @@ mod tests {
 
     fn pane(id: &str) -> Detail {
         Detail::opened(id.to_string(), Tab::Path, None)
+    }
+
+    /// One task with the given title, groomed and waiting.
+    fn titled_work(title: &str) -> Work {
+        let mut task = coding_lanes_core::Task::new("TSK01", title.to_string());
+        task.status = coding_lanes_core::Status::Groomed;
+        task.status_since = "2026-11-07T13:00:00Z".to_string();
+        Work {
+            root: PathBuf::from("/nowhere/coding-lanes/work"),
+            tasks: vec![task],
+            ..Work::default()
+        }
     }
 
     /// The paint of one cell: its colours and its attributes.
@@ -275,6 +427,20 @@ mod tests {
             .join("\n")
     }
 
+    /// The document the pane would show, at the pane's own width.
+    fn document(work: &Work, detail: &Detail, width: usize, theme: &Theme) -> String {
+        document_lines(work, detail, width, theme)
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
     /// Whether `prefix` is a whole number of graphemes at the start of
     /// `text`, by the same grapheme iterator ratatui draws with.
     fn is_grapheme_prefix(prefix: &str, text: &str) -> bool {
@@ -289,15 +455,49 @@ mod tests {
         built == prefix
     }
 
-    /// One task with the given title, groomed and waiting.
-    fn titled_work(title: &str) -> Work {
-        let mut task = coding_lanes_core::Task::new("TSK01", title.to_string());
-        task.status = coding_lanes_core::Status::Groomed;
-        task.status_since = "2026-11-07T13:00:00Z".to_string();
-        Work {
-            root: PathBuf::from("/nowhere/coding-lanes/work"),
-            tasks: vec![task],
-            ..Work::default()
+    /// The sections of the detail pane, in the order the screens file
+    /// writes them down.
+    fn doc_sections() -> Vec<String> {
+        let doc = include_str!("../../../docs/tui/screens.md");
+        let body = doc
+            .split("## The detail pane")
+            .nth(1)
+            .expect("the detail pane section")
+            .split("\n## ")
+            .next()
+            .expect("the section ends");
+        let names: Vec<String> = body
+            .lines()
+            .skip_while(|line| !line.starts_with("| section |"))
+            .skip(2) // the header row and the separator
+            .take_while(|line| line.starts_with("| "))
+            .map(|line| {
+                line.split('|')
+                    .nth(1)
+                    .expect("a first cell")
+                    .trim()
+                    .to_lowercase()
+            })
+            .collect();
+        assert_eq!(names.len(), 10, "{names:?}");
+        names
+    }
+
+    #[test]
+    fn the_document_carries_the_sections_in_the_doc_s_order() {
+        // The sections and their order are the screens file's table, read
+        // here rather than copied. The check can fail: a section the
+        // projection drops or renames is missing from the rendered
+        // document, and one moved out of place breaks the order.
+        let work = mock_work();
+        let detail = pane("TSK13");
+        let rendered = document(&work, &detail, 100, &theme()).to_lowercase();
+        let mut cursor = 0usize;
+        for section in doc_sections() {
+            let at = rendered[cursor..]
+                .find(&section)
+                .unwrap_or_else(|| panic!("{section} is not in the rendered document"));
+            cursor += at + section.len();
         }
     }
 
@@ -311,8 +511,9 @@ mod tests {
         assert!(text.contains(&task.title), "{text}");
         // The pane is full screen: the window under it is not on display.
         assert!(!text.contains("Autopilot"), "{text}");
-        // The body is the placeholder, not a blank screen.
-        assert!(text.contains(BODY), "{text}");
+        // The body is the document, not a blank screen: its first section
+        // is on display.
+        assert!(text.contains("Header"), "{text}");
         // The footer says what the pane does.
         assert!(text.contains("esc") && text.contains("close"), "{text}");
         // The title is `text.strong`.
@@ -329,30 +530,48 @@ mod tests {
     }
 
     #[test]
-    fn the_body_is_on_text_normal() {
+    fn the_first_heading_is_painted_from_its_slot() {
+        // The document opens on `## Header`: a second-level heading takes
+        // `text.strong` and the engine's own bold.
         let work = mock_work();
-        let normal = theme().text.normal.fg.expect("the normal colour");
         let (rows, paints) = draw(&work, &pane("TSK13"), 100, 40);
+        let strong = theme().text.strong.fg.expect("the strong colour");
         let row_at = rows
             .iter()
-            .position(|row| row.contains(BODY))
-            .expect("the body is on screen");
-        let column = rows[row_at].find(BODY).expect("the body's column");
+            .position(|row| row.contains("Header"))
+            .expect("the first heading is on screen");
+        let column = rows[row_at].find("Header").expect("the heading's column");
         assert_eq!(
-            paints[row_at][column].fg, normal,
-            "the body is not on text.normal"
+            paints[row_at][column].fg, strong,
+            "the heading is not on text.strong"
+        );
+        assert!(
+            paints[row_at][column].modifier.contains(Modifier::BOLD),
+            "the heading is not bold"
         );
     }
 
     #[test]
     fn the_title_is_escaped() {
         // A field that must not be interpreted is escaped by the
-        // projection's own rule, wherever it is shown.
+        // projection's own rule, wherever it is shown. The pane's header
+        // shows the escape raw: markdown cannot interpret the title there.
+        // In the document, the same escape keeps the title text: the code
+        // span, the emphasis and the link do not happen — the characters
+        // survive, so no markdown shape replaced them.
         let work = titled_work("fix: `code` *bold* [link]");
         let (rows, _) = draw(&work, &pane("TSK01"), 100, 40);
-        let text = text_of(&rows);
-        assert!(text.contains(r"fix: \`code\` \*bold\* \[link\]"), "{text}");
-        assert!(!text.contains("`code`"), "{text}");
+        let header = &rows[0];
+        assert!(
+            header.contains(r"fix: \`code\` \*bold\* \[link\]"),
+            "{header:?}"
+        );
+        assert!(!header.contains("`code`"), "{header:?}");
+        let body = document(&work, &pane("TSK01"), 98, &theme());
+        assert!(
+            body.contains("fix: `code` *bold* [link]"),
+            "the document interpreted the title: {body}"
+        );
     }
 
     #[test]
@@ -405,22 +624,333 @@ mod tests {
     }
 
     #[test]
-    fn the_body_is_never_a_blank_screen() {
+    fn the_document_fills_the_pane_at_any_width() {
+        // The body is never a blank screen while the record is a task, at
+        // any width the pane can hold.
         let work = mock_work();
-        for width in 0..=100 {
-            let line = body_line(&work, &pane("TSK13"), width, &theme());
-            let text: String = line
-                .spans
-                .iter()
-                .map(|span| span.content.as_ref())
-                .collect();
-            if width == 0 {
-                assert!(text.is_empty(), "{width}: {text:?}");
-            } else {
-                assert!(!text.is_empty(), "{width}: the body is blank");
-                assert_eq!(text, cut_to(BODY, width), "{width}");
+        for width in [100u16, 60, 30, 12] {
+            let (rows, _) = draw(&work, &pane("TSK13"), width, 20);
+            let body = &rows[1..rows.len() - 1];
+            assert!(
+                body.iter().any(|row| !row.trim().is_empty()),
+                "{width}: the body is blank"
+            );
+            // Nothing is wider than the pane: the document is rendered at
+            // the pane's own width.
+            for row in body {
+                assert!(
+                    row.chars().count() <= usize::from(width),
+                    "{width}: {row:?}"
+                );
             }
         }
+    }
+
+    /// Draw the pane, press keys in order, and draw again — the loop a
+    /// redraw is. The first draw is returned with the second, so a test
+    /// can hold the unscrolled view while the keys move the pane.
+    fn drawn_after(
+        work: &Work,
+        id: &str,
+        width: u16,
+        height: u16,
+        keys: &[crossterm::event::KeyCode],
+    ) -> (Vec<String>, Vec<String>, App) {
+        let mut app = App::new(PathBuf::from("/tmp/coding-lanes/work"), theme());
+        app.detail = Some(Detail::opened(id.to_string(), Tab::Path, None));
+        // The first draw, as the loop does: it measures the page.
+        let first = draw_frame(&mut app, work, width, height);
+        for code in keys {
+            app.on_key(crossterm::event::KeyEvent::from(*code), work);
+        }
+        let last = draw_frame(&mut app, work, width, height);
+        (first, last, app)
+    }
+
+    /// One frame of the pane, as rows.
+    fn draw_frame(app: &mut App, work: &Work, width: u16, height: u16) -> Vec<String> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
+        terminal
+            .draw(|frame| app.draw(frame, work))
+            .expect("drawing the pane");
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area().height)
+            .map(|y| {
+                (0..buffer.area().width)
+                    .map(|x| buffer.cell((x, y)).map(|cell| cell.symbol()).unwrap_or(" "))
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_pane_scrolls_a_document_taller_than_the_pane() {
+        use crossterm::event::KeyCode;
+        let work = mock_work();
+        // Unscrolled, the bottom of the document is not on display; at
+        // twenty rows, the top of a long document is the header alone.
+        let (top, bottom, app) = drawn_after(&work, "TSK13", 100, 20, &[KeyCode::Char('G')]);
+        assert!(
+            app.detail.as_ref().expect("open").scroll > 0,
+            "G did not scroll"
+        );
+        assert!(
+            !text_of(&top).contains("Children"),
+            "the unscrolled pane shows the bottom: {}",
+            text_of(&top)
+        );
+        assert!(
+            text_of(&bottom).contains("Children"),
+            "{}",
+            text_of(&bottom)
+        );
+        // Back at the top, the pane is byte for byte the unscrolled view:
+        // the shape at the top matches.
+        let (_, back, _) = drawn_after(
+            &work,
+            "TSK13",
+            100,
+            20,
+            &[KeyCode::Char('G'), KeyCode::Char('g')],
+        );
+        assert_eq!(top, back, "g did not return the unscrolled view");
+    }
+
+    #[test]
+    fn a_row_moves_the_view_by_one_row() {
+        use crossterm::event::KeyCode;
+        let work = mock_work();
+        let (top, down, app) = drawn_after(&work, "TSK13", 100, 20, &[KeyCode::Down]);
+        assert_eq!(
+            app.detail.as_ref().expect("open").scroll,
+            1,
+            "down did not move one row"
+        );
+        assert_ne!(top, down, "down did not move the view");
+        let (_, back, app) = drawn_after(&work, "TSK13", 100, 20, &[KeyCode::Down, KeyCode::Up]);
+        assert_eq!(app.detail.as_ref().expect("open").scroll, 0);
+        assert_eq!(top, back, "up did not return the unscrolled view");
+        // j and k are the same keys in the pane.
+        let (_, vim, app) = drawn_after(&work, "TSK13", 100, 20, &[KeyCode::Char('j')]);
+        assert_eq!(app.detail.as_ref().expect("open").scroll, 1);
+        assert_eq!(down, vim, "j did not scroll like down");
+        let (_, _, app) = drawn_after(
+            &work,
+            "TSK13",
+            100,
+            20,
+            &[KeyCode::Char('j'), KeyCode::Char('k')],
+        );
+        assert_eq!(app.detail.as_ref().expect("open").scroll, 0);
+    }
+
+    #[test]
+    fn a_page_moves_the_view_by_the_pane_s_rows() {
+        use crossterm::event::KeyCode;
+        let work = mock_work();
+        // The first draw measures the page: the rows the pane holds.
+        let (top, _, app) = drawn_after(&work, "TSK13", 100, 20, &[]);
+        let page = app.detail.as_ref().expect("open").page;
+        assert_eq!(
+            page, 17,
+            "the page is not the pane's rows: the height minus the footer and the two borders"
+        );
+        // pgdn moves by that page.
+        let (_, paged, app) = drawn_after(&work, "TSK13", 100, 20, &[KeyCode::PageDown]);
+        assert_eq!(
+            app.detail.as_ref().expect("open").scroll,
+            page,
+            "pgdn did not move a page"
+        );
+        // The same view, reached by the scroll itself.
+        let mut jumped = App::new(PathBuf::from("/tmp/coding-lanes/work"), theme());
+        let mut detail = pane("TSK13");
+        detail.scroll = page;
+        jumped.detail = Some(detail);
+        let expected = draw_frame(&mut jumped, &work, 100, 20);
+        assert_eq!(paged, expected, "pgdn did not show the page's rows");
+        // pgup moves back by the same page.
+        let (_, back, app) = drawn_after(
+            &work,
+            "TSK13",
+            100,
+            20,
+            &[KeyCode::PageDown, KeyCode::PageUp],
+        );
+        assert_eq!(
+            app.detail.as_ref().expect("open").scroll,
+            0,
+            "pgup did not return"
+        );
+        assert_eq!(back, top, "pgup did not show the top again");
+    }
+
+    #[test]
+    fn a_scroll_past_the_end_stays_on_the_document() {
+        use crossterm::event::KeyCode;
+        // The render clamps the scroll to the document, so a document that
+        // shrank between two redraws never shows past its end.
+        let work = mock_work();
+        let (_, _, app) = drawn_after(
+            &work,
+            "TSK13",
+            100,
+            20,
+            &[KeyCode::Char('G'), KeyCode::Down, KeyCode::Down],
+        );
+        let detail = app.detail.as_ref().expect("open");
+        let lines = document_lines(&work, detail, 98, &theme());
+        let visible = 17usize;
+        let max = lines.len().saturating_sub(visible);
+        assert!(
+            usize::from(detail.scroll) <= max,
+            "scroll {} is past the document's end {max}",
+            detail.scroll
+        );
+        // Two downs past G land on the same last page.
+        let (_, bottom, _) = drawn_after(&work, "TSK13", 100, 20, &[KeyCode::Char('G')]);
+        let (_, more, _) = drawn_after(
+            &work,
+            "TSK13",
+            100,
+            20,
+            &[KeyCode::Char('G'), KeyCode::Down, KeyCode::Down],
+        );
+        assert_eq!(bottom, more, "the scroll ran past the end");
+    }
+
+    #[test]
+    fn a_mark_in_free_text_takes_the_selection() {
+        // The fixture's note carries ==key finding==. The engine paints a
+        // mark with mark_fg and mark_bg, which the mapping gives to
+        // text.selected — the pair the palette records, in the dark
+        // preset. The check can fail: any other paint on the mark is a
+        // second spelling of the selection.
+        let work = mock_work();
+        let detail = pane("TSK13");
+        let dark = Theme::preset(Preset::Dark);
+        let selected = dark.text.selected;
+        // The width keeps the wrapped note on one line, so the whole mark
+        // is one span.
+        let lines = document_lines(&work, &detail, 138, &dark);
+        let marked = lines
+            .iter()
+            .flat_map(|line| &line.spans)
+            .find(|span| span.content.contains("key finding"))
+            .expect("the marked span is in the document");
+        assert_eq!(
+            marked.style.fg, selected.fg,
+            "the mark is not on the selection's foreground"
+        );
+        assert_eq!(
+            marked.style.bg, selected.bg,
+            "the mark is not on the selection's background"
+        );
+    }
+
+    #[test]
+    fn the_terminal_preset_marks_with_no_colour() {
+        // The terminal preset names no colour: the mark is the same words
+        // with `Color::Reset` on both sides, as the theme file requires.
+        // The check can fail: any colour here is a colour the preset does
+        // not name.
+        let work = mock_work();
+        let detail = pane("TSK13");
+        let terminal = Theme::preset(Preset::Terminal);
+        // The width keeps the wrapped note on one line, so the whole mark
+        // is one span.
+        let lines = document_lines(&work, &detail, 138, &terminal);
+        let marked = lines
+            .iter()
+            .flat_map(|line| &line.spans)
+            .find(|span| span.content.contains("key finding"))
+            .expect("the marked span is in the document");
+        assert_eq!(
+            marked.style.fg,
+            Some(Color::Reset),
+            "the terminal preset named a foreground"
+        );
+        assert_eq!(
+            marked.style.bg,
+            Some(Color::Reset),
+            "the terminal preset named a background"
+        );
+    }
+
+    #[test]
+    fn the_mark_is_painted_on_screen() {
+        // The paint reaches the pane. The pane is wide enough that the
+        // wrapped note holds the whole mark on one row, and the scroll is
+        // set to the marked line, so the row is deterministic.
+        let work = mock_work();
+        let dark = Theme::preset(Preset::Dark);
+        let selection_fg = dark.text.selected.fg.expect("the selection foreground");
+        let selection_bg = dark.text.selected.bg.expect("the selection background");
+        let mut detail = pane("TSK13");
+        let lines = document_lines(&work, &detail, 138, &dark);
+        let marked_at = lines
+            .iter()
+            .position(|line| {
+                line.spans
+                    .iter()
+                    .any(|span| span.content.contains("key finding"))
+            })
+            .expect("the mark is in the document");
+        detail.scroll = u16::try_from(marked_at).expect("the mark sits in a pane's scroll");
+        let (rows, paints) = draw_with(&dark, &work, &detail, 140, 20);
+        let row_at = rows
+            .iter()
+            .position(|row| row.contains("key finding"))
+            .expect("the marked row is on display");
+        let column = rows[row_at].find("key finding").expect("the mark's column");
+        assert_eq!(
+            paints[row_at][column].fg, selection_fg,
+            "the mark is not painted on the selection's foreground"
+        );
+        assert_eq!(
+            paints[row_at][column].bg, selection_bg,
+            "the mark is not painted on the selection's background"
+        );
+    }
+
+    #[test]
+    fn the_table_parser_consumes_the_projection_s_pipe_escape() {
+        // The engine question the projection review left: how the table
+        // parser renders a backslash inside a code span. The answer, with
+        // the real fixture TSK13, whose verification command carries a
+        // shell pipe: the parser that splits the cells resolves `\|`
+        // before inline parsing, so the code span sees the pipe alone and
+        // the cell is not split. The projection's own escape is consumed
+        // by the same parser that reads it — no backslash reaches the
+        // render, and the pipe is the pipe character, not a cell border.
+        // The seven-column table wraps the command across rows of its
+        // cell, so the pin is on the document's text, not on one row.
+        //
+        // A literal backslash in a value — not the projection's escape —
+        // would be eaten the same way when it sits directly before a pipe
+        // inside a code span. No fixture carries one: the tree has no
+        // backslash anywhere, and the fields the projection renders as
+        // code (commands, paths, ids, timestamps) do not end in `\|`. The
+        // record stays the pin below; a fixture with such a value would be
+        // its own unit in core.
+        let work = mock_work();
+        let detail = pane("TSK13");
+        let rendered = document(&work, &detail, 100, &theme());
+        // The command's tail is rendered: nothing was lost at the split.
+        assert!(
+            rendered.contains("grep detai"),
+            "the command did not survive the cell: {rendered}"
+        );
+        // The pipe is the pipe character in the render. A cell split at
+        // the pipe would show a border instead.
+        assert!(
+            rendered.contains('|'),
+            "the pipe did not survive: {rendered}"
+        );
+        assert!(
+            !rendered.contains('\\'),
+            "the escape reached the render: {rendered}"
+        );
     }
 
     #[test]
@@ -431,6 +961,16 @@ mod tests {
         assert!(footer.contains("quit"), "{footer}");
         assert!(
             footer.contains("esc") && footer.contains("close"),
+            "{footer}"
+        );
+        // The scroll keys work in the pane: they are named.
+        assert!(
+            footer.contains("pgup/pgdn") && footer.contains("page"),
+            "{footer}"
+        );
+        assert!(footer.contains("g/G"), "{footer}");
+        assert!(
+            footer.contains("↑↓") && footer.contains("scroll"),
             "{footer}"
         );
         // Enter has opened, the tabs are left alone, and help is not
@@ -448,23 +988,75 @@ mod tests {
         let text = text_of(&rows);
         assert!(text.contains("TSK99"), "{text}");
         assert!(text.contains("not in the work folder"), "{text}");
-        assert!(!text.contains(BODY), "{text}");
+        assert!(!text.contains("Header"), "{text}");
     }
 
     #[test]
-    fn the_selection_slot_stays_unused() {
-        // The first user of text.selected is the document unit: nothing in
-        // the pane paints with it yet. The accent background is the
-        // selection's alone.
-        let theme = theme();
-        let selection = theme.text.selected.bg.expect("the selection background");
+    fn a_smaller_task_is_said_to_be_one() {
+        // The pane opens from the Backlog, whose rows are smaller tasks
+        // too. A smaller task has no document: it is said, not shown as
+        // the task it is not.
         let work = mock_work();
-        for width in [100u16, 60, 30] {
-            let (_, paints) = draw_with(&theme, &work, &pane("TSK13"), width, 20);
-            for cell in paints.iter().flatten() {
-                assert_ne!(cell.bg, selection, "{width}: the selection slot is painted");
-            }
+        let (rows, _) = draw(&work, &pane("ITM01"), 100, 40);
+        let text = text_of(&rows);
+        assert!(text.contains("ITM01"), "{text}");
+        assert!(text.contains("smaller task"), "{text}");
+        assert!(text.contains("no document yet"), "{text}");
+        assert!(!text.contains("Header"), "{text}");
+    }
+
+    #[test]
+    fn a_notice_is_painted_dim() {
+        // Both notices — the record that left the folder and the smaller
+        // task with no document — take `text.dim`: a notice is secondary
+        // text, not the document's own words. The check can fail: an
+        // unstyled notice reads as document text.
+        let work = mock_work();
+        let dim = theme().text.dim.fg.expect("the dim colour");
+        for (id, marker) in [
+            ("TSK99", "not in the work folder"),
+            ("ITM01", "no document yet"),
+        ] {
+            let (rows, paints) = draw(&work, &pane(id), 100, 40);
+            let row_at = rows
+                .iter()
+                .position(|row| row.contains(marker))
+                .unwrap_or_else(|| panic!("{id}: the notice is not on screen"));
+            let column = rows[row_at].find(marker).expect("the notice's column");
+            assert_eq!(
+                paints[row_at][column].fg, dim,
+                "{id}: the notice is not on text.dim"
+            );
         }
+    }
+
+    #[test]
+    fn the_footer_degrades_in_the_built_order() {
+        // `footer_line` first-fits the optional parts in index order —
+        // pgup/pgdn, then g/G, then `↑↓` — so the single rows are the
+        // first to go in a narrowing footer, then the ends, the page keys
+        // last. The widths are the ones the review rendered.
+        let text = |width: u16| {
+            footer(width, &theme())
+                .spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        };
+        // At 68 the single rows are gone; the ends and the page keys hold.
+        let at_68 = text(68);
+        assert!(at_68.contains("pgup/pgdn"), "{at_68}");
+        assert!(at_68.contains("g/G"), "{at_68}");
+        assert!(!at_68.contains("↑↓"), "{at_68}");
+        // At 55 the ends are gone too.
+        let at_55 = text(55);
+        assert!(at_55.contains("pgup/pgdn"), "{at_55}");
+        assert!(!at_55.contains("g/G"), "{at_55}");
+        // At 40 the page keys are gone last: nothing optional wider than
+        // the single rows still fits.
+        let at_40 = text(40);
+        assert!(!at_40.contains("pgup/pgdn"), "{at_40}");
+        assert!(!at_40.contains("g/G"), "{at_40}");
     }
 
     #[test]
