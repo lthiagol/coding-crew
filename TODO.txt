@@ -154,6 +154,26 @@ WHERE WE ARE
       its own: two instants in one frame; one now per frame, passed through
     - the render test's combining-title fixture replaces exact JSON bytes
       without asserting the replacement matched
+  Unit closed: the detail pane: the document. Two rounds. The body is the
+  real projection through the vendored engine, painted by the unit-13
+  bridge - one palette; reverse dependencies and children progress come
+  from the record's context. Scroll keys up/down j/k pgup/pgdn g/G with a
+  clamped viewport and a footer that names only working keys, its
+  degradation order stated by the comment and pinned by test at 68/55/40.
+  text.selected got its first user: the engine mark on a ==key finding==
+  in TSK13's note, the selection pair in the dark preset, Reset in the
+  terminal one. The backslash question is answered on real data: the
+  table parser consumes the projection's pipe escape before the code
+  span, so no backslash reaches the render. The committed snapshot is the
+  real TSK13 document, byte for byte. The code tokens keep syntect's
+  base16-ocean.dark in both presets, recorded in docs/tui/theme.md. The
+  gate is green: 513 Rust tests and 144 script assertions.
+  The delta review left one low follow-up: the footer order pin does not
+  assert that the single-row keys re-fit at 55 and 40 columns once the
+  wider parts drop; one assertion closes it. And the unit's recorded
+  follow-up stands: no fixture carries a fenced code block, so the
+  syntect token paint is unpinned end to end.
+  Next unit: the pty harness (plan 16).
   Next unit: the detail pane: the document (plan 15).
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
