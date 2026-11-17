@@ -1,0 +1,17 @@
+[package]
+name = "coding-lanes-engine"
+description = "Vendored markdown engine from leaf, for raul"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license = "MIT"
+
+[dependencies]
+ratatui.workspace = true
+pulldown-cmark.workspace = true
+syntect.workspace = true
+mmdflux.workspace = true
+unicodeit.workspace = true
+unicode-width.workspace = true
+unicode-segmentation.workspace = true
