@@ -43,6 +43,7 @@ test-scripts: ## Run the shell script tests
 	bash scripts/test-pty-sweep.sh
 	bash scripts/test-review-snapshot.sh
 	bash scripts/test-sync.sh
+	bash scripts/test-tab-closer.sh
 
 .PHONY: sweep
 sweep: build-raul ## Sweep the plain render at every width from 40 to 120

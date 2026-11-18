@@ -131,6 +131,7 @@ them from there.
 | send a report without waiting | `herdr agent prompt <ORCHESTRATOR-PANE> "<report>"` — no `--wait`; text and Enter as one ordered submission |
 | read a pane | `herdr pane read <PANE> --lines 40` |
 | close a tab | `herdr tab close <TAB_ID>` — takes a **tab** id (`wX:t7`), never a pane id (`wX:p2`). A `tab_not_found` answer means **the id was wrong**, not that the tab is gone: look the tab up with `herdr tab list --workspace <ID>` and close the `tab_id` it prints. |
+| close a tab from the pane id, and prove it | `scripts/herdr-close-pane.sh <PANE>` — resolves the pane's `tab_id` and `workspace_id` itself, closes the tab, proves it is gone from `herdr tab list --workspace <ID>`, and prints the tabs that remain with their agent state; `--audit <workspace-id>` prints that listing and closes nothing. Exits 0 closed and proved, 2 usage, 3 the pane resolves to no tab, 4 the close was refused or the tab is still listed. |
 
 **All agent tabs live in the Orchestration workspace**, not in the
 orchestrator's own workspace. See the next section.
