@@ -380,19 +380,27 @@ pub enum Preset {
     Dark,
     /// The Nord palette: a dark one, from the family's own page.
     Nord,
+    /// The Catppuccin palette: the family's mocha flavour.
+    Catppuccin,
     /// The colours of the terminal itself.
     Terminal,
 }
 
 impl Preset {
     /// Every preset, in the order of the spec.
-    pub const ALL: [Preset; 3] = [Preset::Dark, Preset::Nord, Preset::Terminal];
+    pub const ALL: [Preset; 4] = [
+        Preset::Dark,
+        Preset::Nord,
+        Preset::Catppuccin,
+        Preset::Terminal,
+    ];
 
     /// The name of the preset, as the flag writes it.
     pub fn name(&self) -> &'static str {
         match self {
             Preset::Dark => "dark",
             Preset::Nord => "nord",
+            Preset::Catppuccin => "catppuccin",
             Preset::Terminal => "terminal",
         }
     }
@@ -415,6 +423,7 @@ fn style_of(preset: Preset, slot: Slot) -> Style {
     match preset {
         Preset::Dark => dark_style(slot),
         Preset::Nord => nord_style(slot),
+        Preset::Catppuccin => catppuccin_style(slot),
         Preset::Terminal => terminal_style(slot),
     }
 }
@@ -593,6 +602,101 @@ fn nord_style(slot: Slot) -> Style {
         Slot::SemanticHuman => Style::new().fg(NORD8),
         // The agent lane takes the second accent.
         Slot::SemanticAgent => Style::new().fg(NORD7),
+    }
+}
+
+/// The fifteen Catppuccin mocha values that the slots spend.
+///
+/// The family's page lists twenty-six values; the mapping in
+/// docs/tui/palettes.md names which role each of these fifteen plays, and
+/// why the rest are kept for the record. The flavour is mocha: the other
+/// three wait with the light theme.
+mod catppuccin {
+    use ratatui::style::Color;
+
+    /// base: the background the figures are measured against, and the
+    /// selection's foreground.
+    pub const BASE: Color = Color::Rgb(0x1e, 0x1e, 0x2e);
+    /// rosewater: the raised and the brightest foreground.
+    pub const ROSEWATER: Color = Color::Rgb(0xf5, 0xe0, 0xdc);
+    /// text: the main foreground.
+    pub const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
+    /// subtext1: the muted foreground, and the footer's labels.
+    pub const SUBTEXT1: Color = Color::Rgb(0xba, 0xc2, 0xde);
+    /// subtext0: the neutral: the information colour.
+    pub const SUBTEXT0: Color = Color::Rgb(0xa6, 0xad, 0xc8);
+    /// overlay2: the second foreground, the tabs that are not showing.
+    pub const OVERLAY2: Color = Color::Rgb(0x93, 0x99, 0xb2);
+    /// overlay0: the dimmed chrome, the `3/6` index.
+    pub const OVERLAY0: Color = Color::Rgb(0x6c, 0x70, 0x86);
+    /// surface1: the border.
+    pub const SURFACE1: Color = Color::Rgb(0x45, 0x47, 0x5a);
+    /// mauve: the accent: the focus border, the selection, the human lane.
+    pub const MAUVE: Color = Color::Rgb(0xcb, 0xa6, 0xf7);
+    /// yellow: the attention colour.
+    pub const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
+    /// green: the success colour.
+    pub const GREEN: Color = Color::Rgb(0xa6, 0xe3, 0xa1);
+    /// peach: the warning colour.
+    pub const PEACH: Color = Color::Rgb(0xfa, 0xb3, 0x87);
+    /// red: the error colour.
+    pub const RED: Color = Color::Rgb(0xf3, 0x8b, 0xa8);
+    /// teal: the second accent, the agent lane.
+    pub const TEAL: Color = Color::Rgb(0x94, 0xe2, 0xd5);
+}
+
+/// The style of a slot in the Catppuccin palette.
+///
+/// The palette is the family's mocha flavour: its eighteen values are
+/// written down in docs/tui/palettes.md, with the role each one plays. It
+/// is a dark preset: it assumes a terminal with a dark background and
+/// paints none of its own.
+fn catppuccin_style(slot: Slot) -> Style {
+    use catppuccin::{
+        BASE, GREEN, MAUVE, OVERLAY0, OVERLAY2, PEACH, RED, ROSEWATER, SUBTEXT0, SUBTEXT1,
+        SURFACE1, TEAL, TEXT, YELLOW,
+    };
+    match slot {
+        // The brightest foreground: the name of the tool. The family names
+        // no raised foreground, so the raised and the brightest borrow the
+        // brightest colour it has.
+        Slot::ChromeTitle => Style::new().fg(ROSEWATER).add_modifier(Modifier::BOLD),
+        // The main foreground: the tab that is showing.
+        Slot::ChromeTabActive => Style::new().fg(TEXT).add_modifier(Modifier::BOLD),
+        // The second foreground: the brightest overlay, the tabs that are
+        // not showing.
+        Slot::ChromeTabInactive => Style::new().fg(OVERLAY2),
+        // The dimmed chrome: the `3/6` index.
+        Slot::ChromeTabIndex => Style::new().fg(OVERLAY0),
+        // The border colour.
+        Slot::ChromeBorder => Style::new().fg(SURFACE1),
+        // The accent: the border of the focused block.
+        Slot::ChromeBorderFocus => Style::new().fg(MAUVE),
+        // The footer's labels are words: the dimmed chrome is a border
+        // grade, so they borrow the muted foreground.
+        Slot::ChromeFooter => Style::new().fg(SUBTEXT1),
+        // The attention colour: a key label.
+        Slot::ChromeKey => Style::new().fg(YELLOW).add_modifier(Modifier::BOLD),
+        // The main foreground: ordinary text.
+        Slot::TextNormal => Style::new().fg(TEXT),
+        // The muted foreground: secondary text.
+        Slot::TextDim => Style::new().fg(SUBTEXT1),
+        // The raised foreground: a count, a title that matters.
+        Slot::TextStrong => Style::new().fg(ROSEWATER).add_modifier(Modifier::BOLD),
+        // The selection is the accent, whole: the base colour on it.
+        Slot::TextSelected => Style::new().fg(BASE).bg(MAUVE),
+        // A clean result, a finished task.
+        Slot::SemanticOk => Style::new().fg(GREEN),
+        // Something wants attention and is not broken.
+        Slot::SemanticWarn => Style::new().fg(PEACH),
+        // A failure: the family's own red.
+        Slot::SemanticError => Style::new().fg(RED),
+        // Neutral information: the word grey the other roles leave.
+        Slot::SemanticInfo => Style::new().fg(SUBTEXT0),
+        // The human lane takes the accent.
+        Slot::SemanticHuman => Style::new().fg(MAUVE),
+        // The agent lane takes the second accent.
+        Slot::SemanticAgent => Style::new().fg(TEAL),
     }
 }
 
@@ -941,7 +1045,10 @@ mod tests {
     fn every_slot_is_painted_in_every_colour_preset() {
         // The terminal preset paints by attribute, and its ordinary text is
         // the terminal's own: only the colour presets paint all eighteen.
-        for preset in [Preset::Dark, Preset::Nord] {
+        for preset in Preset::ALL {
+            if preset == Preset::Terminal {
+                continue;
+            }
             let theme = Theme::preset(preset);
             for slot in Slot::ALL {
                 // A slot that paints nothing is a slot that was forgotten.
@@ -1015,7 +1122,10 @@ mod tests {
         // The test is the one the doc states: the spread between the
         // three channels, within a tolerance. A neutral need not have
         // three equal channels.
-        for preset in [Preset::Dark, Preset::Nord] {
+        for preset in Preset::ALL {
+            if preset == Preset::Terminal {
+                continue;
+            }
             let theme = Theme::preset(preset);
             let Color::Rgb(r, g, b) = theme.semantic.info.fg.expect("info has a colour") else {
                 panic!("info is not a colour of the {} preset", preset.name());
@@ -1577,6 +1687,298 @@ mod tests {
             "the example names {checked} slots"
         );
     }
+    /// Mocha, as the family's page lists it: every value, in the page's
+    /// order. The slots spend fifteen of the twenty-six; the rest are kept
+    /// for the record, and the doc's page table is the page's list.
+    const MOCHA_PAGE: [(&str, Color); 26] = [
+        ("rosewater", Color::Rgb(0xf5, 0xe0, 0xdc)),
+        ("flamingo", Color::Rgb(0xf2, 0xcd, 0xcd)),
+        ("pink", Color::Rgb(0xf5, 0xc2, 0xe7)),
+        ("mauve", Color::Rgb(0xcb, 0xa6, 0xf7)),
+        ("red", Color::Rgb(0xf3, 0x8b, 0xa8)),
+        ("maroon", Color::Rgb(0xeb, 0xa0, 0xac)),
+        ("peach", Color::Rgb(0xfa, 0xb3, 0x87)),
+        ("yellow", Color::Rgb(0xf9, 0xe2, 0xaf)),
+        ("green", Color::Rgb(0xa6, 0xe3, 0xa1)),
+        ("teal", Color::Rgb(0x94, 0xe2, 0xd5)),
+        ("sky", Color::Rgb(0x89, 0xdc, 0xeb)),
+        ("sapphire", Color::Rgb(0x74, 0xc7, 0xec)),
+        ("blue", Color::Rgb(0x89, 0xb4, 0xfa)),
+        ("lavender", Color::Rgb(0xb4, 0xbe, 0xfe)),
+        ("text", Color::Rgb(0xcd, 0xd6, 0xf4)),
+        ("subtext1", Color::Rgb(0xba, 0xc2, 0xde)),
+        ("subtext0", Color::Rgb(0xa6, 0xad, 0xc8)),
+        ("overlay2", Color::Rgb(0x93, 0x99, 0xb2)),
+        ("overlay1", Color::Rgb(0x7f, 0x84, 0x9c)),
+        ("overlay0", Color::Rgb(0x6c, 0x70, 0x86)),
+        ("surface2", Color::Rgb(0x58, 0x5b, 0x70)),
+        ("surface1", Color::Rgb(0x45, 0x47, 0x5a)),
+        ("surface0", Color::Rgb(0x31, 0x32, 0x44)),
+        ("base", Color::Rgb(0x1e, 0x1e, 0x2e)),
+        ("mantle", Color::Rgb(0x18, 0x18, 0x25)),
+        ("crust", Color::Rgb(0x11, 0x11, 0x1b)),
+    ];
+
+    /// The colour a Catppuccin role the doc names holds.
+    fn catppuccin_colour(role: &str) -> Color {
+        match role {
+            "base" => catppuccin::BASE,
+            "rosewater" => catppuccin::ROSEWATER,
+            "text" => catppuccin::TEXT,
+            "subtext1" => catppuccin::SUBTEXT1,
+            "subtext0" => catppuccin::SUBTEXT0,
+            "overlay2" => catppuccin::OVERLAY2,
+            "overlay0" => catppuccin::OVERLAY0,
+            "surface1" => catppuccin::SURFACE1,
+            "mauve" => catppuccin::MAUVE,
+            "yellow" => catppuccin::YELLOW,
+            "green" => catppuccin::GREEN,
+            "peach" => catppuccin::PEACH,
+            "red" => catppuccin::RED,
+            "teal" => catppuccin::TEAL,
+            other => panic!("{other} is not a Catppuccin colour the slots spend"),
+        }
+    }
+
+    /// The colour rows of the Catppuccin slot table: the slot, the family's
+    /// role, and the mocha value.
+    fn catppuccin_rows() -> Vec<(String, String, Color)> {
+        let section = section(PALETTES, "Catppuccin");
+        family_rows(&section)
+            .into_iter()
+            .filter_map(|(slot, cells)| {
+                let role = cells.first()?.clone();
+                // The row is the role, frappé, macchiato and mocha.
+                let colour = cells
+                    .iter()
+                    .skip(1)
+                    .filter_map(|cell| hexes_in(cell).first().copied())
+                    .nth(2)?;
+                Some((slot, role, colour))
+            })
+            .collect()
+    }
+
+    /// The rows of the page table: the role and the mocha value it lists.
+    fn catppuccin_page_rows() -> Vec<(String, Color)> {
+        let section = section(PALETTES, "Catppuccin");
+        let table = section
+            .split_once("### Mocha, as the page lists it")
+            .expect("the Catppuccin section records the page's mocha list")
+            .1;
+        let table = table.split_once("\n### ").map_or(table, |(head, _)| head);
+        let mut rows = Vec::new();
+        for line in table.lines() {
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            if cells.len() < 4 {
+                continue;
+            }
+            let Some(colour) = hexes_in(cells[2]).first().copied() else {
+                continue;
+            };
+            rows.push((cells[1].to_string(), colour));
+        }
+        rows
+    }
+
+    #[test]
+    fn the_mocha_page_table_records_every_value_the_page_lists() {
+        // The Nord review found the family section short three values: it
+        // recorded the ones the slots spent and not the family's palette.
+        // The page's mocha list is recorded whole, in the page's order.
+        let rows = catppuccin_page_rows();
+        assert_eq!(
+            rows.len(),
+            MOCHA_PAGE.len(),
+            "the doc records {} mocha values and the page lists {}",
+            rows.len(),
+            MOCHA_PAGE.len()
+        );
+        for ((role, colour), (expected, expected_colour)) in rows.iter().zip(MOCHA_PAGE.iter()) {
+            assert_eq!(role, expected, "the page's order moved");
+            assert_eq!(
+                colour, expected_colour,
+                "{role} holds a value the page does not list"
+            );
+        }
+    }
+
+    #[test]
+    fn the_catppuccin_palette_is_the_one_the_doc_records() {
+        // The doc is the source of truth: the code is checked against its
+        // mocha column, so the two cannot drift apart silently.
+        let theme = Theme::preset(Preset::Catppuccin);
+        let rows = catppuccin_rows();
+        assert_eq!(
+            rows.len(),
+            Slot::ALL.len(),
+            "the doc's Catppuccin table does not hold the eighteen slots"
+        );
+        for (name, _, colour) in rows {
+            let slot = slot_named(&name);
+            let style = theme.slot(slot);
+            if slot == Slot::TextSelected {
+                // The doc records the accent; the selection puts the base
+                // on it, the pair the palette records.
+                assert_eq!(
+                    style.bg,
+                    Some(colour),
+                    "{name} paints a background the doc does not record"
+                );
+                assert_eq!(
+                    style.fg,
+                    Some(catppuccin::BASE),
+                    "{name} does not put the base on the accent"
+                );
+            } else {
+                assert_eq!(
+                    style.fg,
+                    Some(colour),
+                    "{name} paints a foreground the doc does not record"
+                );
+                assert_eq!(
+                    style.bg, None,
+                    "{name} paints a background the doc does not record"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_catppuccin_roles_name_the_values_the_table_states() {
+        // The value beside a role is the value the page gives that role:
+        // the table's role cell and its mocha cell agree with each other.
+        for (name, role, colour) in catppuccin_rows() {
+            let role = role.split_whitespace().next().expect("a role");
+            assert_eq!(
+                catppuccin_colour(role),
+                colour,
+                "{name}'s role {role} holds another value"
+            );
+        }
+    }
+
+    #[test]
+    fn the_contrast_figures_of_the_catppuccin_preset_are_right() {
+        // Every figure the doc states is recomputed from the code's own
+        // palette, the way the dark and Nord presets' figures are. The
+        // mocha column is the preset's; the other two flavours wait.
+        let theme = Theme::preset(Preset::Catppuccin);
+        let rows = family_ratios(&section(PALETTES, "Catppuccin"));
+        assert_eq!(
+            rows.len(),
+            Slot::ALL.len(),
+            "the doc's Catppuccin table states {} figures",
+            rows.len()
+        );
+        let mut checked = 0;
+        for (name, ratios) in rows {
+            let slot = slot_named(&name);
+            let style = theme.slot(slot);
+            let foreground = style.fg.expect("a Catppuccin slot has a foreground");
+            let behind = style.bg.unwrap_or(catppuccin::BASE);
+            let computed = contrast(foreground, behind);
+            assert!(
+                (computed - ratios[2]).abs() < 0.05,
+                "{name} reads at {computed:.2}:1, and the doc says {}:1",
+                ratios[2]
+            );
+            checked += 1;
+        }
+        assert_eq!(
+            checked,
+            Slot::ALL.len(),
+            "Catppuccin states {checked} figures"
+        );
+    }
+
+    #[test]
+    fn the_catppuccin_preset_reads_on_its_background() {
+        // Every word clears the floor the doc states; only the border and
+        // the index are lines.
+        let theme = Theme::preset(Preset::Catppuccin);
+        for slot in Slot::ALL {
+            if matches!(slot, Slot::ChromeBorder | Slot::ChromeTabIndex) {
+                continue;
+            }
+            let style = theme.slot(slot);
+            let foreground = style.fg.expect("a Catppuccin slot has a foreground");
+            let behind = style.bg.unwrap_or(catppuccin::BASE);
+            let ratio = contrast(foreground, behind);
+            assert!(
+                ratio >= 3.0,
+                "{} reads at {ratio:.1}:1, and a word needs 3:1",
+                slot.name()
+            );
+        }
+    }
+
+    #[test]
+    fn the_not_yet_section_does_not_list_a_shipped_preset() {
+        // The Nord review's one-line drift: theme.md still listed Nord under
+        // Not yet after it shipped, so a reader was told the preset did not
+        // exist. Only a deferred variant may be listed there.
+        let not_yet = THEME
+            .split_once("## Not yet")
+            .expect("the theme doc has a Not yet section")
+            .1
+            .to_lowercase();
+        let mut rest = not_yet.clone();
+        let deferred = [
+            "nord-light",
+            "latte",
+            "frappé",
+            "macchiato",
+            "dracula",
+            "alucard",
+        ];
+        for name in deferred {
+            rest = rest.replace(name, " ");
+        }
+        for preset in Preset::ALL {
+            if preset == Preset::Dark || preset == Preset::Terminal {
+                continue;
+            }
+            assert!(
+                !rest.contains(preset.name()),
+                "theme.md lists the shipped {} preset under Not yet",
+                preset.name()
+            );
+        }
+        let named = deferred
+            .iter()
+            .filter(|name| not_yet.contains(*name))
+            .count();
+        assert!(
+            named >= deferred.len(),
+            "the Not yet section names {named} of the {} deferred variants",
+            deferred.len()
+        );
+    }
+
+    #[test]
+    fn the_syntect_note_names_every_preset() {
+        // The Nord review's second one-line drift: detail.rs said the code
+        // token pairing held in both of raul's presets, and there were
+        // three. The note names them the way theme.md does.
+        const DETAIL: &str = include_str!("detail.rs");
+        // The note is wrapped across doc-comment lines: compare its words,
+        // not its line breaks or its comment markers.
+        let words = DETAIL
+            .replace("///", " ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            words.contains("the same in every one of raul's presets"),
+            "the syntect note does not name every preset"
+        );
+        assert!(
+            !words.contains("both of raul's presets"),
+            "the syntect note still counts raul's presets as two"
+        );
+    }
+
     #[test]
     fn the_presets_differ_in_paint() {
         // The presets are not the same palette under another name.

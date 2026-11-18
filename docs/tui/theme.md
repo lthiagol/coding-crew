@@ -113,6 +113,9 @@ background and keeps the searched span's own foreground.
 - In the **nord** preset the same pairing, `text.normal` on the selection's
   nord8, reads at 1.64:1 — the accent is a mid-tone, not the dark backdrop
   the hit's foreground needs.
+- In the **catppuccin** preset the same pairing, `text.normal` on the
+  selection's mauve, reads at 1.40:1 — the accent is a pastel mid-tone, and
+  the hit's foreground stays `text.normal` on it.
 - In the **terminal** preset the engine's fields are `Color::Reset`, so the
   engine paints no background at all: the current match is a bold word with
   no box around it, and the other hits are not marked.
@@ -180,24 +183,28 @@ slots as the chrome; syntect's code-token theme is the one part that does not.
 |---|---|
 | `dark` | the default: the dark palette |
 | `nord` | the Nord family's palette |
+| `catppuccin` | the Catppuccin family's palette, the mocha flavour |
 | `terminal` | no colours of our own — the terminal's palette is used |
 
-The preset is chosen with a flag for now: `raul --theme dark|nord|terminal`.
-A theme file on disk is later.
+The preset is chosen with a flag for now:
+`raul --theme dark|nord|catppuccin|terminal`. A theme file on disk is later.
 
 The `dark` preset is ours, hand-tuned, and its eighteen values are written
 down in [palettes.md](palettes.md), with their roles and their contrast. The
 `nord` preset is the Nord family's, and its eighteen values are recorded in
-the same file.
+the same file. The `catppuccin` preset is the Catppuccin family's mocha
+flavour, and its eighteen values are recorded there too; the other three
+flavours wait with the light theme.
 
-**The dark and nord presets assume a terminal with a dark background, and do
-not paint one.** The background is the terminal's own; every colour of the
-palettes is picked to read on a dark one.
+**The dark, nord and catppuccin presets assume a terminal with a dark
+background, and do not paint one.** The background is the terminal's own;
+every colour of the palettes is picked to read on a dark one.
 
 **The light themes are deferred.** No light preset is built until that changes:
 not ours, and not the light variants of the families — Catppuccin Latte,
-Dracula Alucard and Nord Light wait with them. The slots are shaped so a light
-preset drops in without touching anything else.
+Dracula Alucard and Nord Light wait with them, and so do the Catppuccin
+frappé and macchiato flavours. The slots are shaped so a light preset drops
+in without touching anything else.
 
 **Selection is the accent at full opacity.** A terminal has no alpha
 compositing, so a translucent selection is not available; every colour
@@ -244,7 +251,7 @@ can and cannot do:
   chrome apart.
 
 The preset exists for terminals whose palette the reader has chosen. Where
-the paint matters, the `dark` or `nord` preset is the one.
+the paint matters, the `dark`, `nord` or `catppuccin` preset is the one.
 
 ## Rules
 
@@ -256,9 +263,8 @@ the paint matters, the `dark` or `nord` preset is the one.
 
 ## Not yet
 
-- **the catalog.** Catppuccin (latte, frappé, macchiato, mocha), Dracula
-  (dracula, alucard) and Nord (nord, nord-light). The values come from each
-  family's own page, and the mapping to our slots is in
-  [palettes.md](palettes.md).
+- **the rest of the catalog.** The variants the light theme brings: `latte`,
+  `frappé`, `macchiato`, `dracula`, `alucard` and `nord-light`. Their palettes
+  are recorded in [palettes.md](palettes.md).
 - **a theme file on disk.** The preset is a flag for now; a file comes with
   the catalog.

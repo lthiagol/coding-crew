@@ -54,7 +54,8 @@ static THEMES: OnceLock<ThemeSet> = OnceLock::new();
 /// off: an empty scope-less syntect theme paints the tokens black, and an
 /// empty syntax set panics looking for plain text. So the pane pairs the
 /// code tokens with the pairing the theme file already names — the engine's
-/// own default, `base16-ocean.dark` — the same in both of raul's presets.
+/// own default, `base16-ocean.dark` — the same in every one of raul's
+/// presets.
 fn syntect() -> (&'static SyntaxSet, &'static syntect::highlighting::Theme) {
     let syntax = SYNTAX.get_or_init(syntax_set);
     let themes = THEMES.get_or_init(theme_set);

@@ -306,15 +306,16 @@ const TAB_NAMES: [&str; 6] = [
 ];
 
 #[test]
-fn every_tab_renders_alike_in_nord_and_terminal_at_every_canonical_width() {
+fn every_tab_renders_alike_in_every_preset_at_every_canonical_width() {
     // The plain render carries no colour, so the words are the whole
-    // contract a preset keeps on screen. Nord is a dark preset: it changes
-    // the paint, and the same screen says the same thing in every preset.
-    // Terminal is the one that names no colour; it says the same words too.
+    // contract a preset keeps on screen. Nord and Catppuccin are dark
+    // presets: they change the paint, and the same screen says the same
+    // thing in every preset. Terminal is the one that names no colour; it
+    // says the same words too.
     for tab in TAB_NAMES {
         for width in [40u16, 60, 100] {
             let dark = render_tab_with("dark", tab, width);
-            for preset in ["nord", "terminal"] {
+            for preset in ["nord", "catppuccin", "terminal"] {
                 let other = render_tab_with(preset, tab, width);
                 assert_eq!(
                     other, dark,

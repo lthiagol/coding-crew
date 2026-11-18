@@ -218,8 +218,8 @@ chrome grade, and a chrome grade stays one: it is not a candidate for the
 neutral.
 
 **The footer's labels borrow the muted foreground.** `overlay0` is a border
-grade — 2.9:1 in frappé — and the footer's labels are words. The index keeps
-the border grade; the labels take `subtext1`.
+grade — 2.9:1 in frappé and 3.4:1 in mocha — and the footer's labels are
+words. The index keeps the border grade; the labels take `subtext1`.
 
 **The neutral is `subtext0`.** Catppuccin's greys below the text are
 `subtext1` and `subtext0`. The text colour is spent on `text.normal` and
@@ -231,9 +231,48 @@ a plain grey than `subtext1` in every one of them.
 **The accent is mauve, and the second accent is teal.** Catppuccin's style
 guide selects with a translucent **Overlay 2** — a terminal has no alpha, so
 the selection is the accent whole: the base colour on the accent, 5.6:1 in
-frappé.
+frappé and 8.1:1 in mocha.
 
 **The blue is kept for the record.** It is not used by any slot.
+
+**Only mocha is a preset.** The table above records the three dark flavours
+because they share one mapping, but the preset built from this family is
+mocha; latte, frappé and macchiato wait with the light theme.
+
+### Mocha, as the page lists it
+
+Every value [catppuccin.com/palette](https://catppuccin.com/palette/) lists
+for mocha, in the page's order. The slots spend fifteen of the twenty-six;
+the rest are kept for the record.
+
+| role | mocha |
+|---|---|
+| rosewater | `#f5e0dc` |
+| flamingo | `#f2cdcd` |
+| pink | `#f5c2e7` |
+| mauve | `#cba6f7` |
+| red | `#f38ba8` |
+| maroon | `#eba0ac` |
+| peach | `#fab387` |
+| yellow | `#f9e2af` |
+| green | `#a6e3a1` |
+| teal | `#94e2d5` |
+| sky | `#89dceb` |
+| sapphire | `#74c7ec` |
+| blue | `#89b4fa` |
+| lavender | `#b4befe` |
+| text | `#cdd6f4` |
+| subtext1 | `#bac2de` |
+| subtext0 | `#a6adc8` |
+| overlay2 | `#9399b2` |
+| overlay1 | `#7f849c` |
+| overlay0 | `#6c7086` |
+| surface2 | `#585b70` |
+| surface1 | `#45475a` |
+| surface0 | `#313244` |
+| base | `#1e1e2e` |
+| mantle | `#181825` |
+| crust | `#11111b` |
 
 ## Dracula
 
@@ -501,15 +540,16 @@ The file format is later; the presets ship as code first.
 
 ## Not yet
 
-- **Catppuccin and Dracula as presets** — the values above are the work
-  plan; the mapping is done, the code is not. Nord is a preset, and
-  `nord-light` waits with the light theme
+- **The rest of the catalog as presets** — Catppuccin's latte, frappé and
+  macchiato, Dracula's dracula and alucard, and `nord-light`. The values
+  above are the work plan; the mapping is done, the code is not. Mocha ships
+  as `catppuccin`, and Nord ships as `nord`
 - the theme file on disk
 - a user theme that is not one of the built-ins
 
-**The light variants are deferred with the light theme**: Catppuccin Latte,
-Dracula Alucard and Nord Light wait until that changes. Their palettes are
-recorded here, so they are ready when the time comes:
+**The other variants are deferred with the light theme**: Catppuccin Latte,
+Frappé and Macchiato, Dracula Alucard and Nord Light wait until that changes.
+Their palettes are recorded here, so they are ready when the time comes:
 
 - **Latte**: base `#eff1f5`, mantle `#e6e9ef`, crust `#dce0e8`, surface0
   `#ccd0da`, surface1 `#bcc0cc`, surface2 `#acb0be`, overlay0 `#9ca0b0`,
