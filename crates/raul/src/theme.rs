@@ -382,16 +382,19 @@ pub enum Preset {
     Nord,
     /// The Catppuccin palette: the family's mocha flavour.
     Catppuccin,
+    /// The Dracula palette: the family's Dracula Classic variant.
+    Dracula,
     /// The colours of the terminal itself.
     Terminal,
 }
 
 impl Preset {
     /// Every preset, in the order of the spec.
-    pub const ALL: [Preset; 4] = [
+    pub const ALL: [Preset; 5] = [
         Preset::Dark,
         Preset::Nord,
         Preset::Catppuccin,
+        Preset::Dracula,
         Preset::Terminal,
     ];
 
@@ -401,6 +404,7 @@ impl Preset {
             Preset::Dark => "dark",
             Preset::Nord => "nord",
             Preset::Catppuccin => "catppuccin",
+            Preset::Dracula => "dracula",
             Preset::Terminal => "terminal",
         }
     }
@@ -424,6 +428,7 @@ fn style_of(preset: Preset, slot: Slot) -> Style {
         Preset::Dark => dark_style(slot),
         Preset::Nord => nord_style(slot),
         Preset::Catppuccin => catppuccin_style(slot),
+        Preset::Dracula => dracula_style(slot),
         Preset::Terminal => terminal_style(slot),
     }
 }
@@ -605,10 +610,10 @@ fn nord_style(slot: Slot) -> Style {
     }
 }
 
-/// The fifteen Catppuccin mocha values that the slots spend.
+/// The fourteen Catppuccin mocha values that the slots spend.
 ///
 /// The family's page lists twenty-six values; the mapping in
-/// docs/tui/palettes.md names which role each of these fifteen plays, and
+/// docs/tui/palettes.md names which role each of these fourteen plays, and
 /// why the rest are kept for the record. The flavour is mocha: the other
 /// three wait with the light theme.
 mod catppuccin {
@@ -697,6 +702,95 @@ fn catppuccin_style(slot: Slot) -> Style {
         Slot::SemanticHuman => Style::new().fg(MAUVE),
         // The agent lane takes the second accent.
         Slot::SemanticAgent => Style::new().fg(TEAL),
+    }
+}
+
+/// The eleven Dracula values that the slots spend.
+///
+/// The family's page lists twelve values in its color palette and sixteen in
+/// its ANSI one; the mapping in docs/tui/palettes.md names which role each of
+/// these eleven plays, and why the rest are kept for the record. The variant
+/// is Dracula Classic: alucard waits with the light theme.
+mod dracula {
+    use ratatui::style::Color;
+
+    /// background: the base the figures are measured against, and the
+    /// selection's foreground.
+    pub const BACKGROUND: Color = Color::Rgb(0x28, 0x2a, 0x36);
+    /// current line: the border.
+    pub const CURRENT_LINE: Color = Color::Rgb(0x62, 0x72, 0xa4);
+    /// foreground: the main foreground, and the neutral.
+    pub const FOREGROUND: Color = Color::Rgb(0xf8, 0xf8, 0xf2);
+    /// comment: the muted foreground, the dimmed chrome, the tabs that are
+    /// not showing and the footer's labels.
+    pub const COMMENT: Color = Color::Rgb(0x62, 0x72, 0xa4);
+    /// red: the error colour.
+    pub const RED: Color = Color::Rgb(0xff, 0x55, 0x55);
+    /// orange: the warning colour.
+    pub const ORANGE: Color = Color::Rgb(0xff, 0xb8, 0x6c);
+    /// yellow: the attention colour.
+    pub const YELLOW: Color = Color::Rgb(0xf1, 0xfa, 0x8c);
+    /// green: the success colour.
+    pub const GREEN: Color = Color::Rgb(0x50, 0xfa, 0x7b);
+    /// cyan: the second accent, the agent lane.
+    pub const CYAN: Color = Color::Rgb(0x8b, 0xe9, 0xfd);
+    /// purple: the accent: the focus border, the selection, the human lane.
+    pub const PURPLE: Color = Color::Rgb(0xbd, 0x93, 0xf9);
+    /// ANSI bright white: the raised and the brightest foreground.
+    pub const BRIGHT_WHITE: Color = Color::Rgb(0xff, 0xff, 0xff);
+}
+
+/// The style of a slot in the Dracula palette.
+///
+/// The palette is the family's: its eighteen values are written down in
+/// docs/tui/palettes.md, with the role each one plays. It is a dark preset:
+/// it assumes a terminal with a dark background and paints none of its own.
+fn dracula_style(slot: Slot) -> Style {
+    use dracula::{
+        BACKGROUND, BRIGHT_WHITE, COMMENT, CURRENT_LINE, CYAN, FOREGROUND, GREEN, ORANGE, PURPLE,
+        RED, YELLOW,
+    };
+    match slot {
+        // The brightest foreground: the ANSI bright white, a step above the
+        // plain foreground.
+        Slot::ChromeTitle => Style::new().fg(BRIGHT_WHITE).add_modifier(Modifier::BOLD),
+        // The main foreground: the tab that is showing.
+        Slot::ChromeTabActive => Style::new().fg(FOREGROUND).add_modifier(Modifier::BOLD),
+        // The second foreground: the family's one dimmed grey, the comment.
+        Slot::ChromeTabInactive => Style::new().fg(COMMENT),
+        // The dimmed chrome: the `3/6` index.
+        Slot::ChromeTabIndex => Style::new().fg(COMMENT),
+        // The border: the current line, which the family paints in the
+        // comment's own grey on purpose.
+        Slot::ChromeBorder => Style::new().fg(CURRENT_LINE),
+        // The accent: the border of the focused block.
+        Slot::ChromeBorderFocus => Style::new().fg(PURPLE),
+        // The footer's labels take the comment too: at 3.0:1 it is the floor
+        // a word needs, and the family has no other muted foreground.
+        Slot::ChromeFooter => Style::new().fg(COMMENT),
+        // The attention colour: a key label.
+        Slot::ChromeKey => Style::new().fg(YELLOW).add_modifier(Modifier::BOLD),
+        // The main foreground: ordinary text.
+        Slot::TextNormal => Style::new().fg(FOREGROUND),
+        // The muted foreground: the comment.
+        Slot::TextDim => Style::new().fg(COMMENT),
+        // The raised foreground: the ANSI bright white.
+        Slot::TextStrong => Style::new().fg(BRIGHT_WHITE).add_modifier(Modifier::BOLD),
+        // The selection is the accent, whole: the base colour on it.
+        Slot::TextSelected => Style::new().fg(BACKGROUND).bg(PURPLE),
+        // A clean result, a finished task.
+        Slot::SemanticOk => Style::new().fg(GREEN),
+        // Something wants attention and is not broken.
+        Slot::SemanticWarn => Style::new().fg(ORANGE),
+        // A failure: the family's own red.
+        Slot::SemanticError => Style::new().fg(RED),
+        // Neutral information: both near-greys are spent, so the information
+        // takes the main foreground.
+        Slot::SemanticInfo => Style::new().fg(FOREGROUND),
+        // The human lane takes the accent.
+        Slot::SemanticHuman => Style::new().fg(PURPLE),
+        // The agent lane takes the second accent.
+        Slot::SemanticAgent => Style::new().fg(CYAN),
     }
 }
 
@@ -1468,6 +1562,32 @@ mod tests {
         assert!(checked >= 14, "the dark palette states {checked} figures");
     }
 
+    /// Nord's page: its sixteen colours, in the page's order.
+    const NORD_PAGE: [(&str, Color); 16] = [
+        ("nord0", Color::Rgb(0x2e, 0x34, 0x40)),
+        ("nord1", Color::Rgb(0x3b, 0x42, 0x52)),
+        ("nord2", Color::Rgb(0x43, 0x4c, 0x5e)),
+        ("nord3", Color::Rgb(0x4c, 0x56, 0x6a)),
+        ("nord4", Color::Rgb(0xd8, 0xde, 0xe9)),
+        ("nord5", Color::Rgb(0xe5, 0xe9, 0xf0)),
+        ("nord6", Color::Rgb(0xec, 0xef, 0xf4)),
+        ("nord7", Color::Rgb(0x8f, 0xbc, 0xbb)),
+        ("nord8", Color::Rgb(0x88, 0xc0, 0xd0)),
+        ("nord9", Color::Rgb(0x81, 0xa1, 0xc1)),
+        ("nord10", Color::Rgb(0x5e, 0x81, 0xac)),
+        ("nord11", Color::Rgb(0xbf, 0x61, 0x6a)),
+        ("nord12", Color::Rgb(0xd0, 0x87, 0x70)),
+        ("nord13", Color::Rgb(0xeb, 0xcb, 0x8b)),
+        ("nord14", Color::Rgb(0xa3, 0xbe, 0x8c)),
+        ("nord15", Color::Rgb(0xb4, 0x8e, 0xad)),
+    ];
+
+    /// The four named groups the page gives the palette.
+    const NORD_GROUPS: [&str; 4] = ["polar night", "snow storm", "frost", "aurora"];
+
+    /// The three snow storm greys that carry words.
+    const NORD_WORD_GREYS: [Color; 3] = [nord::NORD4, nord::NORD5, nord::NORD6];
+
     /// The colour rows of the Nord table: the slot, the family's role, and
     /// the value.
     fn nord_rows() -> Vec<(String, String, Color)> {
@@ -1649,6 +1769,112 @@ mod tests {
     }
 
     #[test]
+    fn the_nord_values_kept_for_the_record_are_the_pages() {
+        // The Nord section records four values no slot spends. They are
+        // values, so the gate reads them: each is the page's, and none is
+        // painted.
+        let section = section(PALETTES, "Nord");
+        let kept = ["nord1", "nord10", "nord12", "nord15"];
+        let recorded = section
+            .split_once("**nord1, nord10, nord12 and nord15 are kept for the record.**")
+            .expect("the Nord section no longer records the kept values")
+            .1;
+        for role in kept {
+            let expected = NORD_PAGE
+                .iter()
+                .find(|(name, _)| *name == role)
+                .unwrap_or_else(|| panic!("{role} is not on the Nord page"))
+                .1;
+            let at = recorded
+                .find(role)
+                .unwrap_or_else(|| panic!("the Nord section no longer records {role}"));
+            let colour = hexes_in(&recorded[at..])
+                .first()
+                .copied()
+                .expect("a colour after the role");
+            assert_eq!(
+                colour, expected,
+                "{role} holds a value the page does not list"
+            );
+        }
+        let theme = Theme::preset(Preset::Nord);
+        for role in kept {
+            let colour = NORD_PAGE
+                .iter()
+                .find(|(name, _)| *name == role)
+                .expect("a kept role")
+                .1;
+            for slot in Slot::ALL {
+                let style = theme.slot(slot);
+                assert_ne!(
+                    style.fg,
+                    Some(colour),
+                    "{} spends the kept {role}",
+                    slot.name()
+                );
+                assert_ne!(
+                    style.bg,
+                    Some(colour),
+                    "{} spends the kept {role}",
+                    slot.name()
+                );
+            }
+        }
+        for group in NORD_GROUPS {
+            assert!(
+                section.contains(group),
+                "the Nord section does not name its {group} group"
+            );
+        }
+    }
+
+    #[test]
+    fn every_value_a_family_section_records_in_prose_is_a_page_value() {
+        // A value written in the prose is read by the gate too: a new colour
+        // on the page's record has to be one the page lists, not one written
+        // from memory. The tables are pinned separately, against the page's
+        // order.
+        for heading in FAMILIES {
+            let section = section(PALETTES, heading);
+            let known: Vec<Color> = match heading {
+                "Catppuccin" => {
+                    assert_eq!(
+                        base_of(&section),
+                        CATPPUCCIN_BASES.to_vec(),
+                        "the doc's flavour bases are not the page's"
+                    );
+                    let mut known: Vec<Color> = CATPPUCCIN_BASES.to_vec();
+                    known.extend(MOCHA_PAGE.iter().map(|(_, colour)| *colour));
+                    known
+                }
+                "Dracula" => {
+                    let mut known: Vec<Color> =
+                        DRACULA_COLOURS.iter().map(|(_, colour)| *colour).collect();
+                    known.extend(DRACULA_ANSI.iter().map(|(_, colour)| *colour));
+                    known.extend(DRACULA_FUNCTIONAL.iter().map(|(_, colour)| *colour));
+                    known.extend(DRACULA_UI_BACKGROUNDS.iter().map(|(_, colour)| *colour));
+                    known.push(DRACULA_CURRENT_LINE_FALLBACK);
+                    known
+                }
+                "Nord" => NORD_PAGE.iter().map(|(_, colour)| *colour).collect(),
+                other => panic!("{other} is not a family"),
+            };
+            for line in section.lines() {
+                let line = line.trim();
+                if line.starts_with('|') || line.starts_with('#') {
+                    continue;
+                }
+                for colour in hexes_in(line) {
+                    assert!(
+                        known.contains(&colour),
+                        "{heading} records {colour:?} in its prose, and the page does not list it"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn the_example_theme_file_matches_the_nord_table() {
         // The example in the doc is a Nord theme: every value in it is the
         // value the Nord table states.
@@ -1688,7 +1914,7 @@ mod tests {
         );
     }
     /// Mocha, as the family's page lists it: every value, in the page's
-    /// order. The slots spend fifteen of the twenty-six; the rest are kept
+    /// order. The slots spend fourteen of the twenty-six; the rest are kept
     /// for the record, and the doc's page table is the page's list.
     const MOCHA_PAGE: [(&str, Color); 26] = [
         ("rosewater", Color::Rgb(0xf5, 0xe0, 0xdc)),
@@ -1718,6 +1944,24 @@ mod tests {
         ("mantle", Color::Rgb(0x18, 0x18, 0x25)),
         ("crust", Color::Rgb(0x11, 0x11, 0x1b)),
     ];
+
+    /// The bases of the three dark flavours, in the doc's order.
+    const CATPPUCCIN_BASES: [Color; 3] = [
+        Color::Rgb(0x30, 0x34, 0x46),
+        Color::Rgb(0x24, 0x27, 0x3a),
+        Color::Rgb(0x1e, 0x1e, 0x2e),
+    ];
+
+    /// The four Catppuccin flavours the page names. Latte is the light one;
+    /// the other three are dark.
+    const CATPPUCCIN_FLAVOURS: [&str; 4] = ["latte", "frappé", "macchiato", "mocha"];
+
+    /// The flavour that waits with the light theme.
+    const CATPPUCCIN_LIGHT_FLAVOURS: [&str; 1] = ["latte"];
+
+    /// The word greys the family has: the ordinary text, the muted text and
+    /// the information.
+    const CATPPUCCIN_WORD_GREYS: [&str; 3] = ["text", "subtext1", "subtext0"];
 
     /// The colour a Catppuccin role the doc names holds.
     fn catppuccin_colour(role: &str) -> Color {
@@ -1913,6 +2157,826 @@ mod tests {
         }
     }
 
+    /// Dracula Classic, as the family's page lists it: the page's color
+    /// palette, in the page's order. The slots spend ten of the twelve; the
+    /// selection and the pink are kept for the record.
+    const DRACULA_COLOURS: [(&str, Color); 12] = [
+        ("background", Color::Rgb(0x28, 0x2a, 0x36)),
+        ("current line", Color::Rgb(0x62, 0x72, 0xa4)),
+        ("selection", Color::Rgb(0x44, 0x47, 0x5a)),
+        ("foreground", Color::Rgb(0xf8, 0xf8, 0xf2)),
+        ("comment", Color::Rgb(0x62, 0x72, 0xa4)),
+        ("red", Color::Rgb(0xff, 0x55, 0x55)),
+        ("orange", Color::Rgb(0xff, 0xb8, 0x6c)),
+        ("yellow", Color::Rgb(0xf1, 0xfa, 0x8c)),
+        ("green", Color::Rgb(0x50, 0xfa, 0x7b)),
+        ("cyan", Color::Rgb(0x8b, 0xe9, 0xfd)),
+        ("purple", Color::Rgb(0xbd, 0x93, 0xf9)),
+        ("pink", Color::Rgb(0xff, 0x79, 0xc6)),
+    ];
+
+    /// The page's ANSI palette, for terminal applications: sixteen values,
+    /// eight restating a colour above and eight its own. The theme takes one,
+    /// the bright white.
+    const DRACULA_ANSI: [(&str, Color); 16] = [
+        ("AnsiBlack", Color::Rgb(0x21, 0x22, 0x2c)),
+        ("AnsiRed", Color::Rgb(0xff, 0x55, 0x55)),
+        ("AnsiGreen", Color::Rgb(0x50, 0xfa, 0x7b)),
+        ("AnsiYellow", Color::Rgb(0xf1, 0xfa, 0x8c)),
+        ("AnsiBlue", Color::Rgb(0xbd, 0x93, 0xf9)),
+        ("AnsiMagenta", Color::Rgb(0xff, 0x79, 0xc6)),
+        ("AnsiCyan", Color::Rgb(0x8b, 0xe9, 0xfd)),
+        ("AnsiWhite", Color::Rgb(0xf8, 0xf8, 0xf2)),
+        ("AnsiBrightBlack", Color::Rgb(0x62, 0x72, 0xa4)),
+        ("AnsiBrightRed", Color::Rgb(0xff, 0x6e, 0x6e)),
+        ("AnsiBrightGreen", Color::Rgb(0x69, 0xff, 0x94)),
+        ("AnsiBrightYellow", Color::Rgb(0xff, 0xff, 0xa5)),
+        ("AnsiBrightBlue", Color::Rgb(0xd6, 0xac, 0xff)),
+        ("AnsiBrightMagenta", Color::Rgb(0xff, 0x92, 0xdf)),
+        ("AnsiBrightCyan", Color::Rgb(0xa4, 0xff, 0xff)),
+        ("AnsiBrightWhite", Color::Rgb(0xff, 0xff, 0xff)),
+    ];
+
+    /// The two Dracula variants the page names. Alucard waits with the light
+    /// theme.
+    const DRACULA_VARIANTS: [&str; 2] = ["Dracula Classic", "Alucard Classic"];
+
+    /// The family's two near-grey word colours.
+    const DRACULA_WORD_GREYS: [Color; 2] = [dracula::FOREGROUND, dracula::BRIGHT_WHITE];
+
+    /// The family's one dimmed grey: the comment.
+    const DRACULA_MUTED_GREYS: [Color; 1] = [dracula::COMMENT];
+
+    /// The functional colours the page publishes for UI, and marks not for
+    /// terminal applications. No slot spends one.
+    const DRACULA_FUNCTIONAL: [(&str, Color); 5] = [
+        ("Functional Red", Color::Rgb(0xde, 0x57, 0x35)),
+        ("Functional Orange", Color::Rgb(0xa3, 0x95, 0x14)),
+        ("Functional Green", Color::Rgb(0x08, 0x91, 0x08)),
+        ("Functional Cyan", Color::Rgb(0x00, 0x81, 0xd6)),
+        ("Functional Purple", Color::Rgb(0x81, 0x5c, 0xd6)),
+    ];
+
+    /// The five UI backgrounds the page lists, one of them twice. None is
+    /// spent: the theme paints no background of its own.
+    const DRACULA_UI_BACKGROUNDS: [(&str, Color); 5] = [
+        (
+            "Floating interactive elements",
+            Color::Rgb(0x34, 0x37, 0x46),
+        ),
+        ("Background Lighter", Color::Rgb(0x42, 0x44, 0x50)),
+        ("Background Light", Color::Rgb(0x34, 0x37, 0x46)),
+        ("Background Dark", Color::Rgb(0x21, 0x22, 0x2c)),
+        ("Background Darker", Color::Rgb(0x19, 0x1a, 0x21)),
+    ];
+
+    /// The page's opaque fallback for the current line: implementation
+    /// guidance, not a palette colour.
+    const DRACULA_CURRENT_LINE_FALLBACK: Color = Color::Rgb(0x35, 0x37, 0x47);
+
+    /// The colour a Dracula role the doc names holds.
+    fn dracula_colour(role: &str) -> Color {
+        match role {
+            "background" => dracula::BACKGROUND,
+            "current line" => dracula::CURRENT_LINE,
+            "foreground" => dracula::FOREGROUND,
+            "comment" => dracula::COMMENT,
+            "red" => dracula::RED,
+            "orange" => dracula::ORANGE,
+            "yellow" => dracula::YELLOW,
+            "green" => dracula::GREEN,
+            "cyan" => dracula::CYAN,
+            "purple" => dracula::PURPLE,
+            "ANSI bright white" => dracula::BRIGHT_WHITE,
+            other => panic!("{other} is not a Dracula colour the slots spend"),
+        }
+    }
+
+    /// The colour rows of the Dracula slot table: the slot, the family's
+    /// role, and the value.
+    fn dracula_rows() -> Vec<(String, String, Color)> {
+        let section = section(PALETTES, "Dracula");
+        family_rows(&section)
+            .into_iter()
+            .filter_map(|(slot, cells)| {
+                let role = cells
+                    .first()?
+                    .split(" —")
+                    .next()
+                    .expect("a role")
+                    .trim()
+                    .to_string();
+                let colour = cells
+                    .iter()
+                    .skip(1)
+                    .find_map(|cell| hexes_in(cell).first().copied())?;
+                Some((slot, role, colour))
+            })
+            .collect()
+    }
+
+    /// The rows of a page table: the role the page names and the value it
+    /// gives it.
+    fn page_rows(table: &str) -> Vec<(String, Color)> {
+        let mut rows = Vec::new();
+        for line in table.lines() {
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            if cells.len() < 4 {
+                continue;
+            }
+            let Some(colour) = hexes_in(cells[2]).first().copied() else {
+                continue;
+            };
+            rows.push((cells[1].to_string(), colour));
+        }
+        rows
+    }
+
+    /// One `###` subsection of a family section, by its heading.
+    fn subsection(section: &str, heading: &str) -> String {
+        let rest = section
+            .split_once(&format!("### {heading}"))
+            .unwrap_or_else(|| panic!("the section has no {heading} subsection"))
+            .1;
+        rest.split_once("\n### ")
+            .map_or(rest, |(head, _)| head)
+            .to_string()
+    }
+
+    /// The number a word of the doc states, up to thirty-nine.
+    fn number_word(word: &str) -> Option<usize> {
+        const UNITS: [&str; 20] = [
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+            "thirteen",
+            "fourteen",
+            "fifteen",
+            "sixteen",
+            "seventeen",
+            "eighteen",
+            "nineteen",
+        ];
+        const TENS: [&str; 2] = ["twenty", "thirty"];
+        if let Some(unit) = UNITS.iter().position(|name| *name == word) {
+            return Some(unit);
+        }
+        if let Some(ten) = TENS.iter().position(|name| *name == word) {
+            return Some((ten + 2) * 10);
+        }
+        let (ten, unit) = word.split_once('-')?;
+        let ten = TENS.iter().position(|name| *name == ten)?;
+        let unit = UNITS.iter().position(|name| *name == unit)?;
+        Some((ten + 2) * 10 + unit)
+    }
+
+    /// The number words a sentence states, in order.
+    fn number_words_in(sentence: &str) -> Vec<usize> {
+        sentence
+            .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+            .filter_map(|word| number_word(&word.to_lowercase()))
+            .collect()
+    }
+
+    /// Push the sentences of one paragraph, split on `.`, `!` and `?`.
+    ///
+    /// The terminators are followed by markdown's closing markers and then a
+    /// space, so the markers are skipped before the sentence is cut.
+    fn flush_paragraph(paragraph: &mut String, sentences: &mut Vec<String>) {
+        let text = std::mem::take(paragraph);
+        let mut start = 0;
+        for (i, byte) in text.bytes().enumerate() {
+            if !matches!(byte, b'.' | b'!' | b'?') {
+                continue;
+            }
+            let rest = &text[i + 1..];
+            let after = rest.trim_start_matches(['*', '_', '`', '"', '\'']);
+            let next = after.chars().next();
+            if next.is_none() || next.is_some_and(char::is_whitespace) {
+                let sentence = text[start..=i].trim();
+                if !sentence.is_empty() {
+                    sentences.push(sentence.to_string());
+                }
+                start = i + 1;
+            }
+        }
+        let tail = text[start..].trim();
+        if !tail.is_empty() {
+            sentences.push(tail.to_string());
+        }
+    }
+
+    /// The prose sentences of a section: tables and headings are data the
+    /// table tests read, not count statements.
+    fn prose_sentences(section: &str) -> Vec<String> {
+        let mut sentences = Vec::new();
+        let mut paragraph = String::new();
+        for line in section.lines() {
+            let line = line.trim();
+            if line.is_empty()
+                || line.starts_with('|')
+                || line.starts_with('#')
+                || line.starts_with("```")
+            {
+                flush_paragraph(&mut paragraph, &mut sentences);
+                continue;
+            }
+            if !paragraph.is_empty() {
+                paragraph.push(' ');
+            }
+            paragraph.push_str(line);
+        }
+        flush_paragraph(&mut paragraph, &mut sentences);
+        sentences
+    }
+
+    /// Whether a sentence states how many things a family has.
+    ///
+    /// A sentence that names a number and a count noun — or says "one of the
+    /// sixteen" — is a count the guard has to read. A number word on its own
+    /// is not: "channels" and "one of them" are prose, not catalog counts.
+    fn states_a_count(sentence: &str) -> bool {
+        if number_words_in(sentence).is_empty() {
+            return false;
+        }
+        const NOUNS: [&str; 14] = [
+            "values",
+            "colours",
+            "colors",
+            "variants",
+            "flavours",
+            "flavors",
+            "backgrounds",
+            "greys",
+            "grays",
+            "roles",
+            "groups",
+            "whites",
+            "palettes",
+            "slots",
+        ];
+        let lower = sentence.to_lowercase();
+        let named = lower
+            .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+            .any(|word| NOUNS.contains(&word));
+        named || lower.contains(" of the ") || lower.contains(" the other ")
+    }
+
+    /// The counts the family sections state, with the numbers each one should
+    /// state, in the sentence's order.
+    fn family_count_claims() -> Vec<(&'static str, &'static str, Vec<usize>)> {
+        let catppuccin = section(PALETTES, "Catppuccin");
+        let (mocha_spent, mocha_total) = spent_of_page(
+            &subsection(&catppuccin, "Mocha, as the page lists it"),
+            Preset::Catppuccin,
+        );
+        let dracula = section(PALETTES, "Dracula");
+        let (colour_spent, colour_total) = spent_of_page(
+            &subsection(&dracula, "Dracula Classic, as the page lists it"),
+            Preset::Dracula,
+        );
+        let ansi_restating = DRACULA_ANSI
+            .iter()
+            .filter(|(_, colour)| DRACULA_COLOURS.iter().any(|(_, other)| other == colour))
+            .count();
+        let ansi_own = DRACULA_ANSI.len() - ansi_restating;
+        let mut ansi_roles: Vec<String> = dracula_rows()
+            .into_iter()
+            .map(|(_, role, _)| role)
+            .filter(|role| role.starts_with("ANSI"))
+            .collect();
+        ansi_roles.sort_unstable();
+        ansi_roles.dedup();
+        let ansi_spent = ansi_roles.len();
+        let page_spent = colour_spent + ansi_spent;
+        vec![
+            (
+                "Catppuccin",
+                "Four flavours",
+                vec![CATPPUCCIN_FLAVOURS.len()],
+            ),
+            (
+                "Catppuccin",
+                "Catppuccin's three word greys are spent",
+                vec![CATPPUCCIN_WORD_GREYS.len()],
+            ),
+            (
+                "Catppuccin",
+                "records the three dark flavours",
+                vec![CATPPUCCIN_FLAVOURS.len() - CATPPUCCIN_LIGHT_FLAVOURS.len()],
+            ),
+            (
+                "Catppuccin",
+                "The slots spend",
+                vec![mocha_spent, mocha_total],
+            ),
+            ("Dracula", "Two variants", vec![DRACULA_VARIANTS.len()]),
+            (
+                "Dracula",
+                "two near-grey word colours",
+                vec![DRACULA_WORD_GREYS.len()],
+            ),
+            (
+                "Dracula",
+                "besides the two whites",
+                vec![DRACULA_WORD_GREYS.len(), DRACULA_MUTED_GREYS.len()],
+            ),
+            (
+                "Dracula",
+                "The slots spend",
+                vec![colour_spent, colour_total],
+            ),
+            (
+                "Dracula",
+                "The page publishes a second palette",
+                vec![DRACULA_ANSI.len(), ansi_restating, ansi_own],
+            ),
+            (
+                "Dracula",
+                "The theme takes one of the sixteen",
+                vec![
+                    ansi_spent,
+                    DRACULA_ANSI.len(),
+                    DRACULA_ANSI.len() - ansi_spent,
+                ],
+            ),
+            (
+                "Dracula",
+                "With the color palette's ten",
+                vec![colour_spent, page_spent],
+            ),
+            (
+                "Nord",
+                "The palette has sixteen colours",
+                vec![NORD_PAGE.len(), NORD_GROUPS.len()],
+            ),
+            (
+                "Nord",
+                "The snow storm's three greys",
+                vec![NORD_WORD_GREYS.len()],
+            ),
+        ]
+    }
+
+    /// How many of a page table's values a preset spends, and how many the
+    /// table lists.
+    fn spent_of_page(table: &str, preset: Preset) -> (usize, usize) {
+        let rows = page_rows(table);
+        let theme = Theme::preset(preset);
+        let mut palette = Vec::new();
+        for slot in Slot::ALL {
+            let style = theme.slot(slot);
+            palette.extend(style.fg);
+            palette.extend(style.bg);
+        }
+        let spent = rows
+            .iter()
+            .filter(|(_, colour)| palette.contains(colour))
+            .count();
+        (spent, rows.len())
+    }
+
+    #[test]
+    fn the_dracula_page_tables_record_every_value_the_page_lists() {
+        // The Catppuccin unit's mocha table records the page whole; Dracula's
+        // page publishes two palettes plus its functional colours and UI
+        // backgrounds, and all four are recorded in the page's order, so a
+        // reader can count them.
+        let section = section(PALETTES, "Dracula");
+        let tables: [(&str, &[(&str, Color)]); 4] = [
+            ("Dracula Classic, as the page lists it", &DRACULA_COLOURS),
+            ("The ANSI palette, as the page lists it", &DRACULA_ANSI),
+            (
+                "The functional colours, as the page lists them",
+                &DRACULA_FUNCTIONAL,
+            ),
+            (
+                "The UI backgrounds, as the page lists them",
+                &DRACULA_UI_BACKGROUNDS,
+            ),
+        ];
+        for (heading, expected) in tables {
+            let rows = page_rows(&subsection(&section, heading));
+            assert_eq!(
+                rows.len(),
+                expected.len(),
+                "the doc records {} values for {heading} and the page lists {}",
+                rows.len(),
+                expected.len()
+            );
+            for ((role, colour), (expected_role, expected_colour)) in
+                rows.iter().zip(expected.iter())
+            {
+                assert_eq!(role, expected_role, "{heading}: the page's order moved");
+                assert_eq!(
+                    colour, expected_colour,
+                    "{role} holds a value the page does not list"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_dracula_functional_colours_and_backgrounds_are_not_spent() {
+        // The page marks the functional colours not for terminal
+        // applications, and the UI backgrounds are backgrounds: neither is a
+        // palette colour, and no slot may spend one.
+        let theme = Theme::preset(Preset::Dracula);
+        for (role, colour) in DRACULA_FUNCTIONAL
+            .iter()
+            .chain(DRACULA_UI_BACKGROUNDS.iter())
+        {
+            for slot in Slot::ALL {
+                let style = theme.slot(slot);
+                assert_ne!(
+                    style.fg,
+                    Some(*colour),
+                    "{} spends the out-of-palette {role}",
+                    slot.name()
+                );
+                assert_ne!(
+                    style.bg,
+                    Some(*colour),
+                    "{} spends the out-of-palette {role}",
+                    slot.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_dracula_current_line_fallback_is_guidance_not_a_palette_colour() {
+        // The page lists an opaque fallback for the current line and says it
+        // is implementation guidance, not a token. The doc records it as
+        // such; it is not in any page table, and no slot spends it.
+        let section = section(PALETTES, "Dracula");
+        let fallback = subsection(&section, "The current-line fallback, as the page lists it");
+        let paragraph = fallback
+            .split_once("The page names an opaque fallback")
+            .expect("the doc no longer records the fallback's sentence")
+            .1;
+        let paragraph = paragraph
+            .split("\n\n")
+            .next()
+            .expect("the fallback sentence has a paragraph")
+            .replace('\n', " ");
+        assert_eq!(
+            hexes_in(&paragraph),
+            vec![DRACULA_CURRENT_LINE_FALLBACK],
+            "the doc does not record the page's current-line fallback"
+        );
+        assert!(
+            paragraph.contains("out-of-palette implementation guidance"),
+            "the doc does not mark the fallback as out-of-palette guidance"
+        );
+        let listed = [
+            "Dracula Classic, as the page lists it",
+            "The ANSI palette, as the page lists it",
+            "The functional colours, as the page lists them",
+            "The UI backgrounds, as the page lists them",
+        ];
+        for heading in listed {
+            for (role, colour) in page_rows(&subsection(&section, heading)) {
+                assert_ne!(
+                    colour, DRACULA_CURRENT_LINE_FALLBACK,
+                    "{role} records the fallback as a palette colour"
+                );
+            }
+        }
+        let theme = Theme::preset(Preset::Dracula);
+        for slot in Slot::ALL {
+            let style = theme.slot(slot);
+            assert_ne!(
+                style.fg,
+                Some(DRACULA_CURRENT_LINE_FALLBACK),
+                "{} spends the current-line fallback",
+                slot.name()
+            );
+            assert_ne!(
+                style.bg,
+                Some(DRACULA_CURRENT_LINE_FALLBACK),
+                "{} spends the current-line fallback",
+                slot.name()
+            );
+        }
+    }
+
+    #[test]
+    fn the_dracula_palette_is_the_one_the_doc_records() {
+        // The doc is the source of truth: the code is checked against its
+        // table, so the two cannot drift apart silently.
+        let theme = Theme::preset(Preset::Dracula);
+        let rows = dracula_rows();
+        assert_eq!(
+            rows.len(),
+            Slot::ALL.len(),
+            "the doc's Dracula table does not hold the eighteen slots"
+        );
+        for (name, _, colour) in rows {
+            let slot = slot_named(&name);
+            let style = theme.slot(slot);
+            if slot == Slot::TextSelected {
+                // The doc records the accent; the selection puts the base
+                // on it, the pair the palette records.
+                assert_eq!(
+                    style.bg,
+                    Some(colour),
+                    "{name} paints a background the doc does not record"
+                );
+                assert_eq!(
+                    style.fg,
+                    Some(dracula::BACKGROUND),
+                    "{name} does not put the base on the accent"
+                );
+            } else {
+                assert_eq!(
+                    style.fg,
+                    Some(colour),
+                    "{name} paints a foreground the doc does not record"
+                );
+                assert_eq!(
+                    style.bg, None,
+                    "{name} paints a background the doc does not record"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_dracula_roles_name_the_values_the_table_states() {
+        // The value beside a role is the value the page gives that role:
+        // the table's role cell and its value cell agree with each other.
+        let rows = dracula_rows();
+        for (name, role, colour) in &rows {
+            assert_eq!(
+                dracula_colour(role),
+                *colour,
+                "{name}'s role {role} holds another value"
+            );
+        }
+        // The ANSI palette's sixteen values: the theme takes one, the bright
+        // white, and the doc says so. A second ANSI role would make the count
+        // it states wrong.
+        let mut ansi: Vec<&str> = rows
+            .iter()
+            .map(|(_, role, _)| role.as_str())
+            .filter(|role| role.starts_with("ANSI"))
+            .collect();
+        ansi.sort_unstable();
+        ansi.dedup();
+        assert_eq!(
+            ansi,
+            ["ANSI bright white"],
+            "the slots take more than one value of the ANSI palette"
+        );
+    }
+
+    #[test]
+    fn the_contrast_figures_of_the_dracula_preset_are_right() {
+        // Every figure the doc states is recomputed from the code's own
+        // palette, the way the dark, Nord and Catppuccin presets' are.
+        let theme = Theme::preset(Preset::Dracula);
+        let rows = family_ratios(&section(PALETTES, "Dracula"));
+        assert_eq!(
+            rows.len(),
+            Slot::ALL.len(),
+            "the doc's Dracula table states {} figures",
+            rows.len()
+        );
+        let mut checked = 0;
+        for (name, ratios) in rows {
+            let slot = slot_named(&name);
+            let style = theme.slot(slot);
+            let foreground = style.fg.expect("a Dracula slot has a foreground");
+            let behind = style.bg.unwrap_or(dracula::BACKGROUND);
+            let computed = contrast(foreground, behind);
+            assert!(
+                (computed - ratios[0]).abs() < 0.05,
+                "{name} reads at {computed:.2}:1, and the doc says {}:1",
+                ratios[0]
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, Slot::ALL.len(), "Dracula states {checked} figures");
+    }
+
+    #[test]
+    fn the_dracula_preset_reads_on_its_background() {
+        // Every word clears the floor the doc states; only the border and
+        // the index are lines. The comment is the family's one dimmed grey,
+        // and it reads at 3.0:1 — the floor, not below it.
+        let theme = Theme::preset(Preset::Dracula);
+        for slot in Slot::ALL {
+            if matches!(slot, Slot::ChromeBorder | Slot::ChromeTabIndex) {
+                continue;
+            }
+            let style = theme.slot(slot);
+            let foreground = style.fg.expect("a Dracula slot has a foreground");
+            let behind = style.bg.unwrap_or(dracula::BACKGROUND);
+            let ratio = contrast(foreground, behind);
+            assert!(
+                ratio >= 3.0,
+                "{} reads at {ratio:.1}:1, and a word needs 3:1",
+                slot.name()
+            );
+        }
+    }
+
+    #[test]
+    fn the_dracula_preset_invents_no_colour() {
+        // Rule 9: a theme is a palette, not a mood. Every colour the preset
+        // paints is a value the page lists, in one of its two palettes, so a
+        // slot cannot be filled from memory.
+        let section = section(PALETTES, "Dracula");
+        let colours = page_rows(&subsection(
+            &section,
+            "Dracula Classic, as the page lists it",
+        ));
+        let ansi = page_rows(&subsection(
+            &section,
+            "The ANSI palette, as the page lists it",
+        ));
+        let page: Vec<Color> = colours
+            .iter()
+            .chain(ansi.iter())
+            .map(|(_, colour)| *colour)
+            .collect();
+        assert_eq!(
+            page.len(),
+            DRACULA_COLOURS.len() + DRACULA_ANSI.len(),
+            "the doc does not record both of the page's palettes"
+        );
+        let theme = Theme::preset(Preset::Dracula);
+        for slot in Slot::ALL {
+            let style = theme.slot(slot);
+            for colour in [style.fg, style.bg].into_iter().flatten() {
+                assert!(
+                    page.contains(&colour),
+                    "{} paints {colour:?}, which the page does not list",
+                    slot.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_count_a_family_section_states_is_recomputed() {
+        // The Catppuccin unit's low finding, and then Dracula's: a count the
+        // doc states and no test reads is drift waiting to happen. Every
+        // count sentence in every family section is recomputed here, and a
+        // count sentence with no claim fails the gate — that is what keeps
+        // the class from recurring.
+        let claims = family_count_claims();
+        let mut covered = Vec::new();
+        for (heading, anchor, expected) in &claims {
+            let section = section(PALETTES, heading);
+            let sentence = prose_sentences(&section)
+                .into_iter()
+                .find(|sentence| sentence.contains(anchor))
+                .unwrap_or_else(|| panic!("{heading} no longer states {anchor}"));
+            let stated = number_words_in(&sentence);
+            assert_eq!(
+                &stated, expected,
+                "{heading} says {stated:?} in \"{sentence}\", and the recompute is {expected:?}"
+            );
+            covered.push((heading.to_string(), sentence));
+        }
+        let mut checked = 0;
+        for heading in FAMILIES {
+            for sentence in prose_sentences(&section(PALETTES, heading)) {
+                if !states_a_count(&sentence) {
+                    continue;
+                }
+                assert!(
+                    covered
+                        .iter()
+                        .any(|(covered_heading, covered)| covered_heading == heading
+                            && covered == &sentence),
+                    "{heading} states a count no test recomputes: \"{sentence}\""
+                );
+                checked += 1;
+            }
+        }
+        assert_eq!(
+            checked,
+            claims.len(),
+            "the guard reads {checked} count sentences and the claims name {}",
+            claims.len()
+        );
+    }
+
+    #[test]
+    fn the_code_comments_count_the_catppuccin_values_right() {
+        // The count that drifted was written in two comments as well as the
+        // doc. The doc's count is recomputed from the page table by the test
+        // above; these two are read from the source and held to the same
+        // number, so the two cannot disagree with the page either.
+        //
+        // The anchors are assembled from parts: a phrase written whole here
+        // would be found in this test's own source, and the check would pass
+        // on its own text.
+        let (spent, _) = spent_of_page(
+            &subsection(
+                &section(PALETTES, "Catppuccin"),
+                "Mocha, as the page lists it",
+            ),
+            Preset::Catppuccin,
+        );
+        let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/theme.rs"))
+            .expect("the theme's own source");
+        for anchor in [
+            [" Catppuccin mocha", " values that the slots spend"].concat(),
+            [" of the twenty-six;", " the rest are kept"].concat(),
+        ] {
+            let at = source
+                .find(&anchor)
+                .unwrap_or_else(|| panic!("the source no longer says {anchor}"));
+            let word = source[..at]
+                .split_whitespace()
+                .last()
+                .expect("a number word before the anchor");
+            assert_eq!(
+                number_word(word),
+                Some(spent),
+                "a comment says {word}, and the page table says the slots spend {spent}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_code_comments_count_the_dracula_values_right() {
+        // Dracula's mod comment states the same counts as its doc section:
+        // the values the slots spend, and the two page palettes. They are
+        // read from the source and held to the recompute, so a comment
+        // cannot drift from the page.
+        //
+        // The anchors are assembled from parts: a phrase written whole here
+        // would be found in this test's own source.
+        let section = section(PALETTES, "Dracula");
+        let (colour_spent, colour_total) = spent_of_page(
+            &subsection(&section, "Dracula Classic, as the page lists it"),
+            Preset::Dracula,
+        );
+        let mut ansi_roles: Vec<String> = dracula_rows()
+            .into_iter()
+            .map(|(_, role, _)| role)
+            .filter(|role| role.starts_with("ANSI"))
+            .collect();
+        ansi_roles.sort_unstable();
+        ansi_roles.dedup();
+        let spent = colour_spent + ansi_roles.len();
+        let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/theme.rs"))
+            .expect("the theme's own source");
+        let words = source
+            .replace("///", " ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let checks = [
+            ([" Dracula values that", " the slots spend"].concat(), spent),
+            (
+                [" values in its color palette", " and sixteen in"].concat(),
+                colour_total,
+            ),
+            (
+                [" in its ANSI one;", " the mapping in"].concat(),
+                DRACULA_ANSI.len(),
+            ),
+            (
+                [
+                    " plays, and why the rest",
+                    " are kept for the record. The variant",
+                ]
+                .concat(),
+                spent,
+            ),
+        ];
+        for (anchor, expected) in checks {
+            let at = words
+                .find(&anchor)
+                .unwrap_or_else(|| panic!("the source no longer says {anchor}"));
+            let word = words[..at]
+                .split_whitespace()
+                .last()
+                .expect("a number word before the anchor");
+            assert_eq!(
+                number_word(word),
+                Some(expected),
+                "a comment says {word}, and the page says {expected}"
+            );
+        }
+    }
+
     #[test]
     fn the_not_yet_section_does_not_list_a_shipped_preset() {
         // The Nord review's one-line drift: theme.md still listed Nord under
@@ -1924,14 +2988,7 @@ mod tests {
             .1
             .to_lowercase();
         let mut rest = not_yet.clone();
-        let deferred = [
-            "nord-light",
-            "latte",
-            "frappé",
-            "macchiato",
-            "dracula",
-            "alucard",
-        ];
+        let deferred = ["nord-light", "latte", "frappé", "macchiato", "alucard"];
         for name in deferred {
             rest = rest.replace(name, " ");
         }

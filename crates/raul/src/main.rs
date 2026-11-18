@@ -35,7 +35,7 @@ use detail::Detail;
 use tabs::Tab;
 use theme::{Preset, Theme};
 
-const USAGE: &str = "usage: raul [--theme dark|nord|catppuccin|terminal] [--render --plain [--width N] [--height N] [--tab NAME] [--detail TASK-ID]] [work-folder]";
+const USAGE: &str = "usage: raul [--theme dark|nord|catppuccin|dracula|terminal] [--render --plain [--width N] [--height N] [--tab NAME] [--detail TASK-ID]] [work-folder]";
 /// The columns of a plain render when --width is not given.
 const DEFAULT_WIDTH: u16 = 100;
 /// The rows of a plain render when --height is not given.
@@ -448,6 +448,7 @@ mod tests {
         for (name, preset) in [
             ("nord", Preset::Nord),
             ("catppuccin", Preset::Catppuccin),
+            ("dracula", Preset::Dracula),
             ("terminal", Preset::Terminal),
         ] {
             for args in [

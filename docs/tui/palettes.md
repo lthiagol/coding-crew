@@ -206,10 +206,10 @@ Contrast against the base, for the record:
 **The title and the raised text borrow `rosewater`.** Catppuccin names no
 raised foreground: in the dark flavours every grey it has is dimmer than its
 text colour, and the brightest colour the family has is `rosewater`. It is an
-accent, not one of the word greys, so it is not a candidate for the neutral,
-and it is spent on the title and the raised text besides. In mocha its three
+accent, not a word grey, so it is not a candidate for the neutral,
+and it is spent on the title and the raised text besides. In mocha its
 channels are 25 apart, inside the tolerance of a neutral, and it is still not
-one: the neutral is drawn from the word greys.
+a candidate: the neutral is drawn from the word greys.
 
 **The tabs that are not showing borrow `overlay2`.** Catppuccin's three word
 greys are spent — on the ordinary text, the dimmed text and the information —
@@ -236,14 +236,14 @@ frappé and 8.1:1 in mocha.
 **The blue is kept for the record.** It is not used by any slot.
 
 **Only mocha is a preset.** The table above records the three dark flavours
-because they share one mapping, but the preset built from this family is
+because they share a mapping, but the preset built from this family is
 mocha; latte, frappé and macchiato wait with the light theme.
 
 ### Mocha, as the page lists it
 
 Every value [catppuccin.com/palette](https://catppuccin.com/palette/) lists
-for mocha, in the page's order. The slots spend fifteen of the twenty-six;
-the rest are kept for the record.
+for mocha, in the page's order. The slots spend fourteen of the twenty-six
+values the page lists; the rest are kept for the record.
 
 | role | mocha |
 |---|---|
@@ -329,9 +329,10 @@ Contrast against the base, for the record:
 Dracula's status colours are **syntax** colours — the spec assigns
 Green/Orange/Red/Yellow to code tokens, and a terminal theme reuses them.
 Faithful to Dracula, not an oversight. The spec also publishes *functional*
-colours for UI (`#DE5735` red, `#A39514` orange, `#089108` green, `#0081D6`
-cyan, `#815CD6` purple), marked **not for terminal applications** — we use
-the syntax ones.
+colours for UI, marked **not for terminal applications** — we use the syntax
+ones — and UI backgrounds. Neither is a palette colour, and no slot spends
+either: the theme paints no background of its own. Both lists are recorded
+below, in the page's order.
 
 **The neutral is the `foreground`.** Dracula publishes two near-grey word
 colours, the foreground and the ANSI bright white, and no other: the comment
@@ -352,16 +353,106 @@ reads at 3.0:1 on the background, and it carries the muted text, the dimmed
 chrome and the tabs that are not showing. The spec gives the current line and
 the comment the same value on purpose, so the border is that grey too.
 
+**The footer's labels take the comment as well.** It is the only muted
+foreground the family has, and at 3.0:1 it is at the floor a word needs
+rather than below it, so rule 4 lets it carry the labels.
+
 **The selection is the accent, whole.** Dracula selects with its own
 selection colour `#44475A`; a terminal has no alpha, so the accent is used
 whole: the base colour on the accent, 5.9:1.
 
 **The pink is kept for the record.** It is not used by any slot.
 
+### The functional colours, as the page lists them
+
+The page marks these **not for terminal applications**: they are recorded for
+the record, and no slot spends one.
+
+| role | dracula |
+|---|---|
+| Functional Red | `#DE5735` |
+| Functional Orange | `#A39514` |
+| Functional Green | `#089108` |
+| Functional Cyan | `#0081D6` |
+| Functional Purple | `#815CD6` |
+
+### The UI backgrounds, as the page lists them
+
+The page names these UI backgrounds, a duplicate included; none is spent,
+because the theme paints no background of its own.
+
+| context | dracula |
+|---|---|
+| Floating interactive elements | `#343746` |
+| Background Lighter | `#424450` |
+| Background Light | `#343746` |
+| Background Dark | `#21222C` |
+| Background Darker | `#191A21` |
+
+### The current-line fallback, as the page lists it
+
+The page names an opaque fallback for the current line, `#353747`, for
+editors that cannot alpha-blend it. It is out-of-palette implementation
+guidance, not a palette colour: it adds no token, and no slot spends it.
+
+### Dracula Classic, as the page lists it
+
+Every value [draculatheme.com/spec](https://draculatheme.com/spec) lists in
+its color palette for Dracula Classic, in the page's order. The slots spend
+ten of the twelve values in this table; the selection and the pink are kept
+for the record.
+
+| role | dracula |
+|---|---|
+| background | `#282A36` |
+| current line | `#6272A4` |
+| selection | `#44475A` |
+| foreground | `#F8F8F2` |
+| comment | `#6272A4` |
+| red | `#FF5555` |
+| orange | `#FFB86C` |
+| yellow | `#F1FA8C` |
+| green | `#50FA7B` |
+| cyan | `#8BE9FD` |
+| purple | `#BD93F9` |
+| pink | `#FF79C6` |
+
+### The ANSI palette, as the page lists it
+
+The page publishes a second palette for terminal applications: sixteen
+values, eight of them restating a colour above and eight of them its own. The
+theme takes one of the sixteen by name — the bright white, for the raised and
+the brightest foreground; the other fifteen are kept for the record. With the
+color palette's ten, the theme spends eleven values of the page, and the
+restatements are not counted twice.
+
+| ANSI token | dracula |
+|---|---|
+| AnsiBlack | `#21222C` |
+| AnsiRed | `#FF5555` |
+| AnsiGreen | `#50FA7B` |
+| AnsiYellow | `#F1FA8C` |
+| AnsiBlue | `#BD93F9` |
+| AnsiMagenta | `#FF79C6` |
+| AnsiCyan | `#8BE9FD` |
+| AnsiWhite | `#F8F8F2` |
+| AnsiBrightBlack | `#6272A4` |
+| AnsiBrightRed | `#FF6E6E` |
+| AnsiBrightGreen | `#69FF94` |
+| AnsiBrightYellow | `#FFFFA5` |
+| AnsiBrightBlue | `#D6ACFF` |
+| AnsiBrightMagenta | `#FF92DF` |
+| AnsiBrightCyan | `#A4FFFF` |
+| AnsiBrightWhite | `#FFFFFF` |
+
+**Only Dracula Classic is a preset.** It ships as `dracula`; alucard waits
+with the light theme, and its palette is recorded in *Not yet*.
+
 ## Nord
 
-One palette, sixteen colours, four named groups: **polar night** (nord0–3),
-**snow storm** (nord4–6), **frost** (nord7–10), **aurora** (nord11–15).
+The palette has sixteen colours in four named groups: **polar night**
+(nord0–3), **snow storm** (nord4–6), **frost** (nord7–10), **aurora**
+(nord11–15).
 Source: [nordtheme.com/docs/colors-and-palettes](https://www.nordtheme.com/docs/colors-and-palettes).
 
 The base is `#2e3440` — nord0, the family's own. The theme paints no
@@ -415,13 +506,12 @@ Nord's light variant follows Nord's own **bright ambiance** style: snow storm
 as the base, polar night as the text. Nord's aurora colours work the same in
 both.
 
-**Nord's greys carry the words, and there are three of them.** Nord's greys
+**Nord's greys carry the words.** Nord's greys
 are the polar night (nord0 to nord3) and the snow storm (nord4 to nord6).
 The polar night is a chrome grade — the base, the elevated chrome, the dimmed
 chrome and the border — and on the family's own base it is faint: nord3 reads
-at 1.7:1. The snow storm is what carries words, and it is three greys for
-four roles: the muted text, the ordinary text, and the raised and the
-brightest.
+at 1.7:1. The snow storm is what carries words: the muted text, the ordinary
+text, and the raised and the brightest.
 
 **The muted text is derived: the dimmest snow storm grey, nord4.** Nord has
 no muted foreground of its own for words — the greys other than the snow
@@ -541,9 +631,9 @@ The file format is later; the presets ship as code first.
 ## Not yet
 
 - **The rest of the catalog as presets** — Catppuccin's latte, frappé and
-  macchiato, Dracula's dracula and alucard, and `nord-light`. The values
-  above are the work plan; the mapping is done, the code is not. Mocha ships
-  as `catppuccin`, and Nord ships as `nord`
+  macchiato, Dracula's alucard, and `nord-light`. The values above are the
+  work plan; the mapping is done, the code is not. Mocha ships as
+  `catppuccin`, Dracula Classic as `dracula`, and Nord ships as `nord`
 - the theme file on disk
 - a user theme that is not one of the built-ins
 
