@@ -5,6 +5,7 @@
 # talita is out of scope for now; there are no targets for it.
 
 CARGO ?= $(shell command -v cargo 2>/dev/null || echo $(HOME)/.cargo/bin/cargo)
+CARGO_TARGET_DIR ?= target
 RAUL_PKG := coding-lanes-raul
 TALITA_PKG := coding-lanes-talita
 
@@ -39,8 +40,13 @@ test: ## Run the test suite
 
 test-scripts: ## Run the shell script tests
 	bash scripts/test-herdr-wake.sh
+	bash scripts/test-pty-sweep.sh
 	bash scripts/test-review-snapshot.sh
 	bash scripts/test-sync.sh
+
+.PHONY: sweep
+sweep: build-raul ## Sweep the plain render at every width from 40 to 120
+	python3 scripts/pty-sweep.py --raul $(CARGO_TARGET_DIR)/debug/raul --work mock-data/coding-lanes/work
 
 .PHONY: fmt fmt-check
 fmt: ## Format the code
@@ -54,7 +60,7 @@ lint: ## Run clippy with warnings as errors
 	$(CARGO) clippy --all-targets -- -D warnings
 
 .PHONY: check ci
-check: fmt-check lint test test-scripts ## The gate: fmt, clippy, tests, script tests
+check: fmt-check lint test test-scripts sweep ## The gate: fmt, clippy, tests, script tests, width sweep
 ci: check ## Alias for check
 
 .PHONY: doc

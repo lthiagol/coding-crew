@@ -227,6 +227,11 @@ Every view above is computed from the task files.
 It is how a prototype is captured and how a snapshot test is written — the
 sketch is the tool's own output, not a drawing of it.
 
+`scripts/pty-sweep.py` renders the screen at every width from 40 to 120, keeps
+one file per width, and fails when a line is wider than its width. The gate
+runs it. The Overview is pinned byte for byte at 40, 60 and 100 columns in
+`crates/raul/tests/snapshots/`.
+
 ## Not defined yet
 
 - the autopilot's internals — the tab is a placeholder, and its design is

@@ -73,8 +73,10 @@ fn overview() -> Output {
     ])
 }
 
-fn snapshot_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots/overview.txt")
+fn snapshot_path(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/snapshots")
+        .join(name)
 }
 
 /// The terminal columns a line takes.
@@ -125,23 +127,7 @@ fn wide_task_work() -> PathBuf {
 
 #[test]
 fn the_overview_render_matches_the_snapshot() {
-    let output = overview();
-    assert!(output.status.success(), "raul failed: {output:?}");
-    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
-    let snapshot = fs::read_to_string(snapshot_path()).expect("the Overview snapshot");
-    assert_eq!(
-        text, snapshot,
-        "the Overview render differs from tests/snapshots/overview.txt"
-    );
-    assert!(!text.contains('\u{1b}'), "the render carries ANSI escapes");
-    assert!(text.ends_with('\n'), "the render has no final newline");
-    for (number, line) in text.lines().enumerate() {
-        assert_eq!(
-            line.trim_end_matches(' '),
-            line,
-            "row {number} ends in spaces that carry no information"
-        );
-    }
+    assert_overview_at(100, "overview.txt");
 }
 
 /// The detail pane of a real mock-data task, as the snapshot records it.
@@ -179,6 +165,56 @@ fn the_detail_render_matches_the_snapshot() {
     );
     assert!(!text.contains('\u{1b}'), "the render carries ANSI escapes");
     assert!(text.ends_with('\n'), "the render has no final newline");
+}
+
+/// The Overview at a canonical width, asserted against its snapshot. The
+/// files are what `scripts/pty-sweep.py` writes at that width: one plain
+/// render, byte for byte.
+fn assert_overview_at(width: u16, name: &str) {
+    let width_arg = width.to_string();
+    let output = run(&[
+        "--render", "--plain", "--width", &width_arg, "--height", "40", WORK,
+    ]);
+    assert!(
+        output.status.success(),
+        "raul failed at width {width}: {output:?}"
+    );
+    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    let path = snapshot_path(name);
+    let snapshot =
+        fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    assert_eq!(
+        text, snapshot,
+        "the Overview at width {width} differs from {name}"
+    );
+    assert!(!text.contains('\u{1b}'), "the render carries ANSI escapes");
+    assert!(text.ends_with('\n'), "the render has no final newline");
+    for (number, line) in text.lines().enumerate() {
+        assert_eq!(
+            line.trim_end_matches(' '),
+            line,
+            "row {number} ends in spaces that carry no information"
+        );
+        let measured = display_width(line);
+        assert!(
+            measured <= width as usize,
+            "row {number} is {measured} columns wide, not at most {width}: {line:?}"
+        );
+    }
+}
+
+#[test]
+fn the_overview_matches_the_snapshot_at_every_canonical_width() {
+    // Widths the sweep and the reviewers read: the narrow design width, the
+    // two-column layout, and the default. A rendering regression that the
+    // data unit tests miss changes one of these files.
+    for (width, name) in [
+        (40, "overview-40.txt"),
+        (60, "overview-60.txt"),
+        (100, "overview.txt"),
+    ] {
+        assert_overview_at(width, name);
+    }
 }
 
 #[test]

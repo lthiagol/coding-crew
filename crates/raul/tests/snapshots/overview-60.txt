@@ -1,0 +1,40 @@
+ coding-lanes                    mock-data/coding-lanes/work
+ ‹ Overview ›
+┌counts──────────────────────┐┌needs you───────────────────┐
+│29 tasks by status          ││8 tasks wait on a human     │
+│draft       5 groomed     3 ││approve     2               │
+│approved    4 executing   3 ││review      3               │
+│code-review 3 remediating 3 ││escalated   3               │
+│needs-human 3 done        5 │└────────────────────────────┘
+└────────────────────────────┘┌claimable───────────────────┐
+┌smaller tasks───────────────┐│1 task an agent could claim │
+│smaller tasks by kind       ││right now                   │
+│idea        1               ││approved, free, dependencies│
+│feature     2               ││done                        │
+│bug         2               │└────────────────────────────┘
+└────────────────────────────┘┌next────────────────────────┐
+                              │TSK29 Lorem ipsum dolor sit │
+                              │amet                        │
+                              │the first task of the path  │
+                              └────────────────────────────┘
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ q  quit    1-6  tab    ←→  switch tab    ?  help
