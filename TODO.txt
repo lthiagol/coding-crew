@@ -295,6 +295,18 @@ WHERE WE ARE
   Backlog, with pgup/pgdn and g/G, the cursor never stepping onto a
   hidden row, and the movement keys named in the footer and the help
   overlay. That is the unit the key-set deferral pointed at.
+  Unit closed: the tab closer. Two rounds. scripts/herdr-close-pane.sh
+  takes the pane id the orchestrator holds, resolves the tab id from herdr
+  pane get, closes it, and proves the close by the tab list; --audit
+  lists a workspaces tabs with their agent state so a leak surfaces.
+  Every herdr call is bounded with timeout --signal=KILL in the house
+  style of herdr-wake.sh, and only stdout is parsed so a herdr warning
+  cannot break it. 87 script assertions with a fake herdr, wired into the
+  gate. The first round found the calls unbounded and the parse merged
+  with stderr; the delta round closed both, with live probes against an
+  independent fake. One low stands recorded: a timed-out close exits 4
+  with no listing, though the close fate is unknown, so the orchestrator
+  must audit to learn whether the tab closed.
   The model experiment concluded: the tested pair is now the default. The
   flow configs in flow/ name builder opencode-go/deepseek-v4.1-flash#high
   and reviewer opencode-go/glm-5.3#high - the same strings the temp test
