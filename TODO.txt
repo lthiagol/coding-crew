@@ -191,6 +191,22 @@ WHERE WE ARE
   done-when did not name them; and each gate run leaves a kept 81-file
   dir in /tmp that nothing prunes.
   Next unit: the Settings tab (plan 17).
+  Unit closed: the Settings tab. One clean round. The tab is a named empty
+  state - "nothing to set yet" over "will hold keybinds, sort keys, theme"
+  - on text.dim with the theme border; no rows, so enter opens nothing and
+  the footer names no open or scroll key; tab switch and highlight behave
+  like the other tabs. Render mode gained --tab NAME (overview,
+  needs-you, path, backlog, autopilot, settings), refused outside render
+  mode and on unknown names, the reachability mechanism the unit pinned
+  at 40/60/100. The gate is green: 532 Rust tests and 218 script
+  assertions. Only the Autopilot tab is a stub now.
+  The review left low follow-ups, none blocking: --tab composes with
+  --detail without a guard - the pane covers the window, so --tab is moot
+  and the state is one the keys cannot reach; one refusal or doc sentence
+  and a test pin it; and the dim-paint test locates a cell by byte offset
+  read as a column - move it to the per-cell draw_cells pattern.
+  Next unit: the theme catalog - Nord, then Catppuccin, then Dracula
+  (plan 8-10).
   Next unit: the detail pane: the document (plan 15).
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
