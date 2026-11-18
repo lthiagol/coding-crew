@@ -207,6 +207,23 @@ WHERE WE ARE
   read as a column - move it to the per-cell draw_cells pattern.
   Next unit: the theme catalog - Nord, then Catppuccin, then Dracula
   (plan 8-10).
+  Unit closed: the selection highlight. One round. The selected row of
+  Needs you, Path and Backlog is painted with the text.selected slot -
+  the documented slot, reversed video, bar to the pane edge - and the
+  cursor follows the keys and lands where enter opens; esc restores it.
+  The builder found the movement keys did not exist and built up/down and
+  j/k on the row tabs, clamped and id-keyed, so paint, clamp and
+  enter-open agree even where the layout hides a row. The gate is green:
+  532 Rust tests and 218 script assertions.
+  The review left one blocking finding the human deferred consciously:
+  pgup/pgdn and g/G are dead on the row tabs while screens.md names them
+  and the detail pane has all six - they wait for the row-tab scrolling
+  unit, which owns the scrolling, those keys, the cursor stepping onto
+  announced-hidden rows on short panes, and naming the movement keys in
+  the footer and the help overlay. Two more lows stand recorded: the
+  two-instants follow-up gains a third caller in rows_of.
+  Next unit: the theme catalog - Nord, then Catppuccin, then Dracula
+  (plan 8-10).
   The model experiment concluded: the tested pair is now the default. The
   flow configs in flow/ name builder opencode-go/deepseek-v4.1-flash#high
   and reviewer opencode-go/glm-5.3#high - the same strings the temp test
