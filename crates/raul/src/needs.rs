@@ -1483,35 +1483,22 @@ mod tests {
     fn the_presets_say_the_same_thing() {
         let work = mock_work();
         for (width, height) in [(100u16, 40), (60, 16), (40, 12)] {
-            let mut terminal =
-                Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-            terminal
-                .draw(|frame| {
-                    render(
-                        frame,
-                        frame.area(),
-                        &work,
-                        &Theme::preset(Preset::Dark),
-                        None,
-                    )
-                })
-                .expect("drawing");
-            let dark = buffer_text(terminal.backend().buffer());
-            let mut terminal =
-                Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
-            terminal
-                .draw(|frame| {
-                    render(
-                        frame,
-                        frame.area(),
-                        &work,
-                        &Theme::preset(Preset::Terminal),
-                        None,
-                    )
-                })
-                .expect("drawing");
-            let terminal = buffer_text(terminal.backend().buffer());
-            assert_eq!(dark, terminal, "{width}x{height}");
+            let mut rendered = Vec::new();
+            for preset in Preset::ALL {
+                let mut terminal =
+                    Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
+                terminal
+                    .draw(|frame| render(frame, frame.area(), &work, &Theme::preset(preset), None))
+                    .expect("drawing");
+                rendered.push((preset.name(), buffer_text(terminal.backend().buffer())));
+            }
+            let (first_name, first) = &rendered[0];
+            for (name, text) in &rendered[1..] {
+                assert_eq!(
+                    first, text,
+                    "{width}x{height}: {first_name} and {name} say different things"
+                );
+            }
         }
     }
 

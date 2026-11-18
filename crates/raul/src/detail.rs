@@ -1063,23 +1063,28 @@ mod tests {
     fn the_presets_say_the_same_thing_and_paint_differently() {
         let work = mock_work();
         for (width, height) in [(100u16, 20u16), (60, 16), (40, 12), (24, 8)] {
-            let (dark_rows, dark_paints) = draw_with(
-                &Theme::preset(Preset::Dark),
-                &work,
-                &pane("TSK13"),
-                width,
-                height,
-            );
-            let (terminal_rows, terminal_paints) = draw_with(
-                &Theme::preset(Preset::Terminal),
-                &work,
-                &pane("TSK13"),
-                width,
-                height,
-            );
-            // A theme changes the paint, never the words.
-            assert_eq!(dark_rows, terminal_rows, "{width}x{height}");
-            assert_ne!(dark_paints, terminal_paints, "{width}x{height}");
+            let mut rendered = Vec::new();
+            for preset in Preset::ALL {
+                let (rows, paints) =
+                    draw_with(&Theme::preset(preset), &work, &pane("TSK13"), width, height);
+                rendered.push((preset.name(), rows, paints));
+            }
+            let (first_name, first_rows, _) = &rendered[0];
+            for (name, rows, _) in &rendered[1..] {
+                // A theme changes the paint, never the words.
+                assert_eq!(
+                    first_rows, rows,
+                    "{width}x{height}: {first_name} and {name} say different things"
+                );
+            }
+            for (index, (one, _, one_paints)) in rendered.iter().enumerate() {
+                for (other, _, other_paints) in &rendered[index + 1..] {
+                    assert_ne!(
+                        one_paints, other_paints,
+                        "{width}x{height}: {one} and {other} paint the same"
+                    );
+                }
+            }
         }
     }
 }

@@ -773,20 +773,24 @@ mod tests {
     fn the_presets_say_the_same_thing() {
         for (tab, help) in screens() {
             for (width, height) in [(100, 20), (60, 16), (40, 12)] {
-                let dark = render(
-                    &mut window(&Theme::preset(Preset::Dark), tab, help),
-                    width,
-                    height,
-                )
-                .0;
-                let terminal = render(
-                    &mut window(&Theme::preset(Preset::Terminal), tab, help),
-                    width,
-                    height,
-                )
-                .0;
-                // A theme changes the paint, never the words.
-                assert_eq!(dark, terminal, "{tab:?} help={help} {width}x{height}");
+                let mut rendered = Vec::new();
+                for preset in Preset::ALL {
+                    let rows = render(
+                        &mut window(&Theme::preset(preset), tab, help),
+                        width,
+                        height,
+                    )
+                    .0;
+                    rendered.push((preset.name(), rows));
+                }
+                let (first_name, first) = &rendered[0];
+                for (name, rows) in &rendered[1..] {
+                    // A theme changes the paint, never the words.
+                    assert_eq!(
+                        first, rows,
+                        "{tab:?} help={help} {width}x{height}: {first_name} and {name} say different things"
+                    );
+                }
             }
         }
     }
@@ -794,22 +798,19 @@ mod tests {
     #[test]
     fn the_presets_differ_in_paint() {
         for (tab, help) in screens() {
-            let dark = render(
-                &mut window(&Theme::preset(Preset::Dark), tab, help),
-                100,
-                20,
-            )
-            .1;
-            let terminal = render(
-                &mut window(&Theme::preset(Preset::Terminal), tab, help),
-                100,
-                20,
-            )
-            .1;
-            assert_ne!(
-                dark, terminal,
-                "{tab:?} help={help}: the presets paint the same"
-            );
+            let mut paints = Vec::new();
+            for preset in Preset::ALL {
+                let paint = render(&mut window(&Theme::preset(preset), tab, help), 100, 20).1;
+                paints.push((preset.name(), paint));
+            }
+            for (index, (one, paint)) in paints.iter().enumerate() {
+                for (other, other_paint) in &paints[index + 1..] {
+                    assert_ne!(
+                        paint, other_paint,
+                        "{tab:?} help={help}: {one} and {other} paint the same"
+                    );
+                }
+            }
         }
     }
 

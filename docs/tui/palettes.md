@@ -398,8 +398,11 @@ apart — nearer to a plain grey than the muted text's nord4, which is 17. The
 frost and the aurora are hues and not word greys: nord7 is 45 channels apart
 and near enough to the tolerance, but it is the agent lane.
 
-**nord10 is kept for the record.** It is a hue of its own, 78 channels apart,
-and no slot spends it; the information takes a neutral, and a hue is not one.
+**nord1, nord10, nord12 and nord15 are kept for the record.** nord1
+`#3b4252` is the elevated polar night; the chrome needs only nord2 and nord3.
+nord10 `#5e81ac` is a frost blue, 78 channels apart: a hue of its own, so the
+information takes a neutral instead. nord12 `#d08770` is the aurora's orange
+and nord15 `#b48ead` its purple; neither is a role the slots need.
 
 **The second foreground is the frost, nord9.** Nord's palette names no second
 foreground; the theme takes nord9 for the tabs that are not showing, and it
@@ -498,8 +501,9 @@ The file format is later; the presets ship as code first.
 
 ## Not yet
 
-- the three families as presets — the values above are the work plan; the
-  mapping is done, the code is not
+- **Catppuccin and Dracula as presets** — the values above are the work
+  plan; the mapping is done, the code is not. Nord is a preset, and
+  `nord-light` waits with the light theme
 - the theme file on disk
 - a user theme that is not one of the built-ins
 

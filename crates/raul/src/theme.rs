@@ -378,18 +378,21 @@ pub fn selected_line(line: Line<'static>, width: usize, theme: &Theme) -> Line<'
 pub enum Preset {
     /// The dark palette. The default.
     Dark,
+    /// The Nord palette: a dark one, from the family's own page.
+    Nord,
     /// The colours of the terminal itself.
     Terminal,
 }
 
 impl Preset {
     /// Every preset, in the order of the spec.
-    pub const ALL: [Preset; 2] = [Preset::Dark, Preset::Terminal];
+    pub const ALL: [Preset; 3] = [Preset::Dark, Preset::Nord, Preset::Terminal];
 
     /// The name of the preset, as the flag writes it.
     pub fn name(&self) -> &'static str {
         match self {
             Preset::Dark => "dark",
+            Preset::Nord => "nord",
             Preset::Terminal => "terminal",
         }
     }
@@ -411,6 +414,7 @@ impl Preset {
 fn style_of(preset: Preset, slot: Slot) -> Style {
     match preset {
         Preset::Dark => dark_style(slot),
+        Preset::Nord => nord_style(slot),
         Preset::Terminal => terminal_style(slot),
     }
 }
@@ -503,6 +507,92 @@ fn dark_style(slot: Slot) -> Style {
         Slot::SemanticHuman => Style::new().fg(ACCENT),
         // The agent lane takes the second accent.
         Slot::SemanticAgent => Style::new().fg(SECOND_ACCENT),
+    }
+}
+
+/// The twelve Nord colours that the slots spend.
+///
+/// The family's palette has sixteen values in four groups: polar night
+/// (nord0–3), snow storm (nord4–6), frost (nord7–10) and aurora (nord11–15).
+/// The mapping in docs/tui/palettes.md says which role each of these twelve
+/// plays, and why nord10 is kept for the record.
+mod nord {
+    use ratatui::style::Color;
+
+    /// nord0: the base, and the selection's foreground.
+    pub const NORD0: Color = Color::Rgb(0x2e, 0x34, 0x40);
+    /// nord2: the dimmed chrome.
+    pub const NORD2: Color = Color::Rgb(0x43, 0x4c, 0x5e);
+    /// nord3: the border.
+    pub const NORD3: Color = Color::Rgb(0x4c, 0x56, 0x6a);
+    /// nord4: the muted text, and the footer's labels.
+    pub const NORD4: Color = Color::Rgb(0xd8, 0xde, 0xe9);
+    /// nord5: the main foreground.
+    pub const NORD5: Color = Color::Rgb(0xe5, 0xe9, 0xf0);
+    /// nord6: the raised and the brightest foreground.
+    pub const NORD6: Color = Color::Rgb(0xec, 0xef, 0xf4);
+    /// nord7: the second accent, the agent lane.
+    pub const NORD7: Color = Color::Rgb(0x8f, 0xbc, 0xbb);
+    /// nord8: the accent: the focus border, the selection, the human lane.
+    pub const NORD8: Color = Color::Rgb(0x88, 0xc0, 0xd0);
+    /// nord9: the second foreground, the frost.
+    pub const NORD9: Color = Color::Rgb(0x81, 0xa1, 0xc1);
+    /// nord11: the error colour.
+    pub const NORD11: Color = Color::Rgb(0xbf, 0x61, 0x6a);
+    /// nord13: the warning colour, and the attention colour.
+    pub const NORD13: Color = Color::Rgb(0xeb, 0xcb, 0x8b);
+    /// nord14: the success colour.
+    pub const NORD14: Color = Color::Rgb(0xa3, 0xbe, 0x8c);
+}
+
+/// The style of a slot in the Nord palette.
+///
+/// The palette is the family's: its eighteen values are written down in
+/// docs/tui/palettes.md, with the role each one plays. It is a dark preset:
+/// it assumes a terminal with a dark background and paints none of its own.
+fn nord_style(slot: Slot) -> Style {
+    use nord::{
+        NORD0, NORD2, NORD3, NORD4, NORD5, NORD6, NORD7, NORD8, NORD9, NORD11, NORD13, NORD14,
+    };
+    match slot {
+        // The brightest foreground: the name of the tool.
+        Slot::ChromeTitle => Style::new().fg(NORD6).add_modifier(Modifier::BOLD),
+        // The main foreground: the tab that is showing.
+        Slot::ChromeTabActive => Style::new().fg(NORD5).add_modifier(Modifier::BOLD),
+        // The second foreground: the frost, the tabs that are not showing.
+        Slot::ChromeTabInactive => Style::new().fg(NORD9),
+        // The dimmed chrome: the `3/6` index.
+        Slot::ChromeTabIndex => Style::new().fg(NORD2),
+        // The border colour.
+        Slot::ChromeBorder => Style::new().fg(NORD3),
+        // The accent: the border of the focused block.
+        Slot::ChromeBorderFocus => Style::new().fg(NORD8),
+        // The footer's labels are words: the dimmed chrome is a border
+        // grade, so they borrow the muted text.
+        Slot::ChromeFooter => Style::new().fg(NORD4),
+        // The attention colour: a key label.
+        Slot::ChromeKey => Style::new().fg(NORD13).add_modifier(Modifier::BOLD),
+        // The main foreground: ordinary text.
+        Slot::TextNormal => Style::new().fg(NORD5),
+        // The muted text: the dimmest snow storm grey.
+        Slot::TextDim => Style::new().fg(NORD4),
+        // The raised foreground: a count, a title that matters.
+        Slot::TextStrong => Style::new().fg(NORD6).add_modifier(Modifier::BOLD),
+        // The selection is the accent, whole: the base colour on it.
+        Slot::TextSelected => Style::new().fg(NORD0).bg(NORD8),
+        // A clean result, a finished task.
+        Slot::SemanticOk => Style::new().fg(NORD14),
+        // Something wants attention and is not broken.
+        Slot::SemanticWarn => Style::new().fg(NORD13),
+        // A failure: the family's own red.
+        Slot::SemanticError => Style::new().fg(NORD11),
+        // Neutral information: the snow storm greys all carry text, so the
+        // information takes the main foreground.
+        Slot::SemanticInfo => Style::new().fg(NORD5),
+        // The human lane takes the accent.
+        Slot::SemanticHuman => Style::new().fg(NORD8),
+        // The agent lane takes the second accent.
+        Slot::SemanticAgent => Style::new().fg(NORD7),
     }
 }
 
@@ -848,16 +938,21 @@ mod tests {
     }
 
     #[test]
-    fn every_slot_is_painted_in_the_dark_preset() {
-        let theme = Theme::preset(Preset::Dark);
-        for slot in Slot::ALL {
-            // A slot that paints nothing is a slot that was forgotten.
-            let style = theme.slot(slot);
-            assert!(
-                style.fg.is_some() || style.bg.is_some() || !style.add_modifier.is_empty(),
-                "{} paints nothing",
-                slot.name()
-            );
+    fn every_slot_is_painted_in_every_colour_preset() {
+        // The terminal preset paints by attribute, and its ordinary text is
+        // the terminal's own: only the colour presets paint all eighteen.
+        for preset in [Preset::Dark, Preset::Nord] {
+            let theme = Theme::preset(preset);
+            for slot in Slot::ALL {
+                // A slot that paints nothing is a slot that was forgotten.
+                let style = theme.slot(slot);
+                assert!(
+                    style.fg.is_some() || style.bg.is_some() || !style.add_modifier.is_empty(),
+                    "{} paints nothing in the {} preset",
+                    slot.name(),
+                    preset.name()
+                );
+            }
         }
     }
 
@@ -920,15 +1015,18 @@ mod tests {
         // The test is the one the doc states: the spread between the
         // three channels, within a tolerance. A neutral need not have
         // three equal channels.
-        let theme = Theme::preset(Preset::Dark);
-        let Color::Rgb(r, g, b) = theme.semantic.info.fg.expect("info has a colour") else {
-            panic!("info is not a colour of the dark palette");
-        };
-        let spread = r.max(g).max(b) - r.min(g).min(b);
-        assert!(
-            spread <= NEUTRAL_TOLERANCE,
-            "info is not neutral: its channels are {spread} apart, and the tolerance is {NEUTRAL_TOLERANCE}"
-        );
+        for preset in [Preset::Dark, Preset::Nord] {
+            let theme = Theme::preset(preset);
+            let Color::Rgb(r, g, b) = theme.semantic.info.fg.expect("info has a colour") else {
+                panic!("info is not a colour of the {} preset", preset.name());
+            };
+            let apart = r.max(g).max(b) - r.min(g).min(b);
+            assert!(
+                apart <= NEUTRAL_TOLERANCE,
+                "{}'s info is not neutral: its channels are {apart} apart, and the tolerance is {NEUTRAL_TOLERANCE}",
+                preset.name()
+            );
+        }
     }
 
     #[test]
@@ -1260,6 +1358,155 @@ mod tests {
         assert!(checked >= 14, "the dark palette states {checked} figures");
     }
 
+    /// The colour rows of the Nord table: the slot, the family's role, and
+    /// the value.
+    fn nord_rows() -> Vec<(String, String, Color)> {
+        let section = section(PALETTES, "Nord");
+        family_rows(&section)
+            .into_iter()
+            .filter_map(|(slot, cells)| {
+                let colour = cells
+                    .iter()
+                    .find_map(|cell| hexes_in(cell).first().copied())?;
+                Some((slot, cells[0].clone(), colour))
+            })
+            .collect()
+    }
+
+    /// The colour of a Nord role named by the doc, like `nord6`.
+    fn nord_colour(role: &str) -> Color {
+        match role {
+            "nord0" => nord::NORD0,
+            "nord2" => nord::NORD2,
+            "nord3" => nord::NORD3,
+            "nord4" => nord::NORD4,
+            "nord5" => nord::NORD5,
+            "nord6" => nord::NORD6,
+            "nord7" => nord::NORD7,
+            "nord8" => nord::NORD8,
+            "nord9" => nord::NORD9,
+            "nord11" => nord::NORD11,
+            "nord13" => nord::NORD13,
+            "nord14" => nord::NORD14,
+            other => panic!("{other} is not a Nord colour the slots spend"),
+        }
+    }
+
+    /// The slot a name the doc writes names.
+    fn slot_named(name: &str) -> Slot {
+        *Slot::ALL
+            .iter()
+            .find(|slot| slot.name() == name)
+            .unwrap_or_else(|| panic!("{name} is not a slot"))
+    }
+
+    #[test]
+    fn the_nord_palette_is_the_one_the_doc_records() {
+        // The doc is the source of truth: the code is checked against its
+        // table, so the two cannot drift apart silently.
+        let theme = Theme::preset(Preset::Nord);
+        let base = base_of(&section(PALETTES, "Nord"))[0];
+        let rows = nord_rows();
+        assert_eq!(
+            rows.len(),
+            Slot::ALL.len(),
+            "the doc's Nord table does not hold the eighteen slots"
+        );
+        for (name, _, colour) in rows {
+            let slot = slot_named(&name);
+            let style = theme.slot(slot);
+            if slot == Slot::TextSelected {
+                // The doc records the accent; the selection puts the base
+                // on it, the pair the palette records.
+                assert_eq!(
+                    style.bg,
+                    Some(colour),
+                    "{name} paints a background the doc does not record"
+                );
+                assert_eq!(
+                    style.fg,
+                    Some(base),
+                    "{name} does not put the base on the accent"
+                );
+            } else {
+                assert_eq!(
+                    style.fg,
+                    Some(colour),
+                    "{name} paints a foreground the doc does not record"
+                );
+                assert_eq!(
+                    style.bg, None,
+                    "{name} paints a background the doc does not record"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_nord_roles_name_the_values_the_table_states() {
+        // The value beside a role is the value the page gives that role:
+        // the table's role cell and its value cell agree with each other.
+        for (name, role, colour) in nord_rows() {
+            let role = role.split_whitespace().next().expect("a role");
+            assert_eq!(
+                nord_colour(role),
+                colour,
+                "{name}'s role {role} holds another value"
+            );
+        }
+    }
+
+    #[test]
+    fn the_contrast_figures_of_the_nord_preset_are_right() {
+        // Every figure the doc states is recomputed from the code's own
+        // palette, the way the dark preset's figures are.
+        let theme = Theme::preset(Preset::Nord);
+        let rows = family_ratios(&section(PALETTES, "Nord"));
+        assert_eq!(
+            rows.len(),
+            Slot::ALL.len(),
+            "the doc's Nord table states {} figures",
+            rows.len()
+        );
+        let mut checked = 0;
+        for (name, ratios) in rows {
+            let slot = slot_named(&name);
+            let style = theme.slot(slot);
+            let foreground = style.fg.expect("a Nord slot has a foreground");
+            let behind = style.bg.unwrap_or(nord::NORD0);
+            let computed = contrast(foreground, behind);
+            assert!(
+                (computed - ratios[0]).abs() < 0.05,
+                "{name} reads at {computed:.2}:1, and the doc says {}:1",
+                ratios[0]
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, Slot::ALL.len(), "Nord states {checked} figures");
+    }
+
+    #[test]
+    fn the_nord_preset_reads_on_its_background() {
+        // Nord's aurora is low-contrast on the polar night: the error reads
+        // at 3.1:1 and keeps the family's own red. Every word still clears
+        // the floor the doc states; only the border and the index are lines.
+        let theme = Theme::preset(Preset::Nord);
+        for slot in Slot::ALL {
+            if matches!(slot, Slot::ChromeBorder | Slot::ChromeTabIndex) {
+                continue;
+            }
+            let style = theme.slot(slot);
+            let foreground = style.fg.expect("a Nord slot has a foreground");
+            let behind = style.bg.unwrap_or(nord::NORD0);
+            let ratio = contrast(foreground, behind);
+            assert!(
+                ratio >= 3.0,
+                "{} reads at {ratio:.1}:1, and a word needs 3:1",
+                slot.name()
+            );
+        }
+    }
+
     #[test]
     fn the_nord_table_keeps_its_words_readable() {
         // The fourth review: Nord's border, its muted text and its second
@@ -1333,7 +1580,58 @@ mod tests {
     #[test]
     fn the_presets_differ_in_paint() {
         // The presets are not the same palette under another name.
-        assert_ne!(Theme::preset(Preset::Dark), Theme::preset(Preset::Terminal));
+        for (index, one) in Preset::ALL.iter().enumerate() {
+            for other in &Preset::ALL[index + 1..] {
+                assert_ne!(
+                    Theme::preset(*one),
+                    Theme::preset(*other),
+                    "{} and {} paint the same",
+                    one.name(),
+                    other.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_terminal_preset_is_unchanged() {
+        // Nord is a dark preset and must not have moved the terminal one:
+        // no colour in any slot, and the same five attributes as before.
+        let theme = Theme::preset(Preset::Terminal);
+        let expected = [
+            (Slot::ChromeTitle, Modifier::BOLD),
+            (Slot::ChromeTabActive, Modifier::BOLD | Modifier::REVERSED),
+            (Slot::ChromeTabInactive, Modifier::DIM),
+            (Slot::ChromeTabIndex, Modifier::DIM),
+            (Slot::ChromeBorder, Modifier::DIM),
+            (Slot::ChromeBorderFocus, Modifier::BOLD),
+            (Slot::ChromeFooter, Modifier::DIM),
+            (Slot::ChromeKey, Modifier::BOLD | Modifier::REVERSED),
+            (Slot::TextNormal, Modifier::empty()),
+            (Slot::TextDim, Modifier::DIM),
+            (Slot::TextStrong, Modifier::BOLD),
+            (Slot::TextSelected, Modifier::REVERSED),
+            (Slot::SemanticOk, Modifier::ITALIC),
+            (Slot::SemanticWarn, Modifier::UNDERLINED),
+            (
+                Slot::SemanticError,
+                Modifier::BOLD | Modifier::REVERSED | Modifier::UNDERLINED,
+            ),
+            (Slot::SemanticInfo, Modifier::BOLD | Modifier::DIM),
+            (Slot::SemanticHuman, Modifier::BOLD | Modifier::UNDERLINED),
+            (Slot::SemanticAgent, Modifier::BOLD | Modifier::ITALIC),
+        ];
+        for (slot, attributes) in expected {
+            let style = theme.slot(slot);
+            assert_eq!(style.fg, None, "{} names a colour", slot.name());
+            assert_eq!(style.bg, None, "{} names a colour", slot.name());
+            assert_eq!(
+                style.add_modifier,
+                attributes,
+                "{} paints different attributes in the terminal preset",
+                slot.name()
+            );
+        }
     }
 
     #[test]
@@ -1359,6 +1657,8 @@ mod tests {
         for preset in Preset::ALL {
             assert_eq!(Preset::parse(preset.name()), Some(preset));
         }
+        assert_eq!(Preset::parse("nord"), Some(Preset::Nord));
+        assert_eq!(Preset::parse("nord-light"), None);
         assert_eq!(Preset::parse("light"), None);
         assert_eq!(Preset::parse(""), None);
     }
@@ -1544,34 +1844,68 @@ mod tests {
                 preset.name()
             );
         }
-        // The doc states the hit's ratio; recompute it from the palette, so
-        // a changed foreground or a changed selection leaves the figure
-        // stale here rather than in the prose.
+        // The doc states a hit's ratio for every preset that has a
+        // background; recompute each from that preset's palette, so a
+        // changed foreground or selection leaves the figure stale here
+        // rather than in the prose.
         let search = THEME
             .split_once("**The search is not offered")
             .expect("the theme doc records the search limitation")
             .1;
-        let figure = ratio_in(
-            search
-                .split_once("reads at ")
-                .expect("the search paragraph states the hit's ratio")
-                .1,
-        )
-        .expect("the search paragraph states a ratio");
-        let theme = Theme::preset(Preset::Dark);
-        let computed = contrast(
-            theme
-                .slot(Slot::TextNormal)
-                .fg
-                .expect("text.normal names a foreground"),
-            theme
-                .slot(Slot::TextSelected)
-                .bg
-                .expect("the selection names a background"),
-        );
+        let mut with_a_background = 0;
+        let mut without_a_background = 0;
+        for preset in Preset::ALL {
+            let bullet = search
+                .split("\n- ")
+                .find(|bullet| bullet.contains(&format!("**{}**", preset.name())))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "the search paragraph does not name the {} preset",
+                        preset.name()
+                    )
+                });
+            let theme = Theme::preset(preset);
+            let Some(background) = theme.slot(Slot::TextSelected).bg else {
+                // The terminal preset paints no background; the doc says so.
+                assert!(
+                    bullet.contains("paints no background"),
+                    "the search paragraph does not say why the {} preset has no hit",
+                    preset.name()
+                );
+                without_a_background += 1;
+                continue;
+            };
+            let figure = ratio_in(
+                bullet
+                    .split_once("reads at")
+                    .unwrap_or_else(|| {
+                        panic!("the {} search paragraph states no ratio", preset.name())
+                    })
+                    .1,
+            )
+            .unwrap_or_else(|| panic!("the {} search paragraph states no ratio", preset.name()));
+            let computed = contrast(
+                theme
+                    .slot(Slot::TextNormal)
+                    .fg
+                    .expect("text.normal names a foreground"),
+                background,
+            );
+            assert!(
+                (computed - figure).abs() < 0.05,
+                "{}'s search hit reads at {computed:.2}:1, and the doc says {figure}:1",
+                preset.name()
+            );
+            with_a_background += 1;
+        }
         assert!(
-            (computed - figure).abs() < 0.05,
-            "the search hit reads at {computed:.2}:1, and the doc says {figure}:1"
+            with_a_background >= 2,
+            "the search figure covers {with_a_background} presets"
+        );
+        assert_eq!(
+            with_a_background + without_a_background,
+            Preset::ALL.len(),
+            "the search paragraph does not cover every preset"
         );
     }
 
@@ -1642,31 +1976,42 @@ mod tests {
     }
 
     #[test]
-    fn the_dark_markdown_theme_stays_inside_the_slots() {
+    fn every_colour_preset_keeps_the_markdown_theme_inside_its_slots() {
         // Every colour the engine is handed is a colour one of the eighteen
-        // slots already paints with: no leaf palette leaks in.
-        let theme = Theme::preset(Preset::Dark);
-        let mut palette = Vec::new();
-        for slot in Slot::ALL {
-            let style = theme.slot(slot);
-            palette.extend(style.fg);
-            palette.extend(style.bg);
-        }
-        let mut painted = 0;
-        for (field, color, _) in engine_fields(&theme.markdown_theme()) {
-            if color == Color::Reset {
-                continue;
+        // slots already paints with: no leaf or family palette leaks in.
+        let mut painted_in_all = 0;
+        for preset in Preset::ALL {
+            let theme = Theme::preset(preset);
+            let mut palette = Vec::new();
+            for slot in Slot::ALL {
+                let style = theme.slot(slot);
+                palette.extend(style.fg);
+                palette.extend(style.bg);
             }
-            painted += 1;
-            assert!(
-                palette.contains(&color),
-                "{field} paints {color:?}, which is not one of the eighteen slots"
-            );
+            let mut painted = 0;
+            for (field, color, _) in engine_fields(&theme.markdown_theme()) {
+                if color == Color::Reset {
+                    continue;
+                }
+                painted += 1;
+                assert!(
+                    palette.contains(&color),
+                    "{} paints {field} with {color:?}, which is not one of the eighteen slots",
+                    preset.name()
+                );
+            }
+            if preset == Preset::Terminal {
+                assert_eq!(painted, 0, "the terminal preset paints {painted} fields");
+            } else {
+                assert!(
+                    painted >= 40,
+                    "the {} preset paints only {painted} fields from the palette",
+                    preset.name()
+                );
+                painted_in_all += painted;
+            }
         }
-        assert!(
-            painted >= 40,
-            "the engine paints only {painted} fields from the palette"
-        );
+        assert!(painted_in_all > 0, "no colour preset paints the engine");
     }
 
     /// The rows of the engine mapping table in the theme doc: the field, the

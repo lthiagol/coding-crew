@@ -219,13 +219,19 @@ fn the_overview_matches_the_snapshot_at_every_canonical_width() {
 
 /// A tab, named on the command line, rendered at a width.
 fn render_tab(tab: &str, width: u16) -> String {
+    render_tab_with("dark", tab, width)
+}
+
+/// A tab, rendered at a width in a named preset.
+fn render_tab_with(preset: &str, tab: &str, width: u16) -> String {
     let width_arg = width.to_string();
     let output = run(&[
-        "--render", "--plain", "--tab", tab, "--width", &width_arg, "--height", "40", WORK,
+        "--render", "--plain", "--theme", preset, "--tab", tab, "--width", &width_arg, "--height",
+        "40", WORK,
     ]);
     assert!(
         output.status.success(),
-        "raul failed for tab {tab} at width {width}: {output:?}"
+        "raul failed for {preset}/{tab} at width {width}: {output:?}"
     );
     String::from_utf8(output.stdout).expect("the plain render is UTF-8")
 }
@@ -283,6 +289,41 @@ fn the_row_tabs_fit_their_width_at_every_canonical_width() {
                 assert!(
                     measured <= width as usize,
                     "{tab} at {width}: row {number} is {measured} columns wide: {line:?}"
+                );
+            }
+        }
+    }
+}
+
+/// Every tab the window has, by its command-line name.
+const TAB_NAMES: [&str; 6] = [
+    "overview",
+    "needs-you",
+    "path",
+    "backlog",
+    "autopilot",
+    "settings",
+];
+
+#[test]
+fn every_tab_renders_alike_in_nord_and_terminal_at_every_canonical_width() {
+    // The plain render carries no colour, so the words are the whole
+    // contract a preset keeps on screen. Nord is a dark preset: it changes
+    // the paint, and the same screen says the same thing in every preset.
+    // Terminal is the one that names no colour; it says the same words too.
+    for tab in TAB_NAMES {
+        for width in [40u16, 60, 100] {
+            let dark = render_tab_with("dark", tab, width);
+            for preset in ["nord", "terminal"] {
+                let other = render_tab_with(preset, tab, width);
+                assert_eq!(
+                    other, dark,
+                    "{preset} changes the words of {tab} at width {width}"
+                );
+                assert_eq!(
+                    other.lines().count(),
+                    40,
+                    "{preset}/{tab} at {width}: the render did not take --height"
                 );
             }
         }

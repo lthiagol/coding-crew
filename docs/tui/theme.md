@@ -91,7 +91,7 @@ theme deliberately.
 
 The detail pane handles it deliberately: the code tokens pair with the
 pairing that sentence names — the engine's own default, `base16-ocean.dark`
-— and the pairing is the same in both of raul's presets. There is no
+— and the pairing is the same in every one of raul's presets. There is no
 avoiding it: an empty syntax set panics, and a scope-less syntect theme
 paints the tokens black. The engine's code tokens are the one paint the
 presets do not change.
@@ -103,14 +103,21 @@ preset becomes `Color::Reset`, so the terminal preset names no colour at all,
 and what still tells one role from another is the engine's own modifiers —
 bold on headings and strong text, underlined on links among them.
 
-**The search is not offered in either preset.** The engine paints a hit's
-background and keeps the searched span's own foreground. In the dark preset
-the mapping gives the hit the selection's background, but the foreground
-stays `text.normal`, which reads at 1.26:1 on that background — no slot
-carries a dark background to pair with the accent. In the terminal preset
-the engine's fields are `Color::Reset`, so the engine paints no background
-at all: the current match is a bold word with no box around it, and the
-other hits are not marked. Search waits for a readable pairing.
+**The search is not offered in any preset.** The engine paints a hit's
+background and keeps the searched span's own foreground.
+
+- In the **dark** preset the mapping gives the hit the selection's
+  background, but the foreground stays `text.normal`, which reads at 1.26:1
+  on that background — no slot carries a dark background to pair with the
+  accent.
+- In the **nord** preset the same pairing, `text.normal` on the selection's
+  nord8, reads at 1.64:1 — the accent is a mid-tone, not the dark backdrop
+  the hit's foreground needs.
+- In the **terminal** preset the engine's fields are `Color::Reset`, so the
+  engine paints no background at all: the current match is a bold word with
+  no box around it, and the other hits are not marked.
+
+Search waits for a readable pairing.
 
 | field | slot | why |
 |---|---|---|
@@ -172,17 +179,20 @@ slots as the chrome; syntect's code-token theme is the one part that does not.
 | preset | what it is |
 |---|---|
 | `dark` | the default: the dark palette |
+| `nord` | the Nord family's palette |
 | `terminal` | no colours of our own — the terminal's palette is used |
 
-The preset is chosen with a flag for now: `raul --theme dark|terminal`.
+The preset is chosen with a flag for now: `raul --theme dark|nord|terminal`.
 A theme file on disk is later.
 
 The `dark` preset is ours, hand-tuned, and its eighteen values are written
-down in [palettes.md](palettes.md), with their roles and their contrast.
+down in [palettes.md](palettes.md), with their roles and their contrast. The
+`nord` preset is the Nord family's, and its eighteen values are recorded in
+the same file.
 
-**The dark preset assumes a terminal with a dark background, and does not
-paint one.** The background is the terminal's own; every colour of the
-palette is picked to read on a dark one.
+**The dark and nord presets assume a terminal with a dark background, and do
+not paint one.** The background is the terminal's own; every colour of the
+palettes is picked to read on a dark one.
 
 **The light themes are deferred.** No light preset is built until that changes:
 not ours, and not the light variants of the families — Catppuccin Latte,
@@ -234,7 +244,7 @@ can and cannot do:
   chrome apart.
 
 The preset exists for terminals whose palette the reader has chosen. Where
-the paint matters, the `dark` preset is the one.
+the paint matters, the `dark` or `nord` preset is the one.
 
 ## Rules
 
