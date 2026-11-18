@@ -212,8 +212,6 @@ WHERE WE ARE
   decision inside a round, a BLOCKED builder, a round-5 changes-needed,
   and the Autopilot design (G1), which is groomed with the human before
   anything is built.
-  Next unit: the theme catalog - Nord, then Catppuccin, then Dracula
-  (plan 8-10).
   Unit closed: the selection highlight. One round. The selected row of
   Needs you, Path and Backlog is painted with the text.selected slot -
   the documented slot, reversed video, bar to the pane edge - and the
@@ -229,8 +227,30 @@ WHERE WE ARE
   announced-hidden rows on short panes, and naming the movement keys in
   the footer and the help overlay. Two more lows stand recorded: the
   two-instants follow-up gains a third caller in rows_of.
-  Next unit: the theme catalog - Nord, then Catppuccin, then Dracula
-  (plan 8-10).
+  Unit closed: the theme catalog: Nord. Two rounds. The preset comes from
+  Nord own page - every value fetched live and checked by both reviewers -
+  its eighteen slots mapped per the palettes.md rules, its derivations
+  written down, its contrast figures recomputed by test, and the render
+  tests run it on every tab at 40/60/100. It joins Preset::ALL, so every
+  preset test covers it, and --theme gained the name - no new flag. The
+  gate is green: 537 Rust tests and 218 script assertions.
+  The first round found one blocking defect - theme.md still described a
+  two-preset world, so Nord had no entry and the search figure the
+  recompute test hardcoded was Dark alone - and both axes converged on
+  two lows: the tab-local preset tests still hardcoded dark-vs-terminal,
+  and the Nord section recorded fewer values than the family page lists.
+  The delta round closed all three with probes. Two one-line drift
+  findings came out of it - theme.md still lists Nord under Not yet, and a
+  detail.rs comment still says both of raul presets - and the orchestrator
+  ruled them required fixes in the next unit, which edits the same docs.
+  Two operational lessons from a server restart: /tmp does not survive it,
+  so a round snapshot and the gate log go with it - both are cheap to
+  rebuild; and the wake command cannot see a prompt sitting unsubmitted in
+  opencode input, because herdr reports idle while the text waits - the
+  recovery is a bare Enter through herdr pane send-text, and every dispatch
+  now reads the pane afterwards to check.
+  Next unit: the theme catalog: Catppuccin (plan 9), with those two
+  one-line fixes carried in.
   The model experiment concluded: the tested pair is now the default. The
   flow configs in flow/ name builder opencode-go/deepseek-v4.1-flash#high
   and reviewer opencode-go/glm-5.3#high - the same strings the temp test
