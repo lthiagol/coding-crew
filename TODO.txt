@@ -329,6 +329,15 @@ DONE
   still a stub.
 
 HAPPENED
+  The orchestrator passed pane ids to herdr tab close - wX:p7 where herdr
+  wants a tab id, wX:t7 - and herdr answered tab_not_found every time. The
+  orchestrator read that as already closed and moved on, so no tab closed
+  and the Orchestration workspace piled up thirteen tabs, each holding an
+  opencode client, its own --standalone server and a pty daemon: 2106 MB
+  of RSS held by finished rounds. The rule now: herdr tab close takes a
+  TAB id, and a close that answers tab_not_found means the id was wrong,
+  not that the tab is gone. Twelve tabs and 33 processes were reaped,
+  freeing about 1.7 GB of pane RSS and 1.2 GB of system memory.
   A builder pane was blocked by an account setting, not a defect: the
   opencode-go DeepSeek V4.1 Flash model is region-blocked until the
   console's privacy region is set to Global. And a wake command was left
