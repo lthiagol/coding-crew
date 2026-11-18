@@ -217,6 +217,78 @@ fn the_overview_matches_the_snapshot_at_every_canonical_width() {
     }
 }
 
+/// A tab, named on the command line, rendered at a width.
+fn render_tab(tab: &str, width: u16) -> String {
+    let width_arg = width.to_string();
+    let output = run(&[
+        "--render", "--plain", "--tab", tab, "--width", &width_arg, "--height", "40", WORK,
+    ]);
+    assert!(
+        output.status.success(),
+        "raul failed for tab {tab} at width {width}: {output:?}"
+    );
+    String::from_utf8(output.stdout).expect("the plain render is UTF-8")
+}
+
+#[test]
+fn the_settings_tab_is_reachable_in_render_mode_at_every_canonical_width() {
+    for width in [40, 60, 100] {
+        let text = render_tab("settings", width);
+        assert_eq!(
+            text.lines().count(),
+            40,
+            "the render did not take --height at width {width}"
+        );
+        // The tab bar names it, so the screen is the Settings tab.
+        assert!(text.contains("Settings"), "width {width}: {text}");
+        // It lists nothing yet, and says what it will hold.
+        assert!(text.contains("nothing to set yet"), "width {width}: {text}");
+        for words in ["keybinds", "sort keys", "theme"] {
+            assert!(text.contains(words), "width {width}: {words} is missing");
+        }
+        assert!(!text.contains("not built yet"), "width {width}: {text}");
+        // The footer names no key that does nothing on this tab.
+        let footer = text.lines().last().expect("a footer row").trim_end();
+        assert!(!footer.contains("enter"), "width {width}: {footer}");
+        assert!(!footer.contains("open"), "width {width}: {footer}");
+        for (number, line) in text.lines().enumerate() {
+            let measured = display_width(line);
+            assert!(
+                measured <= width as usize,
+                "row {number} is {measured} columns wide, not at most {width}: {line:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_tab_flag_needs_the_render_mode() {
+    let output = run(&["--tab", "settings", WORK]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "--tab without the render mode exited 0: {output:?}"
+    );
+    assert!(output.stdout.is_empty(), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--tab"), "{stderr}");
+    assert!(stderr.contains("--render"), "{stderr}");
+}
+
+#[test]
+fn an_unknown_tab_is_refused_before_rendering() {
+    let output = run(&["--render", "--plain", "--tab", "settingss", WORK]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "an unknown tab did not exit 1: {output:?}"
+    );
+    assert!(output.stdout.is_empty(), "a screen was printed: {output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("settingss"), "{stderr}");
+    assert!(stderr.contains("settings"), "{stderr}");
+}
+
 #[test]
 fn two_runs_print_the_same_bytes() {
     let first = overview();

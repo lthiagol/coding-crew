@@ -15,6 +15,7 @@ use crate::detail::{self, Detail};
 use crate::needs;
 use crate::overview;
 use crate::path;
+use crate::settings;
 use crate::tabs::Tab;
 use crate::theme::{Theme, block_title_style};
 
@@ -176,6 +177,7 @@ impl App {
             Tab::NeedsYou => needs::render(frame, rows[2], work, &self.theme),
             Tab::Path => path::render(frame, rows[2], work, &self.theme),
             Tab::Backlog => backlog::render(frame, rows[2], work, &self.theme),
+            Tab::Settings => settings::render(frame, rows[2], &self.theme),
             tab => frame.render_widget(placeholder(tab, &self.theme), rows[2]),
         }
         if let Some(detail) = self.detail.as_mut() {
@@ -390,7 +392,7 @@ pub(crate) fn footer_line(
 /// The rows a tab holds, when it holds rows the detail pane can open.
 ///
 /// The Overview is a summary, not a list: it has no rows to open. The
-/// Autopilot and the Settings tabs are placeholders.
+/// Autopilot tab is a placeholder, and the Settings tab lists nothing yet.
 fn rows_of(work: &Work, tab: Tab) -> Option<Vec<String>> {
     match tab {
         Tab::NeedsYou => Some(needs::row_ids(work, &coding_lanes_core::now_rfc3339())),
@@ -400,7 +402,7 @@ fn rows_of(work: &Work, tab: Tab) -> Option<Vec<String>> {
     }
 }
 
-/// The tabs that are not built yet.
+/// The tab that is not built yet.
 fn placeholder(tab: Tab, theme: &Theme) -> Paragraph<'static> {
     Paragraph::new(Line::from(Span::styled(
         format!("the {} tab is not built yet", tab.label()),
@@ -635,6 +637,98 @@ mod tests {
         assert!(text.contains("SMALL TASKS · 4"), "{text}");
         assert!(text.contains("DRAFTS · 5"), "{text}");
         assert!(!text.contains("not built yet"), "{text}");
+    }
+
+    #[test]
+    fn the_settings_tab_says_what_it_will_hold() {
+        let rows = render(
+            &mut window(&Theme::preset(Preset::Dark), Tab::Settings, false),
+            100,
+            20,
+        )
+        .0;
+        let text = rows.join("\n");
+        // A named empty state, not a blank screen.
+        assert!(text.contains("nothing to set yet"), "{text}");
+        // What the spec says the tab will hold.
+        assert!(text.contains("keybinds"), "{text}");
+        assert!(text.contains("sort keys"), "{text}");
+        assert!(text.contains("theme"), "{text}");
+        // The Settings placeholder is its own, not the generic one.
+        assert!(!text.contains("not built yet"), "{text}");
+    }
+
+    #[test]
+    fn the_settings_tab_has_no_rows_to_open() {
+        let work = mock_work();
+        assert!(
+            rows_of(&work, Tab::Settings).is_none(),
+            "Settings holds rows"
+        );
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.on_key(key(KeyCode::Enter), &work);
+        assert!(app.detail.is_none(), "enter opened a record on Settings");
+        assert!(app.selection.is_none(), "Settings selected a row");
+    }
+
+    #[test]
+    fn the_settings_footer_names_only_keys_that_work() {
+        let rows = render(
+            &mut window(&Theme::preset(Preset::Dark), Tab::Settings, false),
+            100,
+            20,
+        )
+        .0;
+        let footer = rows.last().expect("a footer row").trim_end().to_string();
+        for works in ["quit", "1-6", "switch tab", "help"] {
+            assert!(footer.contains(works), "{footer}: {works} is missing");
+        }
+        // Nothing on this tab is opened or scrolled: the footer says so by
+        // leaving those keys out.
+        for nothing in ["enter", "open", " j ", " k ", "pgup", "pgdn"] {
+            assert!(
+                !footer.contains(nothing),
+                "{footer}: {nothing} does nothing here"
+            );
+        }
+    }
+
+    #[test]
+    fn the_settings_placeholder_is_painted_dim() {
+        let theme = Theme::preset(Preset::Dark);
+        let (rows, paint) = render(&mut window(&theme, Tab::Settings, false), 100, 20);
+        let dim = theme.text.dim.fg.expect("the dim colour");
+        for words in ["nothing to set yet", "will hold keybinds, sort keys, theme"] {
+            let row = rows
+                .iter()
+                .position(|row| row.contains(words))
+                .unwrap_or_else(|| panic!("{words} is not on screen"));
+            let column = rows[row].find(words).expect("the words");
+            assert_eq!(paint[row][column].fg, dim, "{words} is not painted dim");
+        }
+        // The box is the theme's, as on the other tabs.
+        let border = theme.chrome.border.fg.expect("the border colour");
+        assert_eq!(
+            paint[2][0].fg, border,
+            "the settings box is not the theme's"
+        );
+    }
+
+    #[test]
+    fn the_settings_tab_is_reached_and_marked_like_the_others() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Overview, false);
+        app.on_key(key(KeyCode::Char('6')), &work);
+        assert_eq!(app.tab, Tab::Settings, "6 did not reach Settings");
+        let (rows, paint) = render(&mut app, 100, 20);
+        let bar = rows.get(1).expect("the tab bar");
+        let column = bar.find(" Settings ").expect("the Settings label") + 1;
+        assert_eq!(
+            paint[1][column].fg,
+            theme.chrome.tab_active.fg.expect("the active tab colour"),
+            "Settings is not marked as the active tab"
+        );
     }
 
     /// Every screen the window can show.

@@ -50,4 +50,21 @@ impl Tab {
     pub fn previous(&self) -> Tab {
         Tab::from_index(self.index() + Tab::ALL.len() - 1)
     }
+
+    /// The name of the tab on the command line.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Tab::Overview => "overview",
+            Tab::NeedsYou => "needs-you",
+            Tab::Path => "path",
+            Tab::Backlog => "backlog",
+            Tab::Autopilot => "autopilot",
+            Tab::Settings => "settings",
+        }
+    }
+
+    /// The tab of a command-line name.
+    pub fn from_name(name: &str) -> Option<Tab> {
+        Tab::ALL.into_iter().find(|tab| tab.name() == name)
+    }
 }

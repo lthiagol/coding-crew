@@ -9,6 +9,7 @@ mod detail;
 mod needs;
 mod overview;
 mod path;
+mod settings;
 mod tabs;
 mod text;
 mod theme;
@@ -31,9 +32,10 @@ use coding_lanes_core::store::{DATA_DIR, WORK_DIR};
 use coding_lanes_core::{Store, StoreError};
 use data::{Missing, Work};
 use detail::Detail;
+use tabs::Tab;
 use theme::{Preset, Theme};
 
-const USAGE: &str = "usage: raul [--theme dark|terminal] [--render --plain [--width N] [--height N] [--detail TASK-ID]] [work-folder]";
+const USAGE: &str = "usage: raul [--theme dark|terminal] [--render --plain [--width N] [--height N] [--tab NAME] [--detail TASK-ID]] [work-folder]";
 /// The columns of a plain render when --width is not given.
 const DEFAULT_WIDTH: u16 = 100;
 /// The rows of a plain render when --height is not given.
@@ -71,6 +73,8 @@ struct Options {
     width: u16,
     /// The rows of a plain render.
     height: u16,
+    /// The tab a plain render shows.
+    tab: Tab,
     /// The record the detail pane shows, in render mode.
     detail: Option<String>,
 }
@@ -87,6 +91,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     let mut plain = false;
     let mut width = DEFAULT_WIDTH;
     let mut height = DEFAULT_HEIGHT;
+    let mut tab: Option<Tab> = None;
     let mut detail: Option<String> = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -123,6 +128,15 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
             other if other.starts_with("--height=") => {
                 height = dimension("--height", &other["--height=".len()..])?;
             }
+            "--tab" => {
+                let Some(name) = args.next() else {
+                    bail!("--tab needs a name\n{USAGE}");
+                };
+                tab = Some(tab_of(&name)?);
+            }
+            other if other.starts_with("--tab=") => {
+                tab = Some(tab_of(&other["--tab=".len()..])?);
+            }
             "--detail" => {
                 let Some(id) = args.next() else {
                     bail!("--detail needs a task id\n{USAGE}");
@@ -151,6 +165,12 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     {
         bail!("--detail needs a task id\n{USAGE}");
     }
+    // The tab is reachable deterministically through the plain render: the
+    // flag has nothing to change in the interactive window, where the keys
+    // switch tabs.
+    if tab.is_some() && !render {
+        bail!("--tab works with --render --plain\n{USAGE}");
+    }
     let (root, reason) = match root {
         Some(root) => {
             let reason = reason_at(&root);
@@ -165,6 +185,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
         render,
         width,
         height,
+        tab: tab.unwrap_or(Tab::Overview),
         detail,
     })
 }
@@ -182,6 +203,14 @@ fn preset_of(name: &str) -> Result<Preset> {
     Preset::parse(name).ok_or_else(|| {
         let names: Vec<&str> = Preset::ALL.iter().map(|preset| preset.name()).collect();
         anyhow::anyhow!("unknown theme {name}: the themes are {}", names.join(", "))
+    })
+}
+
+/// The tab of a name.
+fn tab_of(name: &str) -> Result<Tab> {
+    Tab::from_name(name).ok_or_else(|| {
+        let names: Vec<&str> = Tab::ALL.iter().map(|tab| tab.name()).collect();
+        anyhow::anyhow!("unknown tab {name}: the tabs are {}", names.join(", "))
     })
 }
 
@@ -257,6 +286,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
 /// bounded by the same dimensions.
 fn render_plain(options: Options) -> Result<()> {
     let mut app = App::new(options.root, options.theme);
+    app.tab = options.tab;
     let work = Work::load_missing(&app.root, options.reason);
     if let Some(id) = &options.detail {
         if work.record_title(id).is_none() {
@@ -558,5 +588,57 @@ mod tests {
         let options =
             parse_args(["--render", "--plain"].map(String::from).into_iter()).expect("the options");
         assert!(options.detail.is_none());
+    }
+
+    #[test]
+    fn the_tab_flag_names_the_tab() {
+        let settings = parse_args(
+            ["--render", "--plain", "--tab", "settings"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .expect("the settings tab");
+        assert_eq!(settings.tab, Tab::Settings);
+        let needs_you = parse_args(
+            ["--plain", "--tab=needs-you", "--render"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .expect("the needs-you tab");
+        assert_eq!(needs_you.tab, Tab::NeedsYou);
+    }
+
+    #[test]
+    fn the_render_starts_on_the_overview() {
+        let options =
+            parse_args(["--render", "--plain"].map(String::from).into_iter()).expect("the options");
+        assert_eq!(options.tab, Tab::Overview);
+    }
+
+    #[test]
+    fn an_unknown_tab_is_refused() {
+        let error = parse_args(
+            ["--render", "--plain", "--tab", "settingss"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .expect_err("settingss is not a tab");
+        assert!(error.to_string().contains("settingss"), "{error}");
+        assert!(error.to_string().contains("settings"), "{error}");
+        let error = parse_args(
+            ["--render", "--plain", "--tab"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .expect_err("a tab needs a name");
+        assert!(error.to_string().contains("--tab"), "{error}");
+    }
+
+    #[test]
+    fn the_tab_flag_needs_the_render_mode() {
+        let error = parse_args(["--tab", "settings"].map(String::from).into_iter())
+            .expect_err("the flag is a render-mode flag");
+        assert!(error.to_string().contains("--tab"), "{error}");
+        assert!(error.to_string().contains("--render"), "{error}");
     }
 }

@@ -160,6 +160,8 @@ until then, and says so.
 | sort | the sort key per tab |
 | theme | the colours |
 
+A placeholder: it lists nothing yet, and says what it will hold.
+
 ## The detail pane
 
 The task, close up — as a **document**. The record is JSON; what the human
@@ -226,6 +228,9 @@ Every view above is computed from the task files.
 `raul --render --plain` prints the current screen as plain text and exits.
 It is how a prototype is captured and how a snapshot test is written — the
 sketch is the tool's own output, not a drawing of it.
+
+`--tab NAME` renders another tab — `overview`, `needs-you`, `path`,
+`backlog`, `autopilot`, `settings` — in the same bounded plain render.
 
 `scripts/pty-sweep.py` renders the screen at every width from 40 to 120, keeps
 one file per width, and fails when a line is wider than its width. The gate
