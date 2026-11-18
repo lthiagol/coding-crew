@@ -262,6 +262,34 @@ fn the_settings_tab_is_reachable_in_render_mode_at_every_canonical_width() {
 }
 
 #[test]
+fn the_row_tabs_fit_their_width_at_every_canonical_width() {
+    // The selection bar is paint only: the plain render carries the same
+    // words, and no line grows past the width it is drawn in.
+    for tab in ["needs-you", "path", "backlog"] {
+        for width in [40u16, 60, 100] {
+            let text = render_tab(tab, width);
+            assert_eq!(
+                text.lines().count(),
+                40,
+                "{tab} at {width}: the render did not take --height"
+            );
+            for (number, line) in text.lines().enumerate() {
+                assert_eq!(
+                    line.trim_end_matches(' '),
+                    line,
+                    "{tab} at {width}: row {number} ends in spaces that carry no information"
+                );
+                let measured = display_width(line);
+                assert!(
+                    measured <= width as usize,
+                    "{tab} at {width}: row {number} is {measured} columns wide: {line:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn the_tab_flag_needs_the_render_mode() {
     let output = run(&["--tab", "settings", WORK]);
     assert_eq!(

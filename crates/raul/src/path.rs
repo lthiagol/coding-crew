@@ -15,7 +15,7 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_lanes_core::{Status, Task};
 
 use crate::data::{Work, has_overlay, live_claim};
-use crate::theme::{Theme, block_title_style, phase_style};
+use crate::theme::{Theme, block_title_style, phase_style, selected_line};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -325,7 +325,10 @@ pub fn row_ids(work: &Work) -> Vec<String> {
 }
 
 /// Draw the tab.
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
+///
+/// `selected` is the row the cursor is on: its cells take the selection's
+/// paint. Every other row keeps its own.
+pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
     let block = Block::bordered()
         .title("path tree")
         .title_style(block_title_style(theme))
@@ -364,7 +367,7 @@ pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
     frame.render_widget(
-        Paragraph::new(lines(&tree, width, height, theme))
+        Paragraph::new(lines(&tree, width, height, theme, selected))
             .wrap(Wrap { trim: false })
             .block(block),
         area,
@@ -428,8 +431,14 @@ struct Dropped {
 ///
 /// The task that happens next is never lost without a word: when the spine
 /// does not fit, the trunk is named in the announcement.
-fn lines(tree: &Tree, width: usize, height: usize, theme: &Theme) -> Vec<Line<'static>> {
-    let pieces = pieces(tree, width, theme);
+fn lines(
+    tree: &Tree,
+    width: usize,
+    height: usize,
+    theme: &Theme,
+    selected: Option<&str>,
+) -> Vec<Line<'static>> {
+    let pieces = pieces(tree, width, theme, selected);
     // The tree that is shown is the one that still leaves room to say what
     // is not shown. The announcement comes first: a name that is cut is a
     // name the reader does not have.
@@ -704,7 +713,7 @@ fn summary_entry(branch: &Dropped, width: usize) -> String {
 }
 
 /// The pieces of the tree: the head, then the branches.
-fn pieces(tree: &Tree, width: usize, theme: &Theme) -> Vec<Piece> {
+fn pieces(tree: &Tree, width: usize, theme: &Theme, selected: Option<&str>) -> Vec<Piece> {
     let mut pieces = Vec::new();
 
     // The head: what the spine is, and the spine itself.
@@ -719,7 +728,7 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme) -> Vec<Piece> {
                 " ├─ ".to_string()
             };
             Chunk {
-                lines: row(&prefix, entry, width, theme),
+                lines: row(&prefix, entry, width, theme, is_selected(entry, selected)),
                 tasks: 1,
             }
         })
@@ -758,7 +767,13 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme) -> Vec<Piece> {
                         "{branch_prefix}{group_prefix}{}",
                         connector(row_index == last_row)
                     );
-                    lines.extend(row(&prefix, entry, width, theme));
+                    lines.extend(row(
+                        &prefix,
+                        entry,
+                        width,
+                        theme,
+                        is_selected(entry, selected),
+                    ));
                 }
                 blocks.push(Chunk {
                     lines,
@@ -775,7 +790,7 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme) -> Vec<Piece> {
                 for (row_index, entry) in group.rows.iter().enumerate() {
                     let prefix = format!("{branch_prefix}{}", connector(row_index == last_row));
                     blocks.push(Chunk {
-                        lines: row(&prefix, entry, width, theme),
+                        lines: row(&prefix, entry, width, theme, is_selected(entry, selected)),
                         tasks: 1,
                     });
                 }
@@ -901,8 +916,15 @@ fn branch_header(
 /// A row of the tree: the prefix, the id, the title and what it waits on.
 ///
 /// The title is never cut: when it does not fit on one row, it wraps under
-/// its own column.
-fn row(prefix: &str, entry: &Entry, width: usize, theme: &Theme) -> Vec<Line<'static>> {
+/// its own column. A selected row is painted whole: its wrapped lines and
+/// its note are part of it.
+fn row(
+    prefix: &str,
+    entry: &Entry,
+    width: usize,
+    theme: &Theme,
+    selected: bool,
+) -> Vec<Line<'static>> {
     let style = phase_style(theme, entry.status);
     let id = entry.id.as_str();
     let content = prefix.chars().count();
@@ -964,7 +986,18 @@ fn row(prefix: &str, entry: &Entry, width: usize, theme: &Theme) -> Vec<Line<'st
             }
         }
     }
+    if selected {
+        return lines
+            .into_iter()
+            .map(|line| selected_line(line, width, theme))
+            .collect();
+    }
     lines
+}
+
+/// Whether the row is the one the cursor is on.
+fn is_selected(entry: &Entry, selected: Option<&str>) -> bool {
+    selected == Some(entry.id.as_str())
 }
 
 /// The line that says how much is not shown.
@@ -1042,7 +1075,7 @@ mod tests {
     fn draw(work: &Work, width: u16, height: u16) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme()))
+            .draw(|frame| render(frame, frame.area(), work, &theme(), None))
             .expect("drawing the path");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -1258,7 +1291,7 @@ mod tests {
                 }],
             }],
         };
-        let rows: Vec<String> = lines(&tree, 60, 20, &theme)
+        let rows: Vec<String> = lines(&tree, 60, 20, &theme, None)
             .iter()
             .map(text_of_line)
             .collect();
@@ -1314,7 +1347,7 @@ mod tests {
         let tree = tree(&work);
         for width in [40usize, 60, 100] {
             for height in [8usize, 12, 24, 40] {
-                let rows = lines(&tree, width, height, &theme());
+                let rows = lines(&tree, width, height, &theme(), None);
                 assert!(
                     too_wide(&rows, width).is_empty(),
                     "{width}x{height}: {:?}",
@@ -1337,7 +1370,7 @@ mod tests {
         let tree = tree(&work);
         for width in 20..=120 {
             for height in 4..=40 {
-                let rows = lines(&tree, width, height, &theme());
+                let rows = lines(&tree, width, height, &theme(), None);
                 assert!(
                     too_wide(&rows, width).is_empty(),
                     "{width}x{height}: {:?}",
@@ -1375,6 +1408,7 @@ mod tests {
                     usize::from(width) - BORDER,
                     usize::from(height) - BORDER,
                     &theme(),
+                    None,
                 )
                 .iter()
                 .map(text_of_line)
@@ -1500,7 +1534,7 @@ mod tests {
     fn draw_cells(work: &Work, width: u16, height: u16) -> Vec<Vec<(char, ratatui::style::Color)>> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme()))
+            .draw(|frame| render(frame, frame.area(), work, &theme(), None))
             .expect("drawing the path");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -1554,13 +1588,51 @@ mod tests {
                 waits_on: Vec::new(),
                 hold: None,
             };
-            let lines = row(" ● ", &entry, 100, &theme);
+            let lines = row(" ● ", &entry, 100, &theme, false);
             let style = phase_style(&theme, status);
             // The id and the title of the row carry the colour of the
             // phase; the tree around them is dim.
             assert_eq!(lines[0].spans[1].style, style, "{status:?}");
             assert_eq!(lines[0].spans[3].style, style, "{status:?}");
             assert_eq!(lines[0].spans[0].style, theme.text.dim, "{status:?}");
+        }
+    }
+
+    #[test]
+    fn a_selected_row_takes_the_selection_slot_and_the_others_keep_their_phase() {
+        let theme = theme();
+        let selection = theme.text.selected;
+        let style = phase_style(&theme, Status::Approved);
+        let entry = Entry {
+            id: "TSK01".to_string(),
+            title: "a task".to_string(),
+            status: Status::Approved,
+            waits_on: Vec::new(),
+            hold: None,
+        };
+        // A row that is not the cursor's keeps the slot of its phase.
+        let plain = row(" ● ", &entry, 60, &theme, false);
+        assert_eq!(plain[0].spans[1].style, style, "the id");
+        assert_eq!(plain[0].spans[3].style, style, "the title");
+        // The cursor's row takes the selection's pair on every cell, and the
+        // bar runs to the edge of the pane.
+        let selected = row(" ● ", &entry, 60, &theme, true);
+        assert_eq!(selected.len(), 1, "a short row is one line");
+        assert_eq!(selected[0].width(), 60, "the selection bar stops short");
+        for span in &selected[0].spans {
+            assert_eq!(span.style, selection, "{:?} is not the selection", span);
+        }
+        // A wrapped row is painted whole: every line of it, note included.
+        let mut wrapped = entry.clone();
+        wrapped.title = "a title that does not fit the pane at all, not at any width".to_string();
+        wrapped.waits_on = vec!["TSK02".to_string()];
+        let selected = row(" ● ", &wrapped, 30, &theme, true);
+        assert!(selected.len() > 1, "the fixture wraps: {selected:?}");
+        for line in &selected {
+            assert_eq!(line.width(), 30, "a line of the bar stops short");
+            for span in &line.spans {
+                assert_eq!(span.style, selection, "{:?} is not the selection", span);
+            }
         }
     }
 

@@ -16,7 +16,7 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_lanes_core::{Task, parse_rfc3339};
 
 use crate::data::{Reason, Work};
-use crate::theme::{Theme, block_title_style, reason_style};
+use crate::theme::{Theme, block_title_style, reason_style, selected_line};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -60,7 +60,10 @@ pub struct Group {
 }
 
 /// Draw the tab.
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
+///
+/// `selected` is the row the cursor is on: its cells take the selection's
+/// paint. Every other row keeps its own.
+pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
     let block = Block::bordered()
         .title("needs you")
         .title_style(block_title_style(theme))
@@ -90,7 +93,7 @@ pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
     frame.render_widget(
-        Paragraph::new(lines(work, width, height, theme))
+        Paragraph::new(lines(work, width, height, theme, selected))
             .wrap(Wrap { trim: false })
             .block(block),
         area,
@@ -158,7 +161,13 @@ fn waited_since(task: &Task, now: &str) -> i64 {
 ///
 /// What does not fit is said out loud: a count is never shown as if it
 /// were the whole count, and a reason is never lost.
-fn lines(work: &Work, width: usize, height: usize, theme: &Theme) -> Vec<Line<'static>> {
+fn lines(
+    work: &Work,
+    width: usize,
+    height: usize,
+    theme: &Theme,
+    selected: Option<&str>,
+) -> Vec<Line<'static>> {
     let now = coding_lanes_core::now_rfc3339();
     let groups = groups(work, &now);
     let ages = age_width(&groups);
@@ -175,7 +184,7 @@ fn lines(work: &Work, width: usize, height: usize, theme: &Theme) -> Vec<Line<'s
     if wanted <= rest {
         // Everything fits: there is nothing to say.
         for group in &groups {
-            push_group(&mut out, group, width, ages, theme);
+            push_group(&mut out, group, width, ages, theme, selected);
         }
         return out;
     }
@@ -185,7 +194,7 @@ fn lines(work: &Work, width: usize, height: usize, theme: &Theme) -> Vec<Line<'s
     // announcement cut, and then it says that too.
     let mut shortest: Option<(Vec<Line<'static>>, Vec<Line<'static>>)> = None;
     for budget in (0..=rest).rev() {
-        let (rows, omitted) = layout(&groups, budget, width, ages, theme);
+        let (rows, omitted) = layout(&groups, budget, width, ages, theme, selected);
         let room = rest.saturating_sub(rows.len());
         let (said, cut) = announcement(&omitted, width, room, theme);
         if cut {
@@ -214,6 +223,7 @@ fn layout(
     width: usize,
     age_width: usize,
     theme: &Theme,
+    selected: Option<&str>,
 ) -> (Vec<Line<'static>>, [usize; 3]) {
     let mut out: Vec<Line<'static>> = Vec::new();
     let mut omitted = [0usize; 3];
@@ -230,7 +240,7 @@ fn layout(
         used += 1;
         let shown = (capacity - used).min(group.rows.len());
         for row in group.rows.iter().take(shown) {
-            out.push(row_line(row, width, age_width, theme));
+            out.push(row_line(row, width, age_width, theme, selected));
         }
         used += shown;
         if shown < group.rows.len() {
@@ -332,10 +342,11 @@ fn push_group(
     width: usize,
     age_width: usize,
     theme: &Theme,
+    selected: Option<&str>,
 ) {
     out.push(header(group, width, theme));
     for row in &group.rows {
-        out.push(row_line(row, width, age_width, theme));
+        out.push(row_line(row, width, age_width, theme, selected));
     }
 }
 
@@ -357,7 +368,22 @@ fn age_width(groups: &[Group]) -> usize {
 /// The row is a table: the id, the reason and the age are never cut, and
 /// the title gives way when the pane is narrow. The age stands at the right
 /// of the row, in a column of its own, so the days line up.
-fn row_line(row: &Row, width: usize, age_width: usize, theme: &Theme) -> Line<'static> {
+fn row_line(
+    row: &Row,
+    width: usize,
+    age_width: usize,
+    theme: &Theme,
+    selected: Option<&str>,
+) -> Line<'static> {
+    let line = row_line_plain(row, width, age_width, theme);
+    if selected == Some(row.id.as_str()) {
+        return selected_line(line, width, theme);
+    }
+    line
+}
+
+/// A row in its own paint, before the selection.
+fn row_line_plain(row: &Row, width: usize, age_width: usize, theme: &Theme) -> Line<'static> {
     let age = format!("{:>width$}", age_text(row.waited), width = age_width);
     let style = reason_style(theme, row.reason);
     let id = format!("{:<id_width$}", row.id, id_width = ID_WIDTH);
@@ -702,7 +728,7 @@ mod tests {
     fn draw(work: &Work, width: u16, height: u16) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme()))
+            .draw(|frame| render(frame, frame.area(), work, &theme(), None))
             .expect("drawing the needs you tab");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -719,7 +745,7 @@ mod tests {
     fn draw_cells(work: &Work, width: u16, height: u16) -> Vec<Vec<(char, Color)>> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme()))
+            .draw(|frame| render(frame, frame.area(), work, &theme(), None))
             .expect("drawing the needs you tab");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -1036,7 +1062,7 @@ mod tests {
         let work = mock_work();
         for width in 1..=120 {
             for height in 1..=40 {
-                let rows = lines(&work, width, height, &theme());
+                let rows = lines(&work, width, height, &theme(), None);
                 for row in &rows {
                     assert!(
                         row.width() <= width,
@@ -1081,6 +1107,7 @@ mod tests {
                     usize::from(width) - BORDER,
                     usize::from(height) - BORDER,
                     &theme(),
+                    None,
                 );
                 assert!(
                     asked.len() <= usize::from(height).saturating_sub(BORDER),
@@ -1176,7 +1203,7 @@ mod tests {
         let work = human_lane();
         let now = "2026-11-07T16:00:00Z";
         let groups = groups(&work, now);
-        let (rows, omitted) = layout(&groups, 5, 100, age_width(&groups), &theme());
+        let (rows, omitted) = layout(&groups, 5, 100, age_width(&groups), &theme(), None);
         // A wholly hidden group, a partly shown one, and one with nothing
         // left out.
         assert_eq!(omitted, [0, 2, 3]);
@@ -1342,7 +1369,7 @@ mod tests {
     fn no_line_is_spent_on_an_empty_announcement() {
         // Everything fits: there is nothing to say, and no blank line is
         // spent saying it.
-        let built = lines(&mock_work(), 58, 38, &theme());
+        let built = lines(&mock_work(), 58, 38, &theme(), None);
         for row in &built {
             assert!(row.width() > 0, "{built:?}");
             let text: String = row
@@ -1379,6 +1406,32 @@ mod tests {
         assert_eq!(colour_of(&cells, "TSK04"), Some(human), "an approval");
         assert_eq!(colour_of(&cells, "TSK13"), Some(human), "a review");
         assert_eq!(colour_of(&cells, "TSK19"), Some(error), "an escalation");
+    }
+
+    #[test]
+    fn a_selected_row_takes_the_selection_slot_and_the_others_keep_their_reason() {
+        let theme = theme();
+        let selection = theme.text.selected;
+        let groups = groups(&human_lane(), "2026-11-07T16:00:00Z");
+        let approve = &groups[0].rows[0];
+        let escalated = &groups[2].rows[0];
+        // A row that is not the cursor's keeps the slot of its reason.
+        let plain = row_line(approve, 60, 2, &theme, None);
+        assert_eq!(plain.spans[0].style, theme.semantic.human, "an approval");
+        let plain = row_line(escalated, 60, 2, &theme, None);
+        assert_eq!(plain.spans[0].style, theme.semantic.error, "an escalation");
+        // The cursor's row takes the selection's pair on every cell, and the
+        // bar runs to the edge of the pane.
+        let selected = row_line(approve, 60, 2, &theme, Some("TSK01"));
+        assert_eq!(selected.width(), 60, "the selection bar stops short");
+        for span in &selected.spans {
+            assert_eq!(span.style, selection, "{:?} is not the selection", span);
+        }
+        assert_eq!(selected.spans[0].style.fg, selection.fg);
+        assert_eq!(selected.spans[0].style.bg, selection.bg);
+        // A later row is not painted as the selection.
+        let other = row_line(escalated, 60, 2, &theme, Some("TSK01"));
+        assert_eq!(other.spans[0].style, theme.semantic.error);
     }
 
     #[test]
@@ -1433,13 +1486,29 @@ mod tests {
             let mut terminal =
                 Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
             terminal
-                .draw(|frame| render(frame, frame.area(), &work, &Theme::preset(Preset::Dark)))
+                .draw(|frame| {
+                    render(
+                        frame,
+                        frame.area(),
+                        &work,
+                        &Theme::preset(Preset::Dark),
+                        None,
+                    )
+                })
                 .expect("drawing");
             let dark = buffer_text(terminal.backend().buffer());
             let mut terminal =
                 Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
             terminal
-                .draw(|frame| render(frame, frame.area(), &work, &Theme::preset(Preset::Terminal)))
+                .draw(|frame| {
+                    render(
+                        frame,
+                        frame.area(),
+                        &work,
+                        &Theme::preset(Preset::Terminal),
+                        None,
+                    )
+                })
                 .expect("drawing");
             let terminal = buffer_text(terminal.backend().buffer());
             assert_eq!(dark, terminal, "{width}x{height}");

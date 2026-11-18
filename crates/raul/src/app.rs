@@ -124,6 +124,8 @@ impl App {
                 }
                 Action::Redraw
             }
+            KeyCode::Down | KeyCode::Char('j') => self.move_selection(work, 1),
+            KeyCode::Up | KeyCode::Char('k') => self.move_selection(work, -1),
             KeyCode::Char(digit @ '1'..='6') => {
                 self.go_to(Tab::from_index(digit as usize - '1' as usize))
             }
@@ -145,9 +147,33 @@ impl App {
 
     /// The record enter opens: the selected row, or the tab's first row.
     fn open_target(&self, work: &Work) -> Option<String> {
+        self.cursor(work)
+    }
+
+    /// The row the cursor is on: the selection, or the tab's first row when
+    /// nothing is selected yet.
+    fn cursor(&self, work: &Work) -> Option<String> {
         let ids = rows_of(work, self.tab)?;
         let selected = self.selection.clone().filter(|id| ids.contains(id));
         selected.or_else(|| ids.into_iter().next())
+    }
+
+    /// Move the cursor one row, clamped to the tab's rows. A tab without
+    /// rows has nowhere to move.
+    fn move_selection(&mut self, work: &Work, step: isize) -> Action {
+        let Some(ids) = rows_of(work, self.tab) else {
+            return Action::Redraw;
+        };
+        if ids.is_empty() {
+            return Action::Redraw;
+        }
+        let current = self
+            .cursor(work)
+            .and_then(|id| ids.iter().position(|other| *other == id))
+            .unwrap_or(0);
+        let next = (current as isize + step).clamp(0, ids.len() as isize - 1) as usize;
+        self.selection = Some(ids[next].clone());
+        Action::Redraw
     }
 
     /// Close the detail pane and return to the tab, and the selection, it
@@ -172,11 +198,15 @@ impl App {
 
         frame.render_widget(self.title_line(rows[0].width), rows[0]);
         frame.render_widget(self.tab_bar(rows[1].width), rows[1]);
+        // The row the cursor is on is the row enter opens: the highlight
+        // and the key agree, including before the first move.
+        let selected = self.cursor(work);
+        let selected = selected.as_deref();
         match self.tab {
             Tab::Overview => overview::render(frame, rows[2], work, &self.theme),
-            Tab::NeedsYou => needs::render(frame, rows[2], work, &self.theme),
-            Tab::Path => path::render(frame, rows[2], work, &self.theme),
-            Tab::Backlog => backlog::render(frame, rows[2], work, &self.theme),
+            Tab::NeedsYou => needs::render(frame, rows[2], work, &self.theme, selected),
+            Tab::Path => path::render(frame, rows[2], work, &self.theme, selected),
+            Tab::Backlog => backlog::render(frame, rows[2], work, &self.theme, selected),
             Tab::Settings => settings::render(frame, rows[2], &self.theme),
             tab => frame.render_widget(placeholder(tab, &self.theme), rows[2]),
         }
@@ -803,6 +833,154 @@ mod tests {
     /// A press of the key, as the terminal sends it.
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::from(code)
+    }
+
+    /// What a style paints a cell with.
+    fn paint_of(style: Style) -> Paint {
+        Paint {
+            fg: style.fg.unwrap_or(Color::Reset),
+            bg: style.bg.unwrap_or(Color::Reset),
+            modifier: style.add_modifier,
+        }
+    }
+
+    /// The cell of the first occurrence of `needle`.
+    fn cell_of(rows: &[String], needle: &str) -> Option<(usize, usize)> {
+        for (y, row) in rows.iter().enumerate() {
+            if let Some(byte) = row.find(needle) {
+                return Some((y, row[..byte].chars().count()));
+            }
+        }
+        None
+    }
+
+    /// The tabs whose rows the cursor moves through.
+    fn row_tabs() -> Vec<Tab> {
+        reachability()
+            .into_iter()
+            .filter_map(|(tab, opens)| opens.then_some(tab))
+            .collect()
+    }
+
+    #[test]
+    fn the_cursor_starts_on_the_row_enter_opens_and_the_paint_says_so() {
+        // The first row of a tab is what enter opens before any key: the
+        // highlight is on it, so the cursor and the key agree.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let selection = paint_of(theme.text.selected);
+        for tab in row_tabs() {
+            let mut app = window(&theme, tab, false);
+            let (rows, paint) = render(&mut app, 100, 40);
+            let ids = rows_of(&work, tab).expect("a row tab");
+            let first = ids.first().expect("a row");
+            let (y, x) = cell_of(&rows, first)
+                .unwrap_or_else(|| panic!("{tab:?}: {first} is not on screen"));
+            assert_eq!(
+                paint[y][x], selection,
+                "{tab:?}: the first row is not painted with the selection"
+            );
+            // The bar runs to the edge of the content pane.
+            assert_eq!(
+                paint[y][98], selection,
+                "{tab:?}: the selection bar stops short of the pane's edge"
+            );
+            app.on_key(key(KeyCode::Enter), &work);
+            assert_eq!(
+                app.detail.as_ref().expect("the pane opens").id,
+                *first,
+                "{tab:?}: enter opened another row than the painted one"
+            );
+        }
+    }
+
+    #[test]
+    fn the_cursor_follows_the_keys_and_lands_where_enter_will_open() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let selection = paint_of(theme.text.selected);
+        for tab in row_tabs() {
+            let ids = rows_of(&work, tab).expect("a row tab");
+            assert!(ids.len() >= 3, "{tab:?}: not enough rows to move through");
+            let mut app = window(&theme, tab, false);
+            // Down moves the paint to the second row.
+            app.on_key(key(KeyCode::Down), &work);
+            assert_eq!(app.selection.as_deref(), Some(ids[1].as_str()), "{tab:?}");
+            let (rows, paint) = render(&mut app, 100, 40);
+            let (y, x) = cell_of(&rows, &ids[1]).expect("the second row");
+            assert_eq!(
+                paint[y][x], selection,
+                "{tab:?}: the paint did not follow the key"
+            );
+            // The row the paint is on is the row enter opens.
+            app.on_key(key(KeyCode::Enter), &work);
+            assert_eq!(
+                app.detail.as_ref().expect("the pane opens").id,
+                ids[1],
+                "{tab:?}: enter opened another row than the painted one"
+            );
+            app.on_key(key(KeyCode::Esc), &work);
+            // Up returns the paint and the cursor to the first row.
+            app.on_key(key(KeyCode::Up), &work);
+            assert_eq!(app.selection.as_deref(), Some(ids[0].as_str()), "{tab:?}");
+            let (rows, paint) = render(&mut app, 100, 40);
+            let (y, x) = cell_of(&rows, &ids[0]).expect("the first row");
+            assert_eq!(paint[y][x], selection, "{tab:?}: up did not repaint");
+            // `j` and `k` are the same movement as down and up.
+            app.on_key(key(KeyCode::Char('j')), &work);
+            assert_eq!(app.selection.as_deref(), Some(ids[1].as_str()), "{tab:?}");
+            app.on_key(key(KeyCode::Char('k')), &work);
+            assert_eq!(app.selection.as_deref(), Some(ids[0].as_str()), "{tab:?}");
+            // The cursor stops at the ends rather than running off them.
+            app.on_key(key(KeyCode::Up), &work);
+            assert_eq!(app.selection.as_deref(), Some(ids[0].as_str()), "{tab:?}");
+            for _ in 0..ids.len() + 2 {
+                app.on_key(key(KeyCode::Down), &work);
+            }
+            assert_eq!(
+                app.selection.as_deref(),
+                ids.last().map(String::as_str),
+                "{tab:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn esc_returns_the_cursor_and_its_paint_to_the_row_it_came_from() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let selection = paint_of(theme.text.selected);
+        for tab in row_tabs() {
+            let ids = rows_of(&work, tab).expect("a row tab");
+            let target = &ids[2];
+            let mut app = window(&theme, tab, false);
+            app.on_key(key(KeyCode::Down), &work);
+            app.on_key(key(KeyCode::Down), &work);
+            app.on_key(key(KeyCode::Enter), &work);
+            assert_eq!(
+                app.detail.as_ref().expect("the pane opens").id,
+                *target,
+                "{tab:?}"
+            );
+            app.on_key(key(KeyCode::Esc), &work);
+            assert_eq!(
+                app.selection.as_deref(),
+                Some(target.as_str()),
+                "{tab:?}: esc lost the selection"
+            );
+            let (rows, paint) = render(&mut app, 100, 40);
+            let (y, x) = cell_of(&rows, target).expect("the returned row");
+            assert_eq!(
+                paint[y][x], selection,
+                "{tab:?}: esc lost the paint it came from"
+            );
+            let other = &ids[1];
+            let (y, x) = cell_of(&rows, other).expect("another row");
+            assert_ne!(
+                paint[y][x], selection,
+                "{tab:?}: the paint did not move back"
+            );
+        }
     }
 
     /// The tabs the detail pane opens from, and the tabs it does not.

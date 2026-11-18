@@ -7,6 +7,7 @@
 use coding_lanes_core::Status;
 use coding_lanes_engine::MarkdownTheme;
 use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
 
 use crate::data::Reason;
 
@@ -355,6 +356,21 @@ pub fn reason_style(theme: &Theme, reason: Reason) -> Style {
 /// a dimmed border is taken away again: a title is never dimmed.
 pub fn block_title_style(theme: &Theme) -> Style {
     theme.text.strong.remove_modifier(Modifier::DIM)
+}
+
+/// The line the cursor is on: every cell takes the selection's paint, and
+/// the bar runs to the edge of the pane.
+pub fn selected_line(line: Line<'static>, width: usize, theme: &Theme) -> Line<'static> {
+    let used = line.width();
+    let mut spans: Vec<Span<'static>> = line
+        .spans
+        .into_iter()
+        .map(|span| Span::styled(span.content, theme.text.selected))
+        .collect();
+    if used < width {
+        spans.push(Span::styled(" ".repeat(width - used), theme.text.selected));
+    }
+    Line::from(spans)
 }
 
 /// The palettes raul ships with.
