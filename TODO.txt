@@ -174,6 +174,23 @@ WHERE WE ARE
   follow-up stands: no fixture carries a fenced code block, so the
   syntect token paint is unpinned end to end.
   Next unit: the pty harness (plan 16).
+  Unit closed: the pty harness. One clean round. scripts/pty-sweep.py runs
+  raul --render --plain at every width 40-120 inclusive, one file per
+  width, and a width whose output has a line longer than the width fails
+  the command naming the width, the line and its measured length;
+  python3 standard library only; --height passes through; the output dir
+  defaults to a fresh temp dir reported and kept. make ci now sweeps into
+  a temp dir, a step proven able to fail by a reverted mutation, and the
+  Overview is pinned at 40, 60 and 100 columns. 74 script assertions cover
+  the script with a faked raul. The gate is green: 512 Rust tests and 218
+  script assertions.
+  The review left low follow-ups, none blocking: the sweep and the Rust
+  test hold two terminal-column measures that disagree on combining marks
+  and Cf - decide the rules once, in one place; the sweep's extra failure
+  modes (row count, nonzero exit, timeout) are built and tested though the
+  done-when did not name them; and each gate run leaves a kept 81-file
+  dir in /tmp that nothing prunes.
+  Next unit: the Settings tab (plan 17).
   Next unit: the detail pane: the document (plan 15).
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
@@ -220,6 +237,12 @@ DONE
   are still placeholders.
 
 HAPPENED
+  A builder pane was blocked by an account setting, not a defect: the
+  opencode-go DeepSeek V4.1 Flash model is region-blocked until the
+  console's privacy region is set to Global. And a wake command was left
+  running in the background while its tab was closed, so it ran to its
+  full bound blind - the turn had long completed. Rule: never close an
+  agent tab while its wake command is still in flight.
   The shell and the Overview took six build and review rounds. The reviews
   were worth it: they found that a count could be silently cut at a width
   where the screen looked fine, that the tab bar could be cut in half, and
