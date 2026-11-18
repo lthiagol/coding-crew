@@ -205,6 +205,13 @@ WHERE WE ARE
   and the state is one the keys cannot reach; one refusal or doc sentence
   and a test pin it; and the dim-paint test locates a cell by byte offset
   read as a column - move it to the per-cell draw_cells pattern.
+  The human authorized the sequence to run without check-ins between
+  units: after Nord, Catppuccin and Dracula, the row-tab scrolling unit,
+  then the mock-data dependency graph unit, then the batched low
+  follow-ups. The orchestrator stops for the human only on a product
+  decision inside a round, a BLOCKED builder, a round-5 changes-needed,
+  and the Autopilot design (G1), which is groomed with the human before
+  anything is built.
   Next unit: the theme catalog - Nord, then Catppuccin, then Dracula
   (plan 8-10).
   Unit closed: the selection highlight. One round. The selected row of
