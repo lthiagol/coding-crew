@@ -251,6 +251,22 @@ WHERE WE ARE
   now reads the pane afterwards to check.
   Next unit: the theme catalog: Catppuccin (plan 9), with those two
   one-line fixes carried in.
+  Unit closed: the theme catalog: Catppuccin mocha. One clean round. The
+  preset comes from catppuccin.com/palette - all 26 mocha values fetched
+  live by the builder and by both reviewers - its eighteen slots mapped
+  per the palettes.md rules, its derivations written down, its contrast
+  figures recomputed by test, and the render tests run it on every tab at
+  40/60/100. It joins Preset::ALL; the search pairing recomputes to
+  1.40:1; the terminal preset is untouched; both carried fixes from the
+  Nord unit landed and are pinned by new tests. The gate is green: 544
+  Rust tests and 218 script assertions.
+  Both axes converged on one low: the count the slots spend - fifteen of
+  the twenty-six - is fourteen, in docs/tui/palettes.md and two code
+  comments, and no test recomputes it. Ruled a required fix in the next
+  unit, which edits the same files, with a test that recomputes the
+  count.
+  Next unit: the theme catalog: Dracula (plan 10), with that fix carried
+  in.
   The model experiment concluded: the tested pair is now the default. The
   flow configs in flow/ name builder opencode-go/deepseek-v4.1-flash#high
   and reviewer opencode-go/glm-5.3#high - the same strings the temp test
