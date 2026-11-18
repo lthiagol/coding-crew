@@ -207,25 +207,20 @@ WHERE WE ARE
   read as a column - move it to the per-cell draw_cells pattern.
   Next unit: the theme catalog - Nord, then Catppuccin, then Dracula
   (plan 8-10).
-  The model experiment, still running at the human's request: the roles
-  run opencode-go models instead of the flow defaults. The flow configs
-  in flow/ still name the standard pair - builder
-  deepseek/deepseek-flash#high, reviewer
-  minimax-coding-plan/MiniMax-M3#thinking - and are untouched. The test
-  pair is builder opencode-go/deepseek-v4.1-flash#high and reviewer
-  opencode-go/glm-5.3#high, in temp role configs at
-  /tmp/opencode/flow-glm/builder.json and reviewer.json; they differ from
-  the flow configs in the model string only, so recreate them from these
-  strings if /tmp loses them. The test covered the theme bridge's round 3
-  and units 14, 15, 16 and 17: every unit closed clean, the document unit
-  spent one fix round (2 of the 5 budget), the rest were one-round units,
-  and the reviewers converged independently on the same finding twice
-  (the detail document round 1, the Settings round 1). Two orchestrator
-  stumbles recorded in HAPPENED: the region-blocked DeepSeek pane needed
-  the console privacy region set to Global, and a wake command ran to its
-  bound after its tab was closed - never close an agent tab while its
-  wake command is in flight. The next unit keeps the test pair unless the
-  human says otherwise.
+  The model experiment concluded: the tested pair is now the default. The
+  flow configs in flow/ name builder opencode-go/deepseek-v4.1-flash#high
+  and reviewer opencode-go/glm-5.3#high - the same strings the temp test
+  configs carried, and the flow files are the only configs that matter
+  now; /tmp/opencode/flow-glm/ is no longer needed. The test covered the
+  theme bridge's round 3 and units 14, 15, 16 and 17: every unit closed
+  clean, the document unit spent one fix round (2 of the 5 budget), the
+  rest were one-round units, and the reviewers converged independently on
+  the same finding twice (the detail document round 1, the Settings
+  round 1). The different-family rule holds: the pair is DeepSeek against
+  GLM. Two orchestrator stumbles recorded in HAPPENED: the region-blocked
+  DeepSeek pane needed the console privacy region set to Global, and a
+  wake command ran to its bound after its tab was closed - never close an
+  agent tab while its wake command is in flight.
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
       the fork parent
@@ -332,8 +327,8 @@ OPEN
   The panes run the regular opencode, not mini, with
   OPENCODE_CONFIG=flow/builder.json or flow/reviewer.json and --standalone,
   so the role config is read. The builder is
-  deepseek/deepseek-flash#high; the reviewer is
-  minimax-coding-plan/MiniMax-M3#thinking. Herdr's agent wait --until idle is
+  opencode-go/deepseek-v4.1-flash#high; the reviewer is
+  opencode-go/glm-5.3#high. Herdr's agent wait --until idle is
   broken on herdr 0.9.5: it missed turns that finished in 4-8 seconds and
   waited for its whole timeout. The flow uses scripts/herdr-wake.sh instead.
   The wake script's low follow-ups are non-blocking: bash SECONDS gives a

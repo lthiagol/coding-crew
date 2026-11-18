@@ -244,7 +244,7 @@ config file, so each pane gets one:
     "builder": {
       "mode": "primary",
       "description": "Implements one unit of work",
-      "model": "deepseek/deepseek-flash#high"
+      "model": "opencode-go/deepseek-v4.1-flash#high"
     }
   }
 }
@@ -356,26 +356,27 @@ gets a fresh session and its own findings file.
 | role | model | variant |
 |---|---|---|
 | Orchestrator | the session's own model | — |
-| Builder | `deepseek/deepseek-flash` | `high` |
-| Reviewer | `minimax-coding-plan/MiniMax-M3` | `thinking` |
+| Builder | `opencode-go/deepseek-v4.1-flash` | `high` |
+| Reviewer | `opencode-go/glm-5.3` | `high` |
 
-The two variants do not order against each other. `high` is an effort level on
-`deepseek/deepseek-flash` (`none`, `low`, `high`, `max`); `thinking` is a
-reasoning toggle on `minimax-coding-plan/MiniMax-M3` (`none`, `thinking`).
-`high` says how hard the model works; `thinking` only that it reasons. Neither
-name says the reviewer works deeper.
+The two roles are different model families — DeepSeek against GLM; that
+difference, not a variant, is what separates the lenses. Both carry effort
+variants `none`, `low`, `high`, `max`; the variant names how hard the model
+works, and nothing else.
 
 Both roles name a direct model ID and its variant: the builder runs
-`deepseek/deepseek-flash#high` and the reviewer
-`minimax-coding-plan/MiniMax-M3#thinking`. The variant travels in the model
-string, so it is fixed by the role config and never has to be selected in a
-session.
+`opencode-go/deepseek-v4.1-flash#high` and the reviewer
+`opencode-go/glm-5.3#high`. The variant travels in the model string, so it is
+fixed by the role config and never has to be selected in a session. This pair
+was run through units 14–17 of the build loop as a deliberate test before it
+became the default; the flow configs it replaced named
+`deepseek/deepseek-flash#high` and `minimax-coding-plan/MiniMax-M3#thinking`.
 
 The role configs that name them live in the repository, under `flow/`:
 
 ```
-flow/builder.json     default_agent builder  →  deepseek/deepseek-flash#high
-flow/reviewer.json    default_agent reviewer →  minimax-coding-plan/MiniMax-M3#thinking
+flow/builder.json     default_agent builder  →  opencode-go/deepseek-v4.1-flash#high
+flow/reviewer.json    default_agent reviewer →  opencode-go/glm-5.3#high
 ```
 
 **Two things the config does not do**, each measured on the wire through a
