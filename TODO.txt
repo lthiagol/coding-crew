@@ -1,6 +1,6 @@
 coding-lanes - orchestration state
 
-updated 2026-11-17 by the orchestrator
+updated 2026-11-18 by the orchestrator
 branch main, remote https://github.com/lthiagol/coding-lanes.git
 gate is make ci: cargo fmt --all -- --check, cargo clippy --all-targets -- -D warnings,
 cargo test --workspace, bash scripts/test-herdr-wake.sh
@@ -207,7 +207,25 @@ WHERE WE ARE
   read as a column - move it to the per-cell draw_cells pattern.
   Next unit: the theme catalog - Nord, then Catppuccin, then Dracula
   (plan 8-10).
-  Next unit: the detail pane: the document (plan 15).
+  The model experiment, still running at the human's request: the roles
+  run opencode-go models instead of the flow defaults. The flow configs
+  in flow/ still name the standard pair - builder
+  deepseek/deepseek-flash#high, reviewer
+  minimax-coding-plan/MiniMax-M3#thinking - and are untouched. The test
+  pair is builder opencode-go/deepseek-v4.1-flash#high and reviewer
+  opencode-go/glm-5.3#high, in temp role configs at
+  /tmp/opencode/flow-glm/builder.json and reviewer.json; they differ from
+  the flow configs in the model string only, so recreate them from these
+  strings if /tmp loses them. The test covered the theme bridge's round 3
+  and units 14, 15, 16 and 17: every unit closed clean, the document unit
+  spent one fix round (2 of the 5 budget), the rest were one-round units,
+  and the reviewers converged independently on the same finding twice
+  (the detail document round 1, the Settings round 1). Two orchestrator
+  stumbles recorded in HAPPENED: the region-blocked DeepSeek pane needed
+  the console privacy region set to Global, and a wake command ran to its
+  bound after its tab was closed - never close an agent tab while its
+  wake command is in flight. The next unit keeps the test pair unless the
+  human says otherwise.
   Follow-ups the Path tab left, all low, none blocking:
     - the blocked row names every dependency instead of only the ones after
       the fork parent
@@ -249,8 +267,11 @@ DONE
   Backlog tabs. The Overview measures its text the way ratatui draws it, so a
   count is never shown as if it were the whole count. The Needs you tab
   measures the human wait and says what it left out. The Backlog tab keeps
-  ideas, smaller tasks, and drafts in one derived list. Autopilot and Settings
-  are still placeholders.
+  ideas, smaller tasks, and drafts in one derived list. The detail pane opens
+  full screen from the row tabs and renders the real projected document
+  through the vendored engine, painted by the theme bridge, with scroll
+  keys. Settings is a placeholder that says what it will hold; Autopilot is
+  still a stub.
 
 HAPPENED
   A builder pane was blocked by an account setting, not a defect: the
