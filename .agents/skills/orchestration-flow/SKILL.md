@@ -103,6 +103,15 @@ re-checks it.
 For now the findings live in `/tmp`, outside the repository. That is a stopgap:
 when coding-lanes runs its own work, the findings belong inside the task.
 
+**`/tmp` does not survive a server restart.** A restart takes the findings,
+the round snapshots and the gate logs with it — the agent sessions in the
+panes are gone too (see the defect record). The orchestrator's recovery is
+the same as for any lost session: re-run the gate for the log the review
+brief carries, re-take the snapshot, and open fresh panes. Each is cheap —
+the gate a few minutes, the snapshot seconds — so a restart costs a round's
+setup, not its work. The working tree is the real surface and is never in
+`/tmp`.
+
 ## Herdr mechanics
 
 All multi-agent work runs through Herdr, in the orchestrator's own workspace.
@@ -114,13 +123,14 @@ them from there.
 | open the Orchestration workspace | `herdr workspace create --cwd <dir> --label "Orchestration" --no-focus` |
 | list workspaces | `herdr workspace list` |
 | close the Orchestration workspace | `herdr workspace close <ID>` |
-| open a tab | `herdr tab create --workspace <ID> --label "<label>" --cwd <dir> --no-focus` |
+| open a tab | `herdr tab create --workspace <ID> --label "<label>" --cwd <dir> --no-focus` — the output carries **both** ids: `tab_id` (`wX:t7`) to close the tab and `root_pane.pane_id` (`wX:p2`) to dispatch into it. Write both down when the tab is created. |
+| list a workspace's tabs | `herdr tab list --workspace <ID>` — the tab id and its agent state; the audit for leaked tabs |
 | split a pane | `herdr pane split <PANE> --direction right --ratio 0.5 --cwd <dir>` |
 | start an agent in a pane | `herdr pane run <PANE> env OPENCODE_CONFIG=<role-config> opencode --standalone` |
 | dispatch a prompt and wake when the turn completes | `scripts/herdr-wake.sh <PANE> "<prompt>" --timeout 1800` — waits for a settled baseline, retries `agent_not_found`, submits one line, then waits for `completion_seq` to advance or a working turn to settle twice; the timeout bounds the whole command, including every herdr call and the final pane read |
 | send a report without waiting | `herdr agent prompt <ORCHESTRATOR-PANE> "<report>"` — no `--wait`; text and Enter as one ordered submission |
 | read a pane | `herdr pane read <PANE> --lines 40` |
-| close a tab | `herdr tab close <TAB_ID>` |
+| close a tab | `herdr tab close <TAB_ID>` — takes a **tab** id (`wX:t7`), never a pane id (`wX:p2`). A `tab_not_found` answer means **the id was wrong**, not that the tab is gone: look the tab up with `herdr tab list --workspace <ID>` and close the `tab_id` it prints. |
 
 **All agent tabs live in the Orchestration workspace**, not in the
 orchestrator's own workspace. See the next section.
@@ -194,6 +204,8 @@ Re-check this on every herdr upgrade.
 |---|---|---|
 | herdr | 0.9.5 | `agent wait <PANE> --until idle --timeout 120000` missed a turn that finished in 4–8 seconds and ran the full 120 seconds |
 | opencode | 2.3.0 | the regular TUI lifecycle hook reported the pane idle or done while the wait still hung |
+| herdr + opencode | 0.9.5 / 2.3.0 | a dispatched prompt can land in opencode's input **unsubmitted** — herdr then reports the pane `idle` while the text sits in the box, so the wake command times out with an agent that never started. It shows as `[Pasted ~N lines]` in the pane. The recovery is a bare Enter: `herdr pane send-text <PANE> $'\r'` submits the text already there; no re-dispatch, no duplicate. |
+| opencode | 2.3.0 | a server restart kills every `--standalone` pane: the agent sessions in the panes are gone, and the agents' own state with them. A pane's tab survives; its agent does not. |
 
 **`completion_seq` on herdr 0.9.5.** Herdr's schema describes it as the
 current idle transition completed work, independently of who has viewed it.
@@ -331,6 +343,18 @@ happened to be focused.
    herdr workspace close <orchestration-id>
    ```
 
+4. **A leaked tab is invisible by construction.** The workspace survives
+   while it has a tab, so a tab nobody closes keeps it alive and keeps its
+   processes running. The audit belongs to the round's close step:
+
+   ```sh
+   herdr tab list --workspace <orchestration-id>
+   ```
+
+   Any tab that is not the current round's tab is a leak — close it. The
+   list is the evidence; a tab that is gone does not appear, so the check
+   can fail.
+
 The orchestrator's own session stays where it is. It receives the reports;
 the Orchestration workspace holds the work.
 
@@ -431,6 +455,13 @@ on no entry in a global opencode config.
    and retry once; if that also fails, idle with the summary visible in the
    terminal output — the orchestrator recovers verdicts from terminal output
    on the next check-in.
+   **After every wake, read the pane and check the input box.** A dispatched
+   prompt can arrive unsubmitted — herdr then reports the pane `idle` while
+   the text waits in the box, and the wake times out against an agent that
+   never started (defect record above). The check is one read:
+   `herdr pane read <PANE> --lines 5`. If the kickoff is sitting in the box,
+   submit it with a bare Enter — `herdr pane send-text <PANE> $'\r'` — and
+   wait again; the text is already delivered, so nothing is re-sent.
 3. **On wake**, the orchestrator reads the agent's summary, then decides.
    Before opening any review pane it snapshots the round:
    `scripts/review-snapshot.sh /tmp/opencode/review<N>/round<N>-snapshot`. On a
@@ -452,8 +483,9 @@ on no entry in a global opencode config.
    are recorded; they do not open another round.
 7. **After a clean review** the orchestrator commits and updates the project's
    records. On findings, it opens a fresh builder tab in the same workspace with
-   the merged findings. Close the tab when the round is done; keep the workspace
-   for the next round.
+   the merged findings. **Close the round's tab before opening the next
+   one**, and keep the workspace for the next round — every round ends
+   owning zero tabs of its own.
 
 **Every round is builder → review.** A first review has two reviewers, CODE and
 SPEC, in parallel; a fix round has one delta reviewer. Nothing a builder
@@ -690,8 +722,23 @@ ask-the-user prompt stalls the agent forever.
 - No code ships unreviewed: every changed file is covered by a review round
   before the unit is done.
 - The orchestrator commits after a clean review. Agents never commit or push.
-- **Close a tab when its round is done.** A finished agent left open is an
-  idle process holding a slot, and it is easy to mistake for a live one.
+- **Close a tab when its round is done, and close it by tab id.** A finished
+  agent left open is an idle process holding a slot, and it is easy to
+  mistake for a live one. `herdr tab close` takes the **tab** id
+  (`wX:t7`), never the pane id (`wX:p2`); a `tab_not_found` answer means
+  the id was wrong, not that the tab is gone — look it up with
+  `herdr tab list --workspace <ID>` and close the id it prints.
+- **A closed tab is proved by the listing, not by the intent.** The close is
+  done when `herdr tab close` answers `ok` **and** the tab no longer
+  appears in `herdr tab list --workspace <ID>`. A tab that was never closed
+  leaves no trace, so the listing is the check that can fail.
+- **A leaked tab costs memory, not just tidiness.** A finished agent does
+  not exit: each pane holds an opencode client, its own `--standalone`
+  server and a pty daemon — 100–280 MB a pane, and 1.7 GB for the twelve
+  stale panes one loop left behind. The workspace survives while it has a
+  tab, so leaks are invisible by construction: audit
+  `herdr tab list --workspace <ID>` at the end of every round and close
+  anything that is not the current round's tab.
 - **Raise a toast when a unit closes:** `herdr notification show "coding-lanes" --body "<unit> is committed" --sound done`.
 - **Stage by name.** Never `git add -A`, never `git add .` — a blanket stage
   sweeps another agent's in-flight work into the commit. Stage the paths the
