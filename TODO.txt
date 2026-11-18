@@ -267,6 +267,34 @@ WHERE WE ARE
   count.
   Next unit: the theme catalog: Dracula (plan 10), with that fix carried
   in.
+  Unit closed: the theme catalog: Dracula. Two rounds. The preset comes
+  from draculatheme.com/spec - twelve colour-palette and sixteen ANSI
+  values fetched live by the builder and by both reviewers - its eighteen
+  slots mapped per the palettes.md rules, its figures recomputed by test,
+  its search pairing recomputed to 2.26:1, and the render tests run it on
+  every tab at 40/60/100. It joins Preset::ALL; the terminal preset is
+  untouched; alucard is unbuilt and recorded as deferred. The gate is
+  green: 557 Rust tests and 218 script assertions.
+  The first round found one class of defect - a number or a value in
+  prose that no test read - and the orchestrator opened a short fix round
+  for it, because the class had already appeared in the Catppuccin unit.
+  The fix made the count guard fail-closed and general: every count
+  sentence in the family sections is matched to a recomputed claim, a
+  count without one fails the gate, a value not on the family page fails,
+  and the page lists the functional colours and the current-line fallback
+  too. The delta round closed all three findings with probes.
+  Two lows stand recorded: the count guard recognises a count only through
+  a fixed noun vocabulary, so a count phrased outside it escapes
+  silently - probe-confirmed - and the ANSI-spent derivation is duplicated
+  verbatim in two tests.
+  The theme catalog is done: five presets - dark, nord, catppuccin,
+  dracula, terminal - each from its own family page, each with eighteen
+  slots painted and figures recomputed by test. The light flavours and
+  alucard wait with the light theme.
+  Next unit: the row-tab scrolling unit - scrolling on Needs you, Path and
+  Backlog, with pgup/pgdn and g/G, the cursor never stepping onto a
+  hidden row, and the movement keys named in the footer and the help
+  overlay. That is the unit the key-set deferral pointed at.
   The model experiment concluded: the tested pair is now the default. The
   flow configs in flow/ name builder opencode-go/deepseek-v4.1-flash#high
   and reviewer opencode-go/glm-5.3#high - the same strings the temp test
