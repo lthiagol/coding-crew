@@ -398,9 +398,26 @@ WHERE WE ARE
   condition catches TSK10, so the assertion is not vacuous.
   One low stands recorded: the sharing pin is a text scan, so a copy that
   inlines settles walk without calling it would evade the guard.
-  Next unit: the theme-side follow-ups - the two terminal-column measures,
-  the fenced-code fixture, and the search-figure assertions home. Then the
-  Autopilot design.
+  Unit closed: the terminal column measures. One clean round. The rules
+  for how many columns a line takes are decided once, in
+  scripts/terminal-columns.txt - a combining mark, a format character and a
+  control character take no column, a wide or fullwidth character takes
+  two, a tab advances to the next stop from the running column - and both
+  the sweep and the Rust check read that one file, so neither can drift.
+  The table is the rule, not an example list: the ranges unroll the prose
+  rules over every codepoint. Tests prove the two agree by running the
+  sweeps check-table as a subprocess and comparing every case, with a
+  guard against a vacuous pass, and the gate still catches an overflow.
+  Three lows stand recorded: the measure is per codepoint, so a joined
+  cluster counts six where a terminal draws two, and the repo already cuts
+  titles on cluster boundaries - the fix is to measure per cluster; conjoining
+  Hangul jamo default to one column where unicode-width gives none; and
+  the header claim that the ranges were generated from the rules is prose
+  no gate reads, so put the regeneration probe in the gate.
+  Next unit: the theme-side follow-ups - a fixture with a fenced code
+  block, so the syntect token paint is pinned end to end, and the
+  search-figure assertion out of the test named for background fields.
+  Then the Autopilot design.
   Unit closed: the global flow. Three rounds. The flow skill and the
   review skill now live at ~/.config/opencode/skills, loaded by their IDs,
   and the repository points at them; the skill says where it lives, that
