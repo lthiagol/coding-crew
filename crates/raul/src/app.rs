@@ -144,7 +144,7 @@ impl App {
             }
             KeyCode::Char('g') => self.move_to(work, 0, now),
             KeyCode::Char('G') => self.move_to(work, usize::MAX, now),
-            KeyCode::Char(digit @ '1'..='6') => {
+            KeyCode::Char(digit @ '1'..='5') => {
                 self.go_to(Tab::from_index(digit as usize - '1' as usize))
             }
             KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => self.go_to(self.tab.next()),
@@ -262,7 +262,6 @@ impl App {
                 backlog::render_view(frame, rows[2], work, &self.theme, selected, &mut self.view)
             }
             Tab::Settings => settings::render(frame, rows[2], &self.theme),
-            tab => frame.render_widget(placeholder(tab, &self.theme), rows[2]),
         }
         if let Some(detail) = self.detail.as_mut() {
             // The pane covers the whole window: its own footer is the one
@@ -318,7 +317,7 @@ impl App {
 
     /// The tab bar, with the active tab marked.
     ///
-    /// A terminal too narrow for the six tabs gets the active tab alone.
+    /// A terminal too narrow for the five tabs gets the active tab alone.
     /// The parts of the line are dropped whole: no label is ever cut in
     /// half.
     fn tab_bar(&self, width: u16) -> Line<'static> {
@@ -341,7 +340,7 @@ impl App {
             }
             return Line::from(spans);
         }
-        // Too narrow for the six tabs: the active tab, marked. The parts
+        // Too narrow for the five tabs: the active tab, marked. The parts
         // are dropped whole, from the least to the most useful.
         let marked = format!(" ‹ {} › ", self.tab.label());
         let plain = format!(" {} ", self.tab.label());
@@ -388,7 +387,7 @@ impl App {
                 1,
                 vec![
                     space(),
-                    Span::styled(" 1-6 ", key),
+                    Span::styled(" 1-5 ", key),
                     Span::styled(" tab", label),
                 ],
                 true,
@@ -516,29 +515,14 @@ pub(crate) fn footer_line(
 /// The rows a tab holds, when it holds rows the detail pane can open.
 ///
 /// The Overview is a summary, not a list: it has no rows to open. The
-/// Autopilot tab is a placeholder, and the Settings tab lists nothing yet.
+/// Settings tab lists nothing yet.
 fn rows_of(work: &Work, tab: Tab, now: &str) -> Option<Vec<String>> {
     match tab {
         Tab::NeedsYou => Some(needs::row_ids(work, now)),
         Tab::Path => Some(path::row_ids(work, now)),
         Tab::Backlog => Some(backlog::row_ids(work)),
-        Tab::Overview | Tab::Autopilot | Tab::Settings => None,
+        Tab::Overview | Tab::Settings => None,
     }
-}
-
-/// The tab that is not built yet.
-fn placeholder(tab: Tab, theme: &Theme) -> Paragraph<'static> {
-    Paragraph::new(Line::from(Span::styled(
-        format!("the {} tab is not built yet", tab.label()),
-        theme.text.dim,
-    )))
-    .wrap(Wrap { trim: true })
-    .block(
-        Block::bordered()
-            .title(tab.label())
-            .title_style(block_title_style(theme))
-            .border_style(theme.chrome.border),
-    )
 }
 
 /// Where the help popup sits: three fifths of the window, centred.
@@ -559,7 +543,7 @@ fn help_popup(area: Rect) -> Rect {
 /// lines give way from the least to the most useful: `shift-tab`, then
 /// `h l`, then `tab`, then `← →` (each has a twin that remains), then
 /// `g/G`, then `pgup`/`pgdn` (the arrows still move), then `↑↓`/`j`/`k`,
-/// then `1-6`. `q` and `?` are dropped last: a human who is stuck needs to
+/// then `1-5`. `q` and `?` are dropped last: a human who is stuck needs to
 /// leave and to ask what the keys are.
 fn help_lines(theme: &Theme, has_rows: bool) -> Vec<(u8, Line<'static>)> {
     let line = |key: &str, says: &str| {
@@ -569,7 +553,7 @@ fn help_lines(theme: &Theme, has_rows: bool) -> Vec<(u8, Line<'static>)> {
         ])
     };
     let mut lines = vec![
-        (7, line("1-6", "jump to a tab")),
+        (7, line("1-5", "jump to a tab")),
         (3, line("← →", "switch tab")),
         (1, line("h l", "switch tab")),
         (2, line("tab", "next tab")),
@@ -792,7 +776,7 @@ mod tests {
             // The active tab alone, the index alone, or nothing: no part
             // of the line is cut in half.
             assert!(
-                [" ‹ Overview › ", " Overview ", "1/6", ""].contains(&text.as_str()),
+                [" ‹ Overview › ", " Overview ", "1/5", ""].contains(&text.as_str()),
                 "{width}: {text}"
             );
         }
@@ -826,6 +810,74 @@ mod tests {
             assert!(text.contains(tab.label()), "{tab:?} is missing");
         }
         assert!(text.contains("switch tab"), "{text}");
+    }
+
+    #[test]
+    fn the_tab_bar_shows_five_tabs_in_key_order() {
+        // The five labels, in the order the keys 1 to 5 reach them: the bar
+        // is the visible face of Tab::ALL.
+        let rows = draw(100, 20);
+        let bar = rows.get(1).expect("the tab bar").trim_end();
+        // The labels, in key order: a bar that drops, adds or reorders a tab
+        // disagrees with a window that has five.
+        let expected = ["Overview", "Needs you", "Path", "Backlog", "Settings"]
+            .iter()
+            .map(|label| format!(" {label} "))
+            .collect::<Vec<String>>()
+            .join(" ");
+        assert_eq!(
+            bar,
+            expected.trim_end(),
+            "the tab bar disagrees with the tabs"
+        );
+        // The dropped tab is not back.
+        assert!(!bar.contains("Autopilot"), "{bar}");
+        // Too narrow for the bar, the index counts to five.
+        let narrow = app().tab_bar(8);
+        let text = narrow
+            .spans
+            .iter()
+            .map(|span| span.content.to_string())
+            .collect::<String>();
+        assert_eq!(text, "1/5", "the narrow tab bar counts another window");
+    }
+
+    #[test]
+    fn the_keys_one_to_five_reach_the_five_tabs_and_six_does_not() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        for (offset, tab) in Tab::ALL.iter().enumerate() {
+            let mut app = window(&theme, Tab::Overview, false);
+            let digit = char::from(b'1' + offset as u8);
+            app.on_key(key(KeyCode::Char(digit)), &work, now());
+            assert_eq!(app.tab, *tab, "the key {digit} did not reach {tab:?}");
+        }
+        // 6 names no tab: the window stays where it is.
+        let mut app = window(&theme, Tab::Path, false);
+        app.on_key(key(KeyCode::Char('6')), &work, now());
+        assert_eq!(app.tab, Tab::Path, "6 moved the window");
+    }
+
+    #[test]
+    fn the_footer_names_no_dead_tab_key() {
+        // The footer and the help name the keys that work: 1-5, never the
+        // numbering of a tab that is gone.
+        let theme = Theme::preset(Preset::Dark);
+        for tab in Tab::ALL {
+            for help in [false, true] {
+                let rows = render(&mut window(&theme, tab, help), 100, 20).0;
+                let text = rows.join("\n");
+                assert!(text.contains("1-5"), "{tab:?} help={help}: {text}");
+                assert!(
+                    !text.contains("1-6"),
+                    "{tab:?} help={help}: the footer names a dead key: {text}"
+                );
+                assert!(
+                    !text.contains("Autopilot"),
+                    "{tab:?} help={help}: a dropped tab is named: {text}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -884,7 +936,7 @@ mod tests {
         )
         .0;
         let footer = rows.last().expect("a footer row").trim_end().to_string();
-        for works in ["quit", "1-6", "switch tab", "help"] {
+        for works in ["quit", "1-5", "switch tab", "help"] {
             assert!(footer.contains(works), "{footer}: {works} is missing");
         }
         // Nothing on this tab is opened or scrolled: the footer says so by
@@ -923,8 +975,8 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         let mut app = window(&theme, Tab::Overview, false);
-        app.on_key(key(KeyCode::Char('6')), &work, now());
-        assert_eq!(app.tab, Tab::Settings, "6 did not reach Settings");
+        app.on_key(key(KeyCode::Char('5')), &work, now());
+        assert_eq!(app.tab, Tab::Settings, "5 did not reach Settings");
         let (rows, paint) = render(&mut app, 100, 20);
         let bar = rows.get(1).expect("the tab bar");
         let column = bar.find(" Settings ").expect("the Settings label") + 1;
@@ -1389,7 +1441,7 @@ mod tests {
             }
         }
         // A tab without rows names none of them: no key that does nothing.
-        for tab in [Tab::Overview, Tab::Autopilot, Tab::Settings] {
+        for tab in [Tab::Overview, Tab::Settings] {
             let rows = render(&mut window(&theme, tab, false), 100, 20).0;
             let footer = rows.last().expect("a footer row").trim_end().to_string();
             for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
@@ -1446,7 +1498,7 @@ mod tests {
         // movement key is named.
         let at_40 = text(40);
         assert!(at_40.contains(" q ") && at_40.contains("quit"), "{at_40}");
-        assert!(at_40.contains("1-6") && at_40.contains(" tab"), "{at_40}");
+        assert!(at_40.contains("1-5") && at_40.contains(" tab"), "{at_40}");
         assert!(at_40.contains("enter") && at_40.contains("open"), "{at_40}");
         assert!(!at_40.contains("help"), "{at_40}");
         assert!(!at_40.contains("g/G"), "{at_40}");
@@ -1666,7 +1718,6 @@ mod tests {
             (Tab::NeedsYou, true),
             (Tab::Path, true),
             (Tab::Backlog, true),
-            (Tab::Autopilot, false),
             (Tab::Settings, false),
         ]
     }

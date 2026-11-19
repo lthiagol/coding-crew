@@ -1,5 +1,5 @@
  coding-crew                      mock-data/coding-crew/work
- ‹ Overview ›
+ Overview   Needs you   Path   Backlog   Settings
 ┌counts──────────────────────┐┌needs you───────────────────┐
 │29 tasks by status          ││8 tasks wait on a human     │
 │draft       5 groomed     3 ││approve     2               │
@@ -37,4 +37,4 @@
 
 
 
- q  quit    1-6  tab    ←→  switch tab    ?  help
+ q  quit    1-5  tab    ←→  switch tab    ?  help

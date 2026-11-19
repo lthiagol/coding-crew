@@ -1,4 +1,4 @@
-//! The six tabs of the window.
+//! The five tabs of the window.
 
 /// A tab of the window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -7,17 +7,15 @@ pub enum Tab {
     NeedsYou,
     Path,
     Backlog,
-    Autopilot,
     Settings,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 6] = [
+    pub const ALL: [Tab; 5] = [
         Tab::Overview,
         Tab::NeedsYou,
         Tab::Path,
         Tab::Backlog,
-        Tab::Autopilot,
         Tab::Settings,
     ];
 
@@ -27,7 +25,6 @@ impl Tab {
             Tab::NeedsYou => "Needs you",
             Tab::Path => "Path",
             Tab::Backlog => "Backlog",
-            Tab::Autopilot => "Autopilot",
             Tab::Settings => "Settings",
         }
     }
@@ -58,7 +55,6 @@ impl Tab {
             Tab::NeedsYou => "needs-you",
             Tab::Path => "path",
             Tab::Backlog => "backlog",
-            Tab::Autopilot => "autopilot",
             Tab::Settings => "settings",
         }
     }
@@ -66,5 +62,109 @@ impl Tab {
     /// The tab of a command-line name.
     pub fn from_name(name: &str) -> Option<Tab> {
         Tab::ALL.into_iter().find(|tab| tab.name() == name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LABELS: [&str; 5] = ["Overview", "Needs you", "Path", "Backlog", "Settings"];
+    const NAMES: [&str; 5] = ["overview", "needs-you", "path", "backlog", "settings"];
+
+    #[test]
+    fn the_window_has_five_tabs_in_order() {
+        assert_eq!(Tab::ALL.len(), 5);
+        assert_eq!(Tab::ALL.map(|tab| tab.label()), LABELS);
+        assert_eq!(Tab::ALL.map(|tab| tab.name()), NAMES);
+        for (index, tab) in Tab::ALL.iter().enumerate() {
+            assert_eq!(tab.index(), index);
+            assert_eq!(Tab::from_index(index), *tab);
+        }
+        assert!(Tab::from_name("autopilot").is_none(), "a sixth tab remains");
+    }
+
+    /// The window sketch's tab bar, with the border and padding removed.
+    fn sketch_bar(doc: &str) -> String {
+        let sketch = doc.split("```").nth(1).expect("the window sketch");
+        let line = sketch
+            .lines()
+            .find(|line| line.contains("Overview"))
+            .expect("the sketch's tab bar");
+        line.trim()
+            .trim_start_matches('│')
+            .trim_end_matches('│')
+            .trim()
+            .to_string()
+    }
+
+    /// The labels in the screens file's tab table, in order.
+    fn table_labels(doc: &str) -> Vec<String> {
+        doc.lines()
+            .skip_while(|line| !line.starts_with("| tab |"))
+            .skip(2) // the header row and the separator
+            .take_while(|line| line.starts_with("| "))
+            .map(|line| {
+                line.split('|')
+                    .nth(1)
+                    .expect("a first cell")
+                    .trim()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_screens_doc_sketch_and_tab_table_agree_with_the_code() {
+        let doc = include_str!("../../../docs/tui/screens.md");
+        let labels: Vec<&str> = Tab::ALL.iter().map(|tab| tab.label()).collect();
+
+        // The sketch draws the same tabs in the same order, three spaces
+        // apart, as the bar does.
+        assert_eq!(
+            sketch_bar(doc),
+            labels.join("   "),
+            "the window sketch's tab bar disagrees with the code"
+        );
+
+        // The tab table has one row per tab, in the same order.
+        assert_eq!(
+            table_labels(doc),
+            labels,
+            "the tab table disagrees with the code"
+        );
+
+        // The tab bar names the keys the code answers: 1 to the tab count.
+        let tab_bar_row = doc
+            .lines()
+            .find(|line| line.starts_with("| tab bar |"))
+            .expect("the tab bar row");
+        assert!(
+            tab_bar_row.contains(&format!("`1`–`{}`", Tab::ALL.len())),
+            "the tab bar row does not name keys 1-{}: {tab_bar_row}",
+            Tab::ALL.len()
+        );
+
+        // The render flag knows the same names as the enum.
+        let names: Vec<String> = Tab::ALL
+            .iter()
+            .map(|tab| format!("`{}`", tab.name()))
+            .collect();
+        let doc_flat = doc.split_whitespace().collect::<Vec<&str>>().join(" ");
+        assert!(
+            doc_flat.contains(&names.join(", ")),
+            "the --tab names disagree with the code: {}",
+            names.join(", ")
+        );
+
+        // The automation's questions are hugo's, not a raul tab's.
+        assert!(
+            !doc.to_lowercase().contains("autopilot"),
+            "the screens file still describes the dropped tab"
+        );
+        assert!(
+            doc.contains("docs/hugo/"),
+            "the screens file does not point the automation at hugo"
+        );
     }
 }

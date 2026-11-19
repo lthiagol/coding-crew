@@ -37,4 +37,4 @@
 
 
 
- q  quit    1-6  tab    ?  help
+ q  quit    1-5  tab    ?  help

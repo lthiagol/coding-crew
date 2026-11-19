@@ -11,7 +11,7 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│ Overview   Needs you   Path   Backlog   Autopilot   Settings   │
+│ Overview   Needs you   Path   Backlog   Settings               │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                │
 │  content pane — rows of the active tab                         │
@@ -23,7 +23,7 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 
 | part | behaviour |
 |---|---|
-| tab bar | the six tabs; `1`–`6`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` |
+| tab bar | the five tabs; `1`–`5`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` |
 | content pane | the active tab's rows; `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` |
 | detail pane | `enter` on a row opens the task as a full-screen overlay; `esc` returns to the tab and the selection it came from, and `enter` again reopens |
 | footer | contextual keys for the active tab — never a key that does nothing |
@@ -44,8 +44,11 @@ row. The cursor is never on a row the pane does not show.
 | Needs you | what waits on a human | tasks whose next action is the human's |
 | Path | what happens next, in order | claimable, in flight, blocked — with the reason |
 | Backlog | what is not a task yet | smaller tasks and draft tasks |
-| Autopilot | what the automation is doing | the queue, the live agents, their output |
 | Settings | how the tool behaves | keybinds, sort keys, preferences |
+
+The automation is not a raul tab. Its questions — the order, the queue, the
+crew, whether it runs — belong to hugo; the design record is in
+[docs/hugo/](../hugo/design-record.md).
 
 ### Overview
 
@@ -142,21 +145,6 @@ together, so the human sees one backlog.
 Smaller tasks are grouped by kind — ideas first, then the small tasks that
 could be worked. The grouping is derived from the kind; it is never stored.
 
-### Autopilot
-
-Master-plan's *Watch* and maitre's *Sous-Chef*, in one place: what the
-automation is doing.
-
-| block | shows |
-|---|---|
-| queue | the units of work the autopilot has taken or is about to take |
-| agents | the live agents, their labels and their state |
-| output | the tail of what an agent printed |
-| controls | attach, stop, detach |
-
-This tab is a placeholder until the autopilot is designed. It shows nothing
-until then, and says so.
-
 ### Settings
 
 | row | shows |
@@ -235,7 +223,7 @@ It is how a prototype is captured and how a snapshot test is written — the
 sketch is the tool's own output, not a drawing of it.
 
 `--tab NAME` renders another tab — `overview`, `needs-you`, `path`,
-`backlog`, `autopilot`, `settings` — in the same bounded plain render.
+`backlog`, `settings` — in the same bounded plain render.
 
 `scripts/pty-sweep.py` renders the screen at every width from 40 to 120, keeps
 one file per width, and fails when a line is wider than its width. The gate
@@ -244,8 +232,8 @@ runs it. The Overview is pinned byte for byte at 40, 60 and 100 columns in
 
 ## Not defined yet
 
-- the autopilot's internals — the tab is a placeholder, and its design is
-  being settled by comparing terminal-text variants before it is built
+- the automation's internals — not a raul tab; the design record is
+  [docs/hugo/design-record.md](../hugo/design-record.md)
 - the journal — *Activity* is not a tab until the event kinds exist
 - persisted sort keys and keybinds — the Settings tab is a placeholder too
 - the review's interaction: what raul can do about a finding, if anything

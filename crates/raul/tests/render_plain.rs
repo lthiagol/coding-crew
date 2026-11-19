@@ -513,14 +513,7 @@ fn the_row_tabs_fit_their_width_at_every_canonical_width() {
 }
 
 /// Every tab the window has, by its command-line name.
-const TAB_NAMES: [&str; 6] = [
-    "overview",
-    "needs-you",
-    "path",
-    "backlog",
-    "autopilot",
-    "settings",
-];
+const TAB_NAMES: [&str; 5] = ["overview", "needs-you", "path", "backlog", "settings"];
 
 #[test]
 fn every_tab_renders_alike_in_every_preset_at_every_canonical_width() {
@@ -880,7 +873,7 @@ fn the_detail_renders_the_record_close_up() {
     // The footer says what the pane does.
     assert!(text.contains("esc") && text.contains("close"), "{text}");
     // The pane is full screen: the window under it is not on display.
-    assert!(!text.contains("Autopilot"), "{text}");
+    assert!(!text.contains("Settings"), "{text}");
     assert!(!text.contains("Overview"), "{text}");
 }
 

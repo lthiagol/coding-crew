@@ -4,7 +4,7 @@
 //! esc returns to the tab and the selection it came from, and enter again
 //! reopens. The pane opens from every tab that has rows — Path, Needs you,
 //! Backlog — and nowhere else: the Overview is a summary, not a list, and
-//! Autopilot and Settings are placeholders.
+//! Settings is a placeholder.
 //!
 //! The body is the record projected to markdown
 //! ([ADR 0009](../../../docs/decisions/0009-markdown-projection.md)) and
@@ -517,7 +517,7 @@ mod tests {
         assert!(text.contains("TSK13"), "{text}");
         assert!(text.contains(&task.title), "{text}");
         // The pane is full screen: the window under it is not on display.
-        assert!(!text.contains("Autopilot"), "{text}");
+        assert!(!text.contains("Settings"), "{text}");
         // The body is the document, not a blank screen: its first section
         // is on display.
         assert!(text.contains("Header"), "{text}");
@@ -1159,7 +1159,7 @@ mod tests {
         assert!(!footer.contains("open"), "{footer}");
         assert!(!footer.contains("tab"), "{footer}");
         assert!(!footer.contains("help"), "{footer}");
-        assert!(!footer.contains("1-6"), "{footer}");
+        assert!(!footer.contains("1-5"), "{footer}");
     }
 
     #[test]
