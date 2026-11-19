@@ -719,6 +719,13 @@ HAPPENED
   tabs in a batch at the end of a unit, or only after that panes own wake
   notification has arrived. A report is not a signal that the pane is
   free.
+  It happened a fifth time, on the hugo proposals: three fix rounds were
+  killed on the humans word, and each panes wake was left polling a pane
+  that no longer existed, so all three ran to their 2400-second bound and
+  then reported a timeout - noise that says the round failed when the
+  round was abandoned on purpose. The clause the rule was missing: a pane
+  that is killed deliberately takes its wake with it. Kill the pane, then
+  kill the wake, and no orphan reports.
   A builder pane was blocked by an account setting, not a defect: the
   opencode-go DeepSeek V4.1 Flash model is region-blocked until the
   console's privacy region is set to Global. And a wake command was left
