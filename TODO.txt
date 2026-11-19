@@ -3,7 +3,8 @@ coding-lanes - orchestration state
 updated 2026-11-18 by the orchestrator
 branch main, remote https://github.com/lthiagol/coding-lanes.git
 gate is make ci: cargo fmt --all -- --check, cargo clippy --all-targets -- -D warnings,
-cargo test --workspace, bash scripts/test-herdr-wake.sh
+cargo test --workspace, bash scripts/test-pty-sweep.sh, the flow suites in the
+global skill (skipped when the skill is not installed)
 
 SCOPE
   raul only: the TUI shell and its tabs, built against the mock data in
@@ -306,11 +307,23 @@ WHERE WE ARE
   The review left low follow-ups, none blocking: the DONE summary still
   named the deleted tree, and ADR 0009s rewritten sentence was
   self-referential - both fixed.
-  Next unit: the flow scripts move into the skill - the three herdr and
-  snapshot tools and their two kept suites beside the skills SKILL.md, the
-  skills own references base-directory relative, and a make test-flow
-  target that runs them when the skill is installed and skips cleanly
-  when it is not.
+  Unit closed: the flow scripts move into the skill. Two rounds. The flow
+  skill now carries its own tools beside SKILL.md - herdr-wake.sh,
+  herdr-close-pane.sh, review-snapshot.sh, with the wake and snapshot
+  suites - so the skill is self-contained and every path in its text is
+  absolute. The repository keeps only pty-sweep.py and its test, which
+  test rauls rendering and stay in the product gate.
+  The first round found the suites had left the gate entirely: nothing
+  automatic ran the wake suite any more, so a broken wake script would
+  have passed - the skip clause protected nothing. The fix put test-flow
+  inside check, and the delta review proved both branches: the gate skips
+  with exit 0 without the global folder, and fails when a suite fails.
+  The move also caught the orchestrator twice: the snapshot command and
+  both reviewer dispatches died with exit 127 because the scripts were no
+  longer in the repository. That is the failure the move should cause -
+  loud, not silent.
+  One low stands recorded: the tab closer moved with no suite of its own,
+  the humans pruning decision.
   Next unit: the row-tab scrolling unit - scrolling on Needs you, Path and
   Backlog, with pgup/pgdn and g/G, the cursor never stepping onto a
   hidden row, and the movement keys named in the footer and the help

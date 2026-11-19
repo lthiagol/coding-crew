@@ -8,6 +8,7 @@ CARGO ?= $(shell command -v cargo 2>/dev/null || echo $(HOME)/.cargo/bin/cargo)
 CARGO_TARGET_DIR ?= target
 RAUL_PKG := coding-lanes-raul
 TALITA_PKG := coding-lanes-talita
+SKILL_SCRIPTS ?= $(HOME)/.config/opencode/skills/orchestration-flow/scripts
 
 .DEFAULT_GOAL := help
 
@@ -39,10 +40,17 @@ test: ## Run the test suite
 	$(CARGO) test --workspace
 
 test-scripts: ## Run the shell script tests
-	bash scripts/test-herdr-wake.sh
 	bash scripts/test-pty-sweep.sh
-	bash scripts/test-review-snapshot.sh
-	bash scripts/test-tab-closer.sh
+
+.PHONY: test-flow
+test-flow: ## Run the flow skill's suites when the skill is installed
+	@set -e; \
+	if [ -d "$(SKILL_SCRIPTS)" ]; then \
+		bash "$(SKILL_SCRIPTS)/test-herdr-wake.sh"; \
+		bash "$(SKILL_SCRIPTS)/test-review-snapshot.sh"; \
+	else \
+		echo "flow skill is not installed at $(SKILL_SCRIPTS) - skipping flow suites"; \
+	fi
 
 .PHONY: sweep
 sweep: build-raul ## Sweep the plain render at every width from 40 to 120
@@ -60,7 +68,7 @@ lint: ## Run clippy with warnings as errors
 	$(CARGO) clippy --all-targets -- -D warnings
 
 .PHONY: check ci
-check: fmt-check lint test test-scripts sweep ## The gate: fmt, clippy, tests, script tests, width sweep
+check: fmt-check lint test test-scripts test-flow sweep ## The gate: fmt, clippy, tests, script tests, flow suites, width sweep
 ci: check ## Alias for check
 
 .PHONY: doc

@@ -42,8 +42,9 @@ make raul
 ## Orchestration flow
 
 - The build loop is the global skill `orchestration-flow`
-  (`~/.config/opencode/skills/orchestration-flow/SKILL.md`). It reads this
-  project's `TODO.txt`, `docs/plan.md`, `flow/`, and `scripts/`.
+  (`~/.config/opencode/skills/orchestration-flow/SKILL.md`), and its tools
+  sit beside it. It reads this project's `TODO.txt`, `docs/plan.md`, and
+  `flow/`.
 - `.orchestration.json` holds the flow's project prefix, `cl`, and the paths
   of the role configs.
 
