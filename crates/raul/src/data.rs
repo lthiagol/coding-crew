@@ -9,6 +9,9 @@ use std::path::{Path, PathBuf};
 
 use coding_crew_core::{Item, ItemKind, Status, Task};
 
+// The human lane's vocabulary is the model's, beside the statuses it names.
+pub use coding_crew_core::Reason;
+
 #[cfg(test)]
 #[path = "../tests/support/mod.rs"]
 mod support;
@@ -18,30 +21,6 @@ mod support;
 pub struct ReadError {
     pub file: String,
     pub error: String,
-}
-
-/// Why a task waits on a human.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Reason {
-    /// The task is groomed and waits for approval.
-    Approve,
-    /// The task is in review.
-    Review,
-    /// The review budget is spent and a human has to decide.
-    Escalated,
-}
-
-impl Reason {
-    /// Every reason, in the order of the tab.
-    pub const ALL: [Reason; 3] = [Reason::Approve, Reason::Review, Reason::Escalated];
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            Reason::Approve => "approve",
-            Reason::Review => "review",
-            Reason::Escalated => "escalated",
-        }
-    }
 }
 
 /// Why there is no work folder to read.
@@ -565,5 +544,37 @@ mod tests {
             .map(|error| error.file.as_str())
             .collect();
         assert_eq!(files, support::NAME_ORDER);
+    }
+
+    #[test]
+    fn the_shared_text_helpers_have_one_implementation() {
+        // The helpers live in the theme crate. A private copy here is a
+        // second rule for cutting and padding, and the two drift.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let names = [format!("fn {}_to(", "cut"), format!("fn {}(", "pad")];
+        let mut copies: Vec<String> = Vec::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(dir) = pending.pop() {
+            for entry in fs::read_dir(&dir).expect("the raul tree") {
+                let path = entry.expect("a source file").path();
+                if path.is_dir() {
+                    pending.push(path);
+                    continue;
+                }
+                if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
+                    continue;
+                }
+                let text = fs::read_to_string(&path).expect("a raul source");
+                for name in &names {
+                    if text.contains(name) {
+                        copies.push(format!("{}: {name}", path.display()));
+                    }
+                }
+            }
+        }
+        assert!(
+            copies.is_empty(),
+            "a private copy of the shared helper is back: {copies:?}"
+        );
     }
 }

@@ -281,6 +281,7 @@ dependencies = [
  "anyhow",
  "coding-crew-core",
  "coding-crew-engine",
+ "coding-crew-theme",
  "crossterm",
  "ratatui",
  "serde_json",
@@ -295,6 +296,15 @@ dependencies = [
  "clap",
  "coding-crew-core",
  "serde_json",
+]
+
+[[package]]
+name = "coding-crew-theme"
+version = "0.1.0"
+dependencies = [
+ "coding-crew-core",
+ "coding-crew-engine",
+ "ratatui",
 ]
 
 [[package]]

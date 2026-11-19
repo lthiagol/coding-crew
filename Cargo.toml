@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/talita", "crates/raul", "crates/engine"]
+members = ["crates/core", "crates/talita", "crates/raul", "crates/engine", "crates/theme"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,6 +12,7 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 coding-crew-core = { path = "crates/core" }
 coding-crew-engine = { path = "crates/engine" }
+coding-crew-theme = { path = "crates/theme" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.29"

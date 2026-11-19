@@ -13,9 +13,9 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_crew_core::{Item, ItemKind, ItemStatus, Status, Task};
 
 use crate::data::Work;
-use crate::text::{cut_to, pad, text_width};
-use crate::theme::{Theme, block_title_style, phase_style, selected_line};
 use crate::view::View;
+use coding_crew_theme::text::{cut_to, pad, text_width};
+use coding_crew_theme::{Theme, block_title_style, phase_style, selected_line};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -947,7 +947,7 @@ mod tests {
     use ratatui::style::Color;
 
     use super::*;
-    use crate::theme::Preset;
+    use coding_crew_theme::Preset;
 
     fn mock_work() -> Work {
         Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))

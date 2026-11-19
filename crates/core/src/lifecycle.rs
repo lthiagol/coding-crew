@@ -34,6 +34,33 @@ impl Status {
     }
 }
 
+/// Why a task waits on a human.
+///
+/// A reason is a phase in words: `groomed` waits for approval, `code-review`
+/// for a review, and `needs-human` for a decision after an escalation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reason {
+    /// The task is groomed and waits for approval.
+    Approve,
+    /// The task is in review.
+    Review,
+    /// The review budget is spent and a human has to decide.
+    Escalated,
+}
+
+impl Reason {
+    /// Every reason, in the order the lifecycle reaches them.
+    pub const ALL: [Reason; 3] = [Reason::Approve, Reason::Review, Reason::Escalated];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Reason::Approve => "approve",
+            Reason::Review => "review",
+            Reason::Escalated => "escalated",
+        }
+    }
+}
+
 /// An overlay: orthogonal to the status, applies to any phase.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Overlay {

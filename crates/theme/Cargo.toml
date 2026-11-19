@@ -1,0 +1,13 @@
+[package]
+name = "coding-crew-theme"
+description = "The slots, presets and palettes raul and hugo paint with"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+coding-crew-core.workspace = true
+coding-crew-engine.workspace = true
+ratatui.workspace = true

@@ -16,8 +16,9 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_crew_core::{Task, parse_rfc3339};
 
 use crate::data::{Reason, Work};
-use crate::theme::{Theme, block_title_style, reason_style, selected_line};
 use crate::view::View;
+use coding_crew_theme::text::{cut_to, pad};
+use coding_crew_theme::{Theme, block_title_style, reason_style, selected_line};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -787,38 +788,17 @@ fn wait_word(count: usize) -> &'static str {
     if count == 1 { "waits" } else { "wait" }
 }
 
-/// The text, cut to `width` columns.
-fn cut_to(text: &str, width: usize) -> String {
-    if text.chars().count() <= width {
-        return text.to_string();
-    }
-    if width == 0 {
-        return String::new();
-    }
-    let head: String = text.chars().take(width - 1).collect();
-    format!("{head}…")
-}
-
-/// The text, padded to `width` columns.
-fn pad(text: &str, width: usize) -> String {
-    let length = text.chars().count();
-    if length >= width {
-        return text.to_string();
-    }
-    format!("{text}{}", " ".repeat(width - length))
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
-    use ratatui::style::Color;
+    use ratatui::style::{Color, Style};
 
     use super::*;
     use crate::data::Missing;
-    use crate::theme::Preset;
+    use coding_crew_theme::Preset;
 
     fn mock_work() -> Work {
         Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))
@@ -1667,6 +1647,43 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Whether `prefix` is a whole number of graphemes at the start of
+    /// `text`, by the same grapheme iterator ratatui draws with.
+    fn is_grapheme_prefix(prefix: &str, text: &str) -> bool {
+        let span = Span::raw(text.to_string());
+        let mut built = String::new();
+        if built == prefix {
+            return true;
+        }
+        for grapheme in span.styled_graphemes(Style::default()) {
+            built.push_str(grapheme.symbol);
+            if built == prefix {
+                return true;
+            }
+        }
+        built == prefix
+    }
+
+    #[test]
+    fn a_title_with_a_combining_mark_is_cut_on_a_grapheme_boundary() {
+        // A scalar cut can keep the `e` and drop the combining mark; the
+        // shared helper cuts the grapheme whole, as the detail pane does.
+        let title = "e\u{0301}".repeat(20);
+        let row = Row {
+            id: "TSK01".to_string(),
+            title: title.clone(),
+            reason: Reason::Approve,
+            waited: 0,
+        };
+        // At this width the title column is twelve columns wide.
+        let line = row_line_plain(&row, 39, 2, &theme());
+        let cut = line.spans[1].content.as_ref();
+        assert!(cut.ends_with('…'), "{line:?}");
+        let head = cut.strip_suffix('…').expect("a cut title");
+        assert!(is_grapheme_prefix(head, &title), "{head:?} cuts a grapheme");
+        assert_eq!(head, "e\u{0301}".repeat(11));
     }
 
     /// The text of a buffer.

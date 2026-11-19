@@ -11,7 +11,8 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_crew_core::Status;
 
 use crate::data::{Missing, Reason, Work};
-use crate::theme::{Theme, block_title_style, phase_style, reason_style};
+use coding_crew_theme::text::cut_to;
+use coding_crew_theme::{Theme, block_title_style, phase_style, reason_style};
 
 /// Below this width the blocks are stacked in one column.
 const NARROW: u16 = 58;
@@ -339,18 +340,6 @@ fn lane_span(count: usize, words: &str, lane: Style, theme: &Theme) -> Vec<Span<
 /// The columns a line takes.
 fn width_of(spans: &[Span<'_>]) -> usize {
     spans.iter().map(|span| span.content.chars().count()).sum()
-}
-
-/// The text, cut to `width` columns.
-fn cut_to(text: &str, width: usize) -> String {
-    if text.chars().count() <= width {
-        return text.to_string();
-    }
-    if width == 0 {
-        return String::new();
-    }
-    let head: String = text.chars().take(width - 1).collect();
-    format!("{head}…")
 }
 
 /// A block of the Overview: a titled box with lines in it.
@@ -1018,7 +1007,7 @@ mod tests {
     use ratatui::style::Color;
 
     use super::*;
-    use crate::theme::Preset;
+    use coding_crew_theme::Preset;
 
     fn mock_work() -> Work {
         Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))

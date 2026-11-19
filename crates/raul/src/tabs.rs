@@ -114,6 +114,29 @@ mod tests {
             .collect()
     }
 
+    /// The targets of the markdown links in a document.
+    fn link_targets(doc: &str) -> Vec<String> {
+        let mut targets = Vec::new();
+        let mut rest = doc;
+        while let Some(start) = rest.find("](") {
+            rest = &rest[start + 2..];
+            let Some(end) = rest.find(')') else {
+                break;
+            };
+            let target = rest[..end].split_whitespace().next().unwrap_or("");
+            targets.push(target.to_string());
+            rest = &rest[end..];
+        }
+        targets
+    }
+
+    /// Whether the doc links the automation at hugo's design record.
+    fn points_at_hugo(doc: &str) -> bool {
+        link_targets(doc)
+            .iter()
+            .any(|target| target == "../hugo/design-record.md")
+    }
+
     #[test]
     fn the_screens_doc_sketch_and_tab_table_agree_with_the_code() {
         let doc = include_str!("../../../docs/tui/screens.md");
@@ -163,8 +186,19 @@ mod tests {
             "the screens file still describes the dropped tab"
         );
         assert!(
-            doc.contains("docs/hugo/"),
+            points_at_hugo(doc),
             "the screens file does not point the automation at hugo"
+        );
+    }
+
+    #[test]
+    fn the_hugo_pointer_is_matched_by_its_target_not_its_text() {
+        let doc = include_str!("../../../docs/tui/screens.md");
+        assert!(points_at_hugo(doc), "the real doc links hugo");
+        let dead = doc.replace("../hugo/design-record.md", "../hugo/missing.md");
+        assert!(
+            !points_at_hugo(&dead),
+            "a dead target with the same link text passes the hugo pointer"
         );
     }
 }

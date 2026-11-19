@@ -11,8 +11,6 @@ mod overview;
 mod path;
 mod settings;
 mod tabs;
-mod text;
-mod theme;
 mod view;
 
 use std::io::{Stdout, Write};
@@ -31,10 +29,10 @@ use ratatui::buffer::{Buffer, CellWidth};
 use app::{Action, App};
 use coding_crew_core::store::{DATA_DIR, WORK_DIR};
 use coding_crew_core::{Store, StoreError};
+use coding_crew_theme::{Preset, Theme};
 use data::{Missing, Work};
 use detail::Detail;
 use tabs::Tab;
-use theme::{Preset, Theme};
 
 const USAGE: &str = "usage: raul [--theme dark|nord|catppuccin|dracula|terminal] [--render --plain [--width N] [--height N] [--tab NAME] [--detail TASK-ID]] [work-folder]";
 /// The columns of a plain render when --width is not given.

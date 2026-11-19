@@ -1,9 +1,9 @@
 # Theme
 
-The colours of raul.
+The colours raul and hugo paint with.
 
-The TUI has a theme. The domain does not: a task file never names a colour,
-and `crates/core` stays UI-free.
+Both interfaces have a theme. The domain does not: a task file never names a
+colour, and `crates/core` stays UI-free.
 
 ## The slots
 

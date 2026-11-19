@@ -1,15 +1,13 @@
-//! The theme: the colours of raul.
+//! The theme: the colours raul and hugo paint with.
 //!
 //! A slot names a role; a preset decides what the role looks like. The
 //! domain knows nothing about this: `crates/core` never names a colour, and
 //! a phase names a slot, never a colour.
 
-use coding_crew_core::Status;
+use coding_crew_core::{Reason, Status};
 use coding_crew_engine::MarkdownTheme;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-
-use crate::data::Reason;
 
 /// The role a colour plays.
 ///
@@ -147,7 +145,7 @@ pub struct Semantic {
     pub agent: Style,
 }
 
-/// The colours of raul, one per slot.
+/// The colours raul and hugo paint with, one per slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
     pub chrome: Chrome,
@@ -213,7 +211,7 @@ impl Theme {
 
     /// The markdown engine's theme, mapped onto our slots.
     ///
-    /// The engine has its own palettes; raul does not use them. Every field
+    /// The engine has its own palettes; raul and hugo do not use them. Every field
     /// takes its slot's foreground, or the slot's background for a field that
     /// paints one. A slot with no colour in the preset becomes `Color::Reset`,
     /// so the terminal preset names no colour at all.
@@ -373,7 +371,7 @@ pub fn selected_line(line: Line<'static>, width: usize, theme: &Theme) -> Line<'
     Line::from(spans)
 }
 
-/// The palettes raul ships with.
+/// The palettes raul and hugo ship with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Preset {
     /// The dark palette. The default.
@@ -842,6 +840,8 @@ fn terminal_style(slot: Slot) -> Style {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
     use ratatui::style::Color;
 
@@ -850,6 +850,68 @@ mod tests {
 
     /// The theme doc: the source of truth for the engine mapping.
     const THEME: &str = include_str!("../../../docs/tui/theme.md");
+
+    /// The repository's agent rules: the crate list the workspace must hold.
+    const AGENTS: &str = include_str!("../../../AGENTS.md");
+
+    /// The workspace manifest: the members of the build.
+    const WORKSPACE: &str = include_str!("../../../Cargo.toml");
+
+    /// The crates `AGENTS.md` lists, by directory under `crates/`.
+    fn documented_crates() -> Vec<&'static str> {
+        AGENTS
+            .lines()
+            .filter_map(|line| line.strip_prefix("- `"))
+            .filter_map(|line| line.split('`').next())
+            .filter(|path| path.starts_with("crates/"))
+            .collect()
+    }
+
+    /// The workspace members named in the root manifest.
+    fn workspace_members() -> Vec<&'static str> {
+        let members = WORKSPACE
+            .lines()
+            .find(|line| line.trim_start().starts_with("members ="))
+            .expect("the members of the workspace");
+        let inner = members
+            .split_once('[')
+            .and_then(|(_, rest)| rest.split_once(']'))
+            .map(|(inner, _)| inner)
+            .expect("a member list");
+        inner
+            .split(',')
+            .map(|member| member.trim().trim_matches('"'))
+            .filter(|member| !member.is_empty())
+            .collect()
+    }
+
+    #[test]
+    fn the_documented_crates_are_the_workspace_members() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let documented = documented_crates();
+        let members = workspace_members();
+        // Every member is a crate the rules name, and the tree holds it.
+        for member in &members {
+            assert!(
+                documented.contains(member),
+                "{member} is a workspace member but AGENTS.md does not list it"
+            );
+            assert!(
+                root.join(member).join("Cargo.toml").is_file(),
+                "{member} is a workspace member but has no manifest"
+            );
+        }
+        // A documented crate that is on disk is a member: a plan may name a
+        // crate before it exists, and it joins the workspace when it does.
+        for documented in &documented {
+            if root.join(documented).is_dir() {
+                assert!(
+                    members.contains(documented),
+                    "{documented} is documented and on disk but not a workspace member"
+                );
+            }
+        }
+    }
 
     /// The engine's markdown sources: the authority for which fields it
     /// paints with a background.
@@ -3010,29 +3072,6 @@ mod tests {
             named >= deferred.len(),
             "the Not yet section names {named} of the {} deferred variants",
             deferred.len()
-        );
-    }
-
-    #[test]
-    fn the_syntect_note_names_every_preset() {
-        // The Nord review's second one-line drift: detail.rs said the code
-        // token pairing held in both of raul's presets, and there were
-        // three. The note names them the way theme.md does.
-        const DETAIL: &str = include_str!("detail.rs");
-        // The note is wrapped across doc-comment lines: compare its words,
-        // not its line breaks or its comment markers.
-        let words = DETAIL
-            .replace("///", " ")
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-        assert!(
-            words.contains("the same in every one of raul's presets"),
-            "the syntect note does not name every preset"
-        );
-        assert!(
-            !words.contains("both of raul's presets"),
-            "the syntect note still counts raul's presets as two"
         );
     }
 

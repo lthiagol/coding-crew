@@ -17,8 +17,8 @@ use crate::overview;
 use crate::path;
 use crate::settings;
 use crate::tabs::Tab;
-use crate::theme::{Theme, block_title_style};
 use crate::view::View;
+use coding_crew_theme::{Theme, block_title_style};
 
 /// What a key asks the window to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -647,7 +647,7 @@ mod tests {
 
     use super::*;
     use crate::data::Work;
-    use crate::theme::Preset;
+    use coding_crew_theme::Preset;
 
     /// The tests' clock: one instant for the rows and the draw that shows
     /// them. Every fixture entered its status before it.

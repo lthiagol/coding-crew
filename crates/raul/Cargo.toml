@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 coding-crew-core.workspace = true
 coding-crew-engine.workspace = true
+coding-crew-theme.workspace = true
 anyhow.workspace = true
 crossterm.workspace = true
 # `Paragraph::line_count` asks ratatui how tall a paragraph will be, so the

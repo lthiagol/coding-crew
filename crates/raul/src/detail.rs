@@ -32,8 +32,8 @@ use coding_crew_engine::{
 use crate::app::footer_line;
 use crate::data::Work;
 use crate::tabs::Tab;
-use crate::text::{cut_to, text_width};
-use crate::theme::{Theme, block_title_style};
+use coding_crew_theme::text::{cut_to, text_width};
+use coding_crew_theme::{Theme, block_title_style};
 
 /// The syntect assets, loaded once per process.
 ///
@@ -332,13 +332,39 @@ mod tests {
     use super::*;
     use crate::app::App;
     use crate::data::Work;
-    use crate::theme::Preset;
+    use coding_crew_theme::Preset;
 
     /// The title fixture: one wide, one combining and one joined grapheme.
     const GRAPHEME_TITLE: &str = "界e\u{0301}👨‍👩‍👧x";
 
     fn mock_work() -> Work {
         Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))
+    }
+
+    #[test]
+    fn the_syntect_note_names_every_preset() {
+        // The Nord review's second one-line drift: detail.rs said the code
+        // token pairing held in both of raul's presets, and there were
+        // three. The note names them the way theme.md does.
+        const DETAIL: &str = include_str!("detail.rs");
+        // The test lives beside the note now: read the source above the test
+        // module, so this test's own strings cannot satisfy or trip it.
+        let source = DETAIL.split("\n#[cfg(test)]").next().unwrap_or(DETAIL);
+        // The note is wrapped across doc-comment lines: compare its words,
+        // not its line breaks or its comment markers.
+        let words = source
+            .replace("///", " ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            words.contains("the same in every one of raul's presets"),
+            "the syntect note does not name every preset"
+        );
+        assert!(
+            !words.contains("both of raul's presets"),
+            "the syntect note still counts raul's presets as two"
+        );
     }
 
     fn theme() -> Theme {

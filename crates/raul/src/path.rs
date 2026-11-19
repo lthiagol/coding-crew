@@ -15,8 +15,9 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_crew_core::{Status, Task};
 
 use crate::data::{Work, has_overlay, live_claim};
-use crate::theme::{Theme, block_title_style, phase_style, selected_line};
 use crate::view::View;
+use coding_crew_theme::text::cut_to;
+use coding_crew_theme::{Theme, block_title_style, phase_style, selected_line};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -1176,18 +1177,6 @@ fn announcement(count: usize, prefix: &str, width: usize, theme: &Theme) -> Line
     Line::from(Span::styled(cut_to(&text, width), theme.text.dim))
 }
 
-/// The text, cut to `width` columns.
-fn cut_to(text: &str, width: usize) -> String {
-    if text.chars().count() <= width {
-        return text.to_string();
-    }
-    if width == 0 {
-        return String::new();
-    }
-    let head: String = text.chars().take(width - 1).collect();
-    format!("{head}…")
-}
-
 /// The text, wrapped into rows of `width` columns.
 ///
 /// A word longer than a row is broken over rows: no letter of it is lost.
@@ -1238,7 +1227,7 @@ mod tests {
     }
 
     fn theme() -> Theme {
-        Theme::preset(crate::theme::Preset::Dark)
+        Theme::preset(coding_crew_theme::Preset::Dark)
     }
 
     /// The tests' clock: one instant for the tree and the draw that shows it.

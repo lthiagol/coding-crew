@@ -14,7 +14,7 @@ pub mod task;
 pub use actor::{Actor, ActorKind, Role};
 pub use clock::{now_rfc3339, parse_rfc3339};
 pub use item::{Item, ItemError, ItemKind, ItemStatus};
-pub use lifecycle::{Event, Overlay, Overlays, Status, TransitionContext, TransitionError};
+pub use lifecycle::{Event, Overlay, Overlays, Reason, Status, TransitionContext, TransitionError};
 pub use markdown::{escape_literal, task_to_markdown};
 pub use store::{Store, StoreError};
 pub use task::{

@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 
-use crate::theme::{Theme, block_title_style};
+use coding_crew_theme::{Theme, block_title_style};
 
 /// Draw the tab.
 pub fn render(frame: &mut Frame, area: Rect, theme: &Theme) {
