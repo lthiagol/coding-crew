@@ -417,8 +417,31 @@ WHERE WE ARE
   Hangul jamo default to one column where unicode-width gives none; and
   the header claim that the ranges were generated from the rules is prose
   no gate reads, so put the regeneration probe in the gate.
-  Next unit: the Autopilot design - what the automation is, which is the
-  last piece of work that needs the human rather than a builder.
+  Unit closed: the rename to coding-crew. Two rounds. The project is
+  coding-crew: the data folder is coding-crew/, the packages are
+  coding-crew-core, -engine, -raul and -talita, the mock tree is at
+  mock-data/coding-crew/work/, and the configuration home is
+  ~/.config/coding-crew/. The repository directory and the GitHub remote
+  keep their names for now. ADR 0001 is overwritten with the new names
+  reasoning - a governed crew with an interface for the crews governance -
+  and it settles the residue: the lanes are the tasks own structure, the
+  crew is who does the work, so the interfaces expansions keep Lane while
+  the project stopped being that word. A guard test walks the working tree
+  and fails on either spelling of the old name, so a half-done rename
+  fails the gate; only the sanctioned remote URL is allowed, and TODO.txt
+  keeps the old stem in its history by choice, recording the truncation
+  bug the old name produced.
+  The first round found one blocking defect in the rename itself: the
+  narrow-title pin had been renamed but its guard still looked for the old
+  names stem, so the branch could never fire and a cut of the new name
+  passed - a check that cannot fail, the projects own defect class. The
+  fix round closed it and three more, all probe-confirmed.
+  Two orchestrator mistakes of my own, recorded in HAPPENED: a commit that
+  swept the builders staged work, and a staging that left talita, the mock
+  tree and the sweep scripts out of the unit commit - the commit was
+  amended to match the reviewed state.
+  Next unit: drop the Autopilot tab from raul (plan 29), then the shared
+  theme crate (30), then hugo (31).
   The human changed the directives: the Autopilot tab is dropped from raul
   and a third interface appears - hugo, Human-guided Unified Governance and
   Orchestration - a TUI for the flow alone. The seam is the data: raul
