@@ -657,6 +657,32 @@ WHERE WE ARE
   shell. The open question stays Q5: the shape is settled, and what the main
   pane reads first - the live build loop's crew, or the project's automation -
   is still undecided.
+  Unit closed: the batched lows (plan 34). Two build and review rounds. The
+  column measure counts grapheme clusters, not codepoints, in the sweep and in
+  the Rust check alike, and the two agree; a conjoining Hangul jamo takes one
+  column and the rule says so; the table's rules are the table's parsed
+  source - scripts/generate-terminal-columns.py parses rule lines out of
+  scripts/terminal-columns.txt and derives the ranges, so a rule edited in one
+  place only fails the gate; path.rs cuts a long word on the grapheme
+  boundary through the theme crate's helpers, so there is one implementation
+  of each; the render_view sharing pin holds by construction - View's fields
+  and settle are private, so a planted copy in a tab module does not build -
+  and the three row tabs are pinned to draw through View::draw; the
+  expansions guard accepts a lowercase lead word and pins the descriptions
+  by scanning the whole working tree, so a divergent description in a file
+  nobody listed fails. The gate is green: 611 Rust tests and 212 script
+  assertions.
+  The first round found one blocking defect of the project's own class - the
+  header's rules were a second, unguarded encoding of the rules the script
+  enforces, so a rule edited in prose alone passed the gate green - and the
+  axes converged on it independently. The fix moved the rules into the table
+  as parsed rule lines, so the prose is the source rather than a copy of it.
+  The second round closed all four carried findings with probes. Two lows
+  stand recorded: the shared-helper copy scan covers three of the five
+  helpers, so a private copy of head_to or text_width passes it; and the
+  description pin checks the phrase, not the attribution, and knows four
+  connectives.
+  Next unit: the announcements (plan 35).
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
@@ -761,36 +787,46 @@ HAPPENED
   worth keeping becomes a unit of its own.
 
 OPEN
-  hugo, the TUI for the flow: one sidebar for configuration and one main
-  pane for what is running, no tabs, its configuration under
-  ~/.config/coding-crew/. The shared theme crate comes first, so both
-  TUIs paint with one palette. Thirty candidate sketches are on disk under
-  docs/hugo/tui-proposals/, one directory per model family, with the
-  combined index at its root grouping them into the eight readings the set
-  contains; the human picks a reading and that pick becomes plan 31.
-  raul's Settings tab still lists nothing yet.
+  raul, the TUI for the work, is not finished. What is open, in the order
+  of the plan:
+    - plan 35, the announcements: the Path tab names the rows it scrolled
+      past as well as the rows it cut; a blocked row names every dependency
+      it waits on, not only the ones after the fork parent; a group header
+      dropped for room is never announced as zero hidden; a narrow Backlog
+      pane names the groups it hides; a narrow Needs you announcement keeps
+      the reason name; a one-row pane's announcement is never cut without a
+      word; zero-width content is dropped with a word. The overlay case and
+      the claim-held-elsewhere case are isolated fixtures, so no task is held
+      by two things.
+    - plan 36, the mocked journal: the Overview's activity block against a
+      mocked coding-crew/activity.json, written only through
+      mock-data/generate.py. Nothing writes the journal yet; the kinds are
+      provisional until the flow's writer lands.
+    - plan 37, Settings has content: the themes, the keys that work and the
+      sort each tab uses, all derived.
   The Backlog review left low follow-ups, none blocking: a one- or two-row
   pane below 39 columns gives a total hidden count without naming the groups;
   the compact announcement can resemble the group header's shape; very narrow
-  panes cut or drop group names and counts; a group header dropped for room
-  can be announced as zero hidden; and zero-width content is dropped without
-  a word.
-  The mock-data dependency graph still contradicts the dependencies.satisfied
-  gate for fixtures past approved; it predates the Needs you unit and the Path
-  tab is built on it. It needs its own fixture unit.
-  The Needs you review left low follow-ups, none blocking: the generator's
-  byte-for-byte reproduction is not in the gate; the external review rounds
-  are numbered 2 to 6 although the budget counts external rounds; a narrow
-  announcement may lose the reason name; the tab does not scroll; Task::new
-  reads the clock three times; the leap-second rule does not check the year;
-  and the span-by-span cut path is currently unreachable.
-  The detail pane, and with it the markdown view. ADR 0009 says the record
-  stays JSON and the display is markdown. The pure task-to-markdown projection
-  and leaf's engine are done; the next unit maps our eighteen theme slots onto
-  the engine's MarkdownTheme. The projection review left one engine question:
-  how leaf's table parser renders backslashes inside code spans. Its snapshot
-  uses a synthetic fixture; a real mock-data task belongs in the detail-pane
-  unit.
+  panes cut or drop group names and counts.
+  The Needs you review left low follow-ups, none blocking: the external
+  review rounds are numbered 2 to 6 although the budget counts external
+  rounds; Task::new reads the clock three times; the leap-second rule does
+  not check the year; and the span-by-span cut path is currently unreachable.
+  The batched-lows round left two lows, none blocking: the shared-helper
+  copy scan covers three of the five helpers, so a private copy of head_to
+  or text_width passes it; and the description pin checks the phrase, not
+  the attribution, and knows four connectives.
+  The Path tab left low follow-ups, none blocking: the claim-held-elsewhere
+  fixture leans on an empty lease meaning never expires, which nothing in
+  the model says.
+  The journal's writer is grooming item G2: activity.json exists in the
+  model, nothing writes it, and the kinds are provisional.
+  The autopilot: the orchestrator role has no job yet.
+  The plain-render review left low follow-ups, none blocking: the duplicate-id
+  loader test can be made less filesystem-sensitive with more pairs; --width
+  and --height are accepted and ignored outside render mode; some test
+  fixtures leave temp folders; and the new flags are documented only in
+  --help.
   The panes run the regular opencode, not mini, with
   OPENCODE_CONFIG=flow/builder.json or flow/reviewer.json and --standalone,
   so the role config is read. The builder is
@@ -808,38 +844,8 @@ OPEN
   keep reproducing the committed tree byte for byte.
   The store-discovery review left one low follow-up: its Windows-only path
   tests are compile-checked but CI runs Ubuntu only.
-  The journal: activity.json exists in the model but its event kinds are not
-  defined, so the Overview has no activity block and there is no Activity tab.
-  The autopilot: the orchestrator role has no job yet.
-  The plain-render review left low follow-ups, none blocking: the duplicate-id
-  loader test can be made less filesystem-sensitive with more pairs; --width
-  and --height are accepted and ignored outside render mode; the black-box
-  width measure uses a hand-rolled table instead of unicode-width; some test
-  fixtures leave temp folders; and the new flags are documented only in
-  --help.
-  The Autopilot tab is the only raul tab whose design is not settled. Pilot it
-  the way maitre did its layout: two or three variants in terminal text, the
-  winner built, the rest kept as the record of what was compared. The ideas
-  worth carrying over from maitre's Sous-Chef tab:
-    the order is policy and sits on top, the queue is progress under it, the
-    stamp at the foot says whether the automation runs - policy above,
-    progress below, and the same fact never twice;
-    the agent count is a composition, not a number: three agents means one per
-    role, two means the orchestrator reviews, one means the human reviews,
-    because an agent cannot review itself;
-    the stamp prints no number it cannot compute;
-    the order lives on the tool's side, not in the project's data;
-    the crew is runtime state, and only the runtime has it.
-  A pty harness in the repo, scripts/pty-sweep.py, and snapshot tests of the
-  rendered screens. The plain render mode is done; this is the rest.
-  The theme catalog: Catppuccin (latte, frappe, macchiato, mocha), Dracula
-  (dracula, alucard) and Nord (nord, nord-light). The light variants are
-  deferred with the light theme, until the user says otherwise. The values come from each
-  family's own page - catppuccin.com/palette, draculatheme.com/spec,
-  nordtheme.com/docs/colors-and-palettes - and the mapping to our slots, the
-  theme file format and the rules a new theme has to follow are written down
-  in docs/tui/palettes.md. The structure and the dark and terminal presets
-  are done; the catalog is later.
+  The light themes are deferred: our light preset and the light variants of
+  the families (Catppuccin Latte, Dracula Alucard, Nord Light).
   talita's own verbs. Out of scope, and it stays out of scope until it is
   asked for explicitly. Do not start it because the other tabs are done.
 
@@ -847,15 +853,11 @@ NEXT
   The order is in docs/plan.md, and that is the only list of it. The plan
   holds the small units with their done-when lines, the grooming, and the
   open questions.
-  The next move is a decision, not a unit: the human picks one of the eight
-  readings in docs/hugo/tui-proposals/index.html, and that pick becomes
-  plan row 31 - the hugo shell. To look at them again in a fresh session:
-  python3 -m http.server 8848 --directory docs/hugo/tui-proposals, then
-  open http://localhost:8848/index.html.
-  If the three-family experiment is repeated, the family role configs lived
-  in /tmp and are gone. They are flow/builder.json with the builder's model
-  string changed: opencode-go/glm-5.3-flash#high and
-  minimax-coding-plan/MiniMax-M3.1-Flash-tuned. The families must not read
-  each other's directories, or the comparison is worth nothing.
+  raul is the work now, in three units: plan 35 the announcements, plan 36
+  the mocked journal, plan 37 Settings has content. Then hugo: the human
+  picks one of the eight readings in docs/hugo/tui-proposals/index.html, and
+  that pick becomes plan row 31 - the hugo shell. To look at them again in a
+  fresh session: python3 -m http.server 8848 --directory
+  docs/hugo/tui-proposals, then open http://localhost:8848/index.html.
   The review's rulings are durable in docs/hugo/design-record.md, not in
   /tmp/opencode/review-hugo-props/, which does not survive.

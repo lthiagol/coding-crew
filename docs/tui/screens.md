@@ -236,7 +236,8 @@ runs it. The Overview is pinned byte for byte at 40, 60 and 100 columns in
   [docs/hugo/design-record.md](../hugo/design-record.md)
 - the journal — *Activity* is not a tab until the event kinds exist
 - persisted sort keys and keybinds — the Settings tab is a placeholder too
-- the review's interaction: what raul can do about a finding, if anything
+- the review's interaction: **raul reads**. A finding is shown, never acted on — acting on one
+  needs a writer, a gate and talita's verbs, which are out of scope for now
 
 ## Mock data
 
