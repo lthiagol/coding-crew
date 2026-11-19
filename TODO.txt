@@ -611,6 +611,49 @@ WHERE WE ARE
   verdict, stage by name and commit. Never use git add -A or git add .: a
   blanket stage sweeps another agent's in-flight work into the commit. That
   happened twice.
+  Unit closed: hugo's visual - thirty proposals. The human wanted to see hugo
+  drawn before any of it is built, so three families of model each drew ten
+  candidate interfaces under docs/hugo/tui-proposals/, one directory per
+  family so the path carries the attribution: deepseek
+  (opencode-go/deepseek-v4.1-flash#high), glm (opencode-go/glm-5.3-flash#high)
+  and minimax (minimax-coding-plan/MiniMax-M3.1-Flash-tuned). Each page is a
+  self-contained HTML sketch on the project's own dark palette - no
+  stylesheet, no script, no network - and each family wrote its own index.
+  The combined index groups the thirty into the eight readings the set
+  contains: the order leads, the crew leads, the findings lead, the queue
+  leads, the round leads, the budget leads, the stamp leads, and the flow
+  itself is the subject - that last one only glm reached. Five readings
+  converge across all three families, which is the evidence that those are
+  the obvious ones.
+  The families diverged in sensibility, which is why three were run and not
+  one: deepseek drew a ledger, glm drew the provenance - every running fact
+  citing the order step that produced it - and minimax drew the form, the
+  sidebar as a form to fill and the main pane as only what the form is
+  doing. Three families is the right number for a generative artefact: one
+  family shares one set of priors, and the disagreement between families is
+  the signal.
+  The review round found seven real defects and eleven lows; the human chose
+  not to have them fixed, so the index carries a known-issues block that
+  names them - glm's lanes are colour-inverted on all eleven pages, minimax
+  paints counts twice and draws a review round the record contradicts,
+  deepseek's pages carry no byline, and the count of live tasks varies
+  between sixteen and nineteen across the set, both computable: sixteen is
+  the automation's queue, nineteen adds the three groomed. The fixtures
+  themselves check out - 21 open findings at 8 high, 8 medium and 5 low, 18
+  external rounds spent of a 45-round budget across the nine live tasks
+  with rounds, TSK29 the one claimable task, and every id-to-status pair
+  drawn on any page.
+  Two orchestrator notes. The wake's 1800-second bound was too short for a
+  turn that draws thirty pages - it hit the bound while the agent was still
+  working, and the work was on disk and correct while only the wait was
+  short; the two later families ran with 2400. And a unit whose artefact is
+  pages does not need the gate to say anything about them: the gate is
+  green because the unit adds only new HTML under docs/, so the honesty of
+  the sketches was checked by hand against the fixtures instead.
+  Next: the human picks a reading, and the pick becomes plan 31 - the hugo
+  shell. The open question stays Q5: the shape is settled, and what the main
+  pane reads first - the live build loop's crew, or the project's automation -
+  is still undecided.
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
@@ -711,7 +754,10 @@ OPEN
   hugo, the TUI for the flow: one sidebar for configuration and one main
   pane for what is running, no tabs, its configuration under
   ~/.config/coding-crew/. The shared theme crate comes first, so both
-  TUIs paint with one palette.
+  TUIs paint with one palette. Thirty candidate sketches are on disk under
+  docs/hugo/tui-proposals/, one directory per model family, with the
+  combined index at its root grouping them into the eight readings the set
+  contains; the human picks a reading and that pick becomes plan 31.
   raul's Settings tab still lists nothing yet.
   The Backlog review left low follow-ups, none blocking: a one- or two-row
   pane below 39 columns gives a total hidden count without naming the groups;

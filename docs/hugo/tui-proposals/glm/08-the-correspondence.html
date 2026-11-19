@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>hugo proposal 08 &middot; the correspondence &middot; family glm</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:28px 24px;background:#0d1117;color:#c9d1d9;font:13px/1.5 ui-monospace,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace}
+.page{max-width:1280px;margin:0 auto}
+.meta{color:#7d8590;margin:0 0 12px}
+.meta b{color:#e6edf3}
+.screen{border:1px solid #3d444d;font-size:12px;line-height:1.6}
+.bar{display:flex;justify-content:space-between;gap:16px;padding:5px 12px;border-bottom:1px solid #3d444d;white-space:pre}
+.cols{display:flex;align-items:stretch}
+.side{flex:none;width:420px;border-right:1px solid #3d444d;padding:14px 12px 16px}
+.main{flex:1;min-width:0;padding:14px 14px 16px}
+.blk{border:1px solid #3d444d;padding:12px 12px 10px;margin:0 0 16px;position:relative}
+.blk:last-child{margin-bottom:0}
+.blk h3{position:absolute;top:-9px;left:10px;margin:0;padding:0 6px;background:#0d1117;font-size:11px;color:#e6edf3;font-weight:700;letter-spacing:.6px}
+.blk.focus{border-color:#79c0ff}
+.blk.errb{border-color:#e06c75}
+.row{white-space:pre}
+.foot{display:flex;gap:22px;padding:5px 12px;border-top:1px solid #3d444d;color:#7d8590;white-space:pre}
+.note{margin:14px auto 0;max-width:1280px}
+.note .lbl{color:#7d8590;display:inline-block;width:110px}
+.dim{color:#7d8590}.mut{color:#8b949e}.sec{color:#9aa5b1}.hi{color:#e6edf3}.top{color:#fff;font-weight:700}
+.agent{color:#79c0ff}.human{color:#d2a8ff}.ok{color:#7ec699}.warn{color:#ff9e64}.err{color:#e06c75}
+.sel{background:#79c0ff;color:#0d1117}
+.sel .dim,.sel .sec,.sel .mut,.sel .agent,.sel .human,.sel .hi{color:#0d1117}
+table.ix{border-collapse:collapse;width:100%;margin-top:14px}
+table.ix th{color:#9aa5b1;text-align:left;font-weight:400;border-bottom:1px solid #3d444d;padding:6px 10px 6px 0}
+table.ix td{border-bottom:1px solid #3d444d;padding:7px 10px 7px 0;vertical-align:top}
+table.ix td.f a{color:#79c0ff;text-decoration:none}
+table.ix td.f a:hover{text-decoration:underline}
+table.ix td.n{color:#7d8590}
+.intro{color:#9aa5b1;max-width:900px}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="meta"><b>hugo</b> &mdash; proposal 08/10 &middot; the correspondence &middot; drawn by family <b>glm</b></div>
+<div class="screen">
+<div class="bar"><span class="top">hugo &mdash; the flow</span><span><span class="ok">running</span> since 09:14</span></div>
+<div class="cols">
+<div class="side">
+<div class="blk" style="min-height:96px">
+<h3>A &middot; AGENTS</h3>
+<div class="row"><span class="hi">3</span> &mdash; one per role</div>
+<div class="row"><span class="dim">runner &middot; reviewer &middot; orchestrator</span></div>
+</div>
+<div class="blk" style="min-height:88px">
+<h3>B &middot; ROUNDS</h3>
+<div class="row"><span class="hi">5</span> external &mdash; then needs-human</div>
+</div>
+<div class="blk" style="min-height:180px">
+<h3>C &middot; ORDER</h3>
+<div class="row"><span class="hi">1</span> claim an approved task whose</div>
+<div class="row">    dependencies are done</div>
+<div class="row"><span class="hi">2</span> the runner writes the steps</div>
+<div class="row">    and the evidence</div>
+<div class="row"><span class="hi">3</span> a reviewer who did not</div>
+<div class="row">    write it gives the verdict</div>
+</div>
+<div class="blk" style="min-height:112px">
+<h3>D &middot; HARNESS</h3>
+<div class="row"><span class="hi">opencode</span></div>
+<div class="row"><span class="dim">flow/builder.json + flow/reviewer.json</span></div>
+<div class="row"><span class="dim">builder  deepseek-v4.1-flash#high</span></div>
+<div class="row"><span class="dim">reviewer glm-5.3#high</span></div>
+</div>
+</div>
+
+<div class="main">
+<div class="blk" style="min-height:96px">
+<h3>A &middot; CREW &middot; runtime</h3>
+<div class="row"><span class="agent">runner-01</span>      TSK10  executing</div>
+<div class="row"><span class="human">reviewer-01</span>    TSK14  round 1 in flight</div>
+<div class="row"><span class="sec">orchestrator</span>  &mdash;      dispatching remediation</div>
+</div>
+<div class="blk" style="min-height:88px">
+<h3>B &middot; ROUND METERS</h3>
+<div class="row">TSK13&ndash;TSK15  <span class="agent">&#9675;&#9675;&#9675;&#9675;&#9675;</span> 0/5 &middot; TSK16&ndash;TSK18 <span class="warn">&#9679;&#9675;&#9675;&#9675;&#9675;</span> 1/5</div>
+<div class="row">TSK19&ndash;TSK21  <span class="err">&#9679;&#9679;&#9679;&#9679;&#9679; 5/5 spent</span></div>
+</div>
+<div class="blk" style="min-height:180px">
+<h3>C &middot; QUEUE PLACEMENT</h3>
+<div class="row"><span class="agent">claim</span>      <span class="hi">1</span> now &middot; <span class="hi">3</span> waiting on dependencies</div>
+<div class="row"><span class="agent">execute</span>    <span class="hi">3</span></div>
+<div class="row"><span class="human">review</span>     <span class="hi">3</span> &middot; <span class="warn">remediate</span> <span class="hi">3</span></div>
+<div class="row"><span class="err">escalated</span>  <span class="hi">3</span></div>
+<div class="row"><span class="dim">front: TSK29 claimable &middot; TSK07 &middot; TSK09 &middot; TSK08 wait</span></div>
+</div>
+<div class="blk" style="min-height:112px">
+<h3>D &middot; STAMP</h3>
+<div class="row"><span class="ok">running</span> since 09:14 &mdash; &sect;1 has work: TSK29 is claimable</div>
+</div>
+</div>
+</div>
+<div class="foot"><span>q quit</span><span>s start / stop the automation</span><span>&larr; &rarr; focus pane</span><span>enter edit</span><span>? help</span></div>
+</div>
+<div class="note">
+<div><span class="lbl">easy to see</span>each policy section sits level with the state it governs &mdash; you check the rule and its consequence with one sideways glance.</div>
+<div><span class="lbl">cost</span>nothing is in time order; to follow the loop you jump between bands, and short sections pad to meet their partner.</div>
+</div>
+</div>
+</body>
+</html>

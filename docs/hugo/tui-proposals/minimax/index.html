@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hugo TUI proposals - minimax</title>
+<style>
+
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 32px 24px 64px;
+  background: #0d1117; color: #c9d1d9;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 14px; line-height: 1.5;
+}
+.wrap { max-width: 1120px; margin: 0 auto; }
+h1 { font-size: 17px; color: #ffffff; margin: 0 0 2px; font-weight: 700; }
+.sub { color: #8b949e; font-size: 13px; margin: 0 0 20px; }
+.sub .fam { color: #79c0ff; }
+pre.screen {
+  background: #0d1117; color: #c9d1d9;
+  border: 1px solid #3d444d; border-radius: 6px;
+  padding: 14px 16px; overflow-x: auto;
+  font-family: inherit; font-size: 13px; line-height: 1.42;
+  margin: 0 0 18px;
+}
+p.note { margin: 0 0 6px; color: #e6edf3; }
+p.note .lbl { color: #8b949e; }
+p.note.cost .lbl { color: #ff9e64; }
+p.extra { margin: 0 0 18px; color: #8b949e; }
+p.extra .lbl { color: #d2a8ff; }
+nav { margin: 22px 0 0; color: #7d8590; font-size: 13px; }
+nav a { color: #79c0ff; text-decoration: none; }
+nav a:hover { text-decoration: underline; }
+.c-n{color:#c9d1d9}.c-s{color:#9aa5b1}.c-m{color:#8b949e}.c-d{color:#7d8590}
+.c-r{color:#e6edf3;font-weight:700}.c-t{color:#ffffff;font-weight:700}
+.c-b{color:#3d444d}.c-a{color:#79c0ff}.c-aa{color:#d2a8ff}
+.c-ok{color:#7ec699}.c-w{color:#ff9e64}.c-e{color:#e06c75}
+.c-sel{color:#0d1117;background:#79c0ff}
+
+table { border-collapse: collapse; width: 100%; margin: 0 0 24px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #3d444d;
+         vertical-align: top; font-size: 13px; }
+th { color: #e6edf3; font-weight: 700; background: #161b22; }
+td:nth-child(1) { color: #8b949e; }
+td:nth-child(2) { color: #79c0ff; white-space: nowrap; }
+td:nth-child(3) { color: #c9d1d9; }
+td:nth-child(4), td:nth-child(5) { color: #9aa5b1; }
+td:nth-child(5) { color: #8b949e; }
+a { color: #79c0ff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>hugo - ten candidate screens</h1>
+<p class="sub">the TUI for the flow &middot; <span class="fam">family: minimax</span>
+ &middot; one sidebar for the configuration, one main pane for the running state, no tabs</p>
+<table>
+<thead><tr><th>#</th><th>proposal</th><th>thesis</th><th>leads with</th><th>hides</th></tr></thead>
+<tbody>
+<tr><td>01</td><td><a href="01-form-and-queue.html">the form and the queue</a></td><td>the sidebar is a form to fill; the main pane is only what the form is doing.</td><td>the queue - the tasks waiting to be claimed</td><td>the order is the last field of the form</td></tr>
+<tr><td>02</td><td><a href="02-order-then-crew.html">the order, then the crew</a></td><td>the policy sits at the head of the sidebar and the live crew heads the main pane.</td><td>the crew - who is acting right now</td><td>the claimable task, pushed below the crew</td></tr>
+<tr><td>03</td><td><a href="03-stage-columns.html">five status columns</a></td><td>the main pane is a board of the live work, one column per stored status.</td><td>the board - five status columns</td><td>the order, and what each agent is doing</td></tr>
+<tr><td>04</td><td><a href="04-current-round.html">the round in flight</a></td><td>the main pane opens on the review round happening now, and everything else hangs under it.</td><td>the review round in flight</td><td>every task but the one being judged</td></tr>
+<tr><td>05</td><td><a href="05-findings-desk.html">the findings desk</a></td><td>what is open decides the screen; the queue is what waits behind it.</td><td>the open findings</td><td>which finding belongs to which round</td></tr>
+<tr><td>06</td><td><a href="06-review-budget.html">the review budget</a></td><td>the scarce thing - external rounds - is the screen's subject, and the queue waits under it.</td><td>the review budget - rounds used and left</td><td>what is happening right now</td></tr>
+<tr><td>07</td><td><a href="07-composition-banner.html">the composition first</a></td><td>the first line of the main pane states what the crew's size means; the order is one line in the sidebar.</td><td>the composition - what the agent count means</td><td>the order, compressed to one line in the sidebar</td></tr>
+<tr><td>08</td><td><a href="08-split-main.html">the main pane in two</a></td><td>the main pane is split: the queue on one side, the crew on the other, read together.</td><td>the queue and the crew, read together</td><td>why a task waits - only one dependency is named</td></tr>
+<tr><td>09</td><td><a href="09-stamp-banner.html">the stamp first</a></td><td>the widest band on the screen says whether the automation runs and why; everything else waits under it.</td><td>the stamp - whether the automation runs</td><td>why a task waits, and which step the flow is at</td></tr>
+<tr><td>10</td><td><a href="10-lane-board.html">the lane board</a></td><td>a strip of counts, then the live work split by the two lanes, side by side.</td><td>the counts, then the work split by lane</td><td>the crew, reduced to a number</td></tr>
+</tbody>
+</table>
+<p class="note"><span class="lbl">The shape is settled in every page:</span>
+one sidebar for the configuration, one main pane for what is running, no tabs.
+The order is policy and sits above the progress; the same fact is never painted twice;
+the agent count is a composition, not a number; the stamp prints no number it cannot compute;
+the order lives on the tool side; the crew is runtime state.</p>
+</div>
+</body>
+</html>

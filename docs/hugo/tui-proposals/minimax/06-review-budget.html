@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hugo proposal 06 - the review budget (minimax)</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 32px 24px 64px;
+  background: #0d1117; color: #c9d1d9;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 14px; line-height: 1.5;
+}
+.wrap { max-width: 1120px; margin: 0 auto; }
+h1 { font-size: 17px; color: #ffffff; margin: 0 0 2px; font-weight: 700; }
+.sub { color: #8b949e; font-size: 13px; margin: 0 0 20px; }
+.sub .fam { color: #79c0ff; }
+pre.screen {
+  background: #0d1117; color: #c9d1d9;
+  border: 1px solid #3d444d; border-radius: 6px;
+  padding: 14px 16px; overflow-x: auto;
+  font-family: inherit; font-size: 13px; line-height: 1.42;
+  margin: 0 0 18px;
+}
+p.note { margin: 0 0 6px; color: #e6edf3; }
+p.note .lbl { color: #8b949e; }
+p.note.cost .lbl { color: #ff9e64; }
+p.extra { margin: 0 0 18px; color: #8b949e; }
+p.extra .lbl { color: #d2a8ff; }
+nav { margin: 22px 0 0; color: #7d8590; font-size: 13px; }
+nav a { color: #79c0ff; text-decoration: none; }
+nav a:hover { text-decoration: underline; }
+.c-n{color:#c9d1d9}.c-s{color:#9aa5b1}.c-m{color:#8b949e}.c-d{color:#7d8590}
+.c-r{color:#e6edf3;font-weight:700}.c-t{color:#ffffff;font-weight:700}
+.c-b{color:#3d444d}.c-a{color:#79c0ff}.c-aa{color:#d2a8ff}
+.c-ok{color:#7ec699}.c-w{color:#ff9e64}.c-e{color:#e06c75}
+.c-sel{color:#0d1117;background:#79c0ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>hugo — proposal 06 · the review budget</h1>
+<p class="sub">the TUI for the flow &middot; <span class="fam">family: minimax</span> &middot; <a href="index.html">index</a></p>
+<pre class="screen"><span class="c-b">┌────────────────────────────────────┬────────────────────────────────────────────────────────┐</span>
+<span class="c-b">│</span><span class="c-t">hugo</span>                                <span class="c-b">│</span><span class="c-ok">running</span>                                                 <span class="c-b">│</span>
+<span class="c-b">│</span> <span class="c-r">CONFIGURATION</span>                      <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span> <span class="c-r">ROUND LIMIT</span>                        <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span>  <span class="c-r">5 external rounds</span>                 <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span>  <span class="c-d">per task, per reviewer</span>            <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span> SEATS                              <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span>  runner deepseek-v4.1-flash#high   <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span>  reviewer glm-5.3#high             <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span>  orchestr. (the flow&#x27;s session)    <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span> HARNESS  opencode · herdr          <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span> <span class="c-r">ORDER</span>                              <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span>  claim → write → review →          <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span>  findings back to the runner       <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">┌ <span class="c-r">REVIEW BUDGET</span>──────────────────────────────────────┐</span>  <span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  task     external  left                             <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  TSK13          0      5                             <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  TSK14          0      5                             <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  TSK15          0      5                             <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  TSK16          1      4                             <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  TSK17          1      4                             <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  TSK18          1      4                             <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  TSK19          5      0  <span class="c-e">spent</span>                      <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  TSK20          5      0  <span class="c-e">spent</span>                      <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  TSK21          5      0  <span class="c-e">spent</span>                      <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  <span class="c-d">the 9 tasks with rounds on record</span>                   <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">│</span>  <span class="c-r">18 of 45 external rounds spent</span>                      <span class="c-a">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-a">└──────────────────────────────────────────────────────┘</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span>                                                        <span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-b">┌ <span class="c-r">QUEUE</span>──────────────────────────────────────────────┐</span>  <span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-b">│</span>  <span class="c-sel">● TSK29</span>   <span class="c-aa">approved</span>                                  <span class="c-b">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-b">│</span>  ○ TSK07   <span class="c-aa">approved</span>  waits on TSK04, TSK05           <span class="c-b">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-b">│</span>  ○ TSK08   <span class="c-aa">approved</span>  waits on TSK05, TSK06  <span class="c-w">blocked</span>  <span class="c-b">│</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-b">└──────────────────────────────────────────────────────┘</span><span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span><span class="c-d">crew: 3 seats - one per role</span>                            <span class="c-b">│</span>
+<span class="c-b">│</span>                                    <span class="c-b">│</span> <span class="c-d">q quit   ↑↓ move   enter claim   ? help</span>                <span class="c-b">│</span>
+<span class="c-b">└────────────────────────────────────┴────────────────────────────────────────────────────────┘</span></pre>
+<p class="note"><span class="lbl">Makes easy to see:</span> which tasks have rounds left and which have spent them.</p>
+<p class="note cost"><span class="lbl">Costs:</span> a column of numbers says what is scarce but not what is happening right now.</p>
+<p class="extra"><span class="lbl">Honest limit:</span> the budget counts external rounds only: a self round does not spend it, so TSK13 shows 0 of 5 with one self round on record.</p>
+<nav><a href="05-findings-desk.html">&larr; 05</a> &nbsp;&middot;&nbsp; <a href="index.html">index</a> &nbsp;&middot;&nbsp; <a href="07-composition-banner.html">07 &rarr;</a></nav>
+</div>
+</body>
+</html>

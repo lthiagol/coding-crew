@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>hugo &mdash; ten proposals &middot; family glm</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:28px 24px;background:#0d1117;color:#c9d1d9;font:13px/1.5 ui-monospace,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace}
+.page{max-width:1280px;margin:0 auto}
+.meta{color:#7d8590;margin:0 0 12px}
+.meta b{color:#e6edf3}
+.screen{border:1px solid #3d444d;font-size:12px;line-height:1.6}
+.bar{display:flex;justify-content:space-between;gap:16px;padding:5px 12px;border-bottom:1px solid #3d444d;white-space:pre}
+.cols{display:flex;align-items:stretch}
+.side{flex:none;width:420px;border-right:1px solid #3d444d;padding:14px 12px 16px}
+.main{flex:1;min-width:0;padding:14px 14px 16px}
+.blk{border:1px solid #3d444d;padding:12px 12px 10px;margin:0 0 16px;position:relative}
+.blk:last-child{margin-bottom:0}
+.blk h3{position:absolute;top:-9px;left:10px;margin:0;padding:0 6px;background:#0d1117;font-size:11px;color:#e6edf3;font-weight:700;letter-spacing:.6px}
+.blk.focus{border-color:#79c0ff}
+.blk.errb{border-color:#e06c75}
+.row{white-space:pre}
+.foot{display:flex;gap:22px;padding:5px 12px;border-top:1px solid #3d444d;color:#7d8590;white-space:pre}
+.note{margin:14px auto 0;max-width:1280px}
+.note .lbl{color:#7d8590;display:inline-block;width:110px}
+.dim{color:#7d8590}.mut{color:#8b949e}.sec{color:#9aa5b1}.hi{color:#e6edf3}.top{color:#fff;font-weight:700}
+.agent{color:#79c0ff}.human{color:#d2a8ff}.ok{color:#7ec699}.warn{color:#ff9e64}.err{color:#e06c75}
+.sel{background:#79c0ff;color:#0d1117}
+.sel .dim,.sel .sec,.sel .mut,.sel .agent,.sel .human,.sel .hi{color:#0d1117}
+table.ix{border-collapse:collapse;width:100%;margin-top:14px}
+table.ix th{color:#9aa5b1;text-align:left;font-weight:400;border-bottom:1px solid #3d444d;padding:6px 10px 6px 0}
+table.ix td{border-bottom:1px solid #3d444d;padding:7px 10px 7px 0;vertical-align:top}
+table.ix td.f a{color:#79c0ff;text-decoration:none}
+table.ix td.f a:hover{text-decoration:underline}
+table.ix td.n{color:#7d8590}
+.intro{color:#9aa5b1;max-width:900px}
+
+h1{font-size:16px;color:#e6edf3;margin:0 0 4px}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="meta"><b>hugo</b> &mdash; the TUI for the flow &middot; ten proposals &middot; drawn by family <b>glm</b> &middot; round 1 &middot; 2026-11-19</div>
+<h1>Ten readings of one screen</h1>
+<p class="intro">One sidebar for configuration, one main pane for what is running, no tabs. The sidebar holds the policy &mdash; the agents, the models, the harness, the review-round limit, the order. The main pane holds the run &mdash; the crew, the round, the budget, the findings, the queue. Ten proposals, ten different answers to what leads and what sits beside what. Every number is computed from <span style="color:#7d8590">mock-data/coding-crew/work/</span>: 16 live tasks, 1 claimable (TSK29), 21 open findings (8 high, 8 medium, 5 low), a review budget of 5 external rounds &mdash; 3 tasks at 1/5, 3 spent at 5/5. The crew is runtime state: 3 agents &mdash; one per role.</p>
+<table class="ix">
+<tr><th style="width:26px">#</th><th style="width:200px">proposal</th><th>thesis</th><th style="width:250px">leads with</th><th style="width:250px">hides</th></tr>
+<tr><td class="n">01</td><td class="f"><a href="01-the-ledger.html">the ledger</a></td><td>Every running fact cites the order step or gate that produced it.</td><td>why each state is allowed</td><td>the dashboard read &mdash; two facts on every row</td></tr>
+<tr><td class="n">02</td><td class="f"><a href="02-the-live-dashboard.html">the live dashboard</a></td><td>The crew's current work is the first thing you read.</td><td>is anything happening now</td><td>the order's detail &mdash; one phrase in the sidebar</td></tr>
+<tr><td class="n">03</td><td class="f"><a href="03-the-loop.html">the loop</a></td><td>The main pane is the flow itself; tasks sit at their station.</td><td>where work sits between claim and verdict</td><td>the waits and the budget &mdash; small print and side notes</td></tr>
+<tr><td class="n">04</td><td class="f"><a href="04-the-queue-spine.html">the queue spine</a></td><td>One list of every live task in the order the flow touches it, the crew annotated on their rows.</td><td>what happens next in line</td><td>the crew as a body &mdash; the composition lives in the header</td></tr>
+<tr><td class="n">05</td><td class="f"><a href="05-the-findings-desk.html">the findings desk</a></td><td>The open findings, severity-sorted, are the working surface.</td><td>the quality debt</td><td>the flow's shape &mdash; nothing says what happens next</td></tr>
+<tr><td class="n">06</td><td class="f"><a href="06-the-round-meters.html">the round meters</a></td><td>Each task drawn as the review budget it has left.</td><td>the escalation risk per task</td><td>the queue's front and the crew &mdash; compressed to tags</td></tr>
+<tr><td class="n">07</td><td class="f"><a href="07-the-policy-form.html">the policy form</a></td><td>The sidebar is a set of controls; the main pane is a readout.</td><td>governing the policy</td><td>the running state's detail</td></tr>
+<tr><td class="n">08</td><td class="f"><a href="08-the-correspondence.html">the correspondence</a></td><td>Each policy section sits level with the state it governs.</td><td>rule against consequence, at a glance</td><td>chronology &mdash; nothing is in time order</td></tr>
+<tr><td class="n">09</td><td class="f"><a href="09-the-incident-screen.html">the incident screen</a></td><td>The escalated tasks are the screen; the healthy run is a strip.</td><td>what needs the human</td><td>the live run &mdash; two strips below the alarm</td></tr>
+<tr><td class="n">10</td><td class="f"><a href="10-the-quiet-stamp.html">the quiet stamp</a></td><td>The stamp is the hero; everything else is a ribbon.</td><td>whether the automation runs, and why</td><td>everything below the summary</td></tr>
+</table>
+</div>
+</body>
+</html>

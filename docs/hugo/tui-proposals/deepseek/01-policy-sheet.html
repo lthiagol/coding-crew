@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hugo · 01 — the policy sheet</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html { background: #0d1117; }
+body {
+  margin: 0; background: #0d1117; color: #c9d1d9;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "DejaVu Sans Mono", monospace;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 1080px; margin: 0 auto; padding: 28px 20px 48px; }
+.kicker { margin: 0 0 4px; font-size: 12px; color: #7d8590; }
+.kicker a { color: #7d8590; text-decoration: none; }
+.kicker a:hover { color: #79c0ff; }
+h1 { margin: 0 0 18px; font-size: 14px; font-weight: 600; letter-spacing: .04em;
+     color: #e6edf3; }
+.screen {
+  margin: 0; padding: 6px 0 10px; font-size: 12.4px; line-height: 1.28;
+  white-space: pre; overflow-x: auto; background: #0d1117; color: #c9d1d9;
+  font-variant-ligatures: none; tab-size: 4;
+}
+.norm { color: #c9d1d9; }
+.two { color: #9aa5b1; }
+.dim { color: #8b949e; }
+.dimmed { color: #7d8590; }
+.border, .br { color: #3d444d; }
+.acc { color: #79c0ff; }
+.vio { color: #d2a8ff; }
+.ok { color: #7ec699; }
+.warn { color: #ff9e64; }
+.err { color: #e06c75; }
+.strong { color: #e6edf3; }
+.bright { color: #ffffff; }
+.sel { background: #79c0ff; color: #0d1117; }
+.note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: #c9d1d9; }
+.note b { color: #7d8590; font-weight: 400; }
+</style>
+</head>
+<body>
+<main>
+<p class="kicker">hugo · proposal 01 / 10 · <a href="index.html">index</a></p>
+<h1>01 · the policy sheet</h1>
+<pre class="screen"><span class="br">┌─ </span><span class="bright">hugo</span><span class="br"> · </span><span class="strong">coding-crew</span><span class="br"> ───────────────────────────────────────────────────────────────── </span><span class="dim">mock-data</span><span class="border"> ─┐</span>
+<span class="br">│</span><span class="acc">┌─ </span><span class="strong">ORDER</span><span class="acc"> ──────────────────────────────────┐</span> <span class="border">┌─ </span><span class="strong">ROUND</span><span class="border"> ───────────────────────────────────────────┐</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="strong">1</span>  claim an approved task, deps done     <span class="acc">│</span> <span class="br">│</span> <span class="strong">TSK16</span> · <span class="warn">remediating</span>                               <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">   gate  dependencies.satisfied</span>          <span class="acc">│</span> <span class="br">│</span> <span class="two">external · edge-cases · reviewer-01</span>               <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="strong">2</span>  the runner writes steps + evidence    <span class="acc">│</span> <span class="br">│</span> <span class="warn">verdict changes-needed</span>                            <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">   gate  evidence.attached</span>               <span class="acc">│</span> <span class="br">│</span> <span class="dim">budget</span>  1 of 5 external                           <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="strong">3</span>  a reviewer who did not write it       <span class="acc">│</span> <span class="br">└───────────────────────────────────────────────────┘</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">   gate  review.independent</span>              <span class="acc">│</span>                                                      <span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="strong">4</span>  findings back to the runner           <span class="acc">│</span> <span class="border">┌─ </span><span class="strong">FINDINGS</span><span class="border"> ────────────────────────────────────────┐</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">   gate  review.findings_exist</span>           <span class="acc">│</span> <span class="br">│</span> <span class="norm">FIND-01</span> · <span class="warn">medium</span> · <span class="warn">open</span>                           <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="strong">5</span>  past the limit, a human decides       <span class="acc">│</span> <span class="br">│</span>                                                   <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">   gate  review.budget_exhausted</span>         <span class="acc">│</span> <span class="br">└───────────────────────────────────────────────────┘</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span>                                          <span class="acc">│</span>                                                      <span class="border">│</span>
+<span class="br">│</span><span class="br">│</span>                                          <span class="acc">│</span> <span class="border">┌─ </span><span class="strong">CREW</span><span class="border"> ────────────────────────────────────────────┐</span><span class="border">│</span>
+<span class="br">│</span><span class="br">└──────────────────────────────────────────┘</span> <span class="br">│</span> <span class="vio">orchestrator-1</span>  dispatch                          <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span>                                             <span class="br">│</span> <span class="vio">runner-02</span>       <span class="strong">TSK16</span> · remediating · 12m         <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="border">┌─ </span><span class="strong">CONFIGURATION</span><span class="border"> ──────────────────────────┐</span> <span class="br">│</span> <span class="vio">reviewer-01</span>     <span class="dim">idle</span>                              <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">agents  </span>one per role                     <span class="border">│</span> <span class="br">└───────────────────────────────────────────────────┘</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">        </span>orchestrator · runner ·          <span class="border">│</span>                                                      <span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">        </span>reviewer                         <span class="border">│</span> <span class="border">┌─ </span><span class="strong">QUEUE</span><span class="border"> ───────────────────────────────────────────┐</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">models  </span>runner  deepseek-v4.1-flash#high <span class="border">│</span> <span class="br">│</span> <span class="norm">TSK29</span>  <span class="vio">approved</span>          <span class="norm">TSK14</span>  <span class="acc">code-review</span>       <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">        </span>reviewer glm-5.3#high            <span class="border">│</span> <span class="br">│</span> <span class="norm">TSK09</span>  <span class="vio">approved</span>          <span class="norm">TSK15</span>  <span class="acc">code-review</span>       <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">harness </span>opencode 2.3.0                   <span class="border">│</span> <span class="br">│</span> <span class="norm">TSK07</span>  <span class="vio">approved</span>          <span class="strong">TSK16</span>  <span class="warn">remediating</span>       <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span> <span class="dim">rounds  </span>5 external                       <span class="border">│</span> <span class="br">│</span> <span class="norm">TSK08</span>  <span class="vio">approved</span>          <span class="norm">TSK17</span>  <span class="warn">remediating</span>       <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span>                                          <span class="border">│</span> <span class="br">│</span> <span class="norm">TSK10</span>  <span class="vio">executing</span>         <span class="norm">TSK18</span>  <span class="warn">remediating</span>       <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span>                                          <span class="border">│</span> <span class="br">│</span> <span class="norm">TSK11</span>  <span class="vio">executing</span>         <span class="norm">TSK19</span>  <span class="err">needs-human</span>       <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span>                                          <span class="border">│</span> <span class="br">│</span> <span class="norm">TSK12</span>  <span class="vio">executing</span>         <span class="norm">TSK20</span>  <span class="err">needs-human</span>       <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">│</span>                                          <span class="border">│</span> <span class="br">│</span> <span class="norm">TSK13</span>  <span class="acc">code-review</span>       <span class="norm">TSK21</span>  <span class="err">needs-human</span>       <span class="border">│</span><span class="border">│</span>
+<span class="br">│</span><span class="br">└──────────────────────────────────────────┘</span> <span class="br">└───────────────────────────────────────────────────┘</span><span class="border">│</span>
+<span class="br">├──────────────────────────────────────────────────────────────────────────────────────────────────┤</span>
+<span class="br">│</span> <span class="dimmed">? help · q quit</span>                                                            <span class="ok">● running since 09:14</span> <span class="border">│</span>
+<span class="br">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</span></pre>
+<p class="note"><b>easy to see</b> the five steps the flow obeys, before any of the run</p>
+<p class="note"><b>costs</b> the queue fills the foot, so the crew is read only after the findings</p>
+</main>
+</body>
+</html>

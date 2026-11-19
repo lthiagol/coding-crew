@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hugo · thirty proposals, eight readings</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html { background: #0d1117; }
+body {
+  margin: 0; background: #0d1117; color: #c9d1d9;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "DejaVu Sans Mono", monospace;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+h1 { margin: 0 0 6px; font-size: 15px; font-weight: 600; letter-spacing: .04em;
+     color: #e6edf3; }
+h2 { margin: 34px 0 10px; font-size: 13px; font-weight: 600; letter-spacing: .04em;
+     color: #e6edf3; border-bottom: 1px solid #3d444d; padding-bottom: 6px; }
+p { margin: 0 0 10px; font-size: 12.4px; line-height: 1.5; color: #8b949e;
+    max-width: 78ch; }
+a { color: #79c0ff; text-decoration: none; border-bottom: 1px solid #2b3440; }
+a:hover { border-bottom-color: #79c0ff; }
+.dim { color: #7d8590; }
+.two { color: #9aa5b1; }
+.acc { color: #79c0ff; }
+.vio { color: #d2a8ff; }
+.ok { color: #7ec699; }
+.warn { color: #ff9e64; }
+.err { color: #e06c75; }
+.strong { color: #e6edf3; }
+.bright { color: #ffffff; }
+table { width: 100%; border-collapse: collapse; margin: 0 0 6px; }
+th { text-align: left; font-size: 11.5px; font-weight: 600; color: #7d8590;
+     padding: 6px 10px 6px 0; border-bottom: 1px solid #3d444d; white-space: nowrap; }
+td { font-size: 12.2px; padding: 5px 10px 5px 0; border-bottom: 1px solid #1b2128;
+     vertical-align: top; }
+td.n { white-space: nowrap; color: #7d8590; }
+td.f { white-space: nowrap; color: #d2a8ff; }
+.reading { margin: 0 0 14px; padding: 12px 14px; border: 1px solid #3d444d;
+           border-radius: 6px; background: #0f141a; }
+.reading h3 { margin: 0 0 6px; font-size: 12.5px; color: #e6edf3; font-weight: 600; }
+.reading p { margin: 0 0 6px; }
+.reading .list { font-size: 12px; color: #8b949e; }
+.known { border-left: 2px solid #ff9e64; padding: 2px 0 2px 12px; margin: 8px 0 16px; }
+.known p { margin: 0 0 6px; }
+.k { color: #7d8590; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>hugo — thirty proposals, eight readings</h1>
+<p>Three families of model each drew ten candidate interfaces for <span class="strong">hugo</span>,
+the TUI for the flow. Every page is a self-contained sketch on the project's own dark
+palette, so what you see is what the TUI would paint. Nothing is compiled; this set is
+for <span class="strong">choosing a shape</span>.</p>
+<p class="dim">The shape is settled for all thirty: one sidebar for the configuration,
+one main pane for what is running, no tabs. The order is the policy and sits above the
+progress; the same fact is never painted twice; the crew's size is a composition
+(three = one per role, two = the orchestrator reviews, one = the human reviews, because
+an agent cannot review itself); the stamp says whether the automation runs and why; the
+queue carries ids and statuses, never task content — that belongs to raul.</p>
+
+<h2>the eight readings</h2>
+<p>Thirty sketches, but far fewer ideas. Grouped by what each one puts first, these are
+the readings the set contains — the convergences are the obvious ones, and the
+outliers are where the choice lives.</p>
+
+<div class="reading">
+<h3>1 · the order leads — the policy is the screen</h3>
+<p>The automation's rules take the top of the pane, with the live state arranged
+underneath. The configuration reads like a form or a sheet.</p>
+<p class="list">deepseek 01 the policy sheet · deepseek 10 the inspector ·
+glm 07 the policy form · minimax 01 the form and the queue · minimax 02 the order, then the crew</p>
+</div>
+
+<div class="reading">
+<h3>2 · the crew leads — who is acting, right now</h3>
+<p>The agents and what they hold are the first thing read; the policy becomes a
+sidebar note or a footer.</p>
+<p class="list">deepseek 02 the crew roster · deepseek 06 the seats ·
+glm 02 the live dashboard · minimax 07 the composition first</p>
+</div>
+
+<div class="reading">
+<h3>3 · the findings lead — what is open decides the screen</h3>
+<p>The open findings are the working surface; the queue waits behind them.</p>
+<p class="list">deepseek 07 the findings desk · glm 05 the findings desk ·
+minimax 05 the findings desk · glm 09 the incident screen</p>
+</div>
+
+<div class="reading">
+<h3>4 · the queue leads — the work as an index</h3>
+<p>The live work is the subject: columns, a spine, a master-detail index, or a
+split pane with the crew beside it.</p>
+<p class="list">deepseek 03 the pipeline · deepseek 09 the index and its flow ·
+glm 04 the queue spine · minimax 03 five status columns · minimax 08 the main pane in two ·
+minimax 10 the lane board</p>
+</div>
+
+<div class="reading">
+<h3>5 · the round leads — the review happening now</h3>
+<p>One round in flight, drawn as the screen, with everything else hanging under it.</p>
+<p class="list">deepseek 04 the round on the loop · glm 06 the round meters ·
+minimax 04 the round in flight</p>
+</div>
+
+<div class="reading">
+<h3>6 · the budget leads — the scarce thing is the subject</h3>
+<p>External rounds are finite and worth watching, so they get the screen and the queue
+waits under them.</p>
+<p class="list">deepseek 05 the review ledger · minimax 06 the review budget</p>
+</div>
+
+<div class="reading">
+<h3>7 · the stamp leads — does it run, and why</h3>
+<p>A wide band states whether the automation runs; everything else is a ribbon.</p>
+<p class="list">deepseek 08 the stamp · glm 10 the quiet stamp · minimax 09 the stamp first</p>
+</div>
+
+<div class="reading">
+<h3>8 · the flow is the subject — every fact cites its cause</h3>
+<p>The main pane <em>is</em> the flow: each policy step sits level with the state it
+governs, and every running fact names the order step or gate that produced it.
+Only one family reached this.</p>
+<p class="list">glm 01 the ledger · glm 03 the loop · glm 08 the correspondence</p>
+</div>
+
+<h2>all thirty</h2>
+<table>
+<tr><th>family</th><th>proposal</th><th>leads with</th><th>hides</th></tr>
+<tr><td class="f">deepseek</td><td><a href="deepseek/01-policy-sheet.html">01 the policy sheet</a></td><td>the order — five numbered steps with their gates</td><td>the crew's timing and the queue's bulk, pushed to the foot</td></tr>
+<tr><td class="f">deepseek</td><td><a href="deepseek/02-crew-roster.html">02 the crew roster</a></td><td>the crew — one row per agent, what it holds, for how long</td><td>the order, folded to five arrows</td></tr>
+<tr><td class="f">deepseek</td><td><a href="deepseek/03-pipeline.html">03 the pipeline</a></td><td>the queue — five status columns, every item once</td><td>the round's focus and the finding, reduced to a ticker line</td></tr>
+<tr><td class="f">deepseek</td><td><a href="deepseek/04-the-round.html">04 the round on the loop</a></td><td>the round — its stage on the lifecycle, what each stage proved</td><td>every other task's round</td></tr>
+<tr><td class="f">deepseek</td><td><a href="deepseek/05-review-ledger.html">05 the review ledger</a></td><td>the review budget — external rounds spent, task by task</td><td>the queue's order: the rows sort by spend, not by what runs next</td></tr>
+<tr><td class="f">deepseek</td><td><a href="deepseek/06-seats.html">06 the seats</a></td><td>the composition — a seat per role, and who sits in it</td><td>the queue, two columns at the foot</td></tr>
+<tr><td class="f">deepseek</td><td><a href="deepseek/07-findings-desk.html">07 the findings desk</a></td><td>the round's finding — its severity and status, beside the queue</td><td>the findings of the other eight tasks</td></tr>
+<tr><td class="f">deepseek</td><td><a href="deepseek/08-stamp.html">08 the stamp</a></td><td>the stamp — running, since when, why</td><td>the order, folded to two lines; the queue, a grid of ids</td></tr>
+<tr><td class="f">deepseek</td><td><a href="deepseek/09-index-and-flow.html">09 the index and its flow</a></td><td>the queue as an index</td><td>every other item's round until it is selected</td></tr>
+<tr><td class="f">deepseek</td><td><a href="deepseek/10-inspector.html">10 the inspector</a></td><td>the configuration — one setting open, with its gates</td><td>the queue, two columns; the crew, three lines</td></tr>
+<tr><td class="f">glm</td><td><a href="glm/01-the-ledger.html">01 the ledger</a></td><td>every running fact cites the order step or gate that produced it</td><td>—</td></tr>
+<tr><td class="f">glm</td><td><a href="glm/02-the-live-dashboard.html">02 the live dashboard</a></td><td>the crew's current work is the first thing you read</td><td>—</td></tr>
+<tr><td class="f">glm</td><td><a href="glm/03-the-loop.html">03 the loop</a></td><td>the main pane is the flow itself; tasks sit at their station</td><td>—</td></tr>
+<tr><td class="f">glm</td><td><a href="glm/04-the-queue-spine.html">04 the queue spine</a></td><td>one list of every live task, the crew annotated on their rows</td><td>—</td></tr>
+<tr><td class="f">glm</td><td><a href="glm/05-the-findings-desk.html">05 the findings desk</a></td><td>the open findings, severity-sorted, are the working surface</td><td>—</td></tr>
+<tr><td class="f">glm</td><td><a href="glm/06-the-round-meters.html">06 the round meters</a></td><td>each task drawn as the review budget it has left</td><td>—</td></tr>
+<tr><td class="f">glm</td><td><a href="glm/07-the-policy-form.html">07 the policy form</a></td><td>the sidebar is a set of controls; the main pane is a readout</td><td>—</td></tr>
+<tr><td class="f">glm</td><td><a href="glm/08-the-correspondence.html">08 the correspondence</a></td><td>each policy section sits level with the state it governs</td><td>—</td></tr>
+<tr><td class="f">glm</td><td><a href="glm/09-the-incident-screen.html">09 the incident screen</a></td><td>the escalated tasks are the screen; the healthy run is a strip</td><td>—</td></tr>
+<tr><td class="f">glm</td><td><a href="glm/10-the-quiet-stamp.html">10 the quiet stamp</a></td><td>the stamp is the hero; everything else is a ribbon</td><td>—</td></tr>
+<tr><td class="f">minimax</td><td><a href="minimax/01-form-and-queue.html">01 the form and the queue</a></td><td>the sidebar is a form to fill; the main pane is only what the form is doing</td><td>—</td></tr>
+<tr><td class="f">minimax</td><td><a href="minimax/02-order-then-crew.html">02 the order, then the crew</a></td><td>the policy sits at the head of the sidebar, the live crew heads the pane</td><td>—</td></tr>
+<tr><td class="f">minimax</td><td><a href="minimax/03-stage-columns.html">03 five status columns</a></td><td>the main pane is a board of the live work, one column per stored status</td><td>—</td></tr>
+<tr><td class="f">minimax</td><td><a href="minimax/04-current-round.html">04 the round in flight</a></td><td>the main pane opens on the review round happening now</td><td>—</td></tr>
+<tr><td class="f">minimax</td><td><a href="minimax/05-findings-desk.html">05 the findings desk</a></td><td>what is open decides the screen; the queue waits behind it</td><td>—</td></tr>
+<tr><td class="f">minimax</td><td><a href="minimax/06-review-budget.html">06 the review budget</a></td><td>the scarce thing — external rounds — is the screen's subject</td><td>—</td></tr>
+<tr><td class="f">minimax</td><td><a href="minimax/07-composition-banner.html">07 the composition first</a></td><td>the first line states what the crew's size means</td><td>—</td></tr>
+<tr><td class="f">minimax</td><td><a href="minimax/08-split-main.html">08 the main pane in two</a></td><td>the main pane is split: the queue on one side, the crew on the other</td><td>—</td></tr>
+<tr><td class="f">minimax</td><td><a href="minimax/09-stamp-banner.html">09 the stamp first</a></td><td>the widest band says whether the automation runs and why</td><td>—</td></tr>
+<tr><td class="f">minimax</td><td><a href="minimax/10-lane-board.html">10 the lane board</a></td><td>a strip of counts, then the live work split by the two lanes</td><td>—</td></tr>
+</table>
+<p class="dim">Each family's own index carries its comparison table:
+<a href="deepseek/index.html">deepseek</a> ·
+<a href="glm/index.html">glm</a> ·
+<a href="minimax/index.html">minimax</a>.</p>
+
+<h2>known issues</h2>
+<div class="known">
+<p>The pages are <span class="strong">as drawn</span> — a review round found real defects in them and
+the human chose not to have them fixed, so read these before picking one:</p>
+<p><span class="k">glm</span> — the two lanes are painted <span class="warn">inverted</span> on all eleven
+pages: the agent lane wears the accent <span class="acc">#79c0ff</span> and the human lane the
+second accent <span class="vio">#d2a8ff</span>, the opposite of the project's palette; the
+accent is also spent on every claimable row instead of the focus border and the
+selection. The screens are CSS mockups rather than terminal drawings.</p>
+<p><span class="k">minimax</span> — page 10 paints every count twice, and puts the
+code-review tasks in the human lane while a reviewer seat is live; page 04 draws a
+review round the record contradicts (TSK17's round 2 was already verdicted, and no
+further round can be in flight); every footer paints an "enter claim" key for an
+action that is not settled; pages 01 and 02 read alike; the index uses one
+off-palette colour.</p>
+<p><span class="k">deepseek</span> — the ten pages carry no byline (the model string
+inside the configuration sketch is not an attribution); a held task is painted in
+the crew and the queue on several pages.</p>
+<p><span class="k">all three</span> — the stamp's "why" is partial on some pages; the
+count of live tasks varies between sixteen and nineteen across the set (both
+computable — sixteen is the automation's queue, nineteen adds the three groomed);
+one page's ledger rows carry more than id and status.</p>
+</div>
+
+</main>
+</body>
+</html>

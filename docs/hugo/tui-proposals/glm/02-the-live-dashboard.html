@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>hugo proposal 02 &middot; the live dashboard &middot; family glm</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:28px 24px;background:#0d1117;color:#c9d1d9;font:13px/1.5 ui-monospace,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace}
+.page{max-width:1280px;margin:0 auto}
+.meta{color:#7d8590;margin:0 0 12px}
+.meta b{color:#e6edf3}
+.screen{border:1px solid #3d444d;font-size:12px;line-height:1.6}
+.bar{display:flex;justify-content:space-between;gap:16px;padding:5px 12px;border-bottom:1px solid #3d444d;white-space:pre}
+.cols{display:flex;align-items:stretch}
+.side{flex:none;width:420px;border-right:1px solid #3d444d;padding:14px 12px 16px}
+.main{flex:1;min-width:0;padding:14px 14px 16px}
+.blk{border:1px solid #3d444d;padding:12px 12px 10px;margin:0 0 16px;position:relative}
+.blk:last-child{margin-bottom:0}
+.blk h3{position:absolute;top:-9px;left:10px;margin:0;padding:0 6px;background:#0d1117;font-size:11px;color:#e6edf3;font-weight:700;letter-spacing:.6px}
+.blk.focus{border-color:#79c0ff}
+.blk.errb{border-color:#e06c75}
+.row{white-space:pre}
+.foot{display:flex;gap:22px;padding:5px 12px;border-top:1px solid #3d444d;color:#7d8590;white-space:pre}
+.note{margin:14px auto 0;max-width:1280px}
+.note .lbl{color:#7d8590;display:inline-block;width:110px}
+.dim{color:#7d8590}.mut{color:#8b949e}.sec{color:#9aa5b1}.hi{color:#e6edf3}.top{color:#fff;font-weight:700}
+.agent{color:#79c0ff}.human{color:#d2a8ff}.ok{color:#7ec699}.warn{color:#ff9e64}.err{color:#e06c75}
+.sel{background:#79c0ff;color:#0d1117}
+.sel .dim,.sel .sec,.sel .mut,.sel .agent,.sel .human,.sel .hi{color:#0d1117}
+table.ix{border-collapse:collapse;width:100%;margin-top:14px}
+table.ix th{color:#9aa5b1;text-align:left;font-weight:400;border-bottom:1px solid #3d444d;padding:6px 10px 6px 0}
+table.ix td{border-bottom:1px solid #3d444d;padding:7px 10px 7px 0;vertical-align:top}
+table.ix td.f a{color:#79c0ff;text-decoration:none}
+table.ix td.f a:hover{text-decoration:underline}
+table.ix td.n{color:#7d8590}
+.intro{color:#9aa5b1;max-width:900px}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="meta"><b>hugo</b> &mdash; proposal 02/10 &middot; the live dashboard &middot; drawn by family <b>glm</b></div>
+<div class="screen">
+<div class="bar"><span class="top">hugo &mdash; the flow</span><span><span class="ok">running</span> since 09:14 &middot; 3 agents &mdash; one per role</span></div>
+<div class="cols">
+<div class="side">
+<div class="blk">
+<h3>POLICY &middot; ~/.config/coding-crew/flow.json</h3>
+<div class="row"><span class="sec">agents</span>      <span class="hi">3</span> &mdash; one per role</div>
+<div class="row"><span class="sec">models</span>      builder <span class="hi">deepseek-v4.1-flash#high</span></div>
+<div class="row">              reviewer <span class="hi">glm-5.3#high</span></div>
+<div class="row"><span class="sec">harness</span>     opencode &middot; flow/*.json</div>
+<div class="row"><span class="sec">rounds</span>      <span class="hi">5</span> external &mdash; then needs-human</div>
+<div class="row"><span class="sec">order</span>       claim &rarr; execute &rarr; review,</div>
+<div class="row">              by someone else</div>
+</div>
+</div>
+
+<div class="main">
+<div class="blk focus">
+<h3>CREW &middot; the live run</h3>
+<div class="row"><span class="agent">runner-01</span>     &#9679;  <span class="hi">TSK10</span>   executing</div>
+<div class="row"><span class="human">reviewer-01</span>   &#9679;  <span class="hi">TSK14</span>   external round 1 in flight</div>
+<div class="row"><span class="sec">orchestrator</span> &#9675;  &mdash;        watching the loop</div>
+</div>
+<div class="blk">
+<h3>QUEUE &middot; 16 live &middot; 1 claimable</h3>
+<div class="row"><span class="sec">now    </span> <span class="agent">&#9679;</span> <span class="hi">TSK29</span> <span class="agent">approved</span> &mdash; claimable</div>
+<div class="row"><span class="sec">waiting</span> TSK07 &middot; TSK08 &middot; TSK09 &mdash; <span class="agent">approved</span>, dependencies not done</div>
+<div class="row"><span class="sec">flight </span> TSK10 &middot; TSK11 &middot; TSK12 &mdash; <span class="agent">executing</span></div>
+<div class="row"><span class="sec">review </span> TSK13 &middot; TSK14 &middot; TSK15 &mdash; <span class="human">code-review</span></div>
+<div class="row"><span class="sec">fixing </span> TSK16 &middot; TSK17 &middot; TSK18 &mdash; <span class="warn">remediating</span>, round 1</div>
+<div class="row"><span class="err">stuck  </span> TSK19 &middot; TSK20 &middot; TSK21 &mdash; <span class="err">needs-human</span></div>
+</div>
+<div class="blk">
+<h3>BUDGET &middot; 5 external rounds</h3>
+<div class="row">TSK16&ndash;TSK18  <span class="hi">1/5</span> spent &middot; findings open</div>
+<div class="row">TSK19&ndash;TSK21  <span class="err">5/5 spent</span> &mdash; escalated</div>
+</div>
+<div class="blk">
+<h3>FINDINGS</h3>
+<div class="row"><span class="hi">21</span> open &mdash; <span class="err">8 high</span> &middot; 8 medium &middot; 5 low</div>
+</div>
+</div>
+</div>
+<div class="foot"><span>q quit</span><span>s start / stop the automation</span><span>&larr; &rarr; focus pane</span><span>enter edit</span><span>? help</span></div>
+</div>
+<div class="note">
+<div><span class="lbl">easy to see</span>the first block answers &ldquo;is anything happening&rdquo; &mdash; the three roles and the work each holds read like a status board, and the whole run fits above the fold.</div>
+<div><span class="lbl">cost</span>the order is one phrase in the sidebar &mdash; why TSK29 is claimable and why a reviewer must be someone else is not on the main pane.</div>
+</div>
+</div>
+</body>
+</html>

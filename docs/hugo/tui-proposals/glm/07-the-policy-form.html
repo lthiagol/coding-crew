@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>hugo proposal 07 &middot; the policy form &middot; family glm</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:28px 24px;background:#0d1117;color:#c9d1d9;font:13px/1.5 ui-monospace,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace}
+.page{max-width:1280px;margin:0 auto}
+.meta{color:#7d8590;margin:0 0 12px}
+.meta b{color:#e6edf3}
+.screen{border:1px solid #3d444d;font-size:12px;line-height:1.6}
+.bar{display:flex;justify-content:space-between;gap:16px;padding:5px 12px;border-bottom:1px solid #3d444d;white-space:pre}
+.cols{display:flex;align-items:stretch}
+.side{flex:none;width:420px;border-right:1px solid #3d444d;padding:14px 12px 16px}
+.main{flex:1;min-width:0;padding:14px 14px 16px}
+.blk{border:1px solid #3d444d;padding:12px 12px 10px;margin:0 0 16px;position:relative}
+.blk:last-child{margin-bottom:0}
+.blk h3{position:absolute;top:-9px;left:10px;margin:0;padding:0 6px;background:#0d1117;font-size:11px;color:#e6edf3;font-weight:700;letter-spacing:.6px}
+.blk.focus{border-color:#79c0ff}
+.blk.errb{border-color:#e06c75}
+.row{white-space:pre}
+.foot{display:flex;gap:22px;padding:5px 12px;border-top:1px solid #3d444d;color:#7d8590;white-space:pre}
+.note{margin:14px auto 0;max-width:1280px}
+.note .lbl{color:#7d8590;display:inline-block;width:110px}
+.dim{color:#7d8590}.mut{color:#8b949e}.sec{color:#9aa5b1}.hi{color:#e6edf3}.top{color:#fff;font-weight:700}
+.agent{color:#79c0ff}.human{color:#d2a8ff}.ok{color:#7ec699}.warn{color:#ff9e64}.err{color:#e06c75}
+.sel{background:#79c0ff;color:#0d1117}
+.sel .dim,.sel .sec,.sel .mut,.sel .agent,.sel .human,.sel .hi{color:#0d1117}
+table.ix{border-collapse:collapse;width:100%;margin-top:14px}
+table.ix th{color:#9aa5b1;text-align:left;font-weight:400;border-bottom:1px solid #3d444d;padding:6px 10px 6px 0}
+table.ix td{border-bottom:1px solid #3d444d;padding:7px 10px 7px 0;vertical-align:top}
+table.ix td.f a{color:#79c0ff;text-decoration:none}
+table.ix td.f a:hover{text-decoration:underline}
+table.ix td.n{color:#7d8590}
+.intro{color:#9aa5b1;max-width:900px}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="meta"><b>hugo</b> &mdash; proposal 07/10 &middot; the policy form &middot; drawn by family <b>glm</b></div>
+<div class="screen">
+<div class="bar"><span class="top">hugo &mdash; the flow</span><span><span class="ok">running</span> since 09:14</span></div>
+<div class="cols">
+<div class="side">
+<div class="blk focus">
+<h3>POLICY FORM &middot; ~/.config/coding-crew/flow.json</h3>
+<div class="row"><span class="sec">agents</span>       <span class="sel">  3  </span>  &#9664; &#9656;</div>
+<div class="row"><span class="dim">   3 &rarr; one per role</span></div>
+<div class="row"><span class="dim">   2 &rarr; the orchestrator reviews</span></div>
+<div class="row"><span class="dim">   1 &rarr; the human reviews</span></div>
+<div class="row"><span class="sec">models</span>       builder   <span class="hi">deepseek-v4.1-flash#high</span></div>
+<div class="row">              reviewer  <span class="hi">glm-5.3#high</span></div>
+<div class="row"><span class="sec">harness</span>       <span class="hi">opencode</span> &middot; flow/*.json</div>
+<div class="row"><span class="sec">rounds</span>       <span class="sel">  5  </span>  &#9664; &#9656;  external, then needs-human</div>
+<div class="row"><span class="sec">order</span></div>
+<div class="row">  <span class="hi">1</span>  claim an approved task whose</div>
+<div class="row">       dependencies are done</div>
+<div class="row">  <span class="hi">2</span>  the runner writes the steps</div>
+<div class="row">       and the evidence</div>
+<div class="row">  <span class="hi">3</span>  a reviewer who did not write</div>
+<div class="row">       it gives the verdict</div>
+<div class="row"><span class="dim">  &#94; v move &middot; enter edit &middot; esc done</span></div>
+</div>
+</div>
+
+<div class="main">
+<div class="blk">
+<h3>READOUT &middot; runtime</h3>
+<div class="row"><span class="sec">stamp   </span> <span class="ok">running</span> since 09:14 &mdash; &sect;1 has work: TSK29 claimable</div>
+<div class="row"><span class="sec">crew    </span> 3 agents, one per role &mdash; <span class="agent">runner-01</span> TSK10 &middot; <span class="human">reviewer-01</span> TSK14 &middot; orchestrator dispatching</div>
+<div class="row"><span class="sec">queue   </span> 16 live &mdash; claimable 1 &middot; executing 3 &middot; review 3 &middot; fixing 3 &middot; waiting 3 &middot; escalated 3</div>
+<div class="row"><span class="sec">findings</span> 21 open &mdash; <span class="err">8 high</span> &middot; 8 medium &middot; 5 low</div>
+<div class="row"><span class="sec">human   </span> waiting on a human: 3 groomed to approve &middot; 5 drafts</div>
+</div>
+</div>
+</div>
+<div class="foot"><span>q quit</span><span>s start / stop the automation</span><span>&larr; &rarr; focus pane</span><span>enter edit</span><span>? help</span></div>
+</div>
+<div class="note">
+<div><span class="lbl">easy to see</span>the screen is built for changing the flow &mdash; every policy field is a control, and the agent count is never shown without what it means.</div>
+<div><span class="lbl">cost</span>the running state is a flat readout with no block of its own; nothing on the right half invites the eye.</div>
+</div>
+</div>
+</body>
+</html>

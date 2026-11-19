@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hugo proposal index — ten readings (deepseek)</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html { background: #0d1117; }
+body {
+  margin: 0; background: #0d1117; color: #c9d1d9;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "DejaVu Sans Mono", monospace;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 1080px; margin: 0 auto; padding: 28px 20px 48px; }
+.kicker { margin: 0 0 4px; font-size: 12px; color: #7d8590; }
+.kicker a { color: #7d8590; text-decoration: none; }
+.kicker a:hover { color: #79c0ff; }
+h1 { margin: 0 0 18px; font-size: 14px; font-weight: 600; letter-spacing: .04em;
+     color: #e6edf3; }
+.screen {
+  margin: 0; padding: 6px 0 10px; font-size: 12.4px; line-height: 1.28;
+  white-space: pre; overflow-x: auto; background: #0d1117; color: #c9d1d9;
+  font-variant-ligatures: none; tab-size: 4;
+}
+.norm { color: #c9d1d9; }
+.two { color: #9aa5b1; }
+.dim { color: #8b949e; }
+.dimmed { color: #7d8590; }
+.border, .br { color: #3d444d; }
+.acc { color: #79c0ff; }
+.vio { color: #d2a8ff; }
+.ok { color: #7ec699; }
+.warn { color: #ff9e64; }
+.err { color: #e06c75; }
+.strong { color: #e6edf3; }
+.bright { color: #ffffff; }
+.sel { background: #79c0ff; color: #0d1117; }
+.note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: #c9d1d9; }
+.note b { color: #7d8590; font-weight: 400; }
+
+main { max-width: 1080px; }
+ul.proposals { list-style: none; padding: 0; margin: 0 0 30px; }
+ul.proposals li { margin: 0 0 7px; line-height: 1.55; font-size: 12.5px; }
+ul.proposals a { color: #79c0ff; text-decoration: none; }
+ul.proposals a:hover { text-decoration: underline; }
+ul.proposals .pname { color: #e6edf3; }
+p.shared { margin: 0 0 26px; color: #9aa5b1; font-size: 12.5px; line-height: 1.6; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+caption { caption-side: top; text-align: left; color: #7d8590; margin: 0 0 8px; font-size: 12px; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid #3d444d; }
+thead th { color: #7d8590; font-weight: 400; }
+tbody th { color: #e6edf3; font-weight: 400; white-space: nowrap; }
+tbody th a { color: #e6edf3; text-decoration: none; }
+tbody th a:hover { color: #79c0ff; }
+</style>
+</head>
+<body>
+<main>
+<p class="kicker">hugo · the TUI for the flow</p>
+<h1>ten readings of one screen</h1>
+<p class="shared">All ten draw the same state: sixteen queued tasks, TSK29 at the head of the queue,
+TSK16 in the round, three agents — one per role. One sidebar for the configuration,
+one main pane for what is running, no tabs.</p>
+<ul class="proposals">
+<li><a href="01-policy-sheet.html">01-policy-sheet.html</a> <span class="pname">· the policy sheet</span> — The order is the widest thing on screen, and the run is read under it as one document.</li>
+<li><a href="02-crew-roster.html">02-crew-roster.html</a> <span class="pname">· the crew roster</span> — The crew is the first block: who is live, what each holds, and for how long.</li>
+<li><a href="03-pipeline.html">03-pipeline.html</a> <span class="pname">· the pipeline</span> — The queue is a board of statuses: every item sits once, under the status it is in.</li>
+<li><a href="04-the-round.html">04-the-round.html</a> <span class="pname">· the round on the loop</span> — The current round is drawn on the lifecycle, stage by stage, with what each stage already proved.</li>
+<li><a href="05-review-ledger.html">05-review-ledger.html</a> <span class="pname">· the review ledger</span> — The review budget is the table: every task, the external rounds it spent, the verdict.</li>
+<li><a href="06-seats.html">06-seats.html</a> <span class="pname">· the seats</span> — The crew is a seat per role, and the composition — one per role, two, one — is the sidebar.</li>
+<li><a href="07-findings-desk.html">07-findings-desk.html</a> <span class="pname">· the findings desk</span> — The finding that blocks the round sits beside the whole queue, one item per line.</li>
+<li><a href="08-stamp.html">08-stamp.html</a> <span class="pname">· the stamp</span> — The stamp answers whether the automation runs and why before anything else is read.</li>
+<li><a href="09-index-and-flow.html">09-index-and-flow.html</a> <span class="pname">· the index and its flow</span> — The queue is an index; one selected item&#x27;s round, budget and findings are read beside it.</li>
+<li><a href="10-inspector.html">10-inspector.html</a> <span class="pname">· the inspector</span> — The configuration is a form: one field open, its meaning and its gates laid out, the run in view.</li>
+</ul>
+<table>
+<caption>what each reading leads with and what it hides</caption>
+<thead><tr><th>proposal</th><th>leads with</th><th>hides</th></tr></thead>
+<tbody>
+<tr><th scope="row"><a href="01-policy-sheet.html">01 the policy sheet</a></th><td>the order — five numbered steps with their gates</td><td>the crew&#x27;s timing and the queue&#x27;s bulk, pushed to the foot</td></tr>
+<tr><th scope="row"><a href="02-crew-roster.html">02 the crew roster</a></th><td>the crew — one row per agent, what it holds, for how long</td><td>the order, folded to five arrows</td></tr>
+<tr><th scope="row"><a href="03-pipeline.html">03 the pipeline</a></th><td>the queue — five status columns, every item once</td><td>the round&#x27;s focus and the finding, reduced to a ticker line</td></tr>
+<tr><th scope="row"><a href="04-the-round.html">04 the round on the loop</a></th><td>the round — its stage on the lifecycle, what each stage proved</td><td>every other task&#x27;s round</td></tr>
+<tr><th scope="row"><a href="05-review-ledger.html">05 the review ledger</a></th><td>the review budget — external rounds spent, task by task</td><td>the queue&#x27;s order: the rows sort by spend, not by what runs next</td></tr>
+<tr><th scope="row"><a href="06-seats.html">06 the seats</a></th><td>the composition — a seat per role, and who sits in it</td><td>the queue, two columns at the foot</td></tr>
+<tr><th scope="row"><a href="07-findings-desk.html">07 the findings desk</a></th><td>the round&#x27;s finding — its severity and status, beside the queue</td><td>the findings of the other eight tasks</td></tr>
+<tr><th scope="row"><a href="08-stamp.html">08 the stamp</a></th><td>the stamp — running, since when, why</td><td>the order, folded to two lines; the queue, a grid of ids</td></tr>
+<tr><th scope="row"><a href="09-index-and-flow.html">09 the index and its flow</a></th><td>the queue as an index</td><td>every other item&#x27;s round until it is selected</td></tr>
+<tr><th scope="row"><a href="10-inspector.html">10 the inspector</a></th><td>the configuration — one setting open, with its gates</td><td>the queue, two columns; the crew, three lines</td></tr>
+</tbody>
+</table>
+</main>
+</body>
+</html>
