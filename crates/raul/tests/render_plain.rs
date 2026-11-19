@@ -5,8 +5,10 @@
 //! reads — is the same on every machine.
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
+use std::sync::OnceLock;
 
 mod support;
 
@@ -79,30 +81,204 @@ fn snapshot_path(name: &str) -> PathBuf {
         .join(name)
 }
 
-/// The terminal columns a line takes.
+/// The terminal columns a line takes, by the one table both measures read.
 fn display_width(text: &str) -> usize {
-    text.chars().map(char_width).sum()
+    column_table().width_of(text)
 }
 
-/// The terminal columns one character takes, for the characters a render can
-/// carry: box drawing and ASCII are one column, and a wide grapheme is two.
-fn char_width(ch: char) -> usize {
-    match ch {
-        '\u{1100}'..='\u{115F}'
-        | '\u{2E80}'..='\u{303E}'
-        | '\u{3041}'..='\u{33FF}'
-        | '\u{3400}'..='\u{4DBF}'
-        | '\u{4E00}'..='\u{9FFF}'
-        | '\u{A000}'..='\u{A4CF}'
-        | '\u{AC00}'..='\u{D7A3}'
-        | '\u{F900}'..='\u{FAFF}'
-        | '\u{FE30}'..='\u{FE6F}'
-        | '\u{FF00}'..='\u{FF60}'
-        | '\u{FFE0}'..='\u{FFE6}'
-        | '\u{1F300}'..='\u{1FAFF}'
-        | '\u{20000}'..='\u{3FFFD}' => 2,
-        _ => 1,
+/// The one table of terminal-column rules, read by the sweep and by this
+/// check. `scripts/terminal-columns.txt` is the source of truth.
+fn column_table() -> &'static ColumnTable {
+    static TABLE: OnceLock<ColumnTable> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let path = repo_root().join("scripts/terminal-columns.txt");
+        ColumnTable::load(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+    })
+}
+
+/// The columns a range of codepoints takes, or the cell that advances to the
+/// next tab stop.
+#[derive(Clone, Copy)]
+enum Columns {
+    Fixed(usize),
+    Tab,
+}
+
+struct ColumnRange {
+    start: u32,
+    end: u32,
+    width: Columns,
+}
+
+struct ColumnCase {
+    name: String,
+    text: String,
+    expected: usize,
+}
+
+struct ColumnTable {
+    tab_stop: usize,
+    ranges: Vec<ColumnRange>,
+    cases: Vec<ColumnCase>,
+}
+
+impl ColumnTable {
+    fn load(path: &Path) -> Result<Self, String> {
+        let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
+        let mut tab_stop = None;
+        let mut ranges: Vec<ColumnRange> = Vec::new();
+        let mut cases = Vec::new();
+        for (index, raw) in text.lines().enumerate() {
+            let number = index + 1;
+            let line = raw.split('#').next().unwrap_or("").trim();
+            if line.is_empty() {
+                continue;
+            }
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            let error = |message: String| format!("{}:{number}: {message}", path.display());
+            match fields[0] {
+                "tab-stop" => {
+                    if fields.len() != 2 {
+                        return Err(error("want: tab-stop N".to_string()));
+                    }
+                    let stop: usize = fields[1]
+                        .parse()
+                        .map_err(|_| error(format!("not a positive number: {}", fields[1])))?;
+                    if stop == 0 {
+                        return Err(error("the tab stop must be positive".to_string()));
+                    }
+                    tab_stop = Some(stop);
+                }
+                "case" => {
+                    if fields.len() != 4 {
+                        return Err(error("want: case NAME CODEPOINTS COLUMNS".to_string()));
+                    }
+                    let mut text = String::new();
+                    for codepoint in fields[2].split(',') {
+                        let value = u32::from_str_radix(codepoint, 16)
+                            .map_err(|_| error(format!("not a hex codepoint: {codepoint}")))?;
+                        let character = char::from_u32(value)
+                            .ok_or_else(|| error(format!("not a character: {codepoint}")))?;
+                        text.push(character);
+                    }
+                    let expected = fields[3]
+                        .parse()
+                        .map_err(|_| error(format!("not a column count: {}", fields[3])))?;
+                    cases.push(ColumnCase {
+                        name: fields[1].to_string(),
+                        text,
+                        expected,
+                    });
+                }
+                range => {
+                    if fields.len() != 2 {
+                        return Err(error("want: START-END WIDTH".to_string()));
+                    }
+                    let (start, end) = range
+                        .split_once('-')
+                        .ok_or_else(|| error("want: START-END WIDTH".to_string()))?;
+                    let start = u32::from_str_radix(start, 16)
+                        .map_err(|_| error(format!("not a hex codepoint: {start}")))?;
+                    let end = u32::from_str_radix(end, 16)
+                        .map_err(|_| error(format!("not a hex codepoint: {end}")))?;
+                    let width = match fields[1] {
+                        "tab" => Columns::Tab,
+                        other => match other.parse::<usize>() {
+                            Ok(0) => Columns::Fixed(0),
+                            Ok(2) => Columns::Fixed(2),
+                            _ => {
+                                return Err(error(format!(
+                                    "a range takes 0 or 2 columns, not {other}"
+                                )));
+                            }
+                        },
+                    };
+                    if start > end {
+                        return Err(error(format!("range {range} runs backwards")));
+                    }
+                    if let Some(last) = ranges.last()
+                        && start <= last.end
+                    {
+                        return Err(error("ranges are not in order".to_string()));
+                    }
+                    ranges.push(ColumnRange { start, end, width });
+                }
+            }
+        }
+        let tab_stop = tab_stop.ok_or_else(|| format!("{}: no tab-stop line", path.display()))?;
+        if ranges.is_empty() {
+            return Err(format!("{}: no ranges", path.display()));
+        }
+        if cases.is_empty() {
+            return Err(format!("{}: no cases", path.display()));
+        }
+        Ok(Self {
+            tab_stop,
+            ranges,
+            cases,
+        })
     }
+
+    fn range_at(&self, codepoint: u32) -> Option<&ColumnRange> {
+        let index = self
+            .ranges
+            .partition_point(|range| range.start <= codepoint);
+        if index == 0 {
+            return None;
+        }
+        let range = &self.ranges[index - 1];
+        (codepoint <= range.end).then_some(range)
+    }
+
+    fn advance(&self, character: char, column: usize) -> usize {
+        match self.range_at(character as u32) {
+            Some(ColumnRange {
+                width: Columns::Fixed(width),
+                ..
+            }) => *width,
+            Some(_) => self.tab_stop - column % self.tab_stop,
+            None => 1,
+        }
+    }
+
+    fn width_of(&self, text: &str) -> usize {
+        text.chars().fold(0, |column, character| {
+            column + self.advance(character, column)
+        })
+    }
+
+    fn case(&self, name: &str) -> Option<&ColumnCase> {
+        self.cases.iter().find(|case| case.name == name)
+    }
+}
+
+/// A line measured by the sweep's own reader: the other side of the compare.
+fn sweep_width(line: &str) -> usize {
+    let mut child = Command::new("python3")
+        .arg(repo_root().join("scripts/pty-sweep.py"))
+        .arg("--measure")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("running the sweep's measure");
+    {
+        let stdin = child.stdin.as_mut().expect("the sweep's stdin");
+        stdin.write_all(line.as_bytes()).expect("writing the line");
+        stdin.write_all(b"\n").expect("ending the line");
+    }
+    drop(child.stdin.take());
+    let output = child.wait_with_output().expect("the sweep's measure");
+    assert!(
+        output.status.success(),
+        "the sweep refused the line: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout)
+        .expect("the measurement is UTF-8")
+        .trim()
+        .parse()
+        .expect("a measured width")
 }
 
 /// A work folder holding one approved task whose title is a wide grapheme.
@@ -467,6 +643,88 @@ fn the_render_takes_the_requested_dimensions() {
 }
 
 #[test]
+fn the_terminal_column_table_pins_the_cases_the_measures_used_to_disagree_about() {
+    // The cases live in the table, so the two measures cannot drift on the
+    // characters that differ: a combining mark, a zero-width joiner, a soft
+    // hyphen, a tab, a wide character, a fullwidth character and an emoji.
+    let table = column_table();
+    for name in [
+        "combining-mark",
+        "zero-width-joiner",
+        "soft-hyphen",
+        "tab",
+        "east-asian-wide",
+        "fullwidth",
+        "emoji",
+    ] {
+        let case = table
+            .case(name)
+            .unwrap_or_else(|| panic!("the table has no case {name}"));
+        assert_eq!(
+            table.width_of(&case.text),
+            case.expected,
+            "the table's {name} case"
+        );
+    }
+    assert_eq!(table.tab_stop, 8, "the tab stop is the table's");
+    assert_eq!(table.width_of("a"), 1, "an ordinary letter");
+    assert_eq!(table.width_of("\u{0301}"), 0, "a combining mark");
+    assert_eq!(table.width_of("e\u{0301}"), 1, "a letter and its mark");
+    assert_eq!(table.width_of("\t"), 8, "a tab from the first column");
+    assert_eq!(table.width_of("a\tb"), 9, "a tab advances in place");
+}
+
+#[test]
+fn the_sweep_and_the_rust_check_measure_the_same_table_cases() {
+    // The sweep reads the same file through its own reader. Its check prints
+    // one measured/expected pair per case; every one must equal the number
+    // this side measures, so the two implementations agree on the rules.
+    let output = Command::new("python3")
+        .arg(repo_root().join("scripts/pty-sweep.py"))
+        .arg("--check-table")
+        .output()
+        .expect("running the sweep's table check");
+    assert!(
+        output.status.success(),
+        "the sweep refused the table: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).expect("the table check is UTF-8");
+    let table = column_table();
+    let mut seen = 0;
+    for line in stdout.lines() {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() != 3 {
+            continue;
+        }
+        let case = table.case(fields[0]).unwrap_or_else(|| {
+            panic!(
+                "the sweep measures a case the table does not: {}",
+                fields[0]
+            )
+        });
+        assert_eq!(
+            fields[1].parse::<usize>().expect("the sweep's measurement"),
+            table.width_of(&case.text),
+            "the sweep and the Rust check disagree on {}",
+            case.name
+        );
+        assert_eq!(
+            fields[1], fields[2],
+            "the sweep's {} case drifted from its own table",
+            case.name
+        );
+        seen += 1;
+    }
+    assert_eq!(
+        seen,
+        table.cases.len(),
+        "the sweep checked {seen} of the table's {} cases",
+        table.cases.len()
+    );
+}
+
+#[test]
 fn a_wide_grapheme_costs_two_columns_not_three() {
     let dir = wide_task_work();
     let work = dir.to_str().expect("the work folder is UTF-8");
@@ -704,6 +962,22 @@ fn a_combining_title_is_cut_on_grapheme_boundaries() {
         }
     }
     assert!(text.contains('…'), "no cut is marked: {text}");
+    // The case the two measures used to disagree about: a rendered line with
+    // a combining mark. The sweep and this check must now call it one column.
+    let row = text
+        .lines()
+        .find(|row| row.contains('\u{0301}'))
+        .expect("the combining title is not on screen");
+    assert_eq!(
+        display_width(row),
+        sweep_width(row),
+        "the two measures disagree on a rendered combining mark: {row:?}"
+    );
+    assert_eq!(
+        display_width(row),
+        30,
+        "the rendered row is not the pane width: {row:?}"
+    );
     let _ = fs::remove_dir_all(&dir);
 }
 
