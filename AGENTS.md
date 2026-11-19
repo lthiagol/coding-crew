@@ -64,7 +64,7 @@ make raul
   the review-round limit, and the order — the policy the flow follows.
 - The main pane shows what is running: the crew, the current round, the
   budget, the findings.
-- Its configuration lives under `~/.config/coding-lanes/`, beside the
+- Its configuration lives under `~/.config/coding-crew/`, beside the
   project's other configuration.
 - hugo's screens are designed in `docs/hugo/`.
 

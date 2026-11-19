@@ -10,7 +10,7 @@ SCOPE
   Two TUIs: raul for the work, hugo for the flow. The Autopilot tab is
   gone from raul; the automation's questions live in hugo, which is one
   sidebar for configuration and one main pane for what is running, with no
-  tabs. Its configuration is centralized under ~/.config/coding-lanes/.
+  tabs. Its configuration is centralized under ~/.config/coding-crew/.
   talita is not being built. Do not write talita code, do not extend its
   commands, do not wire raul to it, until that is said explicitly.
   crates/core is shared and stays editable.
