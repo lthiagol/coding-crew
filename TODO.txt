@@ -346,9 +346,28 @@ WHERE WE ARE
   or fewer, which is a design decision; and view.rs keeps one clause
   about the last window that draws a row, which does not hold at content
   height 1.
-  Next unit: the mock-data dependency graph unit - the fixture graph
-  still contradicts the dependencies.satisfied gate for fixtures past
-  approved, and the Path tab is built on it.
+  Unit closed: the mock-data dependency graph. Two rounds. Every task past
+  approved now waits only on done work - executing, code-review,
+  remediating, needs-human and done - so the fixtures tell a history the
+  model allows: the claim gate says a task starts when its dependencies
+  are satisfied, and the graph is closed under waits-on and acyclic. The
+  rule is enforced three ways: a test reads the real fixture tree, the
+  generator self-checks, and the generators byte-for-byte reproduction is
+  now in the gate, closing a long-recorded gap. The Path counts are
+  unchanged - trunk 1, AWAITING APPROVAL 2, BLOCKED 3, RUNNING 6, REVIEW 3,
+  ESCALATED 3 - and so are the Needs you counts.
+  The first round found two blocking defects, both the same class: the
+  structural fix moved the contradiction from structure into time, since
+  every claim predated the completion of its dependency, and the two
+  documents that describe the graph still said it runs backwards only.
+  The fix round corrected both, and the delta review confirmed the
+  chronology over the committed tree.
+  One low was fixed at the close: a README sentence made a universal
+  claim that four fixtures contradicted.
+  Next unit: the batched low follow-ups - the render_view extraction, the
+  help popup sizing, the two terminal-column measures, the fenced-code
+  fixture, the --tab and --detail guard, the two-instants fix, and the
+  search-figure assertions home. Then the Autopilot design.
   Unit closed: the global flow. Three rounds. The flow skill and the
   review skill now live at ~/.config/opencode/skills, loaded by their IDs,
   and the repository points at them; the skill says where it lives, that
