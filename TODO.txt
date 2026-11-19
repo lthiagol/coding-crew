@@ -293,6 +293,24 @@ WHERE WE ARE
   dracula, terminal - each from its own family page, each with eighteen
   slots painted and figures recomputed by test. The light flavours and
   alucard wait with the light theme.
+  Unit closed: the upstream skills move global. One clean round. The four
+  upstream skills - codebase-design, diagnosing-bugs, domain-modeling,
+  writing-for-agents - live whole at ~/.config/opencode/skills, every
+  file beside its SKILL.md, verified byte-identical to the repository
+  copies; the MIT licence sits beside them, and the provenance is a few
+  lines - the upstream repository, the pinned commit 5beb35b, its date,
+  and each skills upstream path - plus the rule that they are never
+  edited in place. The repository no longer carries .agents/skills at all;
+  the sync machinery and its test are gone, and make ci no longer runs
+  them, so CI cannot break on a script that only refreshed copies.
+  The review left low follow-ups, none blocking: the DONE summary still
+  named the deleted tree, and ADR 0009s rewritten sentence was
+  self-referential - both fixed.
+  Next unit: the flow scripts move into the skill - the three herdr and
+  snapshot tools and their two kept suites beside the skills SKILL.md, the
+  skills own references base-directory relative, and a make test-flow
+  target that runs them when the skill is installed and skips cleanly
+  when it is not.
   Next unit: the row-tab scrolling unit - scrolling on Needs you, Path and
   Backlog, with pgup/pgdn and g/G, the cursor never stepping onto a
   hidden row, and the movement keys named in the footer and the help
@@ -379,9 +397,13 @@ DONE
   markdown through one pure, terminal-free interface.
   Docs: task model, smaller tasks, roles, vocabulary, the raul screen spec,
   and ten decision records.
-  Skills: four vendored from upstream under .agents/skills, code-review
-  adapted from mattpocock/skills for the two-axis build-loop review, and
-  orchestration-flow for the build loop itself.
+  Skills: the upstream four - codebase-design, diagnosing-bugs,
+  domain-modeling, writing-for-agents - live global at
+  ~/.config/opencode/skills with the MIT licence and their provenance beside
+  them; code-review is global too, adapted from mattpocock/skills for the
+  two-axis build-loop review and maintained by hand; orchestration-flow is
+  global and holds the build loop itself. The repository carries none of
+  them.
   Engine: leaf 1.29.2's markdown modules vendored into crates/engine with a
   pinned commit, checksummed deviation ledger, safe sync script, and ported
   upstream tests.
