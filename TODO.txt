@@ -488,6 +488,11 @@ HAPPENED
   It happened a third time, and the rule is now written into the skill:
   the report often arrives before the wake notices the turn ended, so a
   tab closed on the report leaves the wake polling a pane that is gone.
+  It happened a fourth time, on the dependency-graph delta - and the
+  practice, not the rule, is what has to change: the orchestrator closes
+  tabs in a batch at the end of a unit, or only after that panes own wake
+  notification has arrived. A report is not a signal that the pane is
+  free.
   A builder pane was blocked by an account setting, not a defect: the
   opencode-go DeepSeek V4.1 Flash model is region-blocked until the
   console's privacy region is set to Global. And a wake command was left
