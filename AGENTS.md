@@ -7,15 +7,22 @@ Rules for agents working in this repository.
 coding-lanes is a task management tool for agents — a todo list with
 superpowers.
 
-- Two interfaces:
+- Three interfaces:
   - **talita** — the CLI tool. Agent-facing, not designed for humans.
     **T**ask **A**ccess and **L**ane **I**nteraction **T**erminal **A**pp.
-  - **raul** — the TUI. Human-facing, for reviewing tasks and understanding the
-    project's flow and status. **R**eview, **A**pprove, **U**nderstand
-    **L**ane.
+  - **raul** — the TUI for the work. Human-facing, for reviewing tasks and
+    understanding the project's flow and status. **R**eview, **A**pprove,
+    **U**nderstand **L**ane.
+  - **hugo** — the TUI for the flow. Human-facing, for configuring and
+    governing the automation that runs the work. **H**uman-guided
+    **U**nified **G**overnance **&** **O**rchestration.
+- The seam between them is the data: raul reads the work folder, hugo reads
+  the runtime. raul draws task content; hugo draws tasks only as items of a
+  queue.
 - In an interactive session the human and agent groom a task; once agreed, the
   agent calls talita to write it down.
-- talita writes and manages tasks; raul shows them.
+- talita writes and manages tasks; raul shows them; hugo governs the
+  automation that acts on them.
 - Tasks live in the managed project's own `coding-lanes/` folder, alongside its
   code. No central store — each project keeps its own data.
 - `coding-lanes/` holds tasks, metadata, code review findings, and everything
@@ -32,6 +39,8 @@ superpowers.
 - `flow/` — the orchestration role configs: `builder.json` and `reviewer.json`.
   They name the agent each pane runs and the model it runs on.
 - `crates/raul` — raul; package `coding-lanes-raul`, binary `raul`.
+- `crates/hugo` — hugo; package `coding-lanes-hugo`, binary `hugo`.
+- `crates/theme` — the slots, presets and palettes both TUIs paint with.
 - `coding-lanes/` — data folder of a managed project (not created here).
 
 ```sh
@@ -47,6 +56,17 @@ make raul
   `flow/`.
 - `.orchestration.json` holds the flow's project prefix, `cl`, and the paths
   of the role configs.
+
+## Hugo
+
+- hugo is the TUI for the flow. **One sidebar and one main pane, no tabs.**
+- The sidebar configures the automation: the agents, the models, the harness,
+  the review-round limit, and the order — the policy the flow follows.
+- The main pane shows what is running: the crew, the current round, the
+  budget, the findings.
+- Its configuration lives under `~/.config/coding-lanes/`, beside the
+  project's other configuration.
+- hugo's screens are designed in `docs/hugo/`.
 
 ## Upstream skills
 
@@ -81,24 +101,30 @@ make raul
 ## Task model
 
 - Task structure, statuses, metadata, and lane definitions are designed in
-  `docs/tasks/task-model.md`; roles in `docs/roles/roles.md`; the TUI's
-  screens in `docs/tui/screens.md`.
+  `docs/tasks/task-model.md`; roles in `docs/roles/roles.md`; raul's screens
+  in `docs/tui/screens.md`; hugo's in `docs/hugo/`.
 - Do not invent them ad hoc — follow the docs.
 - `TODO.txt` at the root is the state of the work: what is done, what is open,
   what is next. Read it before starting; update it when a unit closes.
 
 ## Naming
 
-- The TUI is called **raul**.
+- The TUI for the work is called **raul**.
+- The TUI for the flow is called **hugo**.
 - The CLI tool is called **talita**.
-- Use only the names defined here — `coding-lanes` (project), `raul` (TUI),
-  `talita` (CLI tool). Do not invent aliases for the project, its crates, or
-  its binaries without asking.
+- Use only the names defined here — `coding-lanes` (project), `raul` (TUI for
+  the work), `hugo` (TUI for the flow), `talita` (CLI tool). Do not invent
+  aliases for the project, its crates, or its binaries without asking.
+- A *lane* is the human lane or the agent lane, as the task model defines it.
+  It is not a synonym for an interface.
 
 ## Scope
 
-- Scope is the TUI (raul). Do not write talita code until explicitly told.
-- Work order: design raul's screens and data flow, then implement raul.
+- Scope is the two TUIs: raul for the work, hugo for the flow. Do not write
+  talita code until explicitly told.
+- Work order: raul's screens and data flow first, then hugo's — the
+  directives, then dropping the Autopilot tab from raul, then the shared
+  theme crate, then hugo itself.
 - talita is written only when explicitly instructed — never automatically
   because raul looks finished or mature enough.
-- `crates/core` stays editable; it is shared with raul.
+- `crates/core` stays editable; it is shared with raul and hugo.

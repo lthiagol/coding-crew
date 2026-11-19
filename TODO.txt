@@ -7,8 +7,10 @@ cargo test --workspace, bash scripts/test-pty-sweep.sh, the flow suites in the
 global skill (skipped when the skill is not installed)
 
 SCOPE
-  raul only: the TUI shell and its tabs, built against the mock data in
-  mock-data/. Nothing else is in scope.
+  Two TUIs: raul for the work, hugo for the flow. The Autopilot tab is
+  gone from raul; the automation's questions live in hugo, which is one
+  sidebar for configuration and one main pane for what is running, with no
+  tabs. Its configuration is centralized under ~/.config/coding-lanes/.
   talita is not being built. Do not write talita code, do not extend its
   commands, do not wire raul to it, until that is said explicitly.
   crates/core is shared and stays editable.
@@ -416,6 +418,19 @@ WHERE WE ARE
   no gate reads, so put the regeneration probe in the gate.
   Next unit: the Autopilot design - what the automation is, which is the
   last piece of work that needs the human rather than a builder.
+  The human changed the directives: the Autopilot tab is dropped from raul
+  and a third interface appears - hugo, Human-guided Unified Governance and
+  Orchestration - a TUI for the flow alone. The seam is the data: raul
+  reads the work folder, hugo reads the runtime; raul draws task content,
+  hugo draws tasks only as items of a queue. The shape is settled: one
+  sidebar for configuration - the agents, the models, the harness, the
+  review-round limit, the order - and one main pane for the running state,
+  with no tabs; the configuration is centralized under ~/.config/coding-lanes/.
+  The theme is shared through crates/theme, so both TUIs paint with one
+  palette. The work order: directives, then drop the Autopilot tab from
+  raul, then the shared theme crate, then hugo. The three variants that
+  were compared for the tab are now docs/hugo/design-record.md - their
+  content model carried over, their vertical layout did not.
   Unit closed: the theme-side follow-ups. One clean round. TSK13s note
   carries a fenced rust block, written only through generate.py, so the
   engines code-token paint is pinned end to end: the pane is asserted to

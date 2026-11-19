@@ -1,13 +1,23 @@
-# The Autopilot tab — three variants
+# Hugo — the design record
 
-The only raul tab whose design is not settled. This file is the record of
-what was compared: three sketches, drawn in terminal text, before any of
-them was built. The winner becomes a unit; the other two stay here as the
-record.
+hugo is the TUI for the flow: **one sidebar for configuration and one main
+pane for what is running. No tabs.** The Autopilot tab that used to live in
+raul is gone; the automation's questions live here.
+
+This file is the record of what was compared before any of it was built:
+three sketches of the flow's screen, drawn in terminal text. Their *content*
+model carried over — the order, the queue, the crew, the stamp. Their
+*layout* did not: the sketches arranged those blocks vertically, because the
+Autopilot tab was a tab. hugo splits them instead:
+
+| the sketch's block | where it lives in hugo |
+|---|---|
+| the order — the policy | the sidebar, as configuration |
+| the queue | the main pane, as items — id and status, never content |
+| the crew | the main pane |
+| the stamp | the main pane |
 
 ## The rules the sketches obey
-
-Taken from the decisions already recorded for this tab:
 
 - **The order is policy and sits on top; the queue is progress under it;
   the stamp at the foot says whether the automation runs.** Policy above,
@@ -121,19 +131,28 @@ agents would read "2 agents — the orchestrator reviews", one would read
 
 ## The questions the winner must answer
 
-1. **Where does the order live on screen** — above the queue (A), or
-   below the crew (B), or compressed into the header (C)?
-2. **What does the reader want first** — the policy, the live work, or the
-   shape of the crew?
-3. **How is the composition stated** — as the header's own line (C), or
-   only when it matters (a stamp that names who reviews)?
-4. **What the queue shows** — the claimable task and the ones waiting, as
-   above, or the whole Path tree the tab already has?
+1. **What the sidebar configures** — the agents, the models, the harness,
+   the review-round limit, and the order, in what order they are offered
+   and what each one means.
+2. **What the main pane shows** — the crew, the current round, the budget,
+   the findings, and the queue; and what it shows when nothing is running.
+3. **How the composition is stated** — as the header's own line, or only
+   when it matters (a stamp that names who reviews).
+4. **What the queue shows** — the claimable task and the ones waiting, or
+   the whole Path tree raul already has. hugo draws tasks only as items of
+   a queue: id and status, never their content.
+
+## Decided since
+
+- **The layout**: one sidebar, one main pane, no tabs. The sidebar is
+  configuration; the main pane is the running state.
+- **The configuration is centralized** under `~/.config/coding-lanes/`.
+- **The seam**: raul reads the work folder; hugo reads the runtime.
+- **One interface, the build loop first**: the runtime is an abstraction,
+  and the flow this repository runs itself is its first implementation.
 
 ## Not decided here
 
-- Whether the tab's data comes from the runtime or from the work folder.
-  The crew is runtime state; the queue is derived from the tasks. The
-  sketches show both, in that order of volatility.
-- Whether the autopilot runs at all, or the tab describes a policy the
-  human applies by hand. That is the question behind the tab.
+- Whether the autopilot runs at all, or hugo describes a policy the human
+  applies by hand. That is the question behind the interface.
+- The configuration's format and its file layout under `~/.config/`.
