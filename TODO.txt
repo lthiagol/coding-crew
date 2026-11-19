@@ -464,7 +464,21 @@ WHERE WE ARE
   direction. One low stands recorded: path.rs still breaks a long word on
   a scalar boundary, so a combining mark in a one-word title splits
   mid-grapheme there; pre-existing, not a regression.
-  Next unit: hugo - the TUI for the flow (plan 31).  The human changed the directives: the Autopilot tab is dropped from raul
+  Next unit: hugo - the TUI for the flow (plan 31) - but not yet: the
+  human wants to discuss how it looks before any of it is written, in a
+  later session. The shape is settled - one sidebar for the
+  configuration, one main pane for the running state, no tabs, the
+  configuration under ~/.config/coding-crew/ created on demand - and what
+  is open is the visual and what the main pane reads first: the live build
+  loops crew, or the projects automation. It waits as question Q5 in
+  docs/plan.md, and the shape is recorded in docs/hugo/design-record.md.
+  The batched low follow-ups that remain, none blocking: the measure is
+  per codepoint, so a joined cluster counts six where a terminal draws
+  two; conjoining Hangul jamo default to one column where unicode-width
+  gives none; the tables ranges generation claim is prose no gate reads;
+  the sharing pin is a text scan; and path.rs still breaks a long word on
+  a scalar boundary, so a combining mark in a one-word title splits
+  mid-grapheme there.  The human changed the directives: the Autopilot tab is dropped from raul
   and a third interface appears - hugo, Human-guided Unified Governance and
   Orchestration - a TUI for the flow alone. The seam is the data: raul
   reads the work folder, hugo reads the runtime; raul draws task content,
