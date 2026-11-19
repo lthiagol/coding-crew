@@ -464,6 +464,31 @@ WHERE WE ARE
   direction. One low stands recorded: path.rs still breaks a long word on
   a scalar boundary, so a combining mark in a one-word title splits
   mid-grapheme there; pre-existing, not a regression.
+  Unit closed: the interface expansions. Two rounds. The three interfaces
+  carry the human's expansions: talita, Task Administration, Lifecycle and
+  Interaction Terminal Application; raul, Review, Assess, Understand and
+  Learn; hugo, Human-guided Unified Governance and Orchestration. They read
+  as three jobs - the tool the agent drives, the tool the human reads to
+  learn the state, the tool the human uses to govern - and the acronyms
+  still spell the names exactly. ADR 0001 argues each one, why the lanes
+  stay in the model while the name and the expansions no longer spell
+  that word, and why Learn was chosen over Lead, which would have read as
+  authority over the work.
+  The first round found the guards themselves hollow, and found them by
+  planting defects: the talita doc-comment pin could not fail because the
+  test read its own source, which holds the constant it looked for; the
+  root README and both package descriptions were read by no test; the
+  check tested that a file contains the expansion somewhere rather than
+  that every place spelling it spells it right; and the guards lived in
+  crates/talita, the crate the rules keep off-limits. They now sit in
+  crates/core/tests beside the project-name guard, share one tree walk,
+  read the doc comment and both manifests as separate files, and fail when
+  a divergent spelling stands beside a correct one.
+  Two lows stand recorded: the per-place trigger still wants a capitalised
+  lead word, so a lowercase divergent spelling passes; and the guard does
+  not pin the interfaces descriptions, only their expansions - rauls own
+  screen spec opened The TUI of coding-crew until the orchestrator fixed
+  it at the close.
   Next unit: hugo - the TUI for the flow (plan 31) - but not yet: the
   human wants to discuss how it looks before any of it is written, in a
   later session. The shape is settled - one sidebar for the
@@ -476,9 +501,10 @@ WHERE WE ARE
   per codepoint, so a joined cluster counts six where a terminal draws
   two; conjoining Hangul jamo default to one column where unicode-width
   gives none; the tables ranges generation claim is prose no gate reads;
-  the sharing pin is a text scan; and path.rs still breaks a long word on
-  a scalar boundary, so a combining mark in a one-word title splits
-  mid-grapheme there.  The human changed the directives: the Autopilot tab is dropped from raul
+  the sharing pin is a text scan; path.rs still breaks a long word on a
+  scalar boundary, so a combining mark in a one-word title splits
+  mid-grapheme there; and the expansions guard wants a capitalised lead
+  word and does not pin the interfaces descriptions.  The human changed the directives: the Autopilot tab is dropped from raul
   and a third interface appears - hugo, Human-guided Unified Governance and
   Orchestration - a TUI for the flow alone. The seam is the data: raul
   reads the work folder, hugo reads the runtime; raul draws task content,
