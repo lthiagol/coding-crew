@@ -960,6 +960,180 @@ mod tests {
         );
     }
 
+    /// The text of one rendered line, its spans joined.
+    fn line_text(line: &Line<'static>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
+    }
+
+    /// The paint syntect's own default theme gives `code`, as (text, colour)
+    /// pairs — the engine's pipeline over the pairing the theme doc names.
+    ///
+    /// It is computed from the engine's default, not from the pane's pairing,
+    /// so a pane that chose another syntect theme shows different colours here.
+    fn syntect_paint(code: &str) -> Vec<(String, Color)> {
+        use syntect::easy::HighlightLines;
+        use syntect::util::LinesWithEndings;
+
+        let syntax = syntax_set();
+        let themes = theme_set();
+        let paired = syntect_theme(ThemePreset::default(), &themes);
+        // The doc names the pairing `base16-ocean.dark`: the key in the
+        // engine's theme set, not the theme's display name.
+        let named = themes
+            .themes
+            .get("base16-ocean.dark")
+            .expect("the theme set carries the key the doc records");
+        assert!(
+            std::ptr::eq(paired, named),
+            "the engine's default syntect theme is not the one the doc records"
+        );
+        let rust = syntax
+            .find_syntax_by_token("rust")
+            .expect("the rust syntax");
+        let mut highlighter = HighlightLines::new(rust, paired);
+        let mut paint = Vec::new();
+        for line in LinesWithEndings::from(code) {
+            for (style, text) in highlighter
+                .highlight_line(line, &syntax)
+                .expect("highlighting the code")
+            {
+                let text = text.trim_end_matches('\n');
+                if text.is_empty() {
+                    continue;
+                }
+                paint.push((
+                    text.to_string(),
+                    Color::Rgb(style.foreground.r, style.foreground.g, style.foreground.b),
+                ));
+            }
+        }
+        paint
+    }
+
+    /// The code block in a rendered document: the line that names its
+    /// language, the words of its first code row, and the (text, colour)
+    /// pairs that row's tokens are painted with.
+    fn code_block(lines: &[Line<'static>]) -> (Line<'static>, String, Vec<(String, Color)>) {
+        let header_at = lines
+            .iter()
+            .position(|line| line_text(line).starts_with("┌─ rust "))
+            .expect("the fenced code block is not in the document");
+        let header = lines[header_at].clone();
+        // The first code row: the gutter, then the painted tokens. The
+        // gutters and the unstyled padding are not tokens.
+        let row = &lines[header_at + 1];
+        let tokens = row
+            .spans
+            .iter()
+            .filter(|span| span.style.fg.is_some() && span.content != "│")
+            .map(|span| {
+                (
+                    span.content.to_string(),
+                    span.style.fg.expect("a painted token"),
+                )
+            })
+            .collect();
+        (header, line_text(row), tokens)
+    }
+
+    #[test]
+    fn a_fenced_code_block_is_painted_by_syntect_s_theme() {
+        // The fixture's note carries a fenced rust block. The document draws
+        // it as a code block whose tokens are syntect's own paint — the
+        // engine's default `base16-ocean.dark`, the third palette the theme
+        // doc records and the pane handles deliberately. The words are the
+        // fixture's; the colours are the theme's, not a raul slot's. The
+        // check can fail: a pane that stops highlighting, or pairs another
+        // syntect theme, changes the tokens or their colours.
+        let work = mock_work();
+        let detail = pane("TSK13");
+        let dark = Theme::preset(Preset::Dark);
+        let lines = document_lines(&work, &detail, 138, &dark);
+        let (header, row, tokens) = code_block(&lines);
+        // The frame is `chrome.border` and the label `text.dim`: the block
+        // around the tokens is ours.
+        assert_eq!(
+            header.spans.first().and_then(|span| span.style.fg),
+            dark.chrome.border.fg,
+            "the code frame is not chrome.border"
+        );
+        let label = header
+            .spans
+            .iter()
+            .find(|span| span.content == "rust ")
+            .expect("the block names its language");
+        assert_eq!(
+            label.style.fg, dark.text.dim.fg,
+            "the code label is not text.dim"
+        );
+        // The code row says the fixture's code, and it is painted.
+        assert_eq!(
+            row.trim_matches(|c: char| c == '│' || c == ' '),
+            "let answer = 42;",
+            "the code block does not carry the fixture's code: {row:?}"
+        );
+        let expected = syntect_paint("let answer = 42;\n");
+        assert!(
+            expected.len() >= 3,
+            "the expected paint is too small to pin: {expected:?}"
+        );
+        let colours: std::collections::HashSet<Color> =
+            expected.iter().map(|(_, colour)| *colour).collect();
+        assert!(
+            colours.len() >= 2,
+            "the code is not highlighted: {expected:?}"
+        );
+        // The pane merges adjacent spans of one style and syntect does not,
+        // so the comparison is per character: every character of the code
+        // carries the colour the theme gives it.
+        let paint = |spans: &[(String, Color)]| -> Vec<(char, Color)> {
+            spans
+                .iter()
+                .flat_map(|(text, colour)| text.chars().map(|c| (c, *colour)))
+                .collect()
+        };
+        assert_eq!(
+            paint(&tokens),
+            paint(&expected),
+            "the code tokens are not painted by syntect's base16-ocean.dark"
+        );
+    }
+
+    #[test]
+    fn the_terminal_preset_says_the_code_block_s_words() {
+        // The terminal preset names no colour of ours, so the words are what
+        // it pins: the same document, the same block and the same code. The
+        // tokens keep syntect's paint — the one paint the presets do not
+        // change — while the frame and label around them are Reset.
+        let work = mock_work();
+        let detail = pane("TSK13");
+        let dark = Theme::preset(Preset::Dark);
+        let terminal = Theme::preset(Preset::Terminal);
+        assert_eq!(
+            document(&work, &detail, 138, &terminal),
+            document(&work, &detail, 138, &dark),
+            "the terminal preset says different words"
+        );
+        let lines = document_lines(&work, &detail, 138, &terminal);
+        let (header, _, tokens) = code_block(&lines);
+        assert_eq!(
+            tokens,
+            code_block(&document_lines(&work, &detail, 138, &dark)).2,
+            "the terminal preset changed the code tokens"
+        );
+        for span in &header.spans {
+            assert_eq!(
+                span.style.fg,
+                Some(Color::Reset),
+                "the terminal preset named a colour on the code frame: {:?}",
+                span.content
+            );
+        }
+    }
+
     #[test]
     fn the_footer_names_only_keys_that_do_something() {
         let work = mock_work();

@@ -108,7 +108,7 @@
     {
       "id": "NOTE-01",
       "author": "runner-01",
-      "body": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe. The ==key finding== is marked for the next round.",
+      "body": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe. The ==key finding== is marked for the next round.\n\n```rust\nlet answer = 42;\n```",
       "at": "2026-11-11T09:00Z"
     }
   ],

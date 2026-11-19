@@ -3303,6 +3303,10 @@ mod tests {
                 preset.name()
             );
         }
+    }
+
+    #[test]
+    fn the_search_figures_in_the_doc_are_recomputed_from_the_palettes() {
         // The doc states a hit's ratio for every preset that has a
         // background; recompute each from that preset's palette, so a
         // changed foreground or selection leaves the figure stale here

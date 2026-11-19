@@ -598,11 +598,15 @@ def build():
         )
         if i == 0:
             # The detail pane's fixture. Its note carries a ==mark==, so the
-            # document paints text.selected on free text, and its criterion's
-            # verification carries a shell pipe, so the criteria table holds
-            # a code span with an escaped pipe in it.
+            # document paints text.selected on free text; it carries a fenced
+            # code block, so the document paints syntect's code tokens; and
+            # its criterion's verification carries a shell pipe, so the
+            # criteria table holds a code span with an escaped pipe in it.
             item["notes"][0]["body"] += (
-                " The ==key finding== is marked for the next round."
+                " The ==key finding== is marked for the next round.\n\n"
+                "```rust\n"
+                "let answer = 42;\n"
+                "```"
             )
             item["acceptance_criteria"][0]["verification"] = (
                 "cargo test -p coding-lanes-core | grep detail"

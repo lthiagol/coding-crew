@@ -36,5 +36,125 @@
 │                                                                                                  │
 │Scope                                                                                             │
 │─────                                                                                             │
+│In scope                                                                                          │
+│• Itaque earum rerum hic tenetur a sapiente delectus ut aut reiciendis voluptatibus.              │
+│                                                                                                  │
+│Out of scope                                                                                      │
+│• Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.              │
+│                                                                                                  │
+│Acceptance criteria                                                                               │
+│───────────────────                                                                               │
+│┌─────────────┬──────────────┬──────────────┬──────────┬──────────────┬──────────┬──────────────┐ │
+││ id          │ description  │ verification │ status   │ evidence     │ deferral │ failure      │ │
+││             │              │              │          │              │          │ reason       │ │
+│╞═════════════╪══════════════╪══════════════╪══════════╪══════════════╪══════════╪══════════════╡ │
+││  ACCEPT-01  │ Sed ut       │  cargo test  │  passed  │  cargo test  │ none     │ none         │ │
+││             │ perspiciatis │   -p coding  │          │   --workspa  │          │              │ │
+││             │ unde omnis   │  -lanes-cor  │          │  ce  — exit  │          │              │ │
+││             │ iste natus   │  e | grep d  │          │  0  — 10     │          │              │ │
+││             │ error sit    │  etail       │          │ passed; 0    │          │              │ │
+││             │ voluptatem   │              │          │ failed — by  │          │              │ │
+││             │ accusantium  │              │          │  runner-01   │          │              │ │
+││             │ doloremque.  │              │          │ in           │          │              │ │
+││             │              │              │          │  session-ru  │          │              │ │
+││             │              │              │          │  nner-01  at │          │              │ │
+││             │              │              │          │  2026-11-10  │          │              │ │
+││             │              │              │          │  T14:00Z     │          │              │ │
+│└─────────────┴──────────────┴──────────────┴──────────┴──────────────┴──────────┴──────────────┘ │
+│                                                                                                  │
+│Steps                                                                                             │
+│─────                                                                                             │
+│ STP-01                                                                                           │
+│• order:  1                                                                                       │
+│• action: Sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.          │
+│• done when: The lorem module is read and its behaviour is described in the notes.                │
+│• files:  crates/core/tests/task_model.rs                                                         │
+│• status:  done                                                                                   │
+│• covers:  ACCEPT-01                                                                              │
+│• depends on: none                                                                                │
+│• deviation: none                                                                                 │
+│                                                                                                  │
+│Review                                                                                            │
+│──────                                                                                            │
+│• verdict: none                                                                                   │
+│• budget:  0/5  external rounds                                                                   │
+│                                                                                                  │
+│Rounds                                                                                            │
+│                                                                                                  │
+│┌───┬───┬────────────────┬─────────────┬────────────────┬────────────────┬──────────────┬────────┐│
+││ n │ k │ focus          │ reviewer    │ verdict        │ at             │ notes        │ findin ││
+││   │ i │                │             │                │                │              │ gs     ││
+││   │ n │                │             │                │                │              │        ││
+││   │ d │                │             │                │                │              │        ││
+│╞═══╪═══╪════════════════╪═════════════╪════════════════╪════════════════╪══════════════╪════════╡│
+││  1  │  s  │  spec-complia  │  runner-01  │  changes-need  │  2026-11-10T1  │ Temporibus   │  FIN│
+││   │  e  │  nce           │             │  ed            │  6:00Z         │ autem        │  -01  │
+││   │  l  │                │             │                │                │ quibusdam et │       │
+││   │  f  │                │             │                │                │ aut officiis │       │
+││   │   │                │             │                │                │ debitis aut  │        ││
+││   │   │                │             │                │                │ rerum        │        ││
+││   │   │                │             │                │                │ necessitatib │        ││
+││   │   │                │             │                │                │ us saepe.    │        ││
+│└───┴───┴────────────────┴─────────────┴────────────────┴────────────────┴──────────────┴────────┘│
+│                                                                                                  │
+│Findings                                                                                          │
+│                                                                                                  │
+│ FIND-01                                                                                          │
+│• severity:  medium                                                                               │
+│• status:  open                                                                                   │
+│• created:  2026-11-10T16:00Z                                                                     │
+│• resolved: none                                                                                  │
+│• description: Incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam, quis nostrud.│
+│• resolution: none                                                                                │
+│                                                                                                  │
+│Comments                                                                                          │
+│                                                                                                  │
+│none                                                                                              │
+│                                                                                                  │
+│Questions                                                                                         │
+│─────────                                                                                         │
+│Open                                                                                              │
+│                                                                                                  │
+│none                                                                                              │
+│                                                                                                  │
+│Resolved                                                                                          │
+│                                                                                                  │
+│none                                                                                              │
+│                                                                                                  │
+│Notes                                                                                             │
+│─────                                                                                             │
+│ NOTE-01                                                                                          │
+│• author:  runner-01                                                                              │
+│• at:  2026-11-11T09:00Z                                                                          │
+│                                                                                                  │
+│Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe. The  key       │
+│finding  is marked for the next round.                                                            │
+│┌─ rust ─────────────────────────────────────┐                                                    │
+││ let answer = 42;                           │                                                    │
+│└────────────────────────────────────────────┘                                                    │
+│                                                                                                  │
+│Dependencies                                                                                      │
+│────────────                                                                                      │
+│Waits on                                                                                          │
+│•  TSK22  —  done  — Et harum quidem rerum facilis est et expedita                                │
+│•  TSK23  —  done  — Nemo enim ipsam voluptatem quia voluptas sit                                 │
+│                                                                                                  │
+│Waits on this                                                                                     │
+│                                                                                                  │
+│none                                                                                              │
+│                                                                                                  │
+│Children                                                                                          │
+│────────                                                                                          │
+│none                                                                                              │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
  q  quit    esc  close    pgup/pgdn  page    g/G  top/bottom    ↑↓  scroll

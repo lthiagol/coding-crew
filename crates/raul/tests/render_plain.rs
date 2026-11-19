@@ -306,6 +306,11 @@ fn the_overview_render_matches_the_snapshot() {
     assert_overview_at(100, "overview.txt");
 }
 
+/// The height the detail snapshot renders at: tall enough for the whole TSK13
+/// document, so the snapshot carries every section — the fenced code block in
+/// its note included — and not a window onto the top of it.
+const DETAIL_SNAPSHOT_HEIGHT: &str = "160";
+
 /// The detail pane of a real mock-data task, as the snapshot records it.
 fn detail_snapshot() -> Output {
     run(&[
@@ -316,7 +321,7 @@ fn detail_snapshot() -> Output {
         "--width",
         "100",
         "--height",
-        "40",
+        DETAIL_SNAPSHOT_HEIGHT,
         WORK,
     ])
 }
