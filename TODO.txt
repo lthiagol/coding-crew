@@ -155,7 +155,9 @@ WHERE WE ARE
   The review left three low follow-ups, none blocking:
     - needs.rs, path.rs and overview.rs still hold private cut_to/pad
       copies that cut on scalar boundaries; the tabs' own cut paths should
-      move to crates/raul/src/text.rs
+      move to the shared helper - closed by the theme crate unit, which
+      retired the copies and made coding_crew_theme::text the one
+      implementation
     - app.rs reads a fresh now per key press while needs::render computes
       its own: two instants in one frame; one now per frame, passed through
     - the render test's combining-title fixture replaces exact JSON bytes
@@ -440,8 +442,29 @@ WHERE WE ARE
   swept the builders staged work, and a staging that left talita, the mock
   tree and the sweep scripts out of the unit commit - the commit was
   amended to match the reviewed state.
-  Next unit: drop the Autopilot tab from raul (plan 29), then the shared
-  theme crate (30), then hugo (31).  The human changed the directives: the Autopilot tab is dropped from raul
+  Unit closed: the shared theme crate. Two rounds. The slots, the presets
+  and the palettes live in crates/theme - package coding-crew-theme - and
+  raul paints with it; the measuring and cutting helpers moved with them,
+  so there is one implementation of each, and the three tabs cut titles on
+  the grapheme boundary as the detail pane already did. The renders are
+  byte-identical for the ASCII fixtures - the review proved it twice,
+  sixty then fifty-four outputs - and the one behaviour that changed on
+  purpose, a combining mark in a title, was proven live against a build of
+  the previous commit: the old build left a bare e, the new one does not.
+  The first round found two blockers, both invisible in a green gate: a
+  raul domain type - the Reason enum, the work-lane vocabulary - had
+  moved into the paint crates public API, where hugo would have inherited
+  it, and it now lives in crates/core beside Status with the theme mapping
+  it as it maps phases; and the four private cut_to and pad copies stayed
+  behind, so one implementation of each was still unmet.
+  Two pins came with it: a test that fails if any module but the shared
+  crate defines cut_to or pad - it scans the source, so even an
+  uncompiled copy is caught - and a test that reads AGENTS.md and checks
+  the crates it lists against the workspace members, failing in either
+  direction. One low stands recorded: path.rs still breaks a long word on
+  a scalar boundary, so a combining mark in a one-word title splits
+  mid-grapheme there; pre-existing, not a regression.
+  Next unit: hugo - the TUI for the flow (plan 31).  The human changed the directives: the Autopilot tab is dropped from raul
   and a third interface appears - hugo, Human-guided Unified Governance and
   Orchestration - a TUI for the flow alone. The seam is the data: raul
   reads the work folder, hugo reads the runtime; raul draws task content,
