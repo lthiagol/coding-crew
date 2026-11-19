@@ -1,6 +1,6 @@
 # Vocabulary — the decision of record
 
-coding-lanes has two interfaces, two artifact kinds, four agent roles and one set
+coding-crew has two interfaces, two artifact kinds, four agent roles and one set
 of lifecycle states. This doc fixes the words. The reasoning behind each choice
 is in [decisions/](decisions/); where a doc and an ADR differ, this doc wins.
 
@@ -32,12 +32,12 @@ derived from its latest evidence.
 
 | Thing | Name | Note |
 |---|---|---|
-| The project | **coding-lanes** | *An agentic todo list with superpowers* |
+| The project | **coding-crew** | *An agentic todo list with superpowers* |
 | The CLI tool | **talita** | agent-facing; writes and manages tasks. **T**ask **A**ccess and **L**ane **I**nteraction **T**erminal **A**pp |
 | The TUI | **raul** | human-facing; shows tasks. **R**eview, **A**pprove, **U**nderstand **L**ane |
-| The CLI binary | `talita` | package `coding-lanes-talita`, crate `crates/talita` |
-| The TUI binary | `raul` | package `coding-lanes-raul`, crate `crates/raul` |
-| The work folder | `coding-lanes/work/` | inside each managed project, next to its code. No central store |
+| The CLI binary | `talita` | package `coding-crew-talita`, crate `crates/talita` |
+| The TUI binary | `raul` | package `coding-crew-raul`, crate `crates/raul` |
+| The work folder | `coding-crew/work/` | inside each managed project, next to its code. No central store |
 | A task | **task**, id `TSK01` | the unit of work. Children `TSK03.1` |
 | A smaller task | **smaller task**, id `ITM01` | an idea, a bug or a small feature that is not a task yet |
 | A criterion | acceptance criterion, id `ACCEPT-01` | |
@@ -56,7 +56,7 @@ The work that is not a task yet is **one artifact** with a `kind`.
 
 | | |
 |---|---|
-| The artifact | a **smaller task**, id `ITM01`, in `coding-lanes/work/` |
+| The artifact | a **smaller task**, id `ITM01`, in `coding-crew/work/` |
 | Its kinds | `idea` · `feature` · `bug` |
 | Its groups in raul | **Ideas** (needs shaping) and **Small tasks** (ready to work) — **derived** from the kind, never stored |
 | Its fields | title, body, scope, kind, tags, status, created, updated, promoted_to, dismissed_reason |
@@ -101,8 +101,8 @@ status it was derived from.
 |---|---|
 | raul's tab labels | the backlog tab, the lane headers — **Human lane**, **Agent lane** |
 | raul's group headings | **Ideas**, **Small tasks** — derived from the kind |
-| The window title | *coding-lanes* |
-| talita's help | `talita — the coding-lanes CLI` |
+| The window title | *coding-crew* |
+| talita's help | `talita — the coding-crew CLI` |
 | The state words | shown as stored: `code-review`, `needs-human`, `done` |
 | The id prefixes | shown as stored: `TSK01`, `ITM01`, `ACCEPT-01` |
 

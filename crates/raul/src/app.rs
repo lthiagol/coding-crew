@@ -285,7 +285,7 @@ impl App {
     /// A terminal too narrow for the name gives the whole line to the
     /// folder: a part of the line is never cut in half.
     fn title_line(&self, width: u16) -> Line<'static> {
-        const NAME: &str = " coding-lanes ";
+        const NAME: &str = " coding-crew ";
         let name = Span::styled(NAME, self.theme.chrome.title);
         let folder = self.theme.text.dim;
         let name_width = NAME.chars().count() as u16;
@@ -674,20 +674,20 @@ mod tests {
     }
 
     fn mock_work() -> Work {
-        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-lanes/work"))
+        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))
     }
 
     /// A window on the mock data, with the default theme.
     fn app() -> App {
         App::new(
-            PathBuf::from("/tmp/coding-lanes/work"),
+            PathBuf::from("/tmp/coding-crew/work"),
             Theme::preset(Preset::Dark),
         )
     }
 
     /// The window as it is drawn: a theme, a tab, and the help overlay.
     fn window(theme: &Theme, tab: Tab, help: bool) -> App {
-        let mut app = App::new(PathBuf::from("/tmp/coding-lanes/work"), *theme);
+        let mut app = App::new(PathBuf::from("/tmp/coding-crew/work"), *theme);
         app.tab = tab;
         app.help = help;
         app
@@ -769,9 +769,11 @@ mod tests {
                 .map(|span| span.content.to_string())
                 .collect::<String>();
             assert!(text.chars().count() <= width as usize, "{width}: {text}");
-            // The name is whole, or the folder is.
-            if text.contains("coding-lane") {
-                assert!(text.contains("coding-lanes"), "{width}: {text}");
+            // The name is whole, or the folder is: a cut of the name never
+            // stands alone. Any line that holds the start of the name must
+            // hold all of it.
+            if text.contains("coding") {
+                assert!(text.contains("coding-crew"), "{width}: {text}");
             }
         }
     }
@@ -1097,12 +1099,12 @@ mod tests {
         // cursor moves through is the row the frame drew. A fresh clock in
         // the draw (the real one is before both stamps) would put TSK01
         // first and fail the check.
-        let mut later = coding_lanes_core::Task::new("TSK01", "the later stamp");
-        later.status = coding_lanes_core::Status::Groomed;
+        let mut later = coding_crew_core::Task::new("TSK01", "the later stamp");
+        later.status = coding_crew_core::Status::Groomed;
         later.status_since = "2030-01-01T00:00:10Z".to_string();
         later.created = later.status_since.clone();
-        let mut earlier = coding_lanes_core::Task::new("TSK02", "the earlier stamp");
-        earlier.status = coding_lanes_core::Status::Groomed;
+        let mut earlier = coding_crew_core::Task::new("TSK02", "the earlier stamp");
+        earlier.status = coding_crew_core::Status::Groomed;
         earlier.status_since = "2030-01-01T00:00:00Z".to_string();
         earlier.created = earlier.status_since.clone();
         let work = Work {
@@ -1736,7 +1738,7 @@ mod tests {
     fn enter_opens_nothing_without_rows() {
         // A folder with nothing in it: the row tabs have no rows either,
         // and enter does nothing anywhere.
-        let work = Work::load(Path::new("/nowhere/coding-lanes/work"));
+        let work = Work::load(Path::new("/nowhere/coding-crew/work"));
         for (tab, _) in reachability() {
             let mut app = app();
             app.tab = tab;

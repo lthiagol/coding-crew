@@ -58,7 +58,7 @@
     {
       "id": "ACCEPT-01",
       "description": "Soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat.",
-      "verification": "cargo test -p coding-lanes-core",
+      "verification": "cargo test -p coding-crew-core",
       "status": "pending",
       "evidence": [],
       "deferral": null,

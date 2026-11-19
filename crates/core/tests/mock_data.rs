@@ -1,11 +1,11 @@
-use coding_lanes_core::{Status, Store, Task, parse_rfc3339};
+use coding_crew_core::{Status, Store, Task, parse_rfc3339};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 fn mock_store() -> Store {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("mock-data/coding-lanes/work");
+        .join("mock-data/coding-crew/work");
     Store::new(root)
 }
 
@@ -392,7 +392,7 @@ fn fixtures_keep_their_gates() {
         assert!(
             task.steps
                 .iter()
-                .all(|s| s.status == coding_lanes_core::StepStatus::Done),
+                .all(|s| s.status == coding_crew_core::StepStatus::Done),
             "{} has unsettled steps",
             task.id
         );
@@ -402,7 +402,7 @@ fn fixtures_keep_their_gates() {
         assert!(task.open_findings() > 0, "{} has no open finding", task.id);
         assert_eq!(
             task.review.verdict,
-            Some(coding_lanes_core::Verdict::ChangesNeeded)
+            Some(coding_crew_core::Verdict::ChangesNeeded)
         );
     }
 
@@ -417,7 +417,7 @@ fn fixtures_keep_their_gates() {
 
     for task in by_status(Status::Done) {
         assert_eq!(task.open_findings(), 0, "{} has open findings", task.id);
-        assert_eq!(task.review.verdict, Some(coding_lanes_core::Verdict::Ok));
+        assert_eq!(task.review.verdict, Some(coding_crew_core::Verdict::Ok));
     }
 }
 
@@ -690,7 +690,7 @@ fn smaller_tasks_are_fixtures_too() {
 
     let promoted = items
         .iter()
-        .find(|i| i.status == coding_lanes_core::ItemStatus::Promoted);
+        .find(|i| i.status == coding_crew_core::ItemStatus::Promoted);
     let promoted = promoted.expect("a promoted item");
     let task_id = promoted.promoted_to.clone().expect("the task it became");
     let task = store.load(&task_id).expect("the promoted task");
@@ -699,7 +699,7 @@ fn smaller_tasks_are_fixtures_too() {
 
     let dismissed = items
         .iter()
-        .find(|i| i.status == coding_lanes_core::ItemStatus::Dismissed);
+        .find(|i| i.status == coding_crew_core::ItemStatus::Dismissed);
     let dismissed = dismissed.expect("a dismissed item");
     assert!(!dismissed.dismissed_reason.is_empty());
 }

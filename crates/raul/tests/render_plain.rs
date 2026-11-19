@@ -13,7 +13,7 @@ use std::sync::OnceLock;
 mod support;
 
 /// The work folder, relative to the repository root.
-const WORK: &str = "mock-data/coding-lanes/work";
+const WORK: &str = "mock-data/coding-crew/work";
 
 /// A fresh project folder holding a `work` folder with the duplicate-id
 /// files, written in `order`. The project folder is the working directory of

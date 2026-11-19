@@ -1,6 +1,6 @@
 [package]
-name = "coding-lanes-core"
-description = "Shared domain model and persistence for coding-lanes"
+name = "coding-crew-core"
+description = "Shared domain model and persistence for coding-crew"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

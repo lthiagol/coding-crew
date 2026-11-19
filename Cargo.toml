@@ -6,12 +6,12 @@ members = ["crates/core", "crates/talita", "crates/raul", "crates/engine"]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.100"
-authors = ["coding-lanes contributors"]
+authors = ["coding-crew contributors"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-coding-lanes-core = { path = "crates/core" }
-coding-lanes-engine = { path = "crates/engine" }
+coding-crew-core = { path = "crates/core" }
+coding-crew-engine = { path = "crates/engine" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.29"

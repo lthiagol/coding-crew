@@ -24,8 +24,8 @@ use ratatui::widgets::{Block, Clear, Paragraph};
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 
-use coding_lanes_core::escape_literal;
-use coding_lanes_engine::{
+use coding_crew_core::escape_literal;
+use coding_crew_engine::{
     ThemePreset, parse_markdown_with_width, syntax_set, syntect_theme, theme_set,
 };
 
@@ -178,7 +178,7 @@ fn document_lines(work: &Work, detail: &Detail, width: usize, theme: &Theme) -> 
     // The projection reads the whole work folder as its context: the
     // reverse dependencies and the children's progress are the project's
     // own facts.
-    let markdown = coding_lanes_core::task_to_markdown(task, &work.tasks);
+    let markdown = coding_crew_core::task_to_markdown(task, &work.tasks);
     let (syntax, paired) = syntect();
     parse_markdown_with_width(
         &markdown,
@@ -338,7 +338,7 @@ mod tests {
     const GRAPHEME_TITLE: &str = "界e\u{0301}👨‍👩‍👧x";
 
     fn mock_work() -> Work {
-        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-lanes/work"))
+        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))
     }
 
     fn theme() -> Theme {
@@ -357,11 +357,11 @@ mod tests {
 
     /// One task with the given title, groomed and waiting.
     fn titled_work(title: &str) -> Work {
-        let mut task = coding_lanes_core::Task::new("TSK01", title.to_string());
-        task.status = coding_lanes_core::Status::Groomed;
+        let mut task = coding_crew_core::Task::new("TSK01", title.to_string());
+        task.status = coding_crew_core::Status::Groomed;
         task.status_since = "2026-11-07T13:00:00Z".to_string();
         Work {
-            root: PathBuf::from("/nowhere/coding-lanes/work"),
+            root: PathBuf::from("/nowhere/coding-crew/work"),
             tasks: vec![task],
             ..Work::default()
         }
@@ -383,7 +383,7 @@ mod tests {
         width: u16,
         height: u16,
     ) -> (Vec<String>, Vec<Vec<Paint>>) {
-        let mut app = App::new(PathBuf::from("/tmp/coding-lanes/work"), *theme);
+        let mut app = App::new(PathBuf::from("/tmp/coding-crew/work"), *theme);
         app.detail = Some(detail.clone());
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
@@ -663,7 +663,7 @@ mod tests {
         height: u16,
         keys: &[crossterm::event::KeyCode],
     ) -> (Vec<String>, Vec<String>, App) {
-        let mut app = App::new(PathBuf::from("/tmp/coding-lanes/work"), theme());
+        let mut app = App::new(PathBuf::from("/tmp/coding-crew/work"), theme());
         app.detail = Some(Detail::opened(id.to_string(), Tab::Path, None));
         // The first draw, as the loop does: it measures the page.
         let first = draw_frame(&mut app, work, width, height);
@@ -770,7 +770,7 @@ mod tests {
             "pgdn did not move a page"
         );
         // The same view, reached by the scroll itself.
-        let mut jumped = App::new(PathBuf::from("/tmp/coding-lanes/work"), theme());
+        let mut jumped = App::new(PathBuf::from("/tmp/coding-crew/work"), theme());
         let mut detail = pane("TSK13");
         detail.scroll = page;
         jumped.detail = Some(detail);

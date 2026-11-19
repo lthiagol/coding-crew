@@ -1,4 +1,4 @@
- coding-lanes                    mock-data/coding-lanes/work
+ coding-crew                      mock-data/coding-crew/work
  ‹ Overview ›
 ┌counts──────────────────────┐┌needs you───────────────────┐
 │29 tasks by status          ││8 tasks wait on a human     │

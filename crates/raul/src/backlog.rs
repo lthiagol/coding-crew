@@ -10,7 +10,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 
-use coding_lanes_core::{Item, ItemKind, ItemStatus, Status, Task};
+use coding_crew_core::{Item, ItemKind, ItemStatus, Status, Task};
 
 use crate::data::Work;
 use crate::text::{cut_to, pad, text_width};
@@ -950,7 +950,7 @@ mod tests {
     use crate::theme::Preset;
 
     fn mock_work() -> Work {
-        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-lanes/work"))
+        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))
     }
 
     fn theme() -> Theme {
@@ -1468,11 +1468,11 @@ mod tests {
 
     #[test]
     fn a_missing_folder_says_so_and_names_the_path() {
-        let work = Work::load(Path::new("/nowhere/coding-lanes/work"));
+        let work = Work::load(Path::new("/nowhere/coding-crew/work"));
         let text = draw(&work, 60, 12).join("\n");
-        assert!(text.contains("no coding-lanes folder found"), "{text}");
+        assert!(text.contains("no coding-crew folder found"), "{text}");
         assert!(
-            text.contains("looked in /nowhere/coding-lanes/work"),
+            text.contains("looked in /nowhere/coding-crew/work"),
             "{text}"
         );
     }

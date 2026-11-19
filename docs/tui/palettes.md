@@ -563,7 +563,7 @@ A theme is a TOML file with the slots under a section. The format is leaf's,
 so a theme written for leaf can be read here:
 
 ```toml
-# coding-lanes theme
+# coding-crew theme
 [theme]
 preset = "nord"
 

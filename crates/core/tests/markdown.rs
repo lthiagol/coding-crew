@@ -1,12 +1,12 @@
 //! The task → markdown projection.
 
-use coding_lanes_core::lifecycle::{Overlay, Overlays};
-use coding_lanes_core::task::{
+use coding_crew_core::lifecycle::{Overlay, Overlays};
+use coding_crew_core::task::{
     AcceptanceCriterion, Claim, Comment, Deferral, Effort, Evidence, Finding, FindingStatus, Focus,
     Intent, Meta, Note, Priority, Question, QuestionStatus, Review, Round, RoundKind, Scope,
     Severity, Step, StepStatus, Task, TaskKind, Verdict,
 };
-use coding_lanes_core::{CriterionStatus, Status, task_to_markdown};
+use coding_crew_core::{CriterionStatus, Status, task_to_markdown};
 
 const HEADINGS: [&str; 10] = [
     "## Header",
@@ -130,10 +130,10 @@ fn fixture() -> Task {
             AcceptanceCriterion {
                 id: "ACCEPT-01".to_string(),
                 description: "The selector hides a task that matches no selected lane.".to_string(),
-                verification: "cargo test -p coding-lanes-raul lane_filter".to_string(),
+                verification: "cargo test -p coding-crew-raul lane_filter".to_string(),
                 status: CriterionStatus::Pending,
                 evidence: vec![evidence(
-                    "cargo test -p coding-lanes-raul lane_filter",
+                    "cargo test -p coding-crew-raul lane_filter",
                     Some(0),
                     "12 passed; 0 failed",
                     "2026-11-16T16:10:00Z",
@@ -144,7 +144,7 @@ fn fixture() -> Task {
             AcceptanceCriterion {
                 id: "ACCEPT-02".to_string(),
                 description: "The saved default lane is not in this task.".to_string(),
-                verification: "cargo test -p coding-lanes-raul saved_lane".to_string(),
+                verification: "cargo test -p coding-crew-raul saved_lane".to_string(),
                 status: CriterionStatus::Deferred,
                 evidence: Vec::new(),
                 deferral: Some(Deferral {
@@ -156,10 +156,10 @@ fn fixture() -> Task {
             AcceptanceCriterion {
                 id: "ACCEPT-03".to_string(),
                 description: "The empty lane announces that it is empty.".to_string(),
-                verification: "cargo test -p coding-lanes-raul empty_lane".to_string(),
+                verification: "cargo test -p coding-crew-raul empty_lane".to_string(),
                 status: CriterionStatus::Failed,
                 evidence: vec![evidence(
-                    "cargo test -p coding-lanes-raul empty_lane",
+                    "cargo test -p coding-crew-raul empty_lane",
                     Some(1),
                     "1 failed",
                     "2026-11-16T16:20:00Z",

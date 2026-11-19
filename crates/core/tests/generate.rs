@@ -37,9 +37,8 @@ impl Drop for Scratch {
 fn the_generator_reproduces_the_committed_tree_byte_for_byte() {
     let root = repo_root();
     let source = root.join("mock-data/generate.py");
-    let committed = root.join("mock-data/coding-lanes/work");
-    let scratch =
-        std::env::temp_dir().join(format!("coding-lanes-generate-{}", std::process::id()));
+    let committed = root.join("mock-data/coding-crew/work");
+    let scratch = std::env::temp_dir().join(format!("coding-crew-generate-{}", std::process::id()));
     let _ = fs::remove_dir_all(&scratch);
     let _cleanup = Scratch(scratch.clone());
     fs::create_dir_all(&scratch).expect("a scratch folder");
@@ -56,7 +55,7 @@ fn the_generator_reproduces_the_committed_tree_byte_for_byte() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let generated = scratch.join("coding-lanes").join("work");
+    let generated = scratch.join("coding-crew").join("work");
     let expected = names(&committed);
     assert_eq!(
         names(&generated),

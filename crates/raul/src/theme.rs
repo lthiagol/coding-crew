@@ -4,8 +4,8 @@
 //! domain knows nothing about this: `crates/core` never names a colour, and
 //! a phase names a slot, never a colour.
 
-use coding_lanes_core::Status;
-use coding_lanes_engine::MarkdownTheme;
+use coding_crew_core::Status;
+use coding_crew_engine::MarkdownTheme;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
@@ -47,7 +47,7 @@ pub enum Slot {
     /// Something wants attention and is not broken.
     SemanticWarn,
     /// A failure: an unreadable file, a failed criterion, an escalation, no
-    /// coding-lanes folder found.
+    /// coding-crew folder found.
     SemanticError,
     /// Neutral information.
     ///

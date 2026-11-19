@@ -14,7 +14,7 @@ project as-is.
 
 ```
 mock-data/
-  coding-lanes/
+  coding-crew/
     work/TSK*.json
 ```
 
@@ -64,7 +64,7 @@ An `approved` task can be held by three things, and one fixture covers each:
 ## Use in tests
 
 ```rust
-let store = Store::new(repo_root().join("mock-data/coding-lanes/work"));
+let store = Store::new(repo_root().join("mock-data/coding-crew/work"));
 let task = store.load("TSK07")?;
 ```
 

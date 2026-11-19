@@ -1,4 +1,4 @@
-# coding-lanes — developer targets
+# coding-crew — developer targets
 #
 # The gate is one command: make check
 #
@@ -6,15 +6,15 @@
 
 CARGO ?= $(shell command -v cargo 2>/dev/null || echo $(HOME)/.cargo/bin/cargo)
 CARGO_TARGET_DIR ?= target
-RAUL_PKG := coding-lanes-raul
-TALITA_PKG := coding-lanes-talita
+RAUL_PKG := coding-crew-raul
+TALITA_PKG := coding-crew-talita
 SKILL_SCRIPTS ?= $(HOME)/.config/opencode/skills/orchestration-flow/scripts
 
 .DEFAULT_GOAL := help
 
 .PHONY: help
 help: ## Show this help
-	@echo "coding-lanes — common targets"
+	@echo "coding-crew — common targets"
 	@echo ""
 	@grep -E '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
@@ -33,7 +33,7 @@ build-talita: ## Build talita only
 
 .PHONY: run raul
 run raul: ## Run raul (TUI) on the mock data
-	$(CARGO) run -p $(RAUL_PKG) -- mock-data/coding-lanes/work
+	$(CARGO) run -p $(RAUL_PKG) -- mock-data/coding-crew/work
 
 .PHONY: test test-scripts
 test: ## Run the test suite
@@ -54,7 +54,7 @@ test-flow: ## Run the flow skill's suites when the skill is installed
 
 .PHONY: sweep
 sweep: build-raul ## Sweep the plain render at every width from 40 to 120
-	python3 scripts/pty-sweep.py --raul $(CARGO_TARGET_DIR)/debug/raul --work mock-data/coding-lanes/work
+	python3 scripts/pty-sweep.py --raul $(CARGO_TARGET_DIR)/debug/raul --work mock-data/coding-crew/work
 
 .PHONY: fmt fmt-check
 fmt: ## Format the code

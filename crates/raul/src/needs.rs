@@ -13,7 +13,7 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 
-use coding_lanes_core::{Task, parse_rfc3339};
+use coding_crew_core::{Task, parse_rfc3339};
 
 use crate::data::{Reason, Work};
 use crate::theme::{Theme, block_title_style, reason_style, selected_line};
@@ -821,7 +821,7 @@ mod tests {
     use crate::theme::Preset;
 
     fn mock_work() -> Work {
-        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-lanes/work"))
+        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))
     }
 
     fn theme() -> Theme {
@@ -933,8 +933,8 @@ mod tests {
 
     /// A task that waits for approval.
     fn waiting_task(id: &str) -> Task {
-        let mut task = coding_lanes_core::Task::new(id, "a task");
-        task.status = coding_lanes_core::Status::Groomed;
+        let mut task = coding_crew_core::Task::new(id, "a task");
+        task.status = coding_crew_core::Status::Groomed;
         task
     }
 
@@ -1459,8 +1459,8 @@ mod tests {
     }
 
     /// A task that waits on a human for the given status.
-    fn waiter(id: &str, status: coding_lanes_core::Status) -> Task {
-        let mut task = coding_lanes_core::Task::new(id, "a task");
+    fn waiter(id: &str, status: coding_crew_core::Status) -> Task {
+        let mut task = coding_crew_core::Task::new(id, "a task");
         task.status = status;
         task.status_since = "2026-11-07T13:00:00Z".to_string();
         task
@@ -1469,14 +1469,14 @@ mod tests {
     /// Two approvals, three reviews and three escalations.
     fn human_lane() -> Work {
         work_of(vec![
-            waiter("TSK01", coding_lanes_core::Status::Groomed),
-            waiter("TSK02", coding_lanes_core::Status::Groomed),
-            waiter("TSK03", coding_lanes_core::Status::CodeReview),
-            waiter("TSK04", coding_lanes_core::Status::CodeReview),
-            waiter("TSK05", coding_lanes_core::Status::CodeReview),
-            waiter("TSK06", coding_lanes_core::Status::NeedsHuman),
-            waiter("TSK07", coding_lanes_core::Status::NeedsHuman),
-            waiter("TSK08", coding_lanes_core::Status::NeedsHuman),
+            waiter("TSK01", coding_crew_core::Status::Groomed),
+            waiter("TSK02", coding_crew_core::Status::Groomed),
+            waiter("TSK03", coding_crew_core::Status::CodeReview),
+            waiter("TSK04", coding_crew_core::Status::CodeReview),
+            waiter("TSK05", coding_crew_core::Status::CodeReview),
+            waiter("TSK06", coding_crew_core::Status::NeedsHuman),
+            waiter("TSK07", coding_crew_core::Status::NeedsHuman),
+            waiter("TSK08", coding_crew_core::Status::NeedsHuman),
         ])
     }
 
@@ -1551,11 +1551,11 @@ mod tests {
 
     #[test]
     fn the_empty_state_is_not_a_blank_screen() {
-        let rows = draw(&Work::load(Path::new("/nowhere/coding-lanes/work")), 60, 12);
+        let rows = draw(&Work::load(Path::new("/nowhere/coding-crew/work")), 60, 12);
         let text = text_of(&rows);
-        assert!(text.contains("no coding-lanes folder found"), "{text}");
+        assert!(text.contains("no coding-crew folder found"), "{text}");
         assert!(
-            text.contains("looked in /nowhere/coding-lanes/work"),
+            text.contains("looked in /nowhere/coding-crew/work"),
             "{text}"
         );
         assert!(!text.contains("no work folder"), "{text}");
@@ -1564,16 +1564,16 @@ mod tests {
     #[test]
     fn a_project_without_work_says_so_and_names_the_path() {
         let work = Work::load_missing(
-            Path::new("/nowhere/project/coding-lanes/work"),
+            Path::new("/nowhere/project/coding-crew/work"),
             Missing::NoWork,
         );
         let text = text_of(&draw(&work, 100, 10));
         assert!(text.contains("this project has no work folder"), "{text}");
         assert!(
-            text.contains("looked in /nowhere/project/coding-lanes/work"),
+            text.contains("looked in /nowhere/project/coding-crew/work"),
             "{text}"
         );
-        assert!(!text.contains("no coding-lanes folder found"), "{text}");
+        assert!(!text.contains("no coding-crew folder found"), "{text}");
     }
 
     #[test]
@@ -1581,8 +1581,8 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("raul-needs-empty-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a scratch folder");
-        let mut task = coding_lanes_core::Task::new("TSK01", "a task");
-        task.status = coding_lanes_core::Status::Approved;
+        let mut task = coding_crew_core::Task::new("TSK01", "a task");
+        task.status = coding_crew_core::Status::Approved;
         std::fs::write(
             dir.join("TSK01-a-task.json"),
             serde_json::to_string_pretty(&task).expect("writing a task"),

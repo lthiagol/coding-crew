@@ -12,7 +12,7 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 
-use coding_lanes_core::{Status, Task};
+use coding_crew_core::{Status, Task};
 
 use crate::data::{Work, has_overlay, live_claim};
 use crate::theme::{Theme, block_title_style, phase_style, selected_line};
@@ -1234,7 +1234,7 @@ mod tests {
     use crate::data::Missing;
 
     fn mock_work() -> Work {
-        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-lanes/work"))
+        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))
     }
 
     fn theme() -> Theme {
@@ -1336,7 +1336,7 @@ mod tests {
         // places or in neither.
         let mut task = Task::new("TSK01", "the claimed task");
         task.status = Status::Approved;
-        task.claim = Some(coding_lanes_core::Claim {
+        task.claim = Some(coding_crew_core::Claim {
             by: "runner-01".into(),
             session: Some("session-runner-01".into()),
             at: "2029-12-31T23:00:00Z".into(),
@@ -1734,11 +1734,11 @@ mod tests {
 
     #[test]
     fn the_empty_state_is_not_a_blank_screen() {
-        let rows = draw(&Work::load(Path::new("/nowhere/coding-lanes/work")), 60, 12);
+        let rows = draw(&Work::load(Path::new("/nowhere/coding-crew/work")), 60, 12);
         let text = text_of(&rows);
-        assert!(text.contains("no coding-lanes folder found"), "{text}");
+        assert!(text.contains("no coding-crew folder found"), "{text}");
         assert!(
-            text.contains("looked in /nowhere/coding-lanes/work"),
+            text.contains("looked in /nowhere/coding-crew/work"),
             "{text}"
         );
         assert!(!text.contains("no work folder"), "{text}");
@@ -1747,16 +1747,16 @@ mod tests {
     #[test]
     fn a_project_without_work_says_so_and_names_the_path() {
         let work = Work::load_missing(
-            Path::new("/nowhere/project/coding-lanes/work"),
+            Path::new("/nowhere/project/coding-crew/work"),
             Missing::NoWork,
         );
         let text = text_of(&draw(&work, 100, 10));
         assert!(text.contains("this project has no work folder"), "{text}");
         assert!(
-            text.contains("looked in /nowhere/project/coding-lanes/work"),
+            text.contains("looked in /nowhere/project/coding-crew/work"),
             "{text}"
         );
-        assert!(!text.contains("no coding-lanes folder found"), "{text}");
+        assert!(!text.contains("no coding-crew folder found"), "{text}");
     }
 
     /// Draw the tab and return every cell, with its colour.

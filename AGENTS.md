@@ -4,7 +4,7 @@ Rules for agents working in this repository.
 
 ## Project
 
-coding-lanes is a task management tool for agents — a todo list with
+coding-crew is a task management tool for agents — a todo list with
 superpowers.
 
 - Three interfaces:
@@ -23,25 +23,25 @@ superpowers.
   agent calls talita to write it down.
 - talita writes and manages tasks; raul shows them; hugo governs the
   automation that acts on them.
-- Tasks live in the managed project's own `coding-lanes/` folder, alongside its
+- Tasks live in the managed project's own `coding-crew/` folder, alongside its
   code. No central store — each project keeps its own data.
-- `coding-lanes/` holds tasks, metadata, code review findings, and everything
+- `coding-crew/` holds tasks, metadata, code review findings, and everything
   else the project uses to manage tasks.
-- Never hand-edit files under `coding-lanes/`. Use talita.
-- Dogfooding coding-lanes on this project is future work.
+- Never hand-edit files under `coding-crew/`. Use talita.
+- Dogfooding coding-crew on this project is future work.
 
 ## Repo
 
 - `crates/core` — shared model.
 - `crates/engine` — vendored leaf markdown engine for raul's detail document.
-- `crates/talita` — talita; package `coding-lanes-talita`, binary `talita`.
+- `crates/talita` — talita; package `coding-crew-talita`, binary `talita`.
   Off-limits until instructed.
 - `flow/` — the orchestration role configs: `builder.json` and `reviewer.json`.
   They name the agent each pane runs and the model it runs on.
-- `crates/raul` — raul; package `coding-lanes-raul`, binary `raul`.
-- `crates/hugo` — hugo; package `coding-lanes-hugo`, binary `hugo`.
+- `crates/raul` — raul; package `coding-crew-raul`, binary `raul`.
+- `crates/hugo` — hugo; package `coding-crew-hugo`, binary `hugo`.
 - `crates/theme` — the slots, presets and palettes both TUIs paint with.
-- `coding-lanes/` — data folder of a managed project (not created here).
+- `coding-crew/` — data folder of a managed project (not created here).
 
 ```sh
 make check
@@ -112,7 +112,7 @@ make raul
 - The TUI for the work is called **raul**.
 - The TUI for the flow is called **hugo**.
 - The CLI tool is called **talita**.
-- Use only the names defined here — `coding-lanes` (project), `raul` (TUI for
+- Use only the names defined here — `coding-crew` (project), `raul` (TUI for
   the work), `hugo` (TUI for the flow), `talita` (CLI tool). Do not invent
   aliases for the project, its crates, or its binaries without asking.
 - A *lane* is the human lane or the agent lane, as the task model defines it.

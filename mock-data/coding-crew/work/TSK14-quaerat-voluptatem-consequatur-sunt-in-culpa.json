@@ -40,11 +40,11 @@
     {
       "id": "ACCEPT-01",
       "description": "Totam rem aperiam eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae.",
-      "verification": "cargo test -p coding-lanes-core",
+      "verification": "cargo test -p coding-crew-core",
       "status": "pending",
       "evidence": [
         {
-          "command": "cargo test -p coding-lanes-core",
+          "command": "cargo test -p coding-crew-core",
           "exit_code": 0,
           "summary": "11 passed; 0 failed",
           "at": "2026-11-11T14:00Z",

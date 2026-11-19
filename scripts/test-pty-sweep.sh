@@ -194,7 +194,7 @@ expect_count() {
 # 1. The success path: every width 40-120, one file per width, the default
 # height passed through, and a fresh temp folder reported and kept.
 new_case
-run_sweep --raul "$BIN/raul" --work mock-data/coding-lanes/work
+run_sweep --raul "$BIN/raul" --work mock-data/coding-crew/work
 expect_rc 0 "success"
 expect_contains "$STDOUT" 'sweep: 81 widths 40-120, height 40: every line fits' "success summary"
 OUT=$(sed -n 's/^sweep output: //p' "$STDOUT")
@@ -213,8 +213,8 @@ expect_missing "$OUT/121.txt" "above-range file"
 expect_count 40 "$(wc -l <"$OUT/40.txt")" "default rows in width 40"
 expect_count 0 "$(awk 'length($0) != 40 { count++ } END { print count + 0 }' "$OUT/40.txt")" "width 40 rows are 40 columns"
 expect_count 81 "$(wc -l <"$FAKE_STATE_DIR/calls")" "one call per width"
-expect_line "$FAKE_STATE_DIR/calls" 1 '40|40|mock-data/coding-lanes/work' "first call"
-expect_line "$FAKE_STATE_DIR/calls" 81 '120|40|mock-data/coding-lanes/work' "last call"
+expect_line "$FAKE_STATE_DIR/calls" 1 '40|40|mock-data/coding-crew/work' "first call"
+expect_line "$FAKE_STATE_DIR/calls" 81 '120|40|mock-data/coding-crew/work' "last call"
 # The folder is reported, not cleaned: it still holds the files above.
 expect_exists "$OUT" "output folder is kept"
 

@@ -50,9 +50,9 @@
 │╞═════════════╪══════════════╪══════════════╪══════════╪══════════════╪══════════╪══════════════╡ │
 ││  ACCEPT-01  │ Sed ut       │  cargo test  │  passed  │  cargo test  │ none     │ none         │ │
 ││             │ perspiciatis │   -p coding  │          │   --workspa  │          │              │ │
-││             │ unde omnis   │  -lanes-cor  │          │  ce  — exit  │          │              │ │
-││             │ iste natus   │  e | grep d  │          │  0  — 10     │          │              │ │
-││             │ error sit    │  etail       │          │ passed; 0    │          │              │ │
+││             │ unde omnis   │  -crew-core  │          │  ce  — exit  │          │              │ │
+││             │ iste natus   │   | grep de  │          │  0  — 10     │          │              │ │
+││             │ error sit    │  tail        │          │ passed; 0    │          │              │ │
 ││             │ voluptatem   │              │          │ failed — by  │          │              │ │
 ││             │ accusantium  │              │          │  runner-01   │          │              │ │
 ││             │ doloremque.  │              │          │ in           │          │              │ │

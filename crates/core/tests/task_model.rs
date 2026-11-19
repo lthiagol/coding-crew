@@ -1,8 +1,8 @@
-use coding_lanes_core::lifecycle::{Event, TransitionContext, TransitionError, transition};
-use coding_lanes_core::task::{
+use coding_crew_core::lifecycle::{Event, TransitionContext, TransitionError, transition};
+use coding_crew_core::task::{
     AcceptanceCriterion, Evidence, Finding, FindingStatus, Focus, Round, RoundKind, Verdict,
 };
-use coding_lanes_core::{Actor, CriterionStatus, Role, Step, StepStatus, Store, Task};
+use coding_crew_core::{Actor, CriterionStatus, Role, Step, StepStatus, Store, Task};
 
 fn creator() -> Actor {
     Actor::agent("creator-1", Role::Creator).in_session("s-creator")
@@ -83,7 +83,7 @@ fn draft_needs_outcome_criteria_and_scope() {
         &TransitionContext::default(),
     )
     .unwrap();
-    assert_eq!(task.status, coding_lanes_core::Status::Groomed);
+    assert_eq!(task.status, coding_crew_core::Status::Groomed);
 }
 
 #[test]
@@ -128,7 +128,7 @@ fn approval_needs_coverage_and_done_when() {
         &TransitionContext::default(),
     )
     .unwrap();
-    assert_eq!(task.status, coding_lanes_core::Status::Approved);
+    assert_eq!(task.status, coding_crew_core::Status::Approved);
 }
 
 #[test]
@@ -159,7 +159,7 @@ fn start_needs_a_claim() {
         .is_err()
     );
 
-    task.claim = Some(coding_lanes_core::Claim {
+    task.claim = Some(coding_crew_core::Claim {
         by: "runner-1".to_string(),
         session: Some("s-runner".to_string()),
         at: "now".to_string(),
@@ -172,7 +172,7 @@ fn start_needs_a_claim() {
         &TransitionContext::default(),
     )
     .unwrap();
-    assert_eq!(task.status, coding_lanes_core::Status::Executing);
+    assert_eq!(task.status, coding_crew_core::Status::Executing);
 }
 
 #[test]
@@ -192,7 +192,7 @@ fn finish_needs_evidence_and_a_self_round() {
         &TransitionContext::default(),
     )
     .unwrap();
-    task.claim = Some(coding_lanes_core::Claim {
+    task.claim = Some(coding_crew_core::Claim {
         by: "runner-1".to_string(),
         session: Some("s-runner".to_string()),
         at: "now".to_string(),
@@ -252,7 +252,7 @@ fn finish_needs_evidence_and_a_self_round() {
         &TransitionContext::default(),
     )
     .unwrap();
-    assert_eq!(task.status, coding_lanes_core::Status::CodeReview);
+    assert_eq!(task.status, coding_crew_core::Status::CodeReview);
 }
 
 #[test]
@@ -275,7 +275,7 @@ fn criterion_status_comes_from_evidence() {
 #[test]
 fn five_external_rounds_escalate_to_a_human() {
     let mut task = groomed_task();
-    task.status = coding_lanes_core::Status::CodeReview;
+    task.status = coding_crew_core::Status::CodeReview;
     task.review.verdict = Some(Verdict::ChangesNeeded);
     task.review.findings.push(Finding {
         id: "FIND-01".to_string(),
@@ -302,7 +302,7 @@ fn five_external_rounds_escalate_to_a_human() {
         &TransitionContext::default(),
     )
     .unwrap();
-    assert_eq!(task.status, coding_lanes_core::Status::NeedsHuman);
+    assert_eq!(task.status, coding_crew_core::Status::NeedsHuman);
 }
 
 #[test]
@@ -316,7 +316,7 @@ fn a_transition_stamps_the_moment_the_status_began() {
         &TransitionContext::default(),
     )
     .unwrap();
-    assert_eq!(task.status, coding_lanes_core::Status::Groomed);
+    assert_eq!(task.status, coding_crew_core::Status::Groomed);
     assert_ne!(task.status_since, "2020-01-01T00:00:00Z");
 }
 
@@ -350,13 +350,13 @@ fn an_overlay_does_not_move_the_status_stamp() {
 
 #[test]
 fn store_round_trips_tasks() {
-    let dir = std::env::temp_dir().join("coding-lanes-store-test");
+    let dir = std::env::temp_dir().join("coding-crew-store-test");
     let _ = std::fs::remove_dir_all(&dir);
     let store = Store::new(&dir);
 
     let mut task = store.create("Add lane filtering").unwrap();
     assert_eq!(task.id, "TSK01");
-    assert_eq!(task.status, coding_lanes_core::Status::Draft);
+    assert_eq!(task.status, coding_crew_core::Status::Draft);
     task.status_since = "2026-11-13T12:00:00Z".to_string();
     store.save(&task).unwrap();
 
@@ -378,7 +378,7 @@ fn store_round_trips_tasks() {
 #[test]
 fn a_small_task_skips_the_step_rules() {
     let mut task = Task::new("TSK01", "Fix the lorem pane");
-    task.kind = coding_lanes_core::TaskKind::Bug;
+    task.kind = coding_crew_core::TaskKind::Bug;
     task.intent.outcome = "the lorem pane works".to_string();
     task.scope.out_of_scope = vec!["no unrelated refactors".to_string()];
     task.acceptance_criteria = vec![AcceptanceCriterion {
@@ -403,7 +403,7 @@ fn a_small_task_skips_the_step_rules() {
         &TransitionContext::default(),
     )
     .unwrap();
-    assert_eq!(task.status, coding_lanes_core::Status::Approved);
+    assert_eq!(task.status, coding_crew_core::Status::Approved);
 }
 
 #[test]
@@ -446,7 +446,7 @@ fn an_expired_lease_cannot_start() {
     )
     .unwrap();
 
-    task.claim = Some(coding_lanes_core::Claim {
+    task.claim = Some(coding_crew_core::Claim {
         by: "runner-1".to_string(),
         session: Some("s-runner".to_string()),
         at: "2020-01-01T00:00:00Z".to_string(),
@@ -480,7 +480,7 @@ fn a_live_lease_starts_the_task() {
     )
     .unwrap();
 
-    task.claim = Some(coding_lanes_core::Claim {
+    task.claim = Some(coding_crew_core::Claim {
         by: "runner-1".to_string(),
         session: Some("s-runner".to_string()),
         at: "now".to_string(),
@@ -493,5 +493,5 @@ fn a_live_lease_starts_the_task() {
         &TransitionContext::default(),
     )
     .unwrap();
-    assert_eq!(task.status, coding_lanes_core::Status::Executing);
+    assert_eq!(task.status, coding_crew_core::Status::Executing);
 }

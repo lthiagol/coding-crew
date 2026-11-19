@@ -8,7 +8,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 
-use coding_lanes_core::Status;
+use coding_crew_core::Status;
 
 use crate::data::{Missing, Reason, Work};
 use crate::theme::{Theme, block_title_style, phase_style, reason_style};
@@ -1021,7 +1021,7 @@ mod tests {
     use crate::theme::Preset;
 
     fn mock_work() -> Work {
-        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-lanes/work"))
+        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))
     }
 
     /// The theme the screen is drawn with.
@@ -1099,7 +1099,7 @@ mod tests {
     /// A work folder that is not there, for the given reason.
     fn missing_work(reason: Missing) -> Work {
         Work {
-            root: std::path::PathBuf::from("/nowhere/project/coding-lanes/work"),
+            root: std::path::PathBuf::from("/nowhere/project/coding-crew/work"),
             tasks: Vec::new(),
             items: Vec::new(),
             errors: Vec::new(),
@@ -1110,9 +1110,9 @@ mod tests {
     #[test]
     fn without_a_project_the_screen_says_none_was_found() {
         let text = draw(&missing_work(Missing::NoFolder), 100, 10).join("\n");
-        assert!(text.contains("no coding-lanes folder found"), "{text}");
+        assert!(text.contains("no coding-crew folder found"), "{text}");
         assert!(
-            text.contains("looked in /nowhere/project/coding-lanes/work"),
+            text.contains("looked in /nowhere/project/coding-crew/work"),
             "{text}"
         );
         assert!(!text.contains("no work folder"), "{text}");
@@ -1123,10 +1123,10 @@ mod tests {
         let text = draw(&missing_work(Missing::NoWork), 100, 10).join("\n");
         assert!(text.contains("this project has no work folder"), "{text}");
         assert!(
-            text.contains("looked in /nowhere/project/coding-lanes/work"),
+            text.contains("looked in /nowhere/project/coding-crew/work"),
             "{text}"
         );
-        assert!(!text.contains("no coding-lanes folder found"), "{text}");
+        assert!(!text.contains("no coding-crew folder found"), "{text}");
     }
 
     #[test]
@@ -1160,9 +1160,9 @@ mod tests {
         // answer from the instant the frame is given, so one screen cannot
         // draw a count of zero beside a next task the count says is free,
         // or a count of one beside "nothing is claimable".
-        let mut task = coding_lanes_core::Task::new("TSK01", "the claimed task");
-        task.status = coding_lanes_core::Status::Approved;
-        task.claim = Some(coding_lanes_core::Claim {
+        let mut task = coding_crew_core::Task::new("TSK01", "the claimed task");
+        task.status = coding_crew_core::Status::Approved;
+        task.claim = Some(coding_crew_core::Claim {
             by: "runner-01".into(),
             session: Some("session-runner-01".into()),
             at: "2029-12-31T23:00:00Z".into(),
@@ -1240,9 +1240,9 @@ mod tests {
     #[test]
     fn a_long_text_is_wrapped_and_not_cut() {
         let dir = scratch_dir("wrapped");
-        let mut task = coding_lanes_core::Task::new("TSK01", "a long title");
+        let mut task = coding_crew_core::Task::new("TSK01", "a long title");
         task.title = "a long title that has to be wrapped over more than one line".to_string();
-        task.status = coding_lanes_core::Status::Approved;
+        task.status = coding_crew_core::Status::Approved;
         fs::write(
             dir.join("TSK01-a-long-title.json"),
             serde_json::to_string_pretty(&task).expect("writing a task"),
@@ -1256,9 +1256,9 @@ mod tests {
     #[test]
     fn a_word_longer_than_the_block_takes_the_rows_it_needs() {
         let dir = scratch_dir("long-word");
-        let mut task = coding_lanes_core::Task::new("TSK01", "a long title");
+        let mut task = coding_crew_core::Task::new("TSK01", "a long title");
         task.title = "X".repeat(90);
-        task.status = coding_lanes_core::Status::Approved;
+        task.status = coding_crew_core::Status::Approved;
         fs::write(
             dir.join("TSK01-a-long-title.json"),
             serde_json::to_string_pretty(&task).expect("writing a task"),
@@ -1273,8 +1273,8 @@ mod tests {
     #[test]
     fn an_unreadable_file_outranks_the_smaller_tasks() {
         let dir = scratch_dir("unreadable-rank");
-        let mut task = coding_lanes_core::Task::new("TSK01", "a good task");
-        task.status = coding_lanes_core::Status::Approved;
+        let mut task = coding_crew_core::Task::new("TSK01", "a good task");
+        task.status = coding_crew_core::Status::Approved;
         fs::write(
             dir.join("TSK01-a-good-task.json"),
             serde_json::to_string_pretty(&task).expect("writing a task"),
@@ -1379,8 +1379,8 @@ mod tests {
     fn a_three_digit_count_stands_apart_from_its_label() {
         let dir = scratch_dir("many-tasks");
         for index in 1..=120 {
-            let mut task = coding_lanes_core::Task::new(format!("TSK{index:03}"), "a task");
-            task.status = coding_lanes_core::Status::CodeReview;
+            let mut task = coding_crew_core::Task::new(format!("TSK{index:03}"), "a task");
+            task.status = coding_crew_core::Status::CodeReview;
             fs::write(
                 dir.join(format!("TSK{index:03}-a-task.json")),
                 serde_json::to_string_pretty(&task).expect("writing a task"),
@@ -1458,8 +1458,8 @@ mod tests {
     #[test]
     fn an_unreadable_marker_carries_the_error() {
         let dir = scratch_dir("unreadable-marker");
-        let mut task = coding_lanes_core::Task::new("TSK01", "a good task");
-        task.status = coding_lanes_core::Status::Approved;
+        let mut task = coding_crew_core::Task::new("TSK01", "a good task");
+        task.status = coding_crew_core::Status::Approved;
         fs::write(
             dir.join("TSK01-a-good-task.json"),
             serde_json::to_string_pretty(&task).expect("writing a task"),
@@ -1608,8 +1608,8 @@ mod tests {
     #[test]
     fn the_short_summary_agrees_with_its_count() {
         let dir = scratch_dir("one-human");
-        let mut task = coding_lanes_core::Task::new("TSK01", "a task");
-        task.status = coding_lanes_core::Status::Groomed;
+        let mut task = coding_crew_core::Task::new("TSK01", "a task");
+        task.status = coding_crew_core::Status::Groomed;
         fs::write(
             dir.join("TSK01-a-task.json"),
             serde_json::to_string_pretty(&task).expect("writing a task"),

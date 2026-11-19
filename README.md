@@ -1,13 +1,15 @@
-# coding-lanes
+# coding-crew
 
 An agentic todo list with superpowers.
 
-A task management tool for agents. Two interfaces:
+A task management tool for agents. Three interfaces:
 
 - **talita** — the CLI tool. Agent-facing. **T**ask **A**ccess and **L**ane
   **I**nteraction **T**erminal **A**pp. Writes and manages tasks.
-- **raul** — the TUI. Human-facing. **R**eview, **A**pprove, **U**nderstand
-  **L**ane. Shows them.
+- **raul** — the TUI for the work. Human-facing. **R**eview, **A**pprove,
+  **U**nderstand **L**ane. Shows them.
+- **hugo** — the TUI for the flow. Human-facing. **H**uman-guided **U**nified
+  **G**overnance **&** **O**rchestration. Configures and watches the crew.
 
 ## Status
 
@@ -25,15 +27,15 @@ is asked for.
 
 ```
 crates/
-  core/    # shared model   (coding-lanes-core)
-  talita/  # CLI tool       (coding-lanes-talita, binary talita)
-  raul/    # TUI            (coding-lanes-raul, binary raul)
+  core/    # shared model   (coding-crew-core)
+  talita/  # CLI tool       (coding-crew-talita, binary talita)
+  raul/    # TUI            (coding-crew-raul, binary raul)
 ```
 
-Tasks live in a managed project's own `coding-lanes/` folder:
+Tasks live in a managed project's own `coding-crew/` folder:
 
 ```
-<project>/coding-lanes/work/TSK01-<slug>.json
+<project>/coding-crew/work/TSK01-<slug>.json
 ```
 
 ## Develop

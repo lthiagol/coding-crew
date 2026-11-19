@@ -41,7 +41,7 @@
     {
       "id": "ACCEPT-01",
       "description": "Totam rem aperiam eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae.",
-      "verification": "cargo test -p coding-lanes-core",
+      "verification": "cargo test -p coding-crew-core",
       "status": "pending",
       "evidence": [],
       "deferral": null,

@@ -1,4 +1,4 @@
-//! Shared domain model for `coding-lanes`.
+//! Shared domain model for `coding-crew`.
 //!
 //! The model is specified in `docs/tasks/task-model.md`; this crate is its
 //! code. Both frontends — talita (CLI) and raul (TUI) — build on it.

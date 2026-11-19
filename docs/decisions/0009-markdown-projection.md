@@ -2,7 +2,7 @@
 
 - **Status:** ✅ accepted
 - **Date:** 2026-11-13
-- **Deciders:** coding-lanes
+- **Deciders:** coding-crew
 
 ## Context
 
@@ -27,7 +27,7 @@ target, so it cannot be depended on as a crate.
 
 | layer | what it is | where |
 |---|---|---|
-| record | the task file, JSON — exact, typed, gated | `coding-lanes/work/TSK*.json` |
+| record | the task file, JSON — exact, typed, gated | `coding-crew/work/TSK*.json` |
 | projection | the task → a markdown document: headings per section, tables for the criteria and their evidence, lists for the steps and findings, with the free-text fields embedded as markdown in their own right | `crates/core` — pure `task → markdown`, no terminal involved |
 | rendering | markdown → ratatui lines, via leaf's engine | `crates/engine` — leaf's engine, vendored |
 | surface | the document in the detail pane | `crates/raul` |

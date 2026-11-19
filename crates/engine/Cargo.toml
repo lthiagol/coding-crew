@@ -1,5 +1,5 @@
 [package]
-name = "coding-lanes-engine"
+name = "coding-crew-engine"
 description = "Vendored markdown engine from leaf, for raul"
 version.workspace = true
 edition.workspace = true

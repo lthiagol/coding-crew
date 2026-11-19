@@ -5,7 +5,7 @@ The agents that act on tasks. Humans act too, but carry no role.
 Task structure, statuses, and transitions live in
 [tasks/task-model.md](tasks/task-model.md).
 
-The two interfaces of coding-lanes: **talita**, the CLI tool that writes and
+The two interfaces of coding-crew: **talita**, the CLI tool that writes and
 manages tasks (**T**ask **A**ccess and **L**ane **I**nteraction **T**erminal
 **A**pp), and **raul**, the TUI that shows them (**R**eview, **A**pprove,
 **U**nderstand **L**ane).

@@ -1,7 +1,7 @@
 # Task model
 
-The unit of work in coding-lanes. One task, one file, JSON, under the managed
-project's own `coding-lanes/work/` folder. A task is groomed by a creator
+The unit of work in coding-crew. One task, one file, JSON, under the managed
+project's own `coding-crew/work/` folder. A task is groomed by a creator
 agent with a human, executed by a runner agent, reviewed by a reviewer agent,
 and read by a human.
 
@@ -490,7 +490,7 @@ review and findings. It is not a checklist item on the parent.
 ## 11. Storage
 
 ```
-<project>/coding-lanes/work/
+<project>/coding-crew/work/
   TSK01-<slug>.json     # a task
   ITM01-<slug>.json     # a smaller task — see smaller-tasks.md
 ```
@@ -510,7 +510,7 @@ lives in the project it describes, next to the code it is about.
 | **The reader is tolerant of a broken file** | a file that does not parse is skipped, not fatal — one corrupt file does not hide the folder |
 
 The store is **discovered**, not configured: from any path, walk up until a
-`coding-lanes` folder appears.
+`coding-crew` folder appears.
 
 ## 12. Derived, never stored
 
@@ -528,7 +528,7 @@ These are views, and they are recomputed on read.
 
 ## 13. Worked examples
 
-`mock-data/coding-lanes/work/` holds one task per lifecycle stage, plus the
+`mock-data/coding-crew/work/` holds one task per lifecycle stage, plus the
 edge cases. Every fixture satisfies the gates of the phase it is in.
 
 The table names the **role** of a fixture, not its id: the generator renumbers
@@ -594,5 +594,5 @@ work is in `TODO.txt`.
 | the small-task step exemption | `crates/core/src/lifecycle.rs` — `criteria.covered`, `steps.done_when_present` and `steps.settled` are skipped for a small task |
 | the claim lease | `Claim::lease_expired` compares RFC 3339 instants; an empty lease never expires, a valid lease expires at or after its instant, and a malformed nonempty lease is treated as expired. The `approved → executing` gate refuses an expired lease |
 | the rename cleanup | `Store::save` removes the file the task had under an older name |
-| the work folder path | the store reads `coding-lanes/work/`, as [ADR 0002](../../decisions/0002-work-folder.md) decides; [ADR 0010](../../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-lanes/` folder |
+| the work folder path | the store reads `coding-crew/work/`, as [ADR 0002](../../decisions/0002-work-folder.md) decides; [ADR 0010](../../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-crew/` folder |
 | smaller tasks (`ITM*`) | `crates/core/src/item.rs` — shaping, dismissal, promotion; `Store::promote_item` writes the item first |

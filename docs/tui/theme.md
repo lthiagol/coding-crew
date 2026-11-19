@@ -26,7 +26,7 @@ differently.
 | `text.selected` | the selected row |
 | `semantic.ok` | a clean result, a finished task |
 | `semantic.warn` | something wants attention and is not broken |
-| `semantic.error` | a failure: an unreadable file, a failed criterion, an escalation, no coding-lanes folder found |
+| `semantic.error` | a failure: an unreadable file, a failed criterion, an escalation, no coding-crew folder found |
 | `semantic.info` | neutral information |
 | `semantic.human` | the human lane: approve, review, and the facts that wait on it — "wait on a human" |
 | `semantic.agent` | the agent lane: claimable, running |

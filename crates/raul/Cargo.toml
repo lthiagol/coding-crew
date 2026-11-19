@@ -1,6 +1,6 @@
 [package]
-name = "coding-lanes-raul"
-description = "Review, Approve, Understand Lane — the TUI of coding-lanes"
+name = "coding-crew-raul"
+description = "Review, Approve, Understand Lane — the TUI of coding-crew"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,8 +12,8 @@ name = "raul"
 path = "src/main.rs"
 
 [dependencies]
-coding-lanes-core.workspace = true
-coding-lanes-engine.workspace = true
+coding-crew-core.workspace = true
+coding-crew-engine.workspace = true
 anyhow.workspace = true
 crossterm.workspace = true
 # `Paragraph::line_count` asks ratatui how tall a paragraph will be, so the

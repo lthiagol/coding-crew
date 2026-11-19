@@ -2,7 +2,7 @@
 
 - **Status:** ✅ accepted
 - **Date:** 2026-11-13
-- **Deciders:** coding-lanes
+- **Deciders:** coding-crew
 
 ## Context
 

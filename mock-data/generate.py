@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the mock task fixtures for coding-lanes.
+"""Generate the mock task fixtures for coding-crew.
 
 Every fixture satisfies the gates of the phase it is in. The dependency graph
 is acyclic, and a task past approved is claimed only after the done work it
@@ -15,7 +15,7 @@ import pathlib
 import shutil
 
 ROOT = pathlib.Path(__file__).resolve().parent
-TASKS = ROOT / "coding-lanes" / "work"
+TASKS = ROOT / "coding-crew" / "work"
 
 TITLES = [
     "Lorem ipsum dolor sit amet",
@@ -109,7 +109,7 @@ NOTES = [
 
 VERIFICATIONS = [
     "cargo test --workspace",
-    "cargo test -p coding-lanes-core",
+    "cargo test -p coding-crew-core",
     "cargo clippy --all-targets -- -D warnings",
     "make check",
 ]
@@ -609,7 +609,7 @@ def build():
                 "```"
             )
             item["acceptance_criteria"][0]["verification"] = (
-                "cargo test -p coding-lanes-core | grep detail"
+                "cargo test -p coding-crew-core | grep detail"
             )
         tasks.append(item)
 

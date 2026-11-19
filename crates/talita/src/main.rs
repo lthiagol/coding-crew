@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use coding_lanes_core::{Store, Task};
+use coding_crew_core::{Store, Task};
 use std::path::{Path, PathBuf};
 
-/// Task Access and Lane Interaction Terminal App — the CLI tool of coding-lanes.
+/// Task Access and Lane Interaction Terminal App — the CLI tool of coding-crew.
 #[derive(Debug, Parser)]
 #[command(name = "talita", version, about)]
 struct Talita {
-    /// Project root. Defaults to the nearest parent holding a coding-lanes folder.
+    /// Project root. Defaults to the nearest parent holding a coding-crew folder.
     #[arg(short, long, global = true)]
     project: Option<PathBuf>,
 
@@ -68,7 +68,7 @@ fn store_for(project: Option<&Path>, create: bool) -> Result<Store> {
             let _ = error;
             Ok(Store::for_project(&cwd))
         }
-        Err(error) => Err(error).context("finding the coding-lanes folder"),
+        Err(error) => Err(error).context("finding the coding-crew folder"),
     }
 }
 

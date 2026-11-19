@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use coding_lanes_core::{Item, ItemKind, Status, Task};
+use coding_crew_core::{Item, ItemKind, Status, Task};
 
 #[cfg(test)]
 #[path = "../tests/support/mod.rs"]
@@ -47,9 +47,9 @@ impl Reason {
 /// Why there is no work folder to read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Missing {
-    /// No `coding-lanes` folder was found at or above the start.
+    /// No `coding-crew` folder was found at or above the start.
     NoFolder,
-    /// The nearest project has a `coding-lanes` folder, but no work folder.
+    /// The nearest project has a `coding-crew` folder, but no work folder.
     NoWork,
 }
 
@@ -57,7 +57,7 @@ impl Missing {
     /// The sentence the screens print.
     pub fn headline(self) -> &'static str {
         match self {
-            Missing::NoFolder => "no coding-lanes folder found",
+            Missing::NoFolder => "no coding-crew folder found",
             Missing::NoWork => "this project has no work folder",
         }
     }
@@ -328,10 +328,10 @@ pub fn live_claim(task: &Task, now: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use coding_lanes_core::{Claim, Overlay};
+    use coding_crew_core::{Claim, Overlay};
 
     fn mock_work() -> Work {
-        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-lanes/work"))
+        Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))
     }
 
     fn work_of(tasks: Vec<Task>) -> Work {
@@ -508,7 +508,7 @@ mod tests {
 
     #[test]
     fn a_missing_folder_is_not_an_error() {
-        let work = Work::load(Path::new("/nowhere/coding-lanes/work"));
+        let work = Work::load(Path::new("/nowhere/coding-crew/work"));
         assert_eq!(work.missing, Some(Missing::NoFolder));
         assert!(work.is_empty());
     }
@@ -516,7 +516,7 @@ mod tests {
     #[test]
     fn a_missing_folder_keeps_the_reason_it_is_missing() {
         let work = Work::load_missing(
-            Path::new("/nowhere/project/coding-lanes/work"),
+            Path::new("/nowhere/project/coding-crew/work"),
             Missing::NoWork,
         );
         assert_eq!(work.missing, Some(Missing::NoWork));

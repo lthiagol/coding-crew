@@ -1,13 +1,14 @@
-# 0001. Naming — the project, the two interfaces, the binaries
+# 0001. Naming — the project, the interfaces, the binaries
 
 - **Status:** ✅ accepted
-- **Date:** 2026-11-13
-- **Deciders:** coding-lanes
+- **Date:** 2026-11-19
+- **Deciders:** coding-crew
 
 ## Context
 
-coding-lanes has two interfaces and they are not interchangeable. One is written by
-agents. One is read by humans. Both act on the same records.
+coding-crew has three interfaces and they are not interchangeable. One is written
+by agents. Two are read by humans: one shows the work, one governs the automation
+that runs it. All three act on the same project.
 
 Names surface everywhere: a binary name, a package name, a crate path, a help line,
 a window title, a command in a transcript a human reads later. A name is therefore
@@ -29,25 +30,32 @@ terminal.
 
 | | |
 |---|---|
-| Project | **coding-lanes** |
+| Project | **coding-crew** |
 | Tagline | *An agentic todo list with superpowers* |
-| Workspace layout | `crates/core`, `crates/talita`, `crates/raul` |
+| Workspace layout | `crates/core`, `crates/talita`, `crates/raul`, `crates/hugo` (when built) |
 
-The name says what the project is: lanes of work, each with a next action and an
-owner. It is the same word the TUI groups tasks by, and the same word the acronym
-`raul` expands to (*Understand Lane*).
+The name says what the project has become: a crew of agents and humans working one
+queue, under a human's governance. The work is no longer only lanes that a single
+TUI groups tasks by; it is a crew that claims tasks, reviews them, remediates them,
+and a governance interface — `hugo` — that configures and watches that crew. The
+project names the whole, and the whole is the crew and its governance. The
+interfaces' expansions keep *Lane*: the lanes are the tasks' own structure, and
+the crew is who does the work.
 
-### The two interfaces
+### The interfaces
 
-| | talita | raul |
-|---|---|---|
-| What it is | the CLI tool | the TUI |
-| Audience | agent | human |
-| Acronym | **T**ask **A**ccess and **L**ane **I**nteraction **T**erminal **A**pp | **R**eview, **A**pprove, **U**nderstand **L**ane |
-| Binary | `talita` | `raul` |
-| Package | `coding-lanes-talita` | `coding-lanes-raul` |
-| Crate | `crates/talita` | `crates/raul` |
-| Writes task data | yes | no — see [ADR 0007](0007-one-writer.md) |
+| | talita | raul | hugo |
+|---|---|---|---|
+| What it is | the CLI tool | the TUI for the work | the TUI for the flow |
+| Audience | agent | human | human |
+| Acronym | **T**ask **A**ccess and **L**ane **I**nteraction **T**erminal **A**pp | **R**eview, **A**pprove, **U**nderstand **L**ane | **H**uman-guided **U**nified **G**overnance **&** **O**rchestration |
+| Binary | `talita` | `raul` | `hugo` |
+| Package | `coding-crew-talita` | `coding-crew-raul` | `coding-crew-hugo` (when built) |
+| Crate | `crates/talita` | `crates/raul` | `crates/hugo` (when built) |
+| Writes task data | yes | no — see [ADR 0007](0007-one-writer.md) | no |
+
+The seam between the interfaces is the data: raul reads the work folder, hugo reads
+the runtime. raul draws task content; hugo draws tasks only as items of a queue.
 
 ### Why talita
 
@@ -66,18 +74,27 @@ and does not approve it; it shows what is waiting, what is waiting on whom, and 
 the human is being asked to decide. *Review, Approve, Understand Lane* is that job
 in three words.
 
-### Why the TUI keeps the name raul
+### Why hugo
 
-`raul` is not a job title and not a role. It is the name of a surface, and surfaces
-wear the product's name. Keeping it means a transcript reads unambiguously:
+It is the tool that makes the **crew governable**. It does not do the work and does
+not show the documents; it configures the agents, the models, the harness, the
+review-round limit and the order, and it shows the crew, the round, the budget and
+the findings. *Human-guided Unified Governance & Orchestration* is that job.
+
+### Why the interfaces keep their own names
+
+`raul`, `talita` and `hugo` are not job titles and not roles. They are the names of
+surfaces, and surfaces wear their own short names. Keeping them means a transcript
+reads unambiguously:
 
 ```
 talita task approve TSK01
 raul
+hugo
 ```
 
-Two different verbs, two different names, one line of history to read. Renaming
-raul would lose that, and would lose a short, pronounceable word that fits a
+Three different verbs, three different names, one line of history to read. Renaming
+a surface would lose that, and would lose a short, pronounceable word that fits a
 terminal title bar.
 
 ### The alternatives, and why they lost
@@ -85,9 +102,10 @@ terminal title bar.
 | Option | Lost because |
 |---|---|
 | "The CLI tool" and "the TUI" | mechanism, not purpose; no word for a human to hold in their head, and nothing to type |
-| `coding-lanes-cli` and `coding-lanes-tui` | true and flat. The suffix says what the program is shaped like, and carries no meaning beyond the package name it duplicates |
-| Naming both surfaces after roles — `coder` and `reviewer` | a role is a job, and a surface is not a job. It also collides with the roles in [ADR 0005](0005-roles.md) |
+| `coding-crew-cli` and `coding-crew-tui` | true and flat. The suffix says what the program is shaped like, and carries no meaning beyond the package name it duplicates |
+| Naming the surfaces after roles — `coder` and `reviewer` | a role is a job, and a surface is not a job. It also collides with the roles in [ADR 0005](0005-roles.md) |
 | Naming the CLI after the lane and the TUI after the board | two metaphors for one idea; the TUI shows lanes, not boards, and "board" would need a second definition |
+| A name chosen for a two-interface tool | the project now has a third interface for governing the crew, and a name must describe what the project is, not the shape it had |
 | `talita` renamed later | the name is in package names, crate paths and every transcript. Renaming costs more than it ever earns, so the name is chosen once |
 
 ## Consequences
@@ -99,17 +117,21 @@ terminal title bar.
   months later by someone who has forgotten them.
 - Package and crate names follow the binary names, so there is one name per
   surface.
+- The project's name now covers the crew and its governance, so `hugo` fits under
+  `coding-crew` rather than beside it as an exception.
 
 ### Negative
 
-- **Two invented names have to be learned.** A new reader meets `talita` and
-  `raul` before meeting either tool. The expansions in the docs and the help text
+- **Three invented names have to be learned.** A new reader meets `talita`, `raul`
+  and `hugo` before meeting any tool. The expansions in the docs and the help text
   carry the weight.
-- The names do not describe a workflow. `raul` in particular hides the fact that it
-  is read-only today; that is the cost of naming a surface by its audience rather
-  than by its features.
+- The surfaces do not describe a workflow. `raul` in particular hides the fact that
+  it is read-only today; that is the cost of naming a surface by its audience
+  rather than by its features.
 
 ### Follow-up
 
 - The help text and window titles use the same names, decided in
   [docs/vocabulary.md](../vocabulary.md) § *What is strings only*.
+- The data folder is `coding-crew/`, the package prefix is `coding-crew-`, and the
+  project's configuration home is `~/.config/coding-crew/`.

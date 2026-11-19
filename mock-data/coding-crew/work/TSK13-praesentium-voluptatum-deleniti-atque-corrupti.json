@@ -40,7 +40,7 @@
     {
       "id": "ACCEPT-01",
       "description": "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque.",
-      "verification": "cargo test -p coding-lanes-core | grep detail",
+      "verification": "cargo test -p coding-crew-core | grep detail",
       "status": "pending",
       "evidence": [
         {

@@ -1,6 +1,6 @@
 # raul — screens
 
-The TUI of coding-lanes. It reads the work folder and shows it. It writes
+The TUI of coding-crew. It reads the work folder and shows it. It writes
 nothing.
 
 The domain is in [tasks/task-model.md](../tasks/task-model.md); the names are
@@ -222,7 +222,7 @@ Every view above is computed from the task files.
 | state | what raul shows |
 |---|---|
 | empty | "no tasks yet" in the pane, not a blank screen |
-| no project | "no coding-lanes folder found" with the path it looked in |
+| no project | "no coding-crew folder found" with the path it looked in |
 | no work folder | "this project has no work folder" with the path it looked in |
 | unreadable file | the file name and the error; the rest of the list still renders |
 | smaller task | "the smaller task \<id\> has no document yet" in the detail pane, not the task it is not |
@@ -252,6 +252,6 @@ runs it. The Overview is pinned byte for byte at 40, 60 and 100 columns in
 
 ## Mock data
 
-raul reads `mock-data/coding-lanes/work/` — one task per phase, the edge
+raul reads `mock-data/coding-crew/work/` — one task per phase, the edge
 cases, and the smaller tasks — so the screens can be built against real shapes
 before any data exists to manage. `make raul` points at it.

@@ -1,6 +1,6 @@
 ---
 name: task-review
-description: Review an implementation against its task in coding-lanes. Use when the user asks to review a task's work, act as the reviewer role, file review findings, or give a verdict on a task that reached code-review.
+description: Review an implementation against its task in coding-crew. Use when the user asks to review a task's work, act as the reviewer role, file review findings, or give a verdict on a task that reached code-review.
 ---
 
 # Task review

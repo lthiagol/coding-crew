@@ -55,7 +55,7 @@ points at it rather than repeating it. The vocabulary of record is
 
 | # | Title | Status |
 |---|---|---|
-| [0001](0001-naming.md) | Naming — the project, the two interfaces, the binaries | ✅ accepted |
+| [0001](0001-naming.md) | Naming — the project, the interfaces, the binaries | ✅ accepted |
 | [0002](0002-work-folder.md) | One work folder | ✅ accepted |
 | [0003](0003-smaller-tasks.md) | Smaller tasks — one artifact, three kinds | ✅ accepted |
 | [0004](0004-lighter-gates.md) | Lighter gates for small tasks | ✅ accepted |

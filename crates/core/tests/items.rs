@@ -1,8 +1,8 @@
-use coding_lanes_core::{Item, ItemError, ItemKind, ItemStatus, Store, TaskKind};
+use coding_crew_core::{Item, ItemError, ItemKind, ItemStatus, Store, TaskKind};
 use std::path::PathBuf;
 
 fn temp_store(name: &str) -> (Store, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("coding-lanes-items-{name}"));
+    let dir = std::env::temp_dir().join(format!("coding-crew-items-{name}"));
     let _ = std::fs::remove_dir_all(&dir);
     (Store::new(&dir), dir)
 }
@@ -48,7 +48,7 @@ fn promotion_makes_a_small_task_with_one_criterion() {
     assert_eq!(task.id, "TSK01");
     assert_eq!(task.kind, TaskKind::Bug);
     assert_eq!(task.promoted_from.as_deref(), Some("ITM01"));
-    assert_eq!(task.status, coding_lanes_core::Status::Draft);
+    assert_eq!(task.status, coding_crew_core::Status::Draft);
     assert_eq!(task.acceptance_criteria.len(), 1);
     assert_eq!(
         task.acceptance_criteria[0].description,

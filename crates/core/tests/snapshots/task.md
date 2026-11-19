@@ -39,9 +39,9 @@ lane the human is working in.
 
 | id | description | verification | status | evidence | deferral | failure reason |
 |---|---|---|---|---|---|---|
-| `ACCEPT-01` | The selector hides a task that matches no selected lane. | `cargo test -p coding-lanes-raul lane_filter` | `passed` | `cargo test -p coding-lanes-raul lane_filter` — exit `0` — 12 passed; 0 failed — by `runner-1` in `s-runner` at `2026-11-16T16:10:00Z` | _none_ | _none_ |
-| `ACCEPT-02` | The saved default lane is not in this task. | `cargo test -p coding-lanes-raul saved_lane` | `deferred` | _none_ | The settings store does not exist yet. — follow up: `TSK09` | _none_ |
-| `ACCEPT-03` | The empty lane announces that it is empty. | `cargo test -p coding-lanes-raul empty_lane` | `failed` | `cargo test -p coding-lanes-raul empty_lane` — exit `1` — 1 failed — by `runner-1` in `s-runner` at `2026-11-16T16:20:00Z` | _none_ | The lane count is drawn before the filter runs. |
+| `ACCEPT-01` | The selector hides a task that matches no selected lane. | `cargo test -p coding-crew-raul lane_filter` | `passed` | `cargo test -p coding-crew-raul lane_filter` — exit `0` — 12 passed; 0 failed — by `runner-1` in `s-runner` at `2026-11-16T16:10:00Z` | _none_ | _none_ |
+| `ACCEPT-02` | The saved default lane is not in this task. | `cargo test -p coding-crew-raul saved_lane` | `deferred` | _none_ | The settings store does not exist yet. — follow up: `TSK09` | _none_ |
+| `ACCEPT-03` | The empty lane announces that it is empty. | `cargo test -p coding-crew-raul empty_lane` | `failed` | `cargo test -p coding-crew-raul empty_lane` — exit `1` — 1 failed — by `runner-1` in `s-runner` at `2026-11-16T16:20:00Z` | _none_ | The lane count is drawn before the filter runs. |
 
 ## Steps
 

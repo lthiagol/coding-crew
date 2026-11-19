@@ -8,7 +8,7 @@ use crate::item::Item;
 use crate::task::{Task, slugify};
 
 /// Name of the data folder inside a managed project.
-pub const DATA_DIR: &str = "coding-lanes";
+pub const DATA_DIR: &str = "coding-crew";
 
 /// Name of the work folder inside the data folder.
 pub const WORK_DIR: &str = "work";
@@ -21,7 +21,7 @@ pub enum StoreError {
     Parse(#[from] serde_json::Error),
     #[error("task {0} not found")]
     NotFound(String),
-    #[error("no coding-lanes folder found")]
+    #[error("no coding-crew folder found")]
     NoDataFolder,
     #[error("{} has no work folder", .0.display())]
     NoWorkFolder(PathBuf),
@@ -35,7 +35,7 @@ pub enum StoreError {
 ///
 /// Layout:
 /// ```text
-/// <project>/coding-lanes/work/TSK01-<slug>.json
+/// <project>/coding-crew/work/TSK01-<slug>.json
 /// ```
 ///
 /// One folder holds tasks (`TSK*`) and smaller tasks (`ITM*`).
@@ -57,7 +57,7 @@ impl Store {
 
     /// Find the store of the nearest project containing `start`, walking up.
     ///
-    /// The nearest `coding-lanes/` is the project, and it owns the work
+    /// The nearest `coding-crew/` is the project, and it owns the work
     /// folder: the store is rooted at its `work/`, whether or not that folder
     /// exists yet. The walk stops at the nearest project, so an ancestor
     /// project's tasks are never this project's.
@@ -73,7 +73,7 @@ impl Store {
     ///
     /// The rule is the same as [`Store::discover`], but the nearest project
     /// must have a `work/` folder. When it does not, the error names its
-    /// `coding-lanes/` folder and the walk does not continue: an ancestor's
+    /// `coding-crew/` folder and the walk does not continue: an ancestor's
     /// work is not this project's.
     ///
     /// `start` may be relative; the root returned is absolute.
@@ -295,7 +295,7 @@ impl Store {
 
 /// The nearest project's data folder at or above `start`.
 ///
-/// The first `coding-lanes/` folder is the project: the walk stops there
+/// The first `coding-crew/` folder is the project: the walk stops there
 /// whether or not it holds `work/`. `inside` bounds the walk when the caller
 /// owns the search; the public methods walk to the filesystem root.
 fn nearest_project(start: &Path, inside: Option<&Path>) -> Result<PathBuf, StoreError> {
@@ -396,7 +396,7 @@ mod tests {
 
     fn scratch(name: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("coding-lanes-walk-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("coding-crew-walk-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("a scratch folder");
         dir
@@ -404,7 +404,7 @@ mod tests {
 
     #[test]
     fn the_walk_does_not_leave_its_own_boundary() {
-        // An unrelated coding-lanes folder above the boundary must not
+        // An unrelated coding-crew folder above the boundary must not
         // change the result: the tests own this walk.
         let root = scratch("boundary");
         let start = root.join("src");

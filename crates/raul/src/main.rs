@@ -1,4 +1,4 @@
-//! raul — the TUI of coding-lanes.
+//! raul — the TUI of coding-crew.
 //!
 //! raul reads a work folder and shows it. It writes nothing.
 
@@ -29,8 +29,8 @@ use ratatui::backend::{CrosstermBackend, TestBackend};
 use ratatui::buffer::{Buffer, CellWidth};
 
 use app::{Action, App};
-use coding_lanes_core::store::{DATA_DIR, WORK_DIR};
-use coding_lanes_core::{Store, StoreError};
+use coding_crew_core::store::{DATA_DIR, WORK_DIR};
+use coding_crew_core::{Store, StoreError};
 use data::{Missing, Work};
 use detail::Detail;
 use tabs::Tab;
@@ -232,8 +232,8 @@ fn locate_current() -> Result<(PathBuf, Missing)> {
 /// absent when it is.
 ///
 /// The rule is the store's. When the nearest project has no `work/`, its own
-/// path is the one shown. With no `coding-lanes/` anywhere, the path looked
-/// for is `start/coding-lanes/work`.
+/// path is the one shown. With no `coding-crew/` anywhere, the path looked
+/// for is `start/coding-crew/work`.
 fn locate(start: &Path) -> Result<(PathBuf, Missing)> {
     located(start, Store::discover_work(start))
 }
@@ -273,7 +273,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
         let work = Work::load_missing(&app.root, reason);
         // One clock read per frame: the draw and the key that answers it
         // both see the instant the rows on display were ordered by.
-        let now = coding_lanes_core::now_rfc3339();
+        let now = coding_crew_core::now_rfc3339();
         terminal.draw(|frame| app.draw(frame, &work, &now))?;
 
         if let Event::Key(key) = event::read()?
@@ -304,7 +304,7 @@ fn render_plain(options: Options) -> Result<()> {
         app.detail = Some(Detail::opened(id.clone(), app.tab, None));
     }
     // The plain render is one frame too: one instant, read once.
-    let now = coding_lanes_core::now_rfc3339();
+    let now = coding_crew_core::now_rfc3339();
     let mut terminal = Terminal::new(TestBackend::new(options.width, options.height))?;
     terminal.draw(|frame| app.draw(frame, &work, &now))?;
     let text = plain_text(terminal.backend().buffer());
@@ -373,7 +373,7 @@ mod tests {
     #[test]
     fn the_discovery_needs_a_work_folder() {
         let dir = scratch_dir("discovery");
-        // A coding-lanes folder without a work folder is the project, and its
+        // A coding-crew folder without a work folder is the project, and its
         // own work folder is the one reported missing.
         fs::create_dir_all(dir.join(DATA_DIR)).expect("a data folder");
         assert_eq!(
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn without_a_project_the_folder_looked_for_is_named() {
-        // The folder is built from the start, without a walk: a coding-lanes
+        // The folder is built from the start, without a walk: a coding-crew
         // folder above the temporary directory cannot change it.
         let start = Path::new("/nowhere/project/src");
         assert_eq!(
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn a_missing_project_folder_is_named_by_the_discovery() {
-        let data = PathBuf::from("/nowhere/project/coding-lanes");
+        let data = PathBuf::from("/nowhere/project/coding-crew");
         assert_eq!(
             located(
                 Path::new("/nowhere/project/src"),

@@ -2,12 +2,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
-use coding_lanes_core::store::{DATA_DIR, WORK_DIR};
-use coding_lanes_core::{Store, StoreError};
+use coding_crew_core::store::{DATA_DIR, WORK_DIR};
+use coding_crew_core::{Store, StoreError};
 
 fn scratch(name: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("coding-lanes-store-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("coding-crew-store-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("a scratch folder");
     dir
@@ -93,7 +92,7 @@ fn a_project_without_work_does_not_borrow_an_ancestor() {
 
     let project = ancestor.join("project");
     let data = project.join(DATA_DIR);
-    fs::create_dir_all(&data).expect("a coding-lanes folder without work");
+    fs::create_dir_all(&data).expect("a coding-crew folder without work");
     let start = project.join("src");
     fs::create_dir_all(&start).expect("a nested folder");
 

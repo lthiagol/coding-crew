@@ -18,7 +18,7 @@ defaults to a fresh folder under the system temporary directory.
 Run from the repository root:
 
     python3 scripts/pty-sweep.py --raul target/debug/raul \
-        --work mock-data/coding-lanes/work
+        --work mock-data/coding-crew/work
 """
 
 import argparse

@@ -7,7 +7,7 @@ Ideas, bugs and small features — the work that is not a task yet.
 One folder holds every work unit:
 
 ```
-coding-lanes/work/
+coding-crew/work/
   TSK01-<slug>.json     # a task
   ITM01-<slug>.json     # a smaller task: an idea, a bug, a small feature
 ```

@@ -2,7 +2,7 @@
 
 - **Status:** ✅ accepted
 - **Date:** 2026-11-13
-- **Deciders:** coding-lanes
+- **Deciders:** coding-crew
 
 ## Context
 
@@ -18,8 +18,8 @@ together in one backlog tab.
 Two layouts follow from that:
 
 ```
-coding-lanes/work/tasks/TSK01-x.json       coding-lanes/work/TSK01-x.json
-coding-lanes/work/items/ITM01-y.json       coding-lanes/work/ITM01-y.json
+coding-crew/work/tasks/TSK01-x.json       coding-crew/work/TSK01-x.json
+coding-crew/work/items/ITM01-y.json       coding-crew/work/ITM01-y.json
 ```
 
 The split is the layout a directory-tree instinct produces: one folder per type,
@@ -34,14 +34,14 @@ distinction in front of the reader that the product has deliberately removed.
 **One folder holds every work unit.**
 
 ```
-coding-lanes/work/
+coding-crew/work/
   TSK01-<slug>.json     # a task
   ITM01-<slug>.json     # a smaller task
 ```
 
 | Rule | |
 |---|---|
-| One folder | `coding-lanes/work/`, inside the managed project |
+| One folder | `coding-crew/work/`, inside the managed project |
 | One file per artifact | one task or one smaller task per file |
 | The id prefix says which | `TSK` is a task, `ITM` is a smaller task |
 | No central store | each project carries its own data |

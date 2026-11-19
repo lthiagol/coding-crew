@@ -1,6 +1,6 @@
 ---
 name: task-authoring
-description: Author a task in coding-lanes through talita, the CLI tool. Use when the user asks to write down a task, groom or approve a task, break work into tasks, or turn an idea into a task.
+description: Author a task in coding-crew through talita, the CLI tool. Use when the user asks to write down a task, groom or approve a task, break work into tasks, or turn an idea into a task.
 ---
 
 # Task authoring
@@ -13,13 +13,13 @@ review it. The output of a session is one task file, written by talita.
 One unit of work. One JSON file. One lifecycle.
 
 ```
-<project>/coding-lanes/work/TSK01-<slug>.json
+<project>/coding-crew/work/TSK01-<slug>.json
 ```
 
 | rule | |
 |---|---|
 | The folder is the index | there is no summary file and no manifest. Listing is reading the directory |
-| The store is discovered, not configured | from any path, talita walks up until a `coding-lanes` folder appears |
+| The store is discovered, not configured | from any path, talita walks up until a `coding-crew` folder appears |
 | Writes are atomic | talita writes `<file>.json.tmp`, syncs, renames it over the target |
 | One id, one file | the file name is `<id>-<slug>.json`; a rename writes a new file and removes the old |
 

@@ -1,6 +1,6 @@
 # Design docs
 
-**coding-lanes** — an agentic todo list with superpowers. Two interfaces:
+**coding-crew** — an agentic todo list with superpowers. Two interfaces:
 **talita**, the CLI tool that writes and manages tasks (**T**ask **A**ccess and
 **L**ane **I**nteraction **T**erminal **A**pp), and **raul**, the TUI that
 shows them (**R**eview, **A**pprove, **U**nderstand **L**ane).
