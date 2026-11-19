@@ -17,6 +17,7 @@ use coding_lanes_core::{Task, parse_rfc3339};
 
 use crate::data::{Reason, Work};
 use crate::theme::{Theme, block_title_style, reason_style, selected_line};
+use crate::view::View;
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -59,11 +60,26 @@ pub struct Group {
     pub rows: Vec<Row>,
 }
 
-/// Draw the tab.
+/// Draw the tab at the top of its rows.
+#[cfg(test)]
+pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
+    let mut view = View::default();
+    render_view(frame, area, work, theme, selected, &mut view);
+}
+
+/// Draw the tab through the window the keys move.
 ///
 /// `selected` is the row the cursor is on: its cells take the selection's
-/// paint. Every other row keeps its own.
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
+/// paint. Every other row keeps its own. The window is settled so the cursor
+/// is on a row the pane shows.
+pub fn render_view(
+    frame: &mut Frame,
+    area: Rect,
+    work: &Work,
+    theme: &Theme,
+    selected: Option<&str>,
+    view: &mut View,
+) {
     let block = Block::bordered()
         .title("needs you")
         .title_style(block_title_style(theme))
@@ -92,10 +108,23 @@ pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selecte
     }
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
+    let now = coding_lanes_core::now_rfc3339();
+    let ids = row_ids(work, &now);
+    let cursor = selected
+        .and_then(|id| ids.iter().position(|other| other == id))
+        .unwrap_or(0);
+    let first = view.settle(ids.len(), cursor, |first| {
+        let (_, shown, whole) = window(work, width, height, theme, selected, first, &now);
+        (shown, whole)
+    });
+    let (rows, shown, _) = window(work, width, height, theme, selected, first, &now);
+    if shown.len() == ids.len() {
+        // Every row fits: there is nowhere to scroll.
+        view.first = 0;
+    }
+    view.page = shown.len();
     frame.render_widget(
-        Paragraph::new(lines(work, width, height, theme, selected))
-            .wrap(Wrap { trim: false })
-            .block(block),
+        Paragraph::new(rows).wrap(Wrap { trim: false }).block(block),
         area,
     );
 }
@@ -161,6 +190,7 @@ fn waited_since(task: &Task, now: &str) -> i64 {
 ///
 /// What does not fit is said out loud: a count is never shown as if it
 /// were the whole count, and a reason is never lost.
+#[cfg(test)]
 fn lines(
     work: &Work,
     width: usize,
@@ -169,46 +199,123 @@ fn lines(
     selected: Option<&str>,
 ) -> Vec<Line<'static>> {
     let now = coding_lanes_core::now_rfc3339();
-    let groups = groups(work, &now);
+    window(work, width, height, theme, selected, 0, &now).0
+}
+
+/// The lines of the tab, from the row at `first`, and the rows they show.
+///
+/// What does not fit is said out loud: a count is never shown as if it were
+/// the whole count, and a reason is never lost. The rows before the window
+/// and the rows after it are counted the same way: the announcement names
+/// every reason and the count of its tasks that are not in view.
+///
+/// A pane too short for the announcement and the cursor's row draws the row
+/// alone: the selection is never on nothing.
+fn window(
+    work: &Work,
+    width: usize,
+    height: usize,
+    theme: &Theme,
+    selected: Option<&str>,
+    first: usize,
+    now: &str,
+) -> (Vec<Line<'static>>, Vec<usize>, bool) {
+    let groups = groups(work, now);
     let ages = age_width(&groups);
+    let all: Vec<String> = groups
+        .iter()
+        .flat_map(|group| group.rows.iter().map(|row| row.id.clone()))
+        .collect();
     let mut out: Vec<Line<'static>> = Vec::new();
     if height == 0 {
-        return out;
+        return (out, Vec::new(), false);
     }
     out.push(headline(work, width, theme));
     let rest = height - 1;
     if rest == 0 {
-        return out;
+        // The pane holds one line: the cursor's row is worth more than the
+        // headline, so the cursor is never on a row the pane does not draw.
+        if let Some(id) = selected
+            && let Some((index, line)) = cursor_row(&groups, width, ages, theme, id)
+        {
+            return (vec![line], vec![index], false);
+        }
+        return (out, Vec::new(), false);
     }
     let wanted: usize = groups.iter().map(|group| 1 + group.rows.len()).sum();
-    if wanted <= rest {
+    if first == 0 && wanted <= rest {
         // Everything fits: there is nothing to say.
         for group in &groups {
             push_group(&mut out, group, width, ages, theme, selected);
         }
-        return out;
+        return (out, (0..all.len()).collect(), true);
     }
     // Something does not fit. The announcement is whole or it is cut: the
     // longest announcement that fits whole wins, and the rows give way to
     // it. Only when even the smallest layout cannot say it whole is the
-    // announcement cut, and then it says that too.
-    let mut shortest: Option<(Vec<Line<'static>>, Vec<Line<'static>>)> = None;
+    // announcement cut, and then it says that too. The cursor's row is the
+    // one row the window may not leave out: a cut layout that shows it wins
+    // over the shortest one.
+    let mut shortest: Option<(Vec<Line<'static>>, Vec<Line<'static>>, Vec<usize>)> = None;
+    let mut with_cursor: Option<(Vec<Line<'static>>, Vec<Line<'static>>, Vec<usize>)> = None;
     for budget in (0..=rest).rev() {
-        let (rows, omitted) = layout(&groups, budget, width, ages, theme, selected);
+        let (rows, omitted, shown) = layout(&groups, budget, width, ages, theme, selected, first);
         let room = rest.saturating_sub(rows.len());
         let (said, cut) = announcement(&omitted, width, room, theme);
+        let has_cursor = selected.is_none_or(|id| {
+            shown
+                .iter()
+                .any(|index| all.get(*index).is_some_and(|other| other == id))
+        });
         if cut {
-            shortest = Some((rows, said));
+            if selected.is_some() && has_cursor && with_cursor.is_none() {
+                with_cursor = Some((rows.clone(), said.clone(), shown.clone()));
+            }
+            shortest = Some((rows, said, shown));
+            continue;
+        }
+        if !has_cursor {
+            // Fewer rows cannot bring the cursor back into view.
             continue;
         }
         out.extend(rows);
         out.extend(said);
-        return out;
+        return (out, shown, true);
     }
-    let (rows, said) = shortest.expect("a budget of zero");
+    let (rows, said, shown) = with_cursor.or(shortest).expect("a budget of zero");
+    if let Some(id) = selected
+        && !shown
+            .iter()
+            .any(|index| all.get(*index).is_some_and(|other| other == id))
+        && let Some((index, line)) = cursor_row(&groups, width, ages, theme, id)
+    {
+        // The pane is too short for the cursor's row and the announcement:
+        // the row is shown alone, so the selection is never on nothing.
+        return (vec![line], vec![index], false);
+    }
     out.extend(rows);
     out.extend(said);
-    out
+    (out, shown, false)
+}
+
+/// The line of the cursor's row, and its place among the tab's rows.
+fn cursor_row(
+    groups: &[Group],
+    width: usize,
+    age_width: usize,
+    theme: &Theme,
+    id: &str,
+) -> Option<(usize, Line<'static>)> {
+    let mut index = 0;
+    for group in groups {
+        for row in &group.rows {
+            if row.id == id {
+                return Some((index, row_line(row, width, age_width, theme, Some(id))));
+            }
+            index += 1;
+        }
+    }
+    None
 }
 
 /// The rows of the tab that fit in `capacity` rows, and how many tasks of
@@ -224,12 +331,22 @@ fn layout(
     age_width: usize,
     theme: &Theme,
     selected: Option<&str>,
-) -> (Vec<Line<'static>>, [usize; 3]) {
+    first: usize,
+) -> (Vec<Line<'static>>, [usize; 3], Vec<usize>) {
     let mut out: Vec<Line<'static>> = Vec::new();
     let mut omitted = [0usize; 3];
+    let mut shown_rows: Vec<usize> = Vec::new();
     let mut used = 0usize;
+    let mut row_index = 0usize;
     for group in groups {
         let index = index_of(group.reason);
+        let start = row_index;
+        row_index += group.rows.len();
+        if row_index <= first {
+            // The whole group is above the window.
+            omitted[index] = group.rows.len();
+            continue;
+        }
         if used + 1 > capacity {
             // The header does not fit: the group is not shown at all, and
             // every task of it is left out.
@@ -238,17 +355,21 @@ fn layout(
         }
         out.push(header(group, width, theme));
         used += 1;
-        let shown = (capacity - used).min(group.rows.len());
-        for row in group.rows.iter().take(shown) {
+        let skip = first.saturating_sub(start).min(group.rows.len());
+        let visible = group.rows.len() - skip;
+        let shown = (capacity - used).min(visible);
+        for (offset, row) in group.rows.iter().skip(skip).take(shown).enumerate() {
             out.push(row_line(row, width, age_width, theme, selected));
+            shown_rows.push(start + skip + offset);
         }
         used += shown;
         if shown < group.rows.len() {
-            // The group is on screen, and part of it is not.
+            // The group is on screen, and part of it is not: the rows above
+            // the window count, and so do the rows below it.
             omitted[index] = group.rows.len() - shown;
         }
     }
-    (out, omitted)
+    (out, omitted, shown_rows)
 }
 
 /// The place of a reason in the order of the tab.
@@ -1203,7 +1324,7 @@ mod tests {
         let work = human_lane();
         let now = "2026-11-07T16:00:00Z";
         let groups = groups(&work, now);
-        let (rows, omitted) = layout(&groups, 5, 100, age_width(&groups), &theme(), None);
+        let (rows, omitted, _) = layout(&groups, 5, 100, age_width(&groups), &theme(), None, 0);
         // A wholly hidden group, a partly shown one, and one with nothing
         // left out.
         assert_eq!(omitted, [0, 2, 3]);

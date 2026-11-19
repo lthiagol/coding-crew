@@ -13,6 +13,7 @@ mod settings;
 mod tabs;
 mod text;
 mod theme;
+mod view;
 
 use std::io::{Stdout, Write};
 use std::path::{Path, PathBuf};

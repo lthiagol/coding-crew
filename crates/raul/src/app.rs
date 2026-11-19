@@ -18,6 +18,7 @@ use crate::path;
 use crate::settings;
 use crate::tabs::Tab;
 use crate::theme::{Theme, block_title_style};
+use crate::view::View;
 
 /// What a key asks the window to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +35,8 @@ pub struct App {
     pub tab: Tab,
     /// The row selected on the active tab, when the tab has rows.
     pub selection: Option<String>,
+    /// The window over the active tab's rows.
+    pub view: View,
     /// The open detail pane, when one is open.
     pub detail: Option<Detail>,
     /// The help overlay is open.
@@ -49,6 +52,7 @@ impl App {
             root,
             tab: Tab::Overview,
             selection: None,
+            view: View::default(),
             detail: None,
             help: false,
             theme,
@@ -126,6 +130,16 @@ impl App {
             }
             KeyCode::Down | KeyCode::Char('j') => self.move_selection(work, 1),
             KeyCode::Up | KeyCode::Char('k') => self.move_selection(work, -1),
+            KeyCode::PageDown => {
+                let page = self.view.page.max(1) as isize;
+                self.move_selection(work, page)
+            }
+            KeyCode::PageUp => {
+                let page = self.view.page.max(1) as isize;
+                self.move_selection(work, -page)
+            }
+            KeyCode::Char('g') => self.move_to(work, 0),
+            KeyCode::Char('G') => self.move_to(work, usize::MAX),
             KeyCode::Char(digit @ '1'..='6') => {
                 self.go_to(Tab::from_index(digit as usize - '1' as usize))
             }
@@ -142,6 +156,7 @@ impl App {
     fn go_to(&mut self, tab: Tab) -> Action {
         self.tab = tab;
         self.selection = None;
+        self.view.reset();
         Action::Redraw
     }
 
@@ -176,6 +191,19 @@ impl App {
         Action::Redraw
     }
 
+    /// Move the cursor to a row, clamped to the tab's rows. The first and
+    /// the last row are the ends the `g` and `G` keys reach.
+    fn move_to(&mut self, work: &Work, index: usize) -> Action {
+        let Some(ids) = rows_of(work, self.tab) else {
+            return Action::Redraw;
+        };
+        let Some(id) = ids.get(index.min(ids.len().saturating_sub(1))) else {
+            return Action::Redraw;
+        };
+        self.selection = Some(id.clone());
+        Action::Redraw
+    }
+
     /// Close the detail pane and return to the tab, and the selection, it
     /// came from.
     fn close_detail(&mut self) {
@@ -204,9 +232,15 @@ impl App {
         let selected = selected.as_deref();
         match self.tab {
             Tab::Overview => overview::render(frame, rows[2], work, &self.theme),
-            Tab::NeedsYou => needs::render(frame, rows[2], work, &self.theme, selected),
-            Tab::Path => path::render(frame, rows[2], work, &self.theme, selected),
-            Tab::Backlog => backlog::render(frame, rows[2], work, &self.theme, selected),
+            Tab::NeedsYou => {
+                needs::render_view(frame, rows[2], work, &self.theme, selected, &mut self.view)
+            }
+            Tab::Path => {
+                path::render_view(frame, rows[2], work, &self.theme, selected, &mut self.view)
+            }
+            Tab::Backlog => {
+                backlog::render_view(frame, rows[2], work, &self.theme, selected, &mut self.view)
+            }
             Tab::Settings => settings::render(frame, rows[2], &self.theme),
             tab => frame.render_widget(placeholder(tab, &self.theme), rows[2]),
         }
@@ -221,7 +255,8 @@ impl App {
         frame.render_widget(self.footer(rows[3].width, work), rows[3]);
 
         if self.help {
-            render_help(frame, area, &self.theme);
+            let has_rows = rows_of(work, self.tab).is_some_and(|ids| !ids.is_empty());
+            render_help(frame, area, &self.theme, has_rows);
         }
     }
 
@@ -338,18 +373,10 @@ impl App {
                 ],
                 true,
             ),
-            (
-                2,
-                vec![
-                    space(),
-                    Span::styled(" ←→ ", key),
-                    Span::styled(" switch tab", label),
-                ],
-                false,
-            ),
         ];
         let mut next = 3;
-        if rows_of(work, self.tab).is_some_and(|ids| !ids.is_empty()) {
+        let has_rows = rows_of(work, self.tab).is_some_and(|ids| !ids.is_empty());
+        if has_rows {
             parts.push((
                 next,
                 vec![
@@ -358,6 +385,42 @@ impl App {
                     Span::styled(" open", label),
                 ],
                 true,
+            ));
+            next += 1;
+            // The movement keys work on every tab with rows: the single
+            // rows, the ends and a page. `footer_line` first-fits the
+            // optional parts in index order — g/G, then ↑↓ j/k, then
+            // pgup/pgdn, then the tab pair — so a narrowing footer gives the
+            // pair up first, the page keys next, the ends next, and the
+            // single rows last.
+            parts.push((
+                next,
+                vec![
+                    space(),
+                    Span::styled(" g/G ", key),
+                    Span::styled(" top/bottom", label),
+                ],
+                false,
+            ));
+            next += 1;
+            parts.push((
+                next,
+                vec![
+                    space(),
+                    Span::styled(" ↑↓ j/k ", key),
+                    Span::styled(" move", label),
+                ],
+                false,
+            ));
+            next += 1;
+            parts.push((
+                next,
+                vec![
+                    space(),
+                    Span::styled(" pgup/pgdn ", key),
+                    Span::styled(" page", label),
+                ],
+                false,
             ));
             next += 1;
         }
@@ -381,6 +444,17 @@ impl App {
                 true,
             ));
         }
+        // The tab pair is the last optional part: a pane too narrow for
+        // everything gives it up before a key that works on the tab.
+        parts.push((
+            2,
+            vec![
+                space(),
+                Span::styled(" ←→ ", key),
+                Span::styled(" switch tab", label),
+            ],
+            false,
+        ));
         footer_line(parts, width)
     }
 }
@@ -448,7 +522,7 @@ fn placeholder(tab: Tab, theme: &Theme) -> Paragraph<'static> {
 }
 
 /// The help overlay.
-fn render_help(frame: &mut Frame, area: Rect, theme: &Theme) {
+fn render_help(frame: &mut Frame, area: Rect, theme: &Theme, has_rows: bool) {
     let width = area.width.saturating_mul(3) / 5;
     let height = area.height.saturating_mul(3) / 5;
     let popup = Rect {
@@ -459,7 +533,7 @@ fn render_help(frame: &mut Frame, area: Rect, theme: &Theme) {
     };
     let key = theme.chrome.key;
     let label = theme.text.normal;
-    let lines = vec![
+    let mut lines = vec![
         Line::from(vec![
             Span::styled(" 1-6 ", key),
             Span::styled(" jump to a tab", label),
@@ -480,12 +554,31 @@ fn render_help(frame: &mut Frame, area: Rect, theme: &Theme) {
             Span::styled(" shift-tab ", key),
             Span::styled(" previous tab", label),
         ]),
-        Line::from(vec![Span::styled(" q ", key), Span::styled(" quit", label)]),
-        Line::from(vec![
-            Span::styled(" ? ", key),
-            Span::styled(" this help", label),
-        ]),
     ];
+    if has_rows {
+        // The movement keys work on a tab with rows: the help names the
+        // same keys as the footer, and never one that does nothing.
+        lines.push(Line::from(vec![
+            Span::styled(" ↑↓ j/k ", key),
+            Span::styled(" move", label),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled(" pgup/pgdn ", key),
+            Span::styled(" page", label),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled(" g/G ", key),
+            Span::styled(" top/bottom", label),
+        ]));
+    }
+    lines.push(Line::from(vec![
+        Span::styled(" q ", key),
+        Span::styled(" quit", label),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled(" ? ", key),
+        Span::styled(" this help", label),
+    ]));
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(lines).wrap(Wrap { trim: true }).block(
@@ -861,6 +954,343 @@ mod tests {
             .into_iter()
             .filter_map(|(tab, opens)| opens.then_some(tab))
             .collect()
+    }
+
+    #[test]
+    fn the_viewport_clamps_at_both_ends() {
+        // At a short pane the tabs have rows below the last visible one.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        for tab in row_tabs() {
+            let ids = rows_of(&work, tab).expect("a row tab");
+            assert!(ids.len() > 4, "{tab:?}: not enough rows to scroll");
+            let mut app = window(&theme, tab, false);
+            render(&mut app, 100, 10);
+            assert!(app.view.page > 0, "{tab:?}: the pane shows no rows");
+            assert!(
+                app.view.page < ids.len(),
+                "{tab:?}: every row fits, nothing scrolls"
+            );
+            // G reaches the last page and the last row.
+            app.on_key(key(KeyCode::Char('G')), &work);
+            render(&mut app, 100, 10);
+            assert_eq!(
+                app.selection.as_deref(),
+                ids.last().map(String::as_str),
+                "{tab:?}: G did not reach the last row"
+            );
+            let bottom = app.view;
+            assert_eq!(
+                bottom.first + bottom.page,
+                ids.len(),
+                "{tab:?}: the last page is not at the end"
+            );
+            // Down at the end moves nothing: the viewport clamps.
+            app.on_key(key(KeyCode::Down), &work);
+            render(&mut app, 100, 10);
+            assert_eq!(app.view, bottom, "{tab:?}: down ran past the end");
+            // g reaches the first row and the top.
+            app.on_key(key(KeyCode::Char('g')), &work);
+            render(&mut app, 100, 10);
+            assert_eq!(
+                app.selection.as_deref(),
+                Some(ids[0].as_str()),
+                "{tab:?}: g did not reach the first row"
+            );
+            assert_eq!(app.view.first, 0, "{tab:?}: g did not reach the top");
+            // Up at the top moves nothing.
+            app.on_key(key(KeyCode::Up), &work);
+            render(&mut app, 100, 10);
+            assert_eq!(app.view.first, 0, "{tab:?}: up ran past the top");
+            assert_eq!(
+                app.selection.as_deref(),
+                Some(ids[0].as_str()),
+                "{tab:?}: up left the first row"
+            );
+        }
+    }
+
+    #[test]
+    fn the_cursor_is_never_on_a_row_the_pane_does_not_show() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let selection = paint_of(theme.text.selected);
+        for tab in row_tabs() {
+            let ids = rows_of(&work, tab).expect("a row tab");
+            let mut app = window(&theme, tab, false);
+            render(&mut app, 100, 10);
+            for _ in 0..ids.len() + 3 {
+                app.on_key(key(KeyCode::Down), &work);
+                let (rows, paint) = render(&mut app, 100, 10);
+                let cursor = app.selection.clone().expect("a cursor");
+                let index = ids
+                    .iter()
+                    .position(|id| *id == cursor)
+                    .expect("the cursor's row");
+                assert!(
+                    index >= app.view.first && index < app.view.first + app.view.page,
+                    "{tab:?}: {cursor} is at {index}, the window is {}..{}",
+                    app.view.first,
+                    app.view.first + app.view.page
+                );
+                assert!(
+                    painted_selection(&rows, &paint, &cursor, selection),
+                    "{tab:?}: {cursor} is not painted on the screen: {rows:?}"
+                );
+            }
+        }
+    }
+
+    /// Whether the row an id names is painted with the selection.
+    fn painted_selection(
+        rows: &[String],
+        paint: &[Vec<Paint>],
+        id: &str,
+        selection: Paint,
+    ) -> bool {
+        rows.iter().enumerate().any(|(y, row)| {
+            row.match_indices(id).any(|(byte, _)| {
+                let x = row[..byte].chars().count();
+                paint
+                    .get(y)
+                    .and_then(|cells| cells.get(x))
+                    .is_some_and(|cell| *cell == selection)
+            })
+        })
+    }
+
+    #[test]
+    fn a_page_key_moves_by_the_rows_the_pane_shows() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        for tab in row_tabs() {
+            let ids = rows_of(&work, tab).expect("a row tab");
+            let mut app = window(&theme, tab, false);
+            render(&mut app, 100, 14);
+            let page = app.view.page;
+            assert!(page > 1, "{tab:?}: the pane shows {page} rows");
+            // One page down moves the cursor by exactly the rows on
+            // display.
+            app.on_key(key(KeyCode::PageDown), &work);
+            assert_eq!(
+                app.selection.as_deref(),
+                Some(ids[page.min(ids.len() - 1)].as_str()),
+                "{tab:?}: pgdn did not move a page"
+            );
+            // Further pages clamp at the last row.
+            for _ in 0..ids.len() {
+                app.on_key(key(KeyCode::PageDown), &work);
+            }
+            assert_eq!(
+                app.selection.as_deref(),
+                ids.last().map(String::as_str),
+                "{tab:?}: pgdn ran past the last row"
+            );
+            // A page up moves back by the same distance, and clamps at the
+            // first row.
+            app.on_key(key(KeyCode::PageUp), &work);
+            assert_eq!(
+                app.selection.as_deref(),
+                ids.get(ids.len() - 1 - page).map(String::as_str),
+                "{tab:?}: pgup did not move a page back"
+            );
+            for _ in 0..ids.len() {
+                app.on_key(key(KeyCode::PageUp), &work);
+            }
+            assert_eq!(
+                app.selection.as_deref(),
+                Some(ids[0].as_str()),
+                "{tab:?}: pgup ran past the first row"
+            );
+        }
+    }
+
+    #[test]
+    fn a_page_key_measured_before_the_first_draw_still_moves_a_row() {
+        // The page is what the last draw held; a key pressed before any
+        // draw moves one row rather than nothing.
+        let work = mock_work();
+        let ids = rows_of(&work, Tab::NeedsYou).expect("a row tab");
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::NeedsYou, false);
+        app.on_key(key(KeyCode::PageDown), &work);
+        assert_eq!(
+            app.selection.as_deref(),
+            Some(ids[1].as_str()),
+            "pgdn before a draw did not move"
+        );
+    }
+
+    #[test]
+    fn the_footer_and_the_help_name_the_movement_keys_that_work() {
+        let theme = Theme::preset(Preset::Dark);
+        for tab in row_tabs() {
+            let mut app = window(&theme, tab, false);
+            let rows = render(&mut app, 100, 20).0;
+            let footer = rows.last().expect("a footer row").trim_end().to_string();
+            for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
+                assert!(footer.contains(key), "{tab:?}: {key} is missing: {footer}");
+            }
+            for words in ["move", "page", "top/bottom"] {
+                assert!(
+                    footer.contains(words),
+                    "{tab:?}: {words} is missing: {footer}"
+                );
+            }
+            // The help overlay names the same keys.
+            app.help = true;
+            let help = render(&mut app, 100, 20).0.join("\n");
+            for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
+                assert!(help.contains(key), "{tab:?}: help omits {key}: {help}");
+            }
+        }
+        // A tab without rows names none of them: no key that does nothing.
+        for tab in [Tab::Overview, Tab::Autopilot, Tab::Settings] {
+            let rows = render(&mut window(&theme, tab, false), 100, 20).0;
+            let footer = rows.last().expect("a footer row").trim_end().to_string();
+            for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
+                assert!(
+                    !footer.contains(key),
+                    "{tab:?}: {key} does nothing here: {footer}"
+                );
+            }
+            let help = render(&mut window(&theme, tab, true), 100, 20).0.join("\n");
+            for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
+                assert!(
+                    !help.contains(key),
+                    "{tab:?}: help names {key}, which does nothing here: {help}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_row_tab_footer_degrades_in_the_built_order() {
+        // `footer_line` first-fits the optional parts in index order — g/G,
+        // then ↑↓ j/k, then pgup/pgdn, then the tab pair — so the pair is the
+        // first to go in a narrowing footer, the page keys next, the ends
+        // next, and the single rows last. The widths are the ones the review
+        // rendered.
+        let work = mock_work();
+        let app = window(&Theme::preset(Preset::Dark), Tab::Path, false);
+        let text = |width: u16| {
+            app.footer(width, &work)
+                .spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        };
+        // At 68 the open key and the ends hold; the single rows, the page
+        // keys and the tab pair are gone.
+        let at_68 = text(68);
+        assert!(at_68.contains("enter"), "{at_68}");
+        assert!(at_68.contains("open"), "{at_68}");
+        assert!(at_68.contains("g/G"), "{at_68}");
+        assert!(at_68.contains("top/bottom"), "{at_68}");
+        assert!(!at_68.contains("↑↓") && !at_68.contains("j/k"), "{at_68}");
+        assert!(!at_68.contains("pgup/pgdn"), "{at_68}");
+        assert!(!at_68.contains("switch tab"), "{at_68}");
+        // At 60 the ends are gone too; help still fits.
+        let at_60 = text(60);
+        assert!(at_60.contains("enter") && at_60.contains("open"), "{at_60}");
+        assert!(at_60.contains(" help"), "{at_60}");
+        assert!(!at_60.contains("g/G"), "{at_60}");
+        assert!(!at_60.contains("↑↓") && !at_60.contains("j/k"), "{at_60}");
+        assert!(!at_60.contains("pgup/pgdn"), "{at_60}");
+        assert!(!at_60.contains("switch tab"), "{at_60}");
+        // At 40 help gives way too; the keys that matter most hold, and no
+        // movement key is named.
+        let at_40 = text(40);
+        assert!(at_40.contains(" q ") && at_40.contains("quit"), "{at_40}");
+        assert!(at_40.contains("1-6") && at_40.contains(" tab"), "{at_40}");
+        assert!(at_40.contains("enter") && at_40.contains("open"), "{at_40}");
+        assert!(!at_40.contains("help"), "{at_40}");
+        assert!(!at_40.contains("g/G"), "{at_40}");
+        assert!(!at_40.contains("↑↓") && !at_40.contains("j/k"), "{at_40}");
+        assert!(!at_40.contains("pgup/pgdn"), "{at_40}");
+        assert!(!at_40.contains("switch tab"), "{at_40}");
+    }
+
+    #[test]
+    fn a_scrolled_short_pane_announces_what_it_hides() {
+        // The window moves the rows; what is above it and below it is
+        // counted in the tab's own announcement. The counts are pinned: a
+        // count off by one is a count that lies.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        for tab in row_tabs() {
+            let expected = match tab {
+                Tab::NeedsYou => {
+                    "not shown: approve (2 hidden), review (3 hidden), escalated (0 hidden)"
+                }
+                Tab::Path => concat!(
+                    "not shown: EXECUTION · 1, AWAITING APPROVAL · 2, BLOCKED · 3, ",
+                    "RUNNING · 6, REVIEW · 2"
+                ),
+                Tab::Backlog => {
+                    "not shown: IDEAS (1 hidden), SMALL TASKS (4 hidden), DRAFTS (0 hidden)"
+                }
+                _ => unreachable!("a tab without rows"),
+            };
+            let mut app = window(&theme, tab, false);
+            render(&mut app, 100, 12);
+            app.on_key(key(KeyCode::Char('G')), &work);
+            let (rows, _) = render(&mut app, 100, 12);
+            let text = rows.join("\n");
+            assert!(
+                text.contains(expected),
+                "{tab:?}: the scrolled count is not {expected:?}: {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_cursor_is_painted_on_a_short_pane_in_both_directions() {
+        // A short pane is where a window hides the cursor: the rows above and
+        // below give way to the count. Walking down and up again, the row the
+        // cursor lands on is always on the screen, with the highlight on it.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let selection = paint_of(theme.text.selected);
+        for tab in row_tabs() {
+            let ids = rows_of(&work, tab).expect("a row tab");
+            for height in [7u16, 8, 10] {
+                let mut app = window(&theme, tab, false);
+                render(&mut app, 100, height);
+                for code in [KeyCode::Down, KeyCode::Up] {
+                    for _ in 0..ids.len() + 2 {
+                        app.on_key(key(code), &work);
+                        let (rows, paint) = render(&mut app, 100, height);
+                        let cursor = app.selection.clone().expect("a cursor");
+                        let index = ids
+                            .iter()
+                            .position(|id| *id == cursor)
+                            .expect("the cursor's row");
+                        assert!(
+                            index >= app.view.first && index < app.view.first + app.view.page,
+                            "{tab:?} {height}: {cursor} is at {index}, the window is {}..{}",
+                            app.view.first,
+                            app.view.first + app.view.page
+                        );
+                        assert!(
+                            painted_selection(&rows, &paint, &cursor, selection),
+                            "{tab:?} {height}: {cursor} is not painted on the screen: {rows:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_tab_switch_returns_the_viewport_to_the_top() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Path, false);
+        render(&mut app, 100, 10);
+        app.on_key(key(KeyCode::Char('G')), &work);
+        render(&mut app, 100, 10);
+        assert!(app.view.first > 0, "the path did not scroll");
+        app.on_key(key(KeyCode::Char('1')), &work);
+        assert_eq!(app.view, View::default(), "the window outlived its tab");
     }
 
     #[test]

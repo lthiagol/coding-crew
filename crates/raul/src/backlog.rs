@@ -15,6 +15,7 @@ use coding_lanes_core::{Item, ItemKind, ItemStatus, Status, Task};
 use crate::data::Work;
 use crate::text::{cut_to, pad, text_width};
 use crate::theme::{Theme, block_title_style, phase_style, selected_line};
+use crate::view::View;
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -156,11 +157,26 @@ fn scope_text(scope: &[String]) -> Option<String> {
     (!known.is_empty()).then(|| known.join(", "))
 }
 
-/// Draw the tab.
+/// Draw the tab at the top of its rows.
+#[cfg(test)]
+pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
+    let mut view = View::default();
+    render_view(frame, area, work, theme, selected, &mut view);
+}
+
+/// Draw the tab through the window the keys move.
 ///
 /// `selected` is the row the cursor is on: its cells take the selection's
-/// paint. Every other row keeps its own.
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
+/// paint. Every other row keeps its own. The window is settled so the cursor
+/// is on a row the pane shows.
+pub fn render_view(
+    frame: &mut Frame,
+    area: Rect,
+    work: &Work,
+    theme: &Theme,
+    selected: Option<&str>,
+    view: &mut View,
+) {
     let block = Block::bordered()
         .title("backlog")
         .title_style(block_title_style(theme))
@@ -190,10 +206,22 @@ pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selecte
     }
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
+    let ids = row_ids(work);
+    let cursor = selected
+        .and_then(|id| ids.iter().position(|other| other == id))
+        .unwrap_or(0);
+    let first = view.settle(ids.len(), cursor, |first| {
+        let (_, shown, whole) = window(&groups, width, height, theme, selected, first);
+        (shown, whole)
+    });
+    let (rows, shown, _) = window(&groups, width, height, theme, selected, first);
+    if shown.len() == ids.len() {
+        // Every row fits: there is nowhere to scroll.
+        view.first = 0;
+    }
+    view.page = shown.len();
     frame.render_widget(
-        Paragraph::new(lines(&groups, width, height, theme, selected))
-            .wrap(Wrap { trim: false })
-            .block(block),
+        Paragraph::new(rows).wrap(Wrap { trim: false }).block(block),
         area,
     );
 }
@@ -274,13 +302,7 @@ fn state_width(groups: &[Group]) -> usize {
         .unwrap_or(0)
 }
 
-/// The lines of the tab.
-///
-/// Everything fits at the default size, and there is nothing to announce.
-/// On a short pane the announcement comes first: a row or a header is only
-/// left out when the lines that say so are on screen. A group is never
-/// silently absent — it is either shown, header and rows, or named in the
-/// announcement with the number of its rows that are hidden.
+#[cfg(test)]
 fn lines(
     groups: &[Group],
     width: usize,
@@ -288,38 +310,117 @@ fn lines(
     theme: &Theme,
     selected: Option<&str>,
 ) -> Vec<Line<'static>> {
+    window(groups, width, height, theme, selected, 0).0
+}
+
+/// The lines of the tab, from the row at `first`, and the rows they show.
+///
+/// Everything fits at the default size, and there is nothing to announce.
+/// On a short pane the announcement comes first: a row or a header is only
+/// left out when the lines that say so are on screen. A group is never
+/// silently absent — it is either shown, header and rows, or named in the
+/// announcement with the number of its rows that are not in view, including
+/// the rows above the window.
+///
+/// A pane too short for the announcement and the cursor's row draws the row
+/// alone: the selection is never on nothing.
+fn window(
+    groups: &[Group],
+    width: usize,
+    height: usize,
+    theme: &Theme,
+    selected: Option<&str>,
+    first: usize,
+) -> (Vec<Line<'static>>, Vec<usize>, bool) {
     if height == 0 {
-        return Vec::new();
+        return (Vec::new(), Vec::new(), false);
     }
     let metrics = Metrics {
         id: id_width(groups),
         kind: kind_width(groups),
         state: state_width(groups),
     };
+    let total: usize = groups.iter().map(|group| group.rows.len()).sum();
     let wanted: usize = groups.iter().map(|group| 1 + group.rows.len()).sum();
-    if wanted <= height {
-        return all_lines(groups, width, metrics, theme, selected);
+    if first == 0 && wanted <= height {
+        return (
+            all_lines(groups, width, metrics, theme, selected),
+            (0..total).collect(),
+            true,
+        );
     }
     // Some line does not fit. The rows give way to the announcement: the
     // first layout whose whole announcement fits wins, and the rows take
     // what is left. When even the shortest announcement fills the pane,
-    // the announcement alone is shown, so no omission goes unsaid.
-    let mut shortest: Option<(Vec<Line<'static>>, Vec<Line<'static>>)> = None;
+    // the announcement alone is shown, so no omission goes unsaid. The
+    // cursor's row is the one row the window may not leave out: a cut
+    // layout that shows it wins over the shortest one.
+    let mut shortest: Option<(Vec<Line<'static>>, Vec<Line<'static>>, Vec<usize>)> = None;
+    let mut with_cursor: Option<(Vec<Line<'static>>, Vec<Line<'static>>, Vec<usize>)> = None;
     for capacity in (0..=height).rev() {
-        let (rows, omitted) = layout_groups(groups, capacity, width, metrics, theme, selected);
+        let (rows, omitted, shown) =
+            layout_groups(groups, capacity, width, metrics, theme, selected, first);
         let room = height.saturating_sub(rows.len());
         let (said, cut) = announcement(&omitted, width, room, theme);
+        let has_cursor =
+            selected.is_none_or(|id| shown.iter().any(|index| row_id(groups, *index) == id));
         if cut {
-            shortest = Some((rows, said));
+            if selected.is_some() && has_cursor && with_cursor.is_none() {
+                with_cursor = Some((rows.clone(), said.clone(), shown.clone()));
+            }
+            shortest = Some((rows, said, shown));
+            continue;
+        }
+        if !has_cursor {
             continue;
         }
         let mut out = rows;
         out.extend(said);
-        return out;
+        return (out, shown, true);
     }
-    let (mut out, said) = shortest.expect("a capacity of zero");
+    let (mut out, said, shown) = with_cursor.or(shortest).expect("a capacity of zero");
+    if let Some(id) = selected
+        && !shown.iter().any(|index| row_id(groups, *index) == id)
+        && let Some((index, line)) = cursor_row(groups, width, metrics, theme, id)
+    {
+        // The pane is too short for the cursor's row and the announcement:
+        // the row is shown alone, so the selection is never on nothing.
+        return (vec![line], vec![index], false);
+    }
     out.extend(said);
-    out
+    (out, shown, false)
+}
+
+/// The line of the cursor's row, and its place among the tab's rows.
+fn cursor_row(
+    groups: &[Group],
+    width: usize,
+    metrics: Metrics,
+    theme: &Theme,
+    id: &str,
+) -> Option<(usize, Line<'static>)> {
+    let mut index = 0;
+    for group in groups {
+        for row in &group.rows {
+            if row.id == id {
+                return Some((index, row_line(row, width, metrics, theme, Some(id))));
+            }
+            index += 1;
+        }
+    }
+    None
+}
+
+/// The id of the row at an index of the tab's rows.
+fn row_id(groups: &[Group], index: usize) -> &str {
+    let mut at = index;
+    for group in groups {
+        if at < group.rows.len() {
+            return &group.rows[at].id;
+        }
+        at -= group.rows.len();
+    }
+    ""
 }
 
 /// Every group, header and rows, in the order of the tab.
@@ -355,27 +456,40 @@ fn layout_groups(
     metrics: Metrics,
     theme: &Theme,
     selected: Option<&str>,
-) -> (Vec<Line<'static>>, [usize; 3]) {
+    first: usize,
+) -> (Vec<Line<'static>>, [usize; 3], Vec<usize>) {
     let mut out = Vec::new();
     let mut omitted = [0usize; 3];
+    let mut shown_rows = Vec::new();
     let mut used = 0usize;
+    let mut row_index = 0usize;
     for (index, group) in groups.iter().enumerate() {
+        let start = row_index;
+        row_index += group.rows.len();
+        if row_index <= first {
+            // The whole group is above the window.
+            omitted[index] = group.rows.len();
+            continue;
+        }
         if used + 1 > capacity {
             omitted[index] = group.rows.len();
             continue;
         }
         out.push(header(group, width, theme));
         used += 1;
-        let shown = (capacity - used).min(group.rows.len());
-        for row in group.rows.iter().take(shown) {
+        let skip = first.saturating_sub(start).min(group.rows.len());
+        let visible = group.rows.len() - skip;
+        let shown = (capacity - used).min(visible);
+        for (offset, row) in group.rows.iter().skip(skip).take(shown).enumerate() {
             out.push(row_line(row, width, metrics, theme, selected));
+            shown_rows.push(start + skip + offset);
         }
         used += shown;
         if shown < group.rows.len() {
             omitted[index] = group.rows.len() - shown;
         }
     }
-    (out, omitted)
+    (out, omitted, shown_rows)
 }
 
 /// The widths of the fixed columns.

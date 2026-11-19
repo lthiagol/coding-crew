@@ -16,6 +16,7 @@ use coding_lanes_core::{Status, Task};
 
 use crate::data::{Work, has_overlay, live_claim};
 use crate::theme::{Theme, block_title_style, phase_style, selected_line};
+use crate::view::View;
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -324,11 +325,26 @@ pub fn row_ids(work: &Work) -> Vec<String> {
     ids
 }
 
-/// Draw the tab.
+/// Draw the tab at the top of its rows.
+#[cfg(test)]
+pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
+    let mut view = View::default();
+    render_view(frame, area, work, theme, selected, &mut view);
+}
+
+/// Draw the tab through the window the keys move.
 ///
 /// `selected` is the row the cursor is on: its cells take the selection's
-/// paint. Every other row keeps its own.
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
+/// paint. Every other row keeps its own. The window is settled so the cursor
+/// is on a row the pane shows.
+pub fn render_view(
+    frame: &mut Frame,
+    area: Rect,
+    work: &Work,
+    theme: &Theme,
+    selected: Option<&str>,
+    view: &mut View,
+) {
     let block = Block::bordered()
         .title("path tree")
         .title_style(block_title_style(theme))
@@ -366,10 +382,22 @@ pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selecte
     }
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
+    let ids = row_ids(work);
+    let cursor = selected
+        .and_then(|id| ids.iter().position(|other| other == id))
+        .unwrap_or(0);
+    let first = view.settle(ids.len(), cursor, |first| {
+        let (_, shown, whole) = window(&tree, width, height, theme, selected, first);
+        (shown, whole)
+    });
+    let (rows, shown, _) = window(&tree, width, height, theme, selected, first);
+    if shown.len() == ids.len() {
+        // Every row fits: there is nowhere to scroll.
+        view.first = 0;
+    }
+    view.page = shown.len();
     frame.render_widget(
-        Paragraph::new(lines(&tree, width, height, theme, selected))
-            .wrap(Wrap { trim: false })
-            .block(block),
+        Paragraph::new(rows).wrap(Wrap { trim: false }).block(block),
         area,
     );
 }
@@ -395,9 +423,15 @@ struct HeadPiece {
 /// A block of the tree: the lines of a task, or of a group of tasks.
 ///
 /// A block is shown whole or not at all: a row of the tree is never cut in
-/// half.
+/// half. The lines that head it — the blocker of a group — are not part of
+/// the row: they give way when the pane is too short to hold both.
 struct Chunk {
     lines: Vec<Line<'static>>,
+    /// The lines at the start of the block that head it rather than being
+    /// the row itself.
+    lead: usize,
+    /// The row of the tree the block holds, in the order the rows are drawn.
+    row: usize,
     /// The tasks the block holds.
     tasks: usize,
 }
@@ -423,14 +457,21 @@ struct Dropped {
     count: usize,
 }
 
-/// The lines of the tree.
-///
-/// The tree is taller than a pane now and then. What does not fit is said
-/// out loud: a count is never shown without the group it counts, and a
-/// group that is not shown says how many tasks it holds.
-///
-/// The task that happens next is never lost without a word: when the spine
-/// does not fit, the trunk is named in the announcement.
+/// A layout the tree could use for the window.
+struct Candidate {
+    /// The layout shows the cursor's row.
+    has_cursor: bool,
+    /// The announcement is whole.
+    whole: bool,
+    /// The rows of the tree, before the announcement.
+    tree_rows: usize,
+    lines: Vec<Line<'static>>,
+    /// The rows of the tree the layout shows.
+    rows: Vec<usize>,
+}
+
+/// The lines of the tree at the top of its rows.
+#[cfg(test)]
 fn lines(
     tree: &Tree,
     width: usize,
@@ -438,20 +479,59 @@ fn lines(
     theme: &Theme,
     selected: Option<&str>,
 ) -> Vec<Line<'static>> {
+    window(tree, width, height, theme, selected, 0).0
+}
+
+/// The lines of the tree, from the row at `first`, and the rows they show.
+///
+/// The tree is taller than a pane now and then. What does not fit is said
+/// out loud: a count is never shown without the group it counts, and a
+/// group that is not shown says how many tasks it holds. The rows above the
+/// window are named the same way.
+///
+/// The task that happens next is never lost without a word: when the spine
+/// does not fit, the trunk is named in the announcement.
+///
+/// A pane too short for the announcement and the cursor's row draws the row
+/// alone: the selection is never on nothing.
+fn window(
+    tree: &Tree,
+    width: usize,
+    height: usize,
+    theme: &Theme,
+    selected: Option<&str>,
+    first: usize,
+) -> (Vec<Line<'static>>, Vec<usize>, bool) {
     let pieces = pieces(tree, width, theme, selected);
+    let mut all: Vec<String> = tree.spine.iter().map(|entry| entry.id.clone()).collect();
+    all.extend(
+        tree.branches
+            .iter()
+            .flat_map(|view| view.groups.iter())
+            .flat_map(|group| group.rows.iter())
+            .map(|entry| entry.id.clone()),
+    );
     // The tree that is shown is the one that still leaves room to say what
     // is not shown. The announcement comes first: a name that is cut is a
-    // name the reader does not have.
+    // name the reader does not have. A layout that shows the cursor wins
+    // over one that leaves it off the screen.
     //
     // The bars of the spine are decoration: when the pane is tight they
     // give way, so that a task is not lost to a bar.
-    let mut best: Option<(bool, usize, Vec<Line<'static>>)> = None;
+    let mut best: Option<Candidate> = None;
     for bars in [true, false] {
         for capacity in (0..=height).rev() {
-            let (shown, dropped) = layout(&pieces, capacity, width, bars, theme);
+            let (shown, dropped, rows) = layout(&pieces, capacity, width, bars, theme, first);
+            let has_cursor = selected.is_none_or(|id| {
+                rows.iter()
+                    .any(|index| all.get(*index).is_some_and(|other| other == id))
+            });
             if dropped.is_empty() {
                 // The whole tree fits: there is nothing to say.
-                return shown;
+                if has_cursor {
+                    return (shown, rows, true);
+                }
+                continue;
             }
             let summary = summary(&dropped, width, theme);
             let room = height.saturating_sub(shown.len());
@@ -463,10 +543,10 @@ fn lines(
             let whole = summary.len() <= room;
             let mut out = shown;
             let tree_rows = out.len();
-            let mut rows = summary.into_iter().take(room).collect::<Vec<_>>();
+            let mut summary_rows = summary.into_iter().take(room).collect::<Vec<_>>();
             if !whole {
                 // The announcement is cut: it says so.
-                if let Some(last) = rows.last_mut() {
+                if let Some(last) = summary_rows.last_mut() {
                     let text: String = last
                         .spans
                         .iter()
@@ -478,17 +558,45 @@ fn lines(
                     )];
                 }
             }
-            out.append(&mut rows);
-            let score = (whole, tree_rows);
-            if best
-                .as_ref()
-                .is_none_or(|(whole, rows, _)| score > (*whole, *rows))
-            {
-                best = Some((whole, tree_rows, out));
+            out.append(&mut summary_rows);
+            let candidate = Candidate {
+                has_cursor,
+                whole,
+                tree_rows,
+                lines: out,
+                rows,
+            };
+            let better = best.as_ref().is_none_or(|best| {
+                (candidate.has_cursor, candidate.whole, candidate.tree_rows)
+                    > (best.has_cursor, best.whole, best.tree_rows)
+            });
+            if better {
+                best = Some(candidate);
             }
         }
     }
-    best.map_or_else(Vec::new, |(_, _, out)| out)
+    // The pane is too short for the window and its announcement, but the
+    // cursor's row still has to be drawn: the row is shown alone. The lines
+    // that head its block give way first; a row taller than the pane stays
+    // off screen.
+    if let Some(id) = selected
+        && !best.as_ref().is_some_and(|best| best.has_cursor)
+        && let Some(cursor) = all.iter().position(|other| other == id)
+        && let Some(chunk) = cursor_chunk(&pieces, cursor)
+        && chunk.lines.len() - chunk.lead <= height
+    {
+        return (chunk.lines[chunk.lead..].to_vec(), vec![cursor], false);
+    }
+    best.map_or_else(
+        || (Vec::new(), Vec::new(), false),
+        |best| {
+            (
+                best.lines,
+                best.rows,
+                selected.is_none() || (best.has_cursor && best.whole),
+            )
+        },
+    )
 }
 
 /// The tree, laid out in `capacity` rows.
@@ -501,9 +609,11 @@ fn layout(
     width: usize,
     bars: bool,
     theme: &Theme,
-) -> (Vec<Line<'static>>, Vec<Dropped>) {
+    first: usize,
+) -> (Vec<Line<'static>>, Vec<Dropped>, Vec<usize>) {
     let mut out: Vec<Line<'static>> = Vec::new();
     let mut dropped: Vec<Dropped> = Vec::new();
+    let mut shown_rows: Vec<usize> = Vec::new();
     let mut used = 0usize;
 
     let branches: Vec<&BranchPiece> = pieces
@@ -515,7 +625,7 @@ fn layout(
         .collect();
 
     let Some(Piece::Head(head)) = pieces.first() else {
-        return (out, dropped);
+        return (out, dropped, shown_rows);
     };
 
     if capacity == 0 {
@@ -530,14 +640,20 @@ fn layout(
             name: branch.name,
             count: branch.count,
         }));
-        return (out, dropped);
+        return (out, dropped, shown_rows);
     }
 
-    // The head: the heading and the spine.
-    out.push(head.heading.clone());
-    used += 1;
+    // The head: the heading and the spine. The heading belongs to the top
+    // of the tree: a window that starts lower does not repeat it.
+    if first == 0 {
+        out.push(head.heading.clone());
+        used += 1;
+    }
     let mut shown_tasks = 0usize;
     for chunk in &head.spine {
+        if chunk.row < first {
+            continue;
+        }
         let rows = chunk.lines.len();
         if bars && used + 1 + rows <= capacity {
             // The bar that holds the row, and the row.
@@ -550,18 +666,31 @@ fn layout(
         out.extend(chunk.lines.iter().cloned());
         used += rows;
         shown_tasks += chunk.tasks;
+        shown_rows.push(chunk.row);
     }
     if shown_tasks < head.tasks {
-        // The spine is cut: the trunk is named in the announcement.
+        // The spine is cut: the trunk is named in the announcement. The
+        // rows above the window are part of what is not shown.
         dropped.push(Dropped {
             name: SPINE,
             count: head.tasks - shown_tasks,
         });
     }
 
-    // The branches, in the order of the tree.
-    let mut forked = false;
+    // The branches, in the order of the tree. The fork belongs to the
+    // boundary between the spine and the branches: a window that starts at
+    // or below it has already passed the fork.
+    let mut forked = first > 0 && first >= head.tasks;
     for (index, branch) in branches.iter().enumerate() {
+        let start = branch.blocks.first().map_or(0, |block| block.row);
+        if branch.count > 0 && start + branch.count <= first {
+            // The whole branch is above the window.
+            dropped.push(Dropped {
+                name: branch.name,
+                count: branch.count,
+            });
+            continue;
+        }
         let room = capacity.saturating_sub(used);
         let Some(header) = branch.header.clone() else {
             // The branch cannot be headed: it is not shown.
@@ -571,6 +700,8 @@ fn layout(
             }));
             break;
         };
+        let skip = first.saturating_sub(start).min(branch.count);
+        let visible = branch.count - skip;
         // The fork: the place where the branches leave the trunk. It is
         // drawn once, before the first branch that is shown.
         let fork_rows = if forked {
@@ -584,9 +715,18 @@ fn layout(
         };
         let room = room - fork_rows;
         // The header needs a row of its own.
-        let (whole, whole_tasks, whole_height) = take(&branch.blocks, room.saturating_sub(1));
-        if room >= 1 && whole_tasks == branch.count {
-            // The whole branch fits.
+        let (whole, whole_tasks, whole_height, whole_rows) =
+            take(&branch.blocks, room.saturating_sub(1), skip);
+        if room >= 1 && whole_tasks == visible {
+            // The whole branch fits. The rows above the window are not
+            // drawn: they are named, as every other hidden row is.
+            let above = branch.count - whole_tasks;
+            if above > 0 {
+                dropped.push(Dropped {
+                    name: branch.name,
+                    count: above,
+                });
+            }
             if !forked {
                 fork(&mut out, fork_rows, theme);
                 used += fork_rows;
@@ -595,11 +735,12 @@ fn layout(
             out.push(header);
             out.extend(whole);
             used += 1 + whole_height;
+            shown_rows.extend(whole_rows);
             continue;
         }
         // The branch is cut: it needs the header, some rows, and the
         // announcement of what is not shown.
-        let (rows, shown, _) = take(&branch.blocks, room.saturating_sub(2));
+        let (rows, shown, _, row_indices) = take(&branch.blocks, room.saturating_sub(2), skip);
         if room >= 3 && !rows.is_empty() {
             if !forked {
                 fork(&mut out, fork_rows, theme);
@@ -612,6 +753,7 @@ fn layout(
                 width,
                 theme,
             ));
+            shown_rows.extend(row_indices);
         } else if room >= 2 {
             // No row of the branch fits: it keeps its header, and says how
             // many of its tasks are not shown.
@@ -634,24 +776,47 @@ fn layout(
         }));
         break;
     }
-    (out, dropped)
+    (out, dropped, shown_rows)
 }
 
-/// The blocks that fit in `room` rows: their lines, the tasks they hold and
-/// the rows they take.
-fn take(blocks: &[Chunk], room: usize) -> (Vec<Line<'static>>, usize, usize) {
+/// The block of the tree that holds a row.
+fn cursor_chunk(pieces: &[Piece], cursor: usize) -> Option<&Chunk> {
+    for piece in pieces {
+        let chunks = match piece {
+            Piece::Head(head) => &head.spine,
+            Piece::Branch(branch) => &branch.blocks,
+        };
+        if let Some(chunk) = chunks.iter().find(|chunk| chunk.row == cursor) {
+            return Some(chunk);
+        }
+    }
+    None
+}
+
+/// The blocks that fit in `room` rows: their lines, the tasks they hold, the
+/// rows they take and the rows of the tree they show.
+///
+/// The first `skip` rows of the branch are above the window and are left
+/// out.
+fn take(
+    blocks: &[Chunk],
+    room: usize,
+    skip: usize,
+) -> (Vec<Line<'static>>, usize, usize, Vec<usize>) {
     let mut lines: Vec<Line<'static>> = Vec::new();
     let mut tasks = 0usize;
     let mut height = 0usize;
-    for block in blocks {
+    let mut rows: Vec<usize> = Vec::new();
+    for block in blocks.iter().skip(skip) {
         if height + block.lines.len() > room {
             break;
         }
         height += block.lines.len();
         tasks += block.tasks;
         lines.extend(block.lines.iter().cloned());
+        rows.push(block.row);
     }
-    (lines, tasks, height)
+    (lines, tasks, height, rows)
 }
 
 /// The lines that name what is not shown.
@@ -729,6 +894,8 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme, selected: Option<&str>) -> V
             };
             Chunk {
                 lines: row(&prefix, entry, width, theme, is_selected(entry, selected)),
+                lead: 0,
+                row: index,
                 tasks: 1,
             }
         })
@@ -742,30 +909,37 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme, selected: Option<&str>) -> V
 
     // The branches, in the order of the tree.
     let last = tree.branches.len().saturating_sub(1);
+    let mut branch_base = tree.spine.len();
     for (index, view) in tree.branches.iter().enumerate() {
         let is_last = index == last;
         // The branch hangs on the trunk: the trunk's column comes first.
         let branch_prefix = if is_last { "     " } else { " │   " };
         let mut blocks: Vec<Chunk> = Vec::new();
+        let mut row_index = branch_base;
+        branch_base += view.count;
         if view.branch == Branch::Blocked {
             // The blocked branch is forked: a group per blocker, and the
-            // tasks of the group under it. A group is shown whole: the name
-            // of the blocker and the tasks it holds.
+            // tasks of the group under it. The name of the blocker heads
+            // the first row of its group.
             let last_group = view.groups.len().saturating_sub(1);
             for (group_index, group) in view.groups.iter().enumerate() {
                 let group_is_last = group_index == last_group;
                 let group_prefix = if group_is_last { "    " } else { "│   " };
-                let mut lines: Vec<Line<'static>> = Vec::new();
-                if let Some(blocker) = &group.blocker {
-                    // The name of the blocker heads its group.
-                    let prefix = format!("{branch_prefix}{}", connector(group_is_last));
-                    lines.push(group_header(&prefix, blocker, width, theme));
-                }
                 let last_row = group.rows.len().saturating_sub(1);
-                for (row_index, entry) in group.rows.iter().enumerate() {
+                for (row_at, entry) in group.rows.iter().enumerate() {
+                    let mut lines: Vec<Line<'static>> = Vec::new();
+                    let mut lead = 0;
+                    if row_at == 0
+                        && let Some(blocker) = &group.blocker
+                    {
+                        // The name of the blocker heads its group.
+                        let prefix = format!("{branch_prefix}{}", connector(group_is_last));
+                        lines.push(group_header(&prefix, blocker, width, theme));
+                        lead = 1;
+                    }
                     let prefix = format!(
                         "{branch_prefix}{group_prefix}{}",
-                        connector(row_index == last_row)
+                        connector(row_at == last_row)
                     );
                     lines.extend(row(
                         &prefix,
@@ -774,11 +948,14 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme, selected: Option<&str>) -> V
                         theme,
                         is_selected(entry, selected),
                     ));
+                    blocks.push(Chunk {
+                        lines,
+                        lead,
+                        row: row_index,
+                        tasks: 1,
+                    });
+                    row_index += 1;
                 }
-                blocks.push(Chunk {
-                    lines,
-                    tasks: group.rows.len(),
-                });
             }
         } else {
             let last_row = view
@@ -787,12 +964,15 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme, selected: Option<&str>) -> V
                 .map_or(0, |group| group.rows.len())
                 .saturating_sub(1);
             if let Some(group) = view.groups.first() {
-                for (row_index, entry) in group.rows.iter().enumerate() {
-                    let prefix = format!("{branch_prefix}{}", connector(row_index == last_row));
+                for (row_at, entry) in group.rows.iter().enumerate() {
+                    let prefix = format!("{branch_prefix}{}", connector(row_at == last_row));
                     blocks.push(Chunk {
                         lines: row(&prefix, entry, width, theme, is_selected(entry, selected)),
+                        lead: 0,
+                        row: row_index,
                         tasks: 1,
                     });
+                    row_index += 1;
                 }
             }
         }

@@ -268,6 +268,42 @@ fn the_settings_tab_is_reachable_in_render_mode_at_every_canonical_width() {
 }
 
 #[test]
+fn a_short_row_tab_render_shows_the_window_and_announces_what_it_hides() {
+    // The plain render has no keys, so it shows the window at the top of a
+    // short tab: the rows that fit are on screen, and the tab's own
+    // announcement names the rows that are not. The window the keys move is
+    // the same one: the app tests press the keys.
+    for tab in ["needs-you", "path", "backlog"] {
+        let output = run(&[
+            "--render", "--plain", "--tab", tab, "--width", "100", "--height", "12", WORK,
+        ]);
+        assert!(output.status.success(), "{tab}: raul failed: {output:?}");
+        let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+        let rows: Vec<&str> = text.lines().collect();
+        assert_eq!(rows.len(), 12, "{tab}: the render did not take --height");
+        // The pane holds rows, not a blank screen.
+        assert!(
+            rows.iter().skip(3).any(|row| {
+                row.contains("TSK") || row.contains("ITM") || row.contains("EXECUTION")
+            }),
+            "{tab}: no row is in the window: {text}"
+        );
+        // The rows the window leaves out are counted.
+        assert!(
+            text.contains("not shown") || text.contains("hidden") || text.contains("more task"),
+            "{tab}: a short window hides its count: {text}"
+        );
+        for (number, line) in text.lines().enumerate() {
+            let measured = display_width(line);
+            assert!(
+                measured <= 100,
+                "{tab}: row {number} is {measured} columns wide: {line:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn the_row_tabs_fit_their_width_at_every_canonical_width() {
     // The selection bar is paint only: the plain render carries the same
     // words, and no line grows past the width it is drawn in.

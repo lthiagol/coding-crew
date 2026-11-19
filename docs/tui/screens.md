@@ -31,6 +31,11 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 The detail pane is not a tab: it is the same task seen close up, and it opens
 from any tab that has a row.
 
+The content pane scrolls when its rows are taller than the pane. The window
+follows the cursor, so moving past the last visible row moves the list; a page
+key moves by the rows the pane shows, and `g`/`G` reach the first and the last
+row. The cursor is never on a row the pane does not show.
+
 ## The tabs
 
 | tab | question it answers | rows |
