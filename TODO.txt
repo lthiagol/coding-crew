@@ -21,9 +21,11 @@ HOW TO RESUME
   5. run make ci before you claim anything is done
   6. update this file when the item is closed
 
-  The build loop itself is .agents/skills/orchestration-flow/SKILL.md - the
-  three agents, the Orchestration workspace, the pane recipe, the rounds, the
-  budget.
+  The build loop itself is the global skill orchestration-flow, at
+  ~/.config/opencode/skills/orchestration-flow/SKILL.md - the three agents,
+  the shared Orchestration workspace, the pane recipe, the rounds, the
+  budget. The project's prefix and its role config paths are in
+  .orchestration.json.
 
   The findings of the review rounds are not durable - /tmp does not survive.
   Copy what matters into this file before the round is closed. This unit's
@@ -295,6 +297,33 @@ WHERE WE ARE
   Backlog, with pgup/pgdn and g/G, the cursor never stepping onto a
   hidden row, and the movement keys named in the footer and the help
   overlay. That is the unit the key-set deferral pointed at.
+  Unit closed: the global flow. Three rounds. The flow skill and the
+  review skill now live at ~/.config/opencode/skills, loaded by their IDs,
+  and the repository points at them; the skill says where it lives, that
+  the scripts stay in the project, how the project prefix names every tab
+  and agent, and how the session model question works - asked once at the
+  start of a session, with the projects configured pair recommended, and
+  applied through a generated copy of the role config written outside the
+  repository. The project carries .orchestration.json: the prefix cl and
+  the paths of its role configs.
+  Three rounds, and every round found something real: the move broke
+  sync.sh and left the folder index pointing at ghosts; the sharing broke
+  the teardown rules, so an orchestrator following them would have closed
+  another projects live tab; and the global provenance promised a drift
+  report that no longer comes. None of them was visible to the gate.
+  The human decided that code-review leaves the adapted list - the version
+  we have is enough and updates are a problem for later - so sync.sh now
+  manages only the four vendored skills, its adapted mechanism is generic
+  and per-entry, and an empty list does not fail it.
+  The review left two low follow-ups, none blocking: one stale sentence
+  in the global skill still said the orchestrators own workspace, and the
+  global ledgers licence link was dead - the MIT text now travels with the
+  global copy. The human asked whether sync.sh should go: it only refreshes
+  the four vendored skills from upstream, and the gate never checked that
+  they match upstream - it tested the script against a fixture. The answer
+  is open: keep it if an upstream bump is ever expected, otherwise remove
+  the script and its test and keep LICENSE and UPSTREAM.md as the
+  provenance.
   Unit closed: the tab closer. Two rounds. scripts/herdr-close-pane.sh
   takes the pane id the orchestrator holds, resolves the tab id from herdr
   pane get, closes it, and proves the close by the tab list; --audit
@@ -377,7 +406,10 @@ HAPPENED
   of RSS held by finished rounds. The rule now: herdr tab close takes a
   TAB id, and a close that answers tab_not_found means the id was wrong,
   not that the tab is gone. Twelve tabs and 33 processes were reaped,
-  freeing about 1.7 GB of pane RSS and 1.2 GB of system memory.
+  freeing about 1.7 GB of pane RSS and 1.2 GB of system memory. The
+  orchestrator repeated the mistake once more - it closed a reviewers tab
+  while the wake command was still polling, so the wake ran to its bound
+  blind - the rule is to wait for the wake to return before closing a tab.
   A builder pane was blocked by an account setting, not a defect: the
   opencode-go DeepSeek V4.1 Flash model is region-blocked until the
   console's privacy region is set to Global. And a wake command was left
