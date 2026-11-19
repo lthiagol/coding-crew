@@ -20,8 +20,8 @@ them. A role may not write another role's section.
 
 This document owns the task record: the `review` section, its findings, its
 focus, and the **task verdict** — whether the task may move out of
-`code-review`. The adapted
-[code-review](../../.agents/skills/code-review/SKILL.md) skill governs the
+`code-review`. The adapted `code-review` skill at
+`~/.config/opencode/skills/code-review/SKILL.md` governs the
 build loop's code-diff process: the review surface, the CODE and SPEC axes, the
 probe budget, and the delta review. The build loop's **round verdict** belongs
 to the orchestrator. The task verdict and the round verdict are different
@@ -197,9 +197,9 @@ refused; a verdict of `changes-needed` with no finding is refused.
 
 Read the task record before the diff: the criteria, the scope, the evidence for
 each criterion, and any `deviation` on a step. `exit 0` with an empty summary
-proves nothing. Then follow
-[code-review](../../.agents/skills/code-review/SKILL.md) for the diff surface,
-the two axes, the targeted probes, and the delta review.
+proves nothing. Then follow the `code-review` skill at
+`~/.config/opencode/skills/code-review/SKILL.md` for the diff surface, the two
+axes, the targeted probes, and the delta review.
 
 Record what this document owns: the round, its focus, the findings, and the
 verdict.

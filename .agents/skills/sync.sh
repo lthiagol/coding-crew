@@ -3,14 +3,20 @@
 #
 #   .agents/skills/sync.sh          copy the vendored skills, report adapted drift
 #   .agents/skills/sync.sh --bump   move the global pin and its commit date,
-#                                   then sync; the adapted skill keeps its own
+#                                   then sync; each adapted skill keeps its own
 #                                   source commit
 #   .agents/skills/sync.sh --help   explain the two modes
 #
 # Vendored skills stay byte-identical to upstream: every file is copied from
-# the pinned commit. code-review is adapted for coding-lanes and is never
-# overwritten or auto-rebased: the script diffs it against its own recorded
-# Source commit and reports that a bump needs a manual rebase. See UPSTREAM.md.
+# the pinned commit. Adapted skills are never overwritten or auto-rebased: each
+# entry names its own local directory and reads the pin from that directory's
+# UPSTREAM.md, so an adapted skill may live outside this repository. The script
+# diffs it against its recorded Source commit and reports that a bump needs a
+# manual rebase. See UPSTREAM.md.
+#
+# code-review left the adapted list: it now lives globally at
+# ~/.config/opencode/skills/code-review and is maintained by hand. The
+# mechanism stays for a future adapted skill.
 
 set -euo pipefail
 
@@ -18,7 +24,6 @@ set -euo pipefail
 REPO="${SYNC_REPO:-https://github.com/mattpocock/skills}"
 SKILLS_DIR="$(cd "$(dirname "$0")" && pwd)"
 PIN_FILE="$SKILLS_DIR/UPSTREAM.md"
-ADAPTED_PIN="$SKILLS_DIR/code-review/UPSTREAM.md"
 
 # Vendored skills: <name>:<upstream path relative to the repo root>.
 SKILLS=(
@@ -28,28 +33,42 @@ SKILLS=(
   "writing-for-agents:skills/productivity/writing-for-agents"
 )
 
-# Adapted skills: never overwritten, only diffed against their own source commit.
+# Adapted skills: never overwritten, only diffed against their own source
+# commit. Each entry is <local directory>:<upstream path relative to the repo
+# root>. The local directory is absolute or relative to this folder; it holds
+# SKILL.md and UPSTREAM.md, which records that entry's own Source commit, and it
+# may live outside this repository. The list is empty today: code-review left it
+# when it moved to ~/.config/opencode/skills/code-review and became maintained
+# by hand.
 ADAPTED=(
-  "code-review:skills/engineering/code-review"
 )
+
+# SYNC_ADAPTED lets the tests declare adapted entries without editing the
+# script. One entry per line, same form as above.
+if [ -n "${SYNC_ADAPTED:-}" ]; then
+  mapfile -t ADAPTED <<<"$SYNC_ADAPTED"
+fi
 
 usage() {
   cat <<'EOF'
 usage: .agents/skills/sync.sh [--bump | --help]
 
   (no argument)  copy the vendored skills from the pinned commit; report what
-                 changed, and report how the adapted code-review skill differs
-                 from its pinned upstream
+                 changed, and report how any adapted skill differs from its
+                 pinned upstream
   --bump         move the vendored pin to the latest upstream main, refresh its
-                 commit date, then sync; the adapted skill keeps its own
+                 commit date, then sync; an adapted skill keeps its own
                  recorded source commit and is reported as needing a manual
                  rebase
   --help         show this text
 
 Vendored skills are overwritten and stay byte-identical to upstream.
-code-review is adapted for coding-lanes: it is never overwritten. Its own
-recorded source commit is fetched and diffed against the local copy, and the
-difference is printed as drift. --bump does not move that source commit.
+Adapted skills are never overwritten: each entry names its own local directory
+and reads the pin from its UPSTREAM.md. The script fetches that source commit,
+diffs the local copy against it, and prints the difference as drift. --bump
+does not move those source commits. The adapted list is empty today:
+code-review moved to ~/.config/opencode/skills/code-review and is maintained
+by hand.
 EOF
 }
 
@@ -58,9 +77,17 @@ pinned_commit() {
 }
 
 adapted_source_commit() {
-  [ -f "$ADAPTED_PIN" ] || return 0
-  grep -E '^\| Source commit \|' "$ADAPTED_PIN" |
+  local pin_file="$1"
+  [ -f "$pin_file" ] || return 0
+  grep -E '^\| Source commit \|' "$pin_file" |
     grep -oE '`[0-9a-f]{40}`' | head -1 | tr -d '`'
+}
+
+adapted_dir() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    *) printf '%s\n' "$SKILLS_DIR/$1" ;;
+  esac
 }
 
 sed_in_place() {
@@ -76,8 +103,16 @@ fetch() {
   local commit="$1" tmp
   tmp="$(mktemp -d)"
   echo "fetching $REPO @ $commit" >&2
-  git clone --quiet "$REPO" "$tmp/repo"
-  git -C "$tmp/repo" checkout --quiet "$commit"
+  if ! git clone --quiet "$REPO" "$tmp/repo" 2>/dev/null; then
+    rm -rf "$tmp"
+    echo "sync.sh: could not read upstream from $REPO" >&2
+    exit 4
+  fi
+  if ! git -C "$tmp/repo" checkout --quiet "$commit" 2>/dev/null; then
+    rm -rf "$tmp"
+    echo "sync.sh: could not fetch upstream $commit from $REPO" >&2
+    exit 4
+  fi
   echo "$tmp/repo"
 }
 
@@ -107,16 +142,18 @@ report_diff() {
 }
 
 report_adapted() {
-  local name="$1" up_path="$2" src_root="$3" source_commit="$4"
+  local local_dir="$1" up_path="$2" src_root="$3" source_commit="$4"
+  local name
+  name="$(basename "$local_dir")"
   local up_file="$src_root/$up_path/SKILL.md"
-  local dst="$SKILLS_DIR/$name"
-  local local_file="$dst/SKILL.md"
+  local local_file="$local_dir/SKILL.md"
   local drift
 
   echo "  $name: adapted — local copy kept, not overwritten"
+  echo "    local dir: $local_dir"
   echo "    source commit: $source_commit (its own record, not the global pin)"
   if [ ! -f "$local_file" ]; then
-    echo "    local .agents/skills/$name/SKILL.md is missing; the adaptation is gone"
+    echo "    $local_file is missing; the adaptation is gone"
     return 0
   fi
   if [ ! -f "$up_file" ]; then
@@ -124,13 +161,13 @@ report_adapted() {
     return 0
   fi
   if diff -q "$up_file" "$local_file" >/dev/null 2>&1; then
-    echo "    matches upstream byte for byte; expected a coding-lanes adaptation"
+    echo "    matches upstream byte for byte; expected an adaptation"
     return 0
   fi
 
   drift="$(diff -u "$up_file" "$local_file" | grep -cE '^[+-][^+-]' || true)"
   echo "    upstream: $up_path/SKILL.md"
-  echo "    local:    .agents/skills/$name/SKILL.md"
+  echo "    local:    $local_file"
   echo "    drift:    $drift changed lines vs upstream"
   diff -u "$up_file" "$local_file" | sed -n '1,80p' || true
 }
@@ -150,11 +187,15 @@ bump_pin() {
   sed_in_place "s/\`[0-9a-f]{40}\`/\`$commit\`/" "$PIN_FILE"
   sed_in_place "s/^\\| Commit date \\|.*\\|$/| Commit date | $date |/" "$PIN_FILE"
 
-  if [ -f "$ADAPTED_PIN" ]; then
-    # The adaptation stays based on the commit it records. Moving it is a
-    # manual rebase, so --bump only reports the work and leaves the ledger.
-    echo "adapted skill: code-review keeps its recorded Source commit"
-    echo "  it needs a manual rebase onto $commit; see .agents/skills/code-review/UPSTREAM.md"
+  if [ "${#ADAPTED[@]}" -gt 0 ]; then
+    # Each adaptation stays based on the commit its own ledger records. Moving
+    # it is a manual rebase, so --bump only reports the work and leaves it.
+    local entry local_dir
+    echo "adapted skills keep their recorded Source commits:"
+    for entry in "${ADAPTED[@]}"; do
+      local_dir="$(adapted_dir "${entry%%:*}")"
+      echo "  $(basename "$local_dir") needs a manual rebase onto $commit; see $local_dir/UPSTREAM.md"
+    done
   fi
 }
 
@@ -217,8 +258,15 @@ main() {
   fi
 
   TMP_DIR="$(fetch "$commit")"
-  ADAPTED_TMP=""
-  trap 'rm -rf "${TMP_DIR:-}" "${ADAPTED_TMP:-}"' EXIT
+  ADAPTED_TMP_DIRS=()
+  cleanup() {
+    local d
+    if [ -n "${TMP_DIR:-}" ]; then rm -rf "$TMP_DIR"; fi
+    for d in ${ADAPTED_TMP_DIRS[@]+"${ADAPTED_TMP_DIRS[@]}"}; do
+      if [ -n "$d" ]; then rm -rf "$d"; fi
+    done
+  }
+  trap cleanup EXIT
 
   echo "vendored skills — copied and kept byte-identical:"
   for entry in "${SKILLS[@]}"; do
@@ -227,30 +275,41 @@ main() {
     report_diff "$name" "$up_path" "$TMP_DIR"
   done
 
-  local adapted_commit adapted_root
-  adapted_commit="$(adapted_source_commit)"
-  if [ -z "$adapted_commit" ]; then
-    echo "sync.sh: no Source commit in $ADAPTED_PIN" >&2
-    exit 4
-  fi
-  if [ "$adapted_commit" = "$commit" ]; then
-    adapted_root="$TMP_DIR"
-  else
-    ADAPTED_TMP="$(fetch "$adapted_commit")"
-    adapted_root="$ADAPTED_TMP"
-  fi
-
   echo "adapted skills — local copy kept, upstream drift reported:"
+  if [ "${#ADAPTED[@]}" -eq 0 ]; then
+    echo "  (none)"
+  fi
+  local local_dir up_path adapted_commit adapted_root
   for entry in "${ADAPTED[@]}"; do
-    local name="${entry%%:*}" up_path="${entry#*:}"
-    report_adapted "$name" "$up_path" "$adapted_root" "$adapted_commit"
+    case "$entry" in
+      *:*) ;;
+      *)
+        echo "sync.sh: malformed adapted entry: $entry" >&2
+        exit 4
+        ;;
+    esac
+    up_path="${entry#*:}"
+    if [ -z "${entry%%:*}" ] || [ -z "$up_path" ]; then
+      echo "sync.sh: malformed adapted entry: $entry" >&2
+      exit 4
+    fi
+    local_dir="$(adapted_dir "${entry%%:*}")"
+    adapted_commit="$(adapted_source_commit "$local_dir/UPSTREAM.md")"
+    if [ -z "$adapted_commit" ]; then
+      echo "sync.sh: no Source commit in $local_dir/UPSTREAM.md" >&2
+      exit 4
+    fi
+    if [ "$adapted_commit" = "$commit" ]; then
+      adapted_root="$TMP_DIR"
+    else
+      adapted_root="$(fetch "$adapted_commit")"
+      ADAPTED_TMP_DIRS+=("$adapted_root")
+    fi
+    report_adapted "$local_dir" "$up_path" "$adapted_root" "$adapted_commit"
   done
 
   cp "$TMP_DIR/LICENSE" "$SKILLS_DIR/LICENSE"
 
-  rm -rf "$TMP_DIR"
-  [ -z "$ADAPTED_TMP" ] || rm -rf "$ADAPTED_TMP"
-  trap - EXIT
   echo "done — provenance in .agents/skills/UPSTREAM.md"
 }
 
