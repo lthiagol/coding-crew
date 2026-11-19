@@ -207,19 +207,9 @@ pub fn render_view(
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
     let ids = row_ids(work);
-    let cursor = selected
-        .and_then(|id| ids.iter().position(|other| other == id))
-        .unwrap_or(0);
-    let first = view.settle(ids.len(), cursor, |first| {
-        let (_, shown, whole) = window(&groups, width, height, theme, selected, first);
-        (shown, whole)
+    let rows = view.draw(&ids, selected, |first| {
+        window(&groups, width, height, theme, selected, first)
     });
-    let (rows, shown, _) = window(&groups, width, height, theme, selected, first);
-    if shown.len() == ids.len() {
-        // Every row fits: there is nowhere to scroll.
-        view.first = 0;
-    }
-    view.page = shown.len();
     frame.render_widget(
         Paragraph::new(rows).wrap(Wrap { trim: false }).block(block),
         area,

@@ -679,11 +679,11 @@ mod tests {
 
     #[test]
     fn only_the_frame_reads_the_clock() {
-        // One instant per frame, and no other clock read in the crate: a tab
+        // One instant per frame, and no other clock read under `src/`: a tab
         // that reads its own clock can disagree with the frame it is drawn
         // in. The two frames — the interactive loop and the plain render —
         // are the only readers; every other module takes the instant it is
-        // given.
+        // given. This scan covers `src/`, not `tests/`.
         let clock = ["now", "_rfc3339"].concat();
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut readers: Vec<String> = Vec::new();

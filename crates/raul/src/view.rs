@@ -26,6 +26,32 @@ impl View {
         *self = View::default();
     }
 
+    /// Draw a tab's rows through the window the keys move.
+    ///
+    /// `ids` are the tab's rows in the order they are drawn; `window` returns
+    /// the lines a window at the given first row would draw, the rows that
+    /// window shows, and whether it is complete. The window is settled so the
+    /// cursor is on a row the pane shows, and the lines of the settled window
+    /// are returned ready to draw. This is the one place a row tab finds the
+    /// cursor, settles the window, re-windows at it, and measures the page.
+    pub fn draw<T>(
+        &mut self,
+        ids: &[String],
+        selected: Option<&str>,
+        mut window: impl FnMut(usize) -> (T, Vec<usize>, bool),
+    ) -> T {
+        let cursor = selected
+            .and_then(|id| ids.iter().position(|other| other == id))
+            .unwrap_or(0);
+        let first = self.settle(ids.len(), cursor, |first| {
+            let (_, shown, whole) = window(first);
+            (shown, whole)
+        });
+        let (rows, shown, _) = window(first);
+        self.page = shown.len();
+        rows
+    }
+
     /// The first row to show so that the cursor is on a visible row.
     ///
     /// `shown` returns the rows a window at the given first row would show,
@@ -91,6 +117,9 @@ impl View {
 mod tests {
     use super::*;
 
+    use std::fs;
+    use std::path::Path;
+
     /// A list of `total` rows where a window at `first` shows three rows.
     fn three_row_window(total: usize) -> impl FnMut(usize) -> (Vec<usize>, bool) {
         move |first| {
@@ -144,5 +173,42 @@ mod tests {
         assert_eq!(view.settle(10, 0, |_| ((0..10).collect(), true)), 0);
         assert_eq!(view.first, 0);
         assert_eq!(view.page, 10);
+    }
+
+    #[test]
+    fn the_three_row_tabs_draw_through_one_window_helper() {
+        // The ids-to-cursor-to-settle-to-re-window-to-page block lives in
+        // `View::draw`. A tab that copies it again settles its own window,
+        // and fails here before the copy can drift.
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut settlers: Vec<String> = Vec::new();
+        for entry in fs::read_dir(&dir).expect("the source folder") {
+            let path = entry.expect("a source entry").path();
+            if path.extension().and_then(|value| value.to_str()) != Some("rs") {
+                continue;
+            }
+            let source = fs::read_to_string(&path).expect("a source file");
+            if source.contains(".settle(") {
+                settlers.push(
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .expect("a file name")
+                        .to_string(),
+                );
+            }
+        }
+        settlers.sort();
+        assert_eq!(
+            settlers,
+            vec!["view.rs".to_string()],
+            "a module settles its own window: {settlers:?}"
+        );
+        for tab in ["needs.rs", "path.rs", "backlog.rs"] {
+            let source = fs::read_to_string(dir.join(tab)).expect("a row tab");
+            assert!(
+                source.contains("view.draw("),
+                "{tab} does not draw through the window helper"
+            );
+        }
     }
 }

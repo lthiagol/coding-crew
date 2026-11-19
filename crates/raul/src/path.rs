@@ -147,6 +147,24 @@ impl Tree {
         self.spine.is_empty() && self.branches.is_empty()
     }
 
+    /// The ids of the tree's rows, in the order they are drawn: the spine,
+    /// then the branches.
+    ///
+    /// The detail pane opens from this tab: the rows are what it can open.
+    /// This is the one assembly of the drawn order: the cursor's row list
+    /// and the tree's window both read it.
+    pub fn row_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.spine.iter().map(|entry| entry.id.clone()).collect();
+        ids.extend(
+            self.branches
+                .iter()
+                .flat_map(|view| view.groups.iter())
+                .flat_map(|group| group.rows.iter())
+                .map(|entry| entry.id.clone()),
+        );
+        ids
+    }
+
     /// The tasks of a branch.
     #[cfg(test)]
     pub fn rows(&self, branch: Branch) -> usize {
@@ -316,16 +334,7 @@ fn blocked(work: &Work, now: &str) -> BranchView {
 ///
 /// The detail pane opens from this tab: the rows are what it can open.
 pub fn row_ids(work: &Work, now: &str) -> Vec<String> {
-    let tree = tree(work, now);
-    let mut ids: Vec<String> = tree.spine.iter().map(|entry| entry.id.clone()).collect();
-    ids.extend(
-        tree.branches
-            .iter()
-            .flat_map(|view| view.groups.iter())
-            .flat_map(|group| group.rows.iter())
-            .map(|entry| entry.id.clone()),
-    );
-    ids
+    tree(work, now).row_ids()
 }
 
 /// Draw the tab through the window the keys move.
@@ -380,20 +389,10 @@ pub fn render_view(
     }
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
-    let ids = row_ids(work, now);
-    let cursor = selected
-        .and_then(|id| ids.iter().position(|other| other == id))
-        .unwrap_or(0);
-    let first = view.settle(ids.len(), cursor, |first| {
-        let (_, shown, whole) = window(&tree, width, height, theme, selected, first);
-        (shown, whole)
+    let ids = tree.row_ids();
+    let rows = view.draw(&ids, selected, |first| {
+        window(&tree, width, height, theme, selected, first)
     });
-    let (rows, shown, _) = window(&tree, width, height, theme, selected, first);
-    if shown.len() == ids.len() {
-        // Every row fits: there is nowhere to scroll.
-        view.first = 0;
-    }
-    view.page = shown.len();
     frame.render_widget(
         Paragraph::new(rows).wrap(Wrap { trim: false }).block(block),
         area,
@@ -501,14 +500,7 @@ fn window(
     first: usize,
 ) -> (Vec<Line<'static>>, Vec<usize>, bool) {
     let pieces = pieces(tree, width, theme, selected);
-    let mut all: Vec<String> = tree.spine.iter().map(|entry| entry.id.clone()).collect();
-    all.extend(
-        tree.branches
-            .iter()
-            .flat_map(|view| view.groups.iter())
-            .flat_map(|group| group.rows.iter())
-            .map(|entry| entry.id.clone()),
-    );
+    let all = tree.row_ids();
     // The tree that is shown is the one that still leaves room to say what
     // is not shown. The announcement comes first: a name that is cut is a
     // name the reader does not have. A layout that shows the cursor wins
@@ -1443,17 +1435,10 @@ mod tests {
     fn the_tree_holds_no_draft_and_no_done_task() {
         let work = mock_work();
         let tree = tree(&work, now());
-        let mut seen: Vec<&str> = tree.spine.iter().map(|entry| entry.id.as_str()).collect();
-        for view in &tree.branches {
-            for group in &view.groups {
-                for entry in &group.rows {
-                    seen.push(entry.id.as_str());
-                }
-            }
-        }
+        let seen = tree.row_ids();
         for task in &work.tasks {
             if task.status == Status::Draft || task.status == Status::Done {
-                assert!(!seen.contains(&task.id.as_str()), "{} is history", task.id);
+                assert!(!seen.contains(&task.id), "{} is history", task.id);
             }
         }
     }
