@@ -552,6 +552,12 @@ DONE
   still a stub.
 
 HAPPENED
+  The orchestrator committed another agents staged work: it ran git add on
+  its own two doc paths and then git commit without paths, and the builder
+  had already staged the mock-data rename - so the rename went into the
+  orchestrators commit. The rule: commit the paths you mean - git commit --
+  <paths> - or check what is staged before committing, not only what you
+  added.
   The orchestrator passed pane ids to herdr tab close - wX:p7 where herdr
   wants a tab id, wX:t7 - and herdr answered tab_not_found every time. The
   orchestrator read that as already closed and moved on, so no tab closed
