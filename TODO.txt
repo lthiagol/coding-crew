@@ -383,10 +383,23 @@ WHERE WE ARE
   Two lows carry into the next unit: the drawn-order id assembly exists in
   three copies in path.rs, and the guard comment says the crate when the
   scan covers src only.
-  Next unit: the render_view extraction - the triplicated ids-to-cursor-to-
-  settle-to-window block, one copy in view.rs - with those two lows in it.
-  Then the theme-side follow-ups: the two terminal-column measures, the
-  fenced-code fixture, and the search-figure assertions home. Then the
+  Unit closed: the render_view extraction. Two rounds. The three copies of
+  the ids-to-cursor-to-settle-to-window block live once in View::draw and
+  the three row tabs call it; the dead all-fits line is gone; the
+  drawn-order id assembly in path.rs is one, Tree::row_ids, and the test
+  that asserts no history reads it too. Nothing moved: the review built
+  HEAD in a throwaway worktree and byte-compared 21 render outputs - three
+  tabs, widths 40/60/100, heights 3 to 40 - and every one was identical.
+  That probe is the method for a refactor here: the before-and-after
+  comparison, not the green gate.
+  The first round found the third copy still walking the spine by hand -
+  only two of the three were unified - and the second closed it with two
+  probes: a panic planted in Tree::row_ids fails the test, and a widened
+  condition catches TSK10, so the assertion is not vacuous.
+  One low stands recorded: the sharing pin is a text scan, so a copy that
+  inlines settles walk without calling it would evade the guard.
+  Next unit: the theme-side follow-ups - the two terminal-column measures,
+  the fenced-code fixture, and the search-figure assertions home. Then the
   Autopilot design.
   Unit closed: the global flow. Three rounds. The flow skill and the
   review skill now live at ~/.config/opencode/skills, loaded by their IDs,
