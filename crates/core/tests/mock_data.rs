@@ -1,5 +1,5 @@
 use coding_lanes_core::{Status, Store, Task, parse_rfc3339};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 fn mock_store() -> Store {
@@ -422,7 +422,7 @@ fn fixtures_keep_their_gates() {
 }
 
 #[test]
-fn dependencies_point_to_existing_tasks_and_never_forward() {
+fn dependencies_point_to_existing_tasks_and_form_no_cycle() {
     let tasks = tasks();
     let ids: HashSet<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
 
@@ -433,13 +433,132 @@ fn dependencies_point_to_existing_tasks_and_never_forward() {
                 "{} depends on unknown task {dependency}",
                 task.id
             );
+        }
+    }
+    if let Some(cycle) = dependency_cycle(&tasks) {
+        panic!("the fixtures wait on each other in a cycle: {cycle}");
+    }
+}
+
+/// The first waits-on cycle in the fixtures, if there is one.
+fn dependency_cycle(tasks: &[Task]) -> Option<String> {
+    fn visit<'a>(
+        id: &'a str,
+        tasks: &'a [Task],
+        visiting: &mut Vec<&'a str>,
+        settled: &mut HashSet<&'a str>,
+    ) -> Option<String> {
+        if settled.contains(id) {
+            return None;
+        }
+        if let Some(start) = visiting.iter().position(|seen| *seen == id) {
+            let mut cycle: Vec<&str> = visiting[start..].to_vec();
+            cycle.push(id);
+            return Some(cycle.join(" -> "));
+        }
+        visiting.push(id);
+        let task = tasks.iter().find(|task| task.id == id)?;
+        for dependency in &task.depends_on {
+            if let Some(cycle) = visit(dependency, tasks, visiting, settled) {
+                return Some(cycle);
+            }
+        }
+        visiting.pop();
+        settled.insert(id);
+        None
+    }
+
+    let mut settled = HashSet::new();
+    for task in tasks {
+        if let Some(cycle) = visit(&task.id, tasks, &mut Vec::new(), &mut settled) {
+            return Some(cycle);
+        }
+    }
+    None
+}
+
+#[test]
+fn every_task_past_approved_waits_only_on_done_work() {
+    // `dependencies.satisfied` lets an agent take an approved task only when
+    // every dependency is done, and a status never goes back. So a task past
+    // approved can only exist if its dependencies were done when it was
+    // claimed, and they are still done now. This is the rule the Path tab is
+    // drawn on, in structure and in time.
+    let tasks = tasks();
+    let by_id: HashMap<&str, &Task> = tasks.iter().map(|task| (task.id.as_str(), task)).collect();
+    let past_approved = [
+        Status::Executing,
+        Status::CodeReview,
+        Status::Remediating,
+        Status::NeedsHuman,
+        Status::Done,
+    ];
+
+    let mut checked = 0;
+    for task in tasks
+        .iter()
+        .filter(|task| past_approved.contains(&task.status))
+    {
+        checked += 1;
+        for dependency in &task.depends_on {
+            let dependency = by_id
+                .get(dependency.as_str())
+                .unwrap_or_else(|| panic!("{} waits on unknown task {dependency}", task.id));
+            assert_eq!(
+                dependency.status,
+                Status::Done,
+                "{} is {:?} but waits on {}, which is {:?}",
+                task.id,
+                task.status,
+                dependency.id,
+                dependency.status
+            );
+            // The claim gate needs both: a claim, and dependencies done. A
+            // fixture claimed before the work it waits on finished would tell
+            // a chronology the model does not allow.
+            let claim_at = &task.claim.as_ref().expect("a claim").at;
+            let claimed = parse_rfc3339(claim_at)
+                .unwrap_or_else(|| panic!("{} has an unreadable claim", task.id));
+            let finished = parse_rfc3339(&dependency.status_since)
+                .unwrap_or_else(|| panic!("{} has an unreadable status_since", dependency.id));
             assert!(
-                dependency < &task.id,
-                "{} depends on a later task {dependency}",
-                task.id
+                claimed > finished,
+                "{} was claimed at {claim_at}, before {} finished at {}",
+                task.id,
+                dependency.id,
+                dependency.status_since
             );
         }
     }
+    assert!(checked > 0, "no fixture is past approved");
+
+    // The done set is closed under waits-on.
+    for task in tasks.iter().filter(|task| task.status == Status::Done) {
+        for dependency in &task.depends_on {
+            let dependency = by_id
+                .get(dependency.as_str())
+                .unwrap_or_else(|| panic!("{} waits on unknown task {dependency}", task.id));
+            assert_eq!(
+                dependency.status,
+                Status::Done,
+                "{} is done but waits on {}, which is {:?}",
+                task.id,
+                dependency.id,
+                dependency.status
+            );
+        }
+    }
+
+    // An approved task may still wait on work that is not done: that is the
+    // Path tab's blocked branch, not a contradiction.
+    assert!(
+        tasks
+            .iter()
+            .filter(|task| task.status == Status::Approved)
+            .flat_map(|task| task.depends_on.iter())
+            .any(|dependency| by_id[dependency.as_str()].status != Status::Done),
+        "no approved task is legitimately blocked by unfinished work"
+    );
 }
 
 #[test]
@@ -450,7 +569,9 @@ fn every_phase_after_the_first_depends_on_something() {
         Status::CodeReview,
         Status::Remediating,
         Status::NeedsHuman,
-        Status::Done,
+        // A done task may wait on nothing: the done graph has a root. The
+        // done tasks that do wait are covered by
+        // every_task_past_approved_waits_only_on_done_work.
     ] {
         for task in by_status(status) {
             assert!(!task.depends_on.is_empty(), "{} has no dependency", task.id);

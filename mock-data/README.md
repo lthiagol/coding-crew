@@ -35,14 +35,19 @@ Every fixture satisfies the gates of the phase it is in.
 
 ## Dependencies
 
-Dependencies run backwards only — a task depends on tasks with lower ids — so
-the graph has no cycles and `depends_on` always points at a task that exists.
-Three shapes are covered:
+Dependencies may point forwards or backwards in id order. The graph has no
+cycles and `depends_on` always points at a task that exists. The claim gate is
+what makes a wait real: `start` requires every dependency `done`, so a task
+past `approved` waits only on done work, and the `done` set is closed under
+its own waits-on edges. An `approved` task may wait on unfinished work — that
+is what holds it. Four shapes are covered:
 
-- **fan-in** — most tasks wait on two earlier ones; the last `done` task waits
-  on three
-- **chains** — the `done` tasks form a chain among themselves, and every
-  phase waits on the phase before it
+- **forward edges** — the phase tasks past `approved` — `executing` through
+  `needs-human` — wait on the `done` tasks `TSK22`–`TSK26`, whose ids are
+  higher: the gate, not the id order, is what makes a dependency real
+- **fan-in** — most tasks wait on two others; the last `done` task waits on
+  three
+- **chains** — the `done` tasks form a chain among themselves
 - **waiting on a blocked task** — `TSK07` and `TSK08` wait on `TSK05`, which
   carries a `blocked` overlay, so they cannot start until it is unblocked
 

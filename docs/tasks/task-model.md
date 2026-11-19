@@ -548,10 +548,13 @@ when it changes, so an id in a doc is a fact that goes stale.
 | a done task | verdict `ok`, no open findings |
 | a child task | `parent` set, still `draft` |
 
-The dependency graph in the fixtures runs backwards only — a task depends on
-tasks with lower ids — so the graph has no cycles and every `depends_on` points
-at a task that exists. The tasks that wait on tasks that are not done are
-blocked; the approved task whose dependency is done can be claimed.
+The fixture graph has no cycles and every `depends_on` points at a task that
+exists. Edges may point forwards or backwards in id order: the claim gate is
+what makes a wait real. `dependencies.satisfied` requires every dependency to
+be `done` before an `approved` task can start, so a task past `approved` waits
+only on done work, and the `done` set is closed under its own waits-on edges.
+An `approved` task may still wait on unfinished work — that is what holds it.
+The approved task whose dependencies are done can be claimed.
 
 `crates/core/tests/mock_data.rs` loads the set and checks that it covers every
 phase and keeps every gate.

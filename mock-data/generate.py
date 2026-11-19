@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate the mock task fixtures for coding-lanes.
 
-Every fixture satisfies the gates of the phase it is in, and the dependency
-graph only points backwards, so the set is valid as a whole.
+Every fixture satisfies the gates of the phase it is in. The dependency graph
+is acyclic, and a task past approved is claimed only after the done work it
+waits on has finished, so the set is valid as a whole.
 
 Run from the repo root:
 
@@ -117,6 +118,12 @@ SEVERITIES = ["low", "medium", "high"]
 PRIORITIES = ["urgent", "high", "normal", "low"]
 EFFORTS = ["S", "M", "L"]
 FOCI = ["spec-compliance", "edge-cases", "security", "empirical", "design"]
+
+# The done fixtures take ids 22 to 26: they are generated after the seven
+# phases up to needs-human, and before the promoted bug, the child and the
+# late approved task. A task past approved may only wait on done work, and
+# the approved tasks may wait on work that is not done.
+DONE_IDS = [f"TSK{number:02d}" for number in range(22, 27)]
 
 
 def slugify(title):
@@ -307,6 +314,30 @@ def finalize(item):
     return item
 
 
+def check_claims_follow_dependencies(tasks):
+    """Every task past approved was claimed after its dependencies finished.
+
+    `dependencies.satisfied` gates `start`: the task must be claimed and every
+    dependency done. A fixture past approved therefore tells a chronology the
+    model allows only if its claim sits after the completion of the done work
+    it waits on.
+    """
+    by_id = {item["id"]: item for item in tasks}
+    past_approved = {"executing", "code-review", "remediating", "needs-human", "done"}
+    for item in tasks:
+        if item["status"] not in past_approved:
+            continue
+        for dependency in item["depends_on"]:
+            done = by_id[dependency]
+            assert done["status"] == "done", (item["id"], dependency, done["status"])
+            assert item["claim"]["at"] > done["status_since"], (
+                item["id"],
+                item["claim"]["at"],
+                dependency,
+                done["status_since"],
+            )
+
+
 def build():
     tasks = []
     counter = 0
@@ -494,7 +525,7 @@ def build():
                     "at": ts(claim_day, 13),
                 }
             ],
-            depends_on=[ids["approved"][i], ids["approved"][(i + 2) % 3]],
+            depends_on=[DONE_IDS[i]],
         )
         tasks.append(item)
 
@@ -563,7 +594,7 @@ def build():
                     "at": ts(review_day + 1, 9),
                 }
             ],
-            depends_on=[ids["executing"][i], ids["executing"][(i + 1) % 3]],
+            depends_on=[DONE_IDS[i], DONE_IDS[(i + 1) % len(DONE_IDS)]],
         )
         if i == 0:
             # The detail pane's fixture. Its note carries a ==mark==, so the
@@ -646,7 +677,7 @@ def build():
                 "verdict": "changes-needed",
                 "findings": [finding(i + 1, external_at)],
             },
-            depends_on=[ids["code-review"][i], ids["code-review"][(i + 2) % 3]],
+            depends_on=[DONE_IDS[(i + 1) % len(DONE_IDS)]],
         )
         tasks.append(item)
 
@@ -728,27 +759,32 @@ def build():
                     "at": ts(claim_day, 12),
                 }
             ],
-            depends_on=[ids["remediating"][i], ids["remediating"][(i + 1) % 3]],
+            depends_on=[DONE_IDS[i], DONE_IDS[(i + 2) % len(DONE_IDS)]],
         )
         tasks.append(item)
 
-    # done — clean verdict, no open findings. Five of them, chained.
+    # done — clean verdict, no open findings. Five of them, chained only
+    # among themselves: the done set is closed under its waits-on edges.
+    # The chain is scheduled first in the month, before every task that
+    # waits on it, so each of those can be claimed after its dependencies
+    # finished.
     done_dependencies = [
-        [ids["needs-human"][0], ids["needs-human"][1]],
-        [ids["needs-human"][2], None],  # None: filled below with done[0]
-        [None, None],  # filled below with done[0], done[1]
-        [ids["needs-human"][0], None],  # None: filled below with done[2]
-        [None, None, None],  # filled below with done[1..3]
+        [],
+        [DONE_IDS[0]],
+        [DONE_IDS[0], DONE_IDS[1]],
+        [DONE_IDS[2]],
+        [DONE_IDS[1], DONE_IDS[2], DONE_IDS[3]],
     ]
     done_schedule = [
-        (ts(15, 12), (15, 14, 0), ts(15, 16), ts(15, 18)),
-        (ts(16, 11), (16, 12, 0), ts(16, 13), ts(16, 14)),
-        (ts(16, 15), (16, 16, 0), ts(16, 17), ts(16, 18)),
-        (ts(16, 19), (16, 19, 20), ts(16, 19, 40), ts(16, 20)),
-        (ts(16, 20, 10), (16, 20, 20), ts(16, 20, 30), ts(16, 20, 40)),
+        (ts(5, 15), (5, 16, 0), ts(5, 17), ts(5, 18)),
+        (ts(6, 16), (6, 17, 0), ts(6, 18), ts(6, 19)),
+        (ts(7, 17), (7, 18, 0), ts(7, 19), ts(7, 20)),
+        (ts(7, 20, 30), (7, 20, 40), ts(7, 20, 50), ts(7, 21)),
+        (ts(8, 9), (8, 10, 0), ts(8, 11), ts(8, 12)),
     ]
     for i in range(5):
         tid = next_id()
+        assert tid == DONE_IDS[i], (tid, DONE_IDS[i])
         ids.setdefault("done", []).append(tid)
         claim_at, (evidence_day, evidence_hour, evidence_minute), self_at, external_at = done_schedule[i]
         item = task(
@@ -809,26 +845,11 @@ def build():
                 "verdict": "ok",
                 "findings": [],
             },
-            depends_on=[],
+            depends_on=done_dependencies[i],
         )
-        item["depends_on"] = [
-            dependency
-            for dependency in done_dependencies[i]
-            if dependency is not None
-        ]
         tasks.append(item)
 
-    # The done chain: each task waits on the previous one, the last one on
-    # three at once.
     done_ids = ids["done"]
-    done_dependencies[1] = [ids["needs-human"][2], done_ids[0]]
-    done_dependencies[2] = [done_ids[0], done_ids[1]]
-    done_dependencies[3] = [ids["needs-human"][0], done_ids[2]]
-    done_dependencies[4] = [done_ids[1], done_ids[2], done_ids[3]]
-    for index, item in enumerate(tasks):
-        if item["id"] in done_ids:
-            position = done_ids.index(item["id"])
-            item["depends_on"] = done_dependencies[position]
 
     # smaller tasks — ideas, bugs and small features, plus the trail of one
     # that became a task.
@@ -958,6 +979,7 @@ def build():
 
     for task_item in tasks:
         finalize(task_item)
+    check_claims_follow_dependencies(tasks)
 
     return tasks, items
 

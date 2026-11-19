@@ -6,15 +6,15 @@
   "parent": null,
   "children": [],
   "created": "2026-11-07T16:00Z",
-  "updated": "2026-11-16T18:00Z",
+  "updated": "2026-11-07T20:00Z",
   "status": "done",
-  "status_since": "2026-11-16T18:00Z",
+  "status_since": "2026-11-07T20:00Z",
   "overlays": {},
   "claim": {
     "by": "runner-06",
     "session": "session-runner-06",
-    "at": "2026-11-16T15:00Z",
-    "lease_expires_at": "2026-11-16T18:00Z"
+    "at": "2026-11-07T17:00Z",
+    "lease_expires_at": "2026-11-07T20:00Z"
   },
   "planned_by": "session-creator-06",
   "meta": {
@@ -47,7 +47,7 @@
           "command": "cargo clippy --all-targets -- -D warnings",
           "exit_code": 0,
           "summary": "12 passed; 0 failed",
-          "at": "2026-11-16T16:00Z",
+          "at": "2026-11-07T18:00Z",
           "by": "runner-06",
           "session": "session-runner-06"
         }
@@ -82,7 +82,7 @@
         "focus": "spec-compliance",
         "reviewer": "runner-06",
         "verdict": "ok",
-        "at": "2026-11-16T17:00Z",
+        "at": "2026-11-07T19:00Z",
         "notes": "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum.",
         "findings": []
       },
@@ -92,7 +92,7 @@
         "focus": "security",
         "reviewer": "reviewer-07",
         "verdict": "ok",
-        "at": "2026-11-16T18:00Z",
+        "at": "2026-11-07T20:00Z",
         "notes": "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum.",
         "findings": []
       }

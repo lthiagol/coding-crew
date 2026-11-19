@@ -98,7 +98,6 @@
     }
   ],
   "depends_on": [
-    "TSK07",
-    "TSK09"
+    "TSK22"
   ]
 }
