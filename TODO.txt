@@ -1,6 +1,6 @@
 coding-crew - orchestration state
 
-updated 2026-11-18 by the orchestrator
+updated 2026-11-19 by the orchestrator
 branch main, remote https://github.com/lthiagol/coding-lanes.git
 gate is make ci: cargo fmt --all -- --check, cargo clippy --all-targets -- -D warnings,
 cargo test --workspace, bash scripts/test-pty-sweep.sh, the flow suites in the

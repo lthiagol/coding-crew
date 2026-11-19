@@ -1,9 +1,11 @@
 # Design docs
 
-**coding-crew** — an agentic todo list with superpowers. Two interfaces:
+**coding-crew** — an agentic todo list with superpowers. Three interfaces:
 **talita**, the CLI tool that writes and manages tasks (**T**ask **A**ccess and
-**L**ane **I**nteraction **T**erminal **A**pp), and **raul**, the TUI that
-shows them (**R**eview, **A**pprove, **U**nderstand **L**ane).
+**L**ane **I**nteraction **T**erminal **A**pp); **raul**, the TUI for the work
+that shows them (**R**eview, **A**pprove, **U**nderstand **L**ane); and
+**hugo**, the TUI for the flow that governs the automation (**H**uman-guided
+**U**nified **G**overnance **&** **O**rchestration).
 
 | doc | what |
 |---|---|
@@ -11,6 +13,7 @@ shows them (**R**eview, **A**pprove, **U**nderstand **L**ane).
 | [tasks/smaller-tasks.md](tasks/smaller-tasks.md) | ideas, bugs and small features — the work that is not a task yet |
 | [roles/roles.md](roles/roles.md) | actors, roles, ownership, session boundaries |
 | [tui/screens.md](tui/screens.md) | raul: the window, the tabs, the detail pane, the derived views |
+| [hugo/design-record.md](hugo/design-record.md) | hugo: the interface for the flow — the sidebar, the main pane, and the sketches that were compared |
 | [tui/theme.md](tui/theme.md) | the colour slots, the phase-to-slot mapping, the presets |
 | [tui/palettes.md](tui/palettes.md) | where the themes come from: the families, the mapping, the rules for a new one |
 | [vocabulary.md](vocabulary.md) | the names we use, and the ones we rejected |
