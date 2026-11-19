@@ -42,7 +42,6 @@ test-scripts: ## Run the shell script tests
 	bash scripts/test-herdr-wake.sh
 	bash scripts/test-pty-sweep.sh
 	bash scripts/test-review-snapshot.sh
-	bash scripts/test-sync.sh
 	bash scripts/test-tab-closer.sh
 
 .PHONY: sweep

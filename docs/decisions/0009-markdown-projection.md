@@ -64,8 +64,8 @@ tested without a terminal, and it is the piece other surfaces will need.
 ### Follow-up
 
 - The markdown view is a unit of its own, after the shell and the Overview.
-- `crates/engine` needs a sync script and a `VENDORED.md`, the way
-  `.agents/skills/` does for its vendored skills.
+- `crates/engine` needs a sync script and a `VENDORED.md` — delivered by
+  the vendored-engine unit.
 - The escaping rule is decided, and it is what the screens spec already
   implies: **the free text is markdown in its own right** — the intent, the
   criterion descriptions, the notes, the smaller task's body — and **the

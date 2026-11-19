@@ -47,6 +47,14 @@ make raul
 - `.orchestration.json` holds the flow's project prefix, `cl`, and the paths
   of the role configs.
 
+## Upstream skills
+
+- Four skills are used from upstream `github.com/mattpocock/skills`, pinned at
+  commit `5beb35b040e3de97e54fa9e386d7e42d15c295c2`: `codebase-design`,
+  `diagnosing-bugs`, `domain-modeling`, `writing-for-agents`.
+- They live whole at `~/.config/opencode/skills/`, with the MIT licence and
+  their provenance beside them. This repository does not carry them.
+
 ## Communication
 
 - Be concise. No verbosity in docs, code comments, commit messages, or replies.
