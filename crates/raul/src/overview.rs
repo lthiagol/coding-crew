@@ -21,7 +21,11 @@ const BORDER: u16 = 2;
 const LABEL_WIDTH: usize = 12;
 
 /// Draw the tab.
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
+///
+/// `now` is the frame's instant: the claimable count, the summary line and
+/// the next task all answer from it, so one screen cannot draw a count and
+/// a next task from two clocks.
+pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, now: &str) {
     if let Some(missing) = work.missing {
         render_missing(frame, area, work, missing, theme);
         return;
@@ -31,9 +35,9 @@ pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
         return;
     }
     if area.width < NARROW {
-        render_stacked(frame, area, work, theme);
+        render_stacked(frame, area, work, theme, now);
     } else {
-        render_wide(frame, area, work, theme);
+        render_wide(frame, area, work, theme, now);
     }
 }
 
@@ -171,7 +175,7 @@ fn error_marker(work: &Work, width: u16, theme: &Theme) -> Line<'static> {
 
 /// Two columns: the counts on the left, the numbers that ask for a decision
 /// on the right.
-fn render_wide(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
+fn render_wide(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, now: &str) {
     let columns =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
     // The unreadable block outranks the kinds: a file that could not be read
@@ -183,8 +187,8 @@ fn render_wide(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
     left.push(kinds_panel(work, columns[0].width, theme));
     let right = vec![
         needs_you_panel(work, columns[1].width, theme),
-        claimable_panel(work, theme),
-        next_panel(work, theme),
+        claimable_panel(work, theme, now),
+        next_panel(work, theme, now),
     ];
     let fits = column_fits(
         &left,
@@ -195,7 +199,7 @@ fn render_wide(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
         columns[1].width.saturating_sub(BORDER),
         columns[1].height,
     );
-    let area = summary_area(frame, area, work, fits, theme);
+    let area = summary_area(frame, area, work, fits, theme, now);
     let columns =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
     draw_panels(frame, columns[0], &left, theme);
@@ -203,11 +207,11 @@ fn render_wide(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
 }
 
 /// One column, for a narrow terminal.
-fn render_stacked(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
+fn render_stacked(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, now: &str) {
     let mut panels = vec![
         needs_you_panel(work, area.width, theme),
-        claimable_panel(work, theme),
-        next_panel(work, theme),
+        claimable_panel(work, theme, now),
+        next_panel(work, theme, now),
     ];
     panels.push(counts_panel(work, area.width, theme));
     // The unreadable block outranks the kinds: a file that could not be read
@@ -218,7 +222,7 @@ fn render_stacked(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
     panels.push(kinds_panel(work, area.width, theme));
     let width = area.width.saturating_sub(BORDER);
     let fits = column_fits(&panels, width, area.height);
-    let area = summary_area(frame, area, work, fits, theme);
+    let area = summary_area(frame, area, work, fits, theme, now);
     draw_panels(frame, area, &panels, theme);
 }
 
@@ -226,11 +230,18 @@ fn render_stacked(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
 ///
 /// The key numbers stay visible, whatever the height and the width: when a
 /// block does not fit, the numbers go on top of the blocks.
-fn summary_area(frame: &mut Frame, area: Rect, work: &Work, fits: bool, theme: &Theme) -> Rect {
+fn summary_area(
+    frame: &mut Frame,
+    area: Rect,
+    work: &Work,
+    fits: bool,
+    theme: &Theme,
+    now: &str,
+) -> Rect {
     if fits || area.height == 0 {
         return area;
     }
-    let Some(summary) = summary_line(work, area.width, theme) else {
+    let Some(summary) = summary_line(work, area.width, theme, now) else {
         return area;
     };
     frame.render_widget(
@@ -267,10 +278,10 @@ fn column_fits(panels: &[Panel], width: u16, height: u16) -> bool {
 ///
 /// The lane facts are painted with the lane slots, the same as in the
 /// blocks: the same fact is never painted two ways on one screen.
-fn summary_line(work: &Work, width: u16, theme: &Theme) -> Option<Line<'static>> {
+fn summary_line(work: &Work, width: u16, theme: &Theme, now: &str) -> Option<Line<'static>> {
     let (approve, review, escalated) = work.needs_you_counts();
     let total = approve + review + escalated;
-    let claimable = work.claimable().len();
+    let claimable = work.claimable_at(now).len();
     // The long forms of the two lane facts, and the short ones.
     let human_long = format!("{} {} on a human", task_word(total), wait_word(total));
     let human_brief = format!("{} a human", need_word(total));
@@ -279,7 +290,7 @@ fn summary_line(work: &Work, width: u16, theme: &Theme) -> Option<Line<'static>>
     let claim_short = "claim".to_string();
     let separator = || Span::styled(" · ", theme.text.dim);
     let mut forms: Vec<Vec<Span<'static>>> = Vec::new();
-    if let Some(task) = work.next() {
+    if let Some(task) = work.next_at(now) {
         forms.push(
             [
                 lane_span(total, &human_long, theme.semantic.human, theme),
@@ -878,9 +889,9 @@ fn count_width(counts: impl IntoIterator<Item = usize>) -> usize {
         .unwrap_or(1)
 }
 
-/// How many tasks an agent could claim right now.
-fn claimable_panel(work: &Work, theme: &Theme) -> Panel {
-    let count = work.claimable().len();
+/// How many tasks an agent could claim at `now`.
+fn claimable_panel(work: &Work, theme: &Theme, now: &str) -> Panel {
+    let count = work.claimable_at(now).len();
     let lines = vec![
         Line::from(vec![
             Span::styled(format!("{count} "), theme.text.strong),
@@ -906,9 +917,9 @@ fn claimable_panel(work: &Work, theme: &Theme) -> Panel {
     }
 }
 
-/// What happens next: the first claimable task.
-fn next_panel(work: &Work, theme: &Theme) -> Panel {
-    let lines = match work.next() {
+/// What happens next: the first claimable task at `now`.
+fn next_panel(work: &Work, theme: &Theme, now: &str) -> Panel {
+    let lines = match work.next_at(now) {
         Some(task) => vec![
             Line::from(vec![
                 Span::styled(format!("{} ", task.id), theme.text.strong),
@@ -1018,11 +1029,23 @@ mod tests {
         Theme::preset(Preset::Dark)
     }
 
+    /// The tests' clock: every fixture claim has expired by it.
+    const NOW: &str = "2026-11-19T08:00:00Z";
+
+    fn now() -> &'static str {
+        NOW
+    }
+
     /// Draw the Overview and return the rows it shows.
     fn draw(work: &Work, width: u16, height: u16) -> Vec<String> {
+        draw_at(work, width, height, now())
+    }
+
+    /// Draw the Overview at a given instant.
+    fn draw_at(work: &Work, width: u16, height: u16, now: &str) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme()))
+            .draw(|frame| render(frame, frame.area(), work, &theme(), now))
             .expect("drawing the overview");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -1039,7 +1062,7 @@ mod tests {
     fn draw_cells(work: &Work, width: u16, height: u16) -> Vec<Vec<(char, Color)>> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme()))
+            .draw(|frame| render(frame, frame.area(), work, &theme(), now()))
             .expect("drawing the overview");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -1128,6 +1151,57 @@ mod tests {
         assert!(text.contains("needs-human"), "{text}");
         assert!(text.contains("idea"), "{text}");
         assert!(text.contains("TSK29"), "{text}");
+    }
+
+    #[test]
+    fn the_overview_draws_from_one_instant() {
+        // A lease expiring at a boundary: before it the task is held, at it
+        // the task is claimable. The claimable count and the next task
+        // answer from the instant the frame is given, so one screen cannot
+        // draw a count of zero beside a next task the count says is free,
+        // or a count of one beside "nothing is claimable".
+        let mut task = coding_lanes_core::Task::new("TSK01", "the claimed task");
+        task.status = coding_lanes_core::Status::Approved;
+        task.claim = Some(coding_lanes_core::Claim {
+            by: "runner-01".into(),
+            session: Some("session-runner-01".into()),
+            at: "2029-12-31T23:00:00Z".into(),
+            lease_expires_at: "2030-01-01T00:00:00Z".into(),
+        });
+        let work = Work {
+            root: std::path::PathBuf::new(),
+            tasks: vec![task],
+            items: Vec::new(),
+            errors: Vec::new(),
+            missing: None,
+        };
+        let held = "2029-12-31T23:59:59Z";
+        let free = "2030-01-01T00:00:00Z";
+        let before = draw_at(&work, 100, 40, held).join("\n");
+        assert!(
+            before.contains("0 tasks an agent could claim right now"),
+            "the live claim is not held: {before}"
+        );
+        assert!(
+            before.contains("nothing is claimable right now"),
+            "a held task is still next: {before}"
+        );
+        assert!(!before.contains("TSK01"), "a held task is drawn: {before}");
+        // The expired side is the one a fresh clock in the tab fails: the
+        // real clock is years before the fixture's lease.
+        let after = draw_at(&work, 100, 40, free).join("\n");
+        assert!(
+            after.contains("1 task an agent could claim right now"),
+            "the expired claim still holds the task: {after}"
+        );
+        assert!(
+            after.contains("TSK01"),
+            "the count says one and the next panel names none: {after}"
+        );
+        assert!(
+            !after.contains("nothing is claimable right now"),
+            "the count says one beside no next task: {after}"
+        );
     }
 
     #[test]
@@ -1322,7 +1396,7 @@ mod tests {
     fn a_short_summary_keeps_the_qualifier_of_its_number() {
         let work = mock_work();
         for width in 8..=60 {
-            let Some(line) = summary_line(&work, width, &theme()) else {
+            let Some(line) = summary_line(&work, width, &theme(), now()) else {
                 continue;
             };
             let text = text_of(std::slice::from_ref(&line));
@@ -1544,7 +1618,7 @@ mod tests {
         let work = Work::load(&dir);
         let mut seen = false;
         for width in 1..=60 {
-            let Some(line) = summary_line(&work, width, &theme()) else {
+            let Some(line) = summary_line(&work, width, &theme(), now()) else {
                 continue;
             };
             let text = text_of(std::slice::from_ref(&line));

@@ -345,6 +345,12 @@ mod tests {
         Theme::preset(Preset::Dark)
     }
 
+    /// The tests' clock: the pane does not measure time, but the window it
+    /// draws over does.
+    fn now() -> &'static str {
+        "2026-11-19T08:00:00Z"
+    }
+
     fn pane(id: &str) -> Detail {
         Detail::opened(id.to_string(), Tab::Path, None)
     }
@@ -381,7 +387,7 @@ mod tests {
         app.detail = Some(detail.clone());
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| app.draw(frame, work))
+            .draw(|frame| app.draw(frame, work, now()))
             .expect("drawing the pane");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -662,7 +668,7 @@ mod tests {
         // The first draw, as the loop does: it measures the page.
         let first = draw_frame(&mut app, work, width, height);
         for code in keys {
-            app.on_key(crossterm::event::KeyEvent::from(*code), work);
+            app.on_key(crossterm::event::KeyEvent::from(*code), work, now());
         }
         let last = draw_frame(&mut app, work, width, height);
         (first, last, app)
@@ -672,7 +678,7 @@ mod tests {
     fn draw_frame(app: &mut App, work: &Work, width: u16, height: u16) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| app.draw(frame, work))
+            .draw(|frame| app.draw(frame, work, now()))
             .expect("drawing the pane");
         let buffer = terminal.backend().buffer();
         (0..buffer.area().height)

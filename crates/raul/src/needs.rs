@@ -60,13 +60,6 @@ pub struct Group {
     pub rows: Vec<Row>,
 }
 
-/// Draw the tab at the top of its rows.
-#[cfg(test)]
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
-    let mut view = View::default();
-    render_view(frame, area, work, theme, selected, &mut view);
-}
-
 /// Draw the tab through the window the keys move.
 ///
 /// `selected` is the row the cursor is on: its cells take the selection's
@@ -79,6 +72,7 @@ pub fn render_view(
     theme: &Theme,
     selected: Option<&str>,
     view: &mut View,
+    now: &str,
 ) {
     let block = Block::bordered()
         .title("needs you")
@@ -108,16 +102,15 @@ pub fn render_view(
     }
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
-    let now = coding_lanes_core::now_rfc3339();
-    let ids = row_ids(work, &now);
+    let ids = row_ids(work, now);
     let cursor = selected
         .and_then(|id| ids.iter().position(|other| other == id))
         .unwrap_or(0);
     let first = view.settle(ids.len(), cursor, |first| {
-        let (_, shown, whole) = window(work, width, height, theme, selected, first, &now);
+        let (_, shown, whole) = window(work, width, height, theme, selected, first, now);
         (shown, whole)
     });
-    let (rows, shown, _) = window(work, width, height, theme, selected, first, &now);
+    let (rows, shown, _) = window(work, width, height, theme, selected, first, now);
     if shown.len() == ids.len() {
         // Every row fits: there is nowhere to scroll.
         view.first = 0;
@@ -197,9 +190,9 @@ fn lines(
     height: usize,
     theme: &Theme,
     selected: Option<&str>,
+    now: &str,
 ) -> Vec<Line<'static>> {
-    let now = coding_lanes_core::now_rfc3339();
-    window(work, width, height, theme, selected, 0, &now).0
+    window(work, width, height, theme, selected, 0, now).0
 }
 
 /// The lines of the tab, from the row at `first`, and the rows they show.
@@ -845,11 +838,20 @@ mod tests {
         Theme::preset(Preset::Dark)
     }
 
+    /// The tests' clock: one instant for the rows and the draw that shows
+    /// them. Every fixture entered its status before it.
+    const NOW: &str = "2026-11-19T08:00:00Z";
+
+    fn now() -> &'static str {
+        NOW
+    }
+
     /// Draw the tab and return the rows it shows.
     fn draw(work: &Work, width: u16, height: u16) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
+        let mut view = View::default();
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme(), None))
+            .draw(|frame| render_view(frame, frame.area(), work, &theme(), None, &mut view, now()))
             .expect("drawing the needs you tab");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -865,8 +867,9 @@ mod tests {
     /// Draw the tab and return every cell, with its colour.
     fn draw_cells(work: &Work, width: u16, height: u16) -> Vec<Vec<(char, Color)>> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
+        let mut view = View::default();
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme(), None))
+            .draw(|frame| render_view(frame, frame.area(), work, &theme(), None, &mut view, now()))
             .expect("drawing the needs you tab");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -949,18 +952,18 @@ mod tests {
     fn the_counts_of_the_fixtures_are_pinned() {
         // The three counts the Overview shows, and the rows behind them.
         let work = mock_work();
-        let now = coding_lanes_core::now_rfc3339();
+        let now = NOW;
         assert_eq!(work.needs_you_counts(), (2, 3, 3));
-        assert_eq!(group_of(&work, Reason::Approve, &now).rows.len(), 2);
-        assert_eq!(group_of(&work, Reason::Review, &now).rows.len(), 3);
-        assert_eq!(group_of(&work, Reason::Escalated, &now).rows.len(), 3);
+        assert_eq!(group_of(&work, Reason::Approve, now).rows.len(), 2);
+        assert_eq!(group_of(&work, Reason::Review, now).rows.len(), 3);
+        assert_eq!(group_of(&work, Reason::Escalated, now).rows.len(), 3);
     }
 
     #[test]
     fn a_task_with_an_overlay_does_not_wait_on_a_human() {
         // TSK05 is groomed and blocked: it is held, not waiting on a human.
         let work = mock_work();
-        let ids: Vec<String> = groups(&work, &coding_lanes_core::now_rfc3339())
+        let ids: Vec<String> = groups(&work, now())
             .into_iter()
             .flat_map(|group| group.rows.into_iter().map(|row| row.id))
             .collect();
@@ -971,7 +974,7 @@ mod tests {
     #[test]
     fn every_row_of_the_human_lane_is_in_the_tab() {
         let work = mock_work();
-        let shown: Vec<String> = groups(&work, &coding_lanes_core::now_rfc3339())
+        let shown: Vec<String> = groups(&work, now())
             .into_iter()
             .flat_map(|group| group.rows.into_iter().map(|row| row.id))
             .collect();
@@ -1026,14 +1029,14 @@ mod tests {
     fn the_wait_of_a_fixture_is_the_time_since_it_entered_its_status() {
         // One clock for the whole test: two reads can land in two seconds.
         let work = mock_work();
-        let now = coding_lanes_core::now_rfc3339();
-        let row = group_of(&work, Reason::Approve, &now)
+        let now = NOW;
+        let row = group_of(&work, Reason::Approve, now)
             .rows
             .into_iter()
             .find(|row| row.id == "TSK04")
             .expect("TSK04 waits for approval");
         let task = work.task("TSK04").expect("the task");
-        let expected = parse_rfc3339(&now).expect("now")
+        let expected = parse_rfc3339(now).expect("now")
             - parse_rfc3339(&task.status_since)
                 .or_else(|| parse_rfc3339(&task.created))
                 .expect("the moment the task entered its status");
@@ -1047,9 +1050,9 @@ mod tests {
         // stamp of the status, not from the fallback to created, and not
         // from the last write.
         let work = mock_work();
-        let now = coding_lanes_core::now_rfc3339();
-        let now_ts = parse_rfc3339(&now).expect("now");
-        let rows: Vec<Row> = groups(&work, &now)
+        let now = NOW;
+        let now_ts = parse_rfc3339(now).expect("now");
+        let rows: Vec<Row> = groups(&work, now)
             .into_iter()
             .flat_map(|group| group.rows)
             .collect();
@@ -1117,7 +1120,7 @@ mod tests {
     #[test]
     fn the_longest_wait_comes_first() {
         let work = mock_work();
-        let group = group_of(&work, Reason::Escalated, &coding_lanes_core::now_rfc3339());
+        let group = group_of(&work, Reason::Escalated, now());
         let waits: Vec<i64> = group.rows.iter().map(|row| row.waited).collect();
         let mut sorted = waits.clone();
         sorted.sort_by(|a, b| b.cmp(a));
@@ -1129,8 +1132,8 @@ mod tests {
         // Each fixture of a phase entered it at its own moment: the reader
         // can tell the rows apart by their wait.
         let work = mock_work();
-        let now = coding_lanes_core::now_rfc3339();
-        for group in groups(&work, &now) {
+        let now = NOW;
+        for group in groups(&work, now) {
             let mut ages: Vec<String> = group.rows.iter().map(|row| age_text(row.waited)).collect();
             ages.sort();
             ages.dedup();
@@ -1183,7 +1186,7 @@ mod tests {
         let work = mock_work();
         for width in 1..=120 {
             for height in 1..=40 {
-                let rows = lines(&work, width, height, &theme(), None);
+                let rows = lines(&work, width, height, &theme(), None, now());
                 for row in &rows {
                     assert!(
                         row.width() <= width,
@@ -1229,6 +1232,7 @@ mod tests {
                     usize::from(height) - BORDER,
                     &theme(),
                     None,
+                    now(),
                 );
                 assert!(
                     asked.len() <= usize::from(height).saturating_sub(BORDER),
@@ -1490,7 +1494,7 @@ mod tests {
     fn no_line_is_spent_on_an_empty_announcement() {
         // Everything fits: there is nothing to say, and no blank line is
         // spent saying it.
-        let built = lines(&mock_work(), 58, 38, &theme(), None);
+        let built = lines(&mock_work(), 58, 38, &theme(), None, now());
         for row in &built {
             assert!(row.width() > 0, "{built:?}");
             let text: String = row
@@ -1608,8 +1612,19 @@ mod tests {
             for preset in Preset::ALL {
                 let mut terminal =
                     Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
+                let mut view = View::default();
                 terminal
-                    .draw(|frame| render(frame, frame.area(), &work, &Theme::preset(preset), None))
+                    .draw(|frame| {
+                        render_view(
+                            frame,
+                            frame.area(),
+                            &work,
+                            &Theme::preset(preset),
+                            None,
+                            &mut view,
+                            now(),
+                        )
+                    })
                     .expect("drawing");
                 rendered.push((preset.name(), buffer_text(terminal.backend().buffer())));
             }

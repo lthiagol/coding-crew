@@ -396,6 +396,30 @@ fn an_unknown_tab_is_refused_before_rendering() {
 }
 
 #[test]
+fn the_tab_and_detail_flags_are_refused_together() {
+    // The pane covers the whole window: the tab under it is a state the keys
+    // cannot reach, so the pair is refused before anything is printed.
+    let output = run(&[
+        "--render",
+        "--plain",
+        "--tab",
+        "path",
+        "--detail",
+        DETAIL_TASK,
+        WORK,
+    ]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "--tab with --detail did not exit 1: {output:?}"
+    );
+    assert!(output.stdout.is_empty(), "a screen was printed: {output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--tab"), "{stderr}");
+    assert!(stderr.contains("--detail"), "{stderr}");
+}
+
+#[test]
 fn two_runs_print_the_same_bytes() {
     let first = overview();
     let second = run(&["--plain", "--height=40", "--render", "--width=100", WORK]);

@@ -172,6 +172,11 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     if tab.is_some() && !render {
         bail!("--tab works with --render --plain\n{USAGE}");
     }
+    // The detail pane covers the whole window, so a tab under it is a state
+    // the keys cannot reach: the pair is refused, never silently rendered.
+    if tab.is_some() && detail.is_some() {
+        bail!("--tab and --detail cannot be combined: the detail pane covers the tab\n{USAGE}");
+    }
     let (root, reason) = match root {
         Some(root) => {
             let reason = reason_at(&root);
@@ -266,11 +271,14 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
     let mut app = App::new(options.root, options.theme);
     loop {
         let work = Work::load_missing(&app.root, reason);
-        terminal.draw(|frame| app.draw(frame, &work))?;
+        // One clock read per frame: the draw and the key that answers it
+        // both see the instant the rows on display were ordered by.
+        let now = coding_lanes_core::now_rfc3339();
+        terminal.draw(|frame| app.draw(frame, &work, &now))?;
 
         if let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
-            && app.on_key(key, &work) == Action::Quit
+            && app.on_key(key, &work, &now) == Action::Quit
         {
             break;
         }
@@ -295,8 +303,10 @@ fn render_plain(options: Options) -> Result<()> {
         }
         app.detail = Some(Detail::opened(id.clone(), app.tab, None));
     }
+    // The plain render is one frame too: one instant, read once.
+    let now = coding_lanes_core::now_rfc3339();
     let mut terminal = Terminal::new(TestBackend::new(options.width, options.height))?;
-    terminal.draw(|frame| app.draw(frame, &work))?;
+    terminal.draw(|frame| app.draw(frame, &work, &now))?;
     let text = plain_text(terminal.backend().buffer());
     let mut stdout = std::io::stdout();
     stdout.write_all(text.as_bytes())?;
@@ -648,5 +658,61 @@ mod tests {
             .expect_err("the flag is a render-mode flag");
         assert!(error.to_string().contains("--tab"), "{error}");
         assert!(error.to_string().contains("--render"), "{error}");
+    }
+
+    #[test]
+    fn the_tab_and_detail_flags_are_refused_together() {
+        // The pane covers the whole window: the tab under it is a state the
+        // keys cannot reach, so the pair is refused rather than rendered.
+        for args in [
+            vec!["--render", "--plain", "--tab", "path", "--detail", "TSK13"],
+            vec!["--render", "--plain", "--tab=settings", "--detail=TSK13"],
+        ] {
+            let error = parse_args(args.into_iter().map(String::from))
+                .expect_err("the pair has no reachable state");
+            let text = error.to_string();
+            assert!(text.contains("--tab"), "{text}");
+            assert!(text.contains("--detail"), "{text}");
+            assert!(text.contains("combined"), "{text}");
+        }
+    }
+
+    #[test]
+    fn only_the_frame_reads_the_clock() {
+        // One instant per frame, and no other clock read in the crate: a tab
+        // that reads its own clock can disagree with the frame it is drawn
+        // in. The two frames — the interactive loop and the plain render —
+        // are the only readers; every other module takes the instant it is
+        // given.
+        let clock = ["now", "_rfc3339"].concat();
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut readers: Vec<String> = Vec::new();
+        for entry in fs::read_dir(&dir).expect("the source folder") {
+            let path = entry.expect("a source entry").path();
+            if path.extension().and_then(|value| value.to_str()) != Some("rs") {
+                continue;
+            }
+            let source = fs::read_to_string(&path).expect("a source file");
+            if source.contains(&clock) {
+                readers.push(
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .expect("a file name")
+                        .to_string(),
+                );
+            }
+        }
+        readers.sort();
+        assert_eq!(
+            readers,
+            vec!["main.rs".to_string()],
+            "a module outside the frame reads the clock: {readers:?}"
+        );
+        let main = fs::read_to_string(dir.join("main.rs")).expect("main.rs");
+        assert_eq!(
+            main.matches(&clock).count(),
+            2,
+            "the clock is read once per frame: the loop and the plain render"
+        );
     }
 }

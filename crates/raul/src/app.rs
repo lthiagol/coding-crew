@@ -60,7 +60,11 @@ impl App {
     }
 
     /// Handle a key. Returns what the window does next.
-    pub fn on_key(&mut self, key: KeyEvent, work: &Work) -> Action {
+    ///
+    /// `now` is the frame's instant: the one the screen on display was drawn
+    /// with. The rows a key moves through are the rows that were painted, so
+    /// a clock read between the draw and the key cannot reorder the list.
+    pub fn on_key(&mut self, key: KeyEvent, work: &Work, now: &str) -> Action {
         if key.kind != KeyEventKind::Press {
             return Action::Redraw;
         }
@@ -122,24 +126,24 @@ impl App {
                 // Enter opens the row that is selected, or the tab's first
                 // row: the pane opens from every tab that has rows, and
                 // nowhere else.
-                if let Some(id) = self.open_target(work) {
+                if let Some(id) = self.open_target(work, now) {
                     self.selection = Some(id.clone());
                     self.detail = Some(Detail::opened(id, self.tab, self.selection.clone()));
                 }
                 Action::Redraw
             }
-            KeyCode::Down | KeyCode::Char('j') => self.move_selection(work, 1),
-            KeyCode::Up | KeyCode::Char('k') => self.move_selection(work, -1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_selection(work, 1, now),
+            KeyCode::Up | KeyCode::Char('k') => self.move_selection(work, -1, now),
             KeyCode::PageDown => {
                 let page = self.view.page.max(1) as isize;
-                self.move_selection(work, page)
+                self.move_selection(work, page, now)
             }
             KeyCode::PageUp => {
                 let page = self.view.page.max(1) as isize;
-                self.move_selection(work, -page)
+                self.move_selection(work, -page, now)
             }
-            KeyCode::Char('g') => self.move_to(work, 0),
-            KeyCode::Char('G') => self.move_to(work, usize::MAX),
+            KeyCode::Char('g') => self.move_to(work, 0, now),
+            KeyCode::Char('G') => self.move_to(work, usize::MAX, now),
             KeyCode::Char(digit @ '1'..='6') => {
                 self.go_to(Tab::from_index(digit as usize - '1' as usize))
             }
@@ -161,29 +165,29 @@ impl App {
     }
 
     /// The record enter opens: the selected row, or the tab's first row.
-    fn open_target(&self, work: &Work) -> Option<String> {
-        self.cursor(work)
+    fn open_target(&self, work: &Work, now: &str) -> Option<String> {
+        self.cursor(work, now)
     }
 
     /// The row the cursor is on: the selection, or the tab's first row when
     /// nothing is selected yet.
-    fn cursor(&self, work: &Work) -> Option<String> {
-        let ids = rows_of(work, self.tab)?;
+    fn cursor(&self, work: &Work, now: &str) -> Option<String> {
+        let ids = rows_of(work, self.tab, now)?;
         let selected = self.selection.clone().filter(|id| ids.contains(id));
         selected.or_else(|| ids.into_iter().next())
     }
 
     /// Move the cursor one row, clamped to the tab's rows. A tab without
     /// rows has nowhere to move.
-    fn move_selection(&mut self, work: &Work, step: isize) -> Action {
-        let Some(ids) = rows_of(work, self.tab) else {
+    fn move_selection(&mut self, work: &Work, step: isize, now: &str) -> Action {
+        let Some(ids) = rows_of(work, self.tab, now) else {
             return Action::Redraw;
         };
         if ids.is_empty() {
             return Action::Redraw;
         }
         let current = self
-            .cursor(work)
+            .cursor(work, now)
             .and_then(|id| ids.iter().position(|other| *other == id))
             .unwrap_or(0);
         let next = (current as isize + step).clamp(0, ids.len() as isize - 1) as usize;
@@ -193,8 +197,8 @@ impl App {
 
     /// Move the cursor to a row, clamped to the tab's rows. The first and
     /// the last row are the ends the `g` and `G` keys reach.
-    fn move_to(&mut self, work: &Work, index: usize) -> Action {
-        let Some(ids) = rows_of(work, self.tab) else {
+    fn move_to(&mut self, work: &Work, index: usize, now: &str) -> Action {
+        let Some(ids) = rows_of(work, self.tab, now) else {
             return Action::Redraw;
         };
         let Some(id) = ids.get(index.min(ids.len().saturating_sub(1))) else {
@@ -214,7 +218,11 @@ impl App {
     }
 
     /// Draw the window.
-    pub fn draw(&mut self, frame: &mut Frame, work: &Work) {
+    ///
+    /// `now` is read once per frame by the caller and passed through: the
+    /// cursor's row order, the rows that are painted and the footer's
+    /// question all answer from one instant.
+    pub fn draw(&mut self, frame: &mut Frame, work: &Work, now: &str) {
         let area = frame.area();
         let rows = Layout::vertical([
             Constraint::Length(1),
@@ -228,16 +236,28 @@ impl App {
         frame.render_widget(self.tab_bar(rows[1].width), rows[1]);
         // The row the cursor is on is the row enter opens: the highlight
         // and the key agree, including before the first move.
-        let selected = self.cursor(work);
+        let selected = self.cursor(work, now);
         let selected = selected.as_deref();
         match self.tab {
-            Tab::Overview => overview::render(frame, rows[2], work, &self.theme),
-            Tab::NeedsYou => {
-                needs::render_view(frame, rows[2], work, &self.theme, selected, &mut self.view)
-            }
-            Tab::Path => {
-                path::render_view(frame, rows[2], work, &self.theme, selected, &mut self.view)
-            }
+            Tab::Overview => overview::render(frame, rows[2], work, &self.theme, now),
+            Tab::NeedsYou => needs::render_view(
+                frame,
+                rows[2],
+                work,
+                &self.theme,
+                selected,
+                &mut self.view,
+                now,
+            ),
+            Tab::Path => path::render_view(
+                frame,
+                rows[2],
+                work,
+                &self.theme,
+                selected,
+                &mut self.view,
+                now,
+            ),
             Tab::Backlog => {
                 backlog::render_view(frame, rows[2], work, &self.theme, selected, &mut self.view)
             }
@@ -252,10 +272,10 @@ impl App {
             detail::render(frame, area, work, detail, &self.theme);
             return;
         }
-        frame.render_widget(self.footer(rows[3].width, work), rows[3]);
+        frame.render_widget(self.footer(rows[3].width, work, now), rows[3]);
 
         if self.help {
-            let has_rows = rows_of(work, self.tab).is_some_and(|ids| !ids.is_empty());
+            let has_rows = rows_of(work, self.tab, now).is_some_and(|ids| !ids.is_empty());
             render_help(frame, area, &self.theme, has_rows);
         }
     }
@@ -353,7 +373,7 @@ impl App {
     /// A terminal too narrow for every key keeps the keys that matter most,
     /// and no key is ever cut in half. Enter is named only where it opens:
     /// a tab without rows never offers it.
-    fn footer(&self, width: u16, work: &Work) -> Line<'static> {
+    fn footer(&self, width: u16, work: &Work, now: &str) -> Line<'static> {
         let key = self.theme.chrome.key;
         let label = self.theme.chrome.footer;
         let space = || Span::raw("   ");
@@ -375,7 +395,7 @@ impl App {
             ),
         ];
         let mut next = 3;
-        let has_rows = rows_of(work, self.tab).is_some_and(|ids| !ids.is_empty());
+        let has_rows = rows_of(work, self.tab, now).is_some_and(|ids| !ids.is_empty());
         if has_rows {
             parts.push((
                 next,
@@ -497,10 +517,10 @@ pub(crate) fn footer_line(
 ///
 /// The Overview is a summary, not a list: it has no rows to open. The
 /// Autopilot tab is a placeholder, and the Settings tab lists nothing yet.
-fn rows_of(work: &Work, tab: Tab) -> Option<Vec<String>> {
+fn rows_of(work: &Work, tab: Tab, now: &str) -> Option<Vec<String>> {
     match tab {
-        Tab::NeedsYou => Some(needs::row_ids(work, &coding_lanes_core::now_rfc3339())),
-        Tab::Path => Some(path::row_ids(work)),
+        Tab::NeedsYou => Some(needs::row_ids(work, now)),
+        Tab::Path => Some(path::row_ids(work, now)),
         Tab::Backlog => Some(backlog::row_ids(work)),
         Tab::Overview | Tab::Autopilot | Tab::Settings => None,
     }
@@ -521,64 +541,104 @@ fn placeholder(tab: Tab, theme: &Theme) -> Paragraph<'static> {
     )
 }
 
-/// The help overlay.
-fn render_help(frame: &mut Frame, area: Rect, theme: &Theme, has_rows: bool) {
+/// Where the help popup sits: three fifths of the window, centred.
+fn help_popup(area: Rect) -> Rect {
     let width = area.width.saturating_mul(3) / 5;
     let height = area.height.saturating_mul(3) / 5;
-    let popup = Rect {
+    Rect {
         x: area.x + (area.width.saturating_sub(width)) / 2,
         y: area.y + (area.height.saturating_sub(height)) / 2,
         width,
         height,
+    }
+}
+
+/// The help lines, with the rank that decides which one is dropped first.
+///
+/// A popup three fifths of a short window cannot hold every line, so the
+/// lines give way from the least to the most useful: `shift-tab`, then
+/// `h l`, then `tab`, then `← →` (each has a twin that remains), then
+/// `g/G`, then `pgup`/`pgdn` (the arrows still move), then `↑↓`/`j`/`k`,
+/// then `1-6`. `q` and `?` are dropped last: a human who is stuck needs to
+/// leave and to ask what the keys are.
+fn help_lines(theme: &Theme, has_rows: bool) -> Vec<(u8, Line<'static>)> {
+    let line = |key: &str, says: &str| {
+        Line::from(vec![
+            Span::styled(format!(" {key} "), theme.chrome.key),
+            Span::styled(format!(" {says}"), theme.text.normal),
+        ])
     };
-    let key = theme.chrome.key;
-    let label = theme.text.normal;
     let mut lines = vec![
-        Line::from(vec![
-            Span::styled(" 1-6 ", key),
-            Span::styled(" jump to a tab", label),
-        ]),
-        Line::from(vec![
-            Span::styled(" ← → ", key),
-            Span::styled(" switch tab", label),
-        ]),
-        Line::from(vec![
-            Span::styled(" h l ", key),
-            Span::styled(" switch tab", label),
-        ]),
-        Line::from(vec![
-            Span::styled(" tab ", key),
-            Span::styled(" next tab", label),
-        ]),
-        Line::from(vec![
-            Span::styled(" shift-tab ", key),
-            Span::styled(" previous tab", label),
-        ]),
+        (7, line("1-6", "jump to a tab")),
+        (3, line("← →", "switch tab")),
+        (1, line("h l", "switch tab")),
+        (2, line("tab", "next tab")),
+        (0, line("shift-tab", "previous tab")),
     ];
     if has_rows {
         // The movement keys work on a tab with rows: the help names the
         // same keys as the footer, and never one that does nothing.
-        lines.push(Line::from(vec![
-            Span::styled(" ↑↓ j/k ", key),
-            Span::styled(" move", label),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled(" pgup/pgdn ", key),
-            Span::styled(" page", label),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled(" g/G ", key),
-            Span::styled(" top/bottom", label),
-        ]));
+        lines.push((6, line("↑↓ j/k", "move")));
+        lines.push((5, line("pgup/pgdn", "page")));
+        lines.push((4, line("g/G", "top/bottom")));
     }
-    lines.push(Line::from(vec![
-        Span::styled(" q ", key),
-        Span::styled(" quit", label),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled(" ? ", key),
-        Span::styled(" this help", label),
-    ]));
+    lines.push((u8::MAX, line("q", "quit")));
+    lines.push((u8::MAX, line("?", "this help")));
+    lines
+}
+
+/// The rows a help line takes in an `inner`-column popup.
+///
+/// The height is the one ratatui draws: the paragraph that will be shown is
+/// the one that is measured. A column count is only the minimum: word breaks
+/// add rows, so counting columns undercounts and the drop loop could stop
+/// with a line still below the popup's last row.
+fn help_rows(line: &Line<'_>, inner: usize) -> usize {
+    if inner == 0 {
+        return usize::MAX;
+    }
+    let width = u16::try_from(inner).unwrap_or(u16::MAX);
+    Paragraph::new(line.clone())
+        .wrap(Wrap { trim: true })
+        .line_count(width)
+        .max(1)
+}
+
+/// The help overlay.
+fn render_help(frame: &mut Frame, area: Rect, theme: &Theme, has_rows: bool) {
+    let popup = help_popup(area);
+    // The border takes one row at the top and one at the bottom.
+    let inner_width = usize::from(popup.width).saturating_sub(2);
+    let room = usize::from(popup.height).saturating_sub(2);
+    let lines = help_lines(theme, has_rows);
+    let lines: Vec<Line<'static>> = if inner_width == 0 {
+        Vec::new()
+    } else {
+        let rows = |line: &Line<'_>| help_rows(line, inner_width);
+        let mut used = lines
+            .iter()
+            .fold(0usize, |used, (_, line)| used.saturating_add(rows(line)));
+        if used <= room {
+            lines.into_iter().map(|(_, line)| line).collect()
+        } else {
+            let mut order: Vec<usize> = (0..lines.len()).collect();
+            order.sort_by_key(|index| lines[*index].0);
+            let mut dropped = vec![false; lines.len()];
+            for index in order {
+                if used <= room {
+                    break;
+                }
+                used = used.saturating_sub(rows(&lines[index].1));
+                dropped[index] = true;
+            }
+            lines
+                .into_iter()
+                .enumerate()
+                .filter(|(index, _)| !dropped[*index])
+                .map(|(_, (_, line))| line)
+                .collect()
+        }
+    };
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(lines).wrap(Wrap { trim: true }).block(
@@ -604,6 +664,14 @@ mod tests {
     use super::*;
     use crate::data::Work;
     use crate::theme::Preset;
+
+    /// The tests' clock: one instant for the rows and the draw that shows
+    /// them. Every fixture entered its status before it.
+    const NOW: &str = "2026-11-19T08:00:00Z";
+
+    fn now() -> &'static str {
+        NOW
+    }
 
     fn mock_work() -> Work {
         Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-lanes/work"))
@@ -637,9 +705,20 @@ mod tests {
     /// of every cell.
     fn render(app: &mut App, width: u16, height: u16) -> (Vec<String>, Vec<Vec<Paint>>) {
         let work = mock_work();
+        render_work(app, &work, width, height, now())
+    }
+
+    /// Draw the window over `work` at a given instant.
+    fn render_work(
+        app: &mut App,
+        work: &Work,
+        width: u16,
+        height: u16,
+        now: &str,
+    ) -> (Vec<String>, Vec<Vec<Paint>>) {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| app.draw(frame, &work))
+            .draw(|frame| app.draw(frame, work, now))
             .expect("drawing the window");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -785,11 +864,11 @@ mod tests {
     fn the_settings_tab_has_no_rows_to_open() {
         let work = mock_work();
         assert!(
-            rows_of(&work, Tab::Settings).is_none(),
+            rows_of(&work, Tab::Settings, now()).is_none(),
             "Settings holds rows"
         );
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
-        app.on_key(key(KeyCode::Enter), &work);
+        app.on_key(key(KeyCode::Enter), &work, now());
         assert!(app.detail.is_none(), "enter opened a record on Settings");
         assert!(app.selection.is_none(), "Settings selected a row");
     }
@@ -842,7 +921,7 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         let mut app = window(&theme, Tab::Overview, false);
-        app.on_key(key(KeyCode::Char('6')), &work);
+        app.on_key(key(KeyCode::Char('6')), &work, now());
         assert_eq!(app.tab, Tab::Settings, "6 did not reach Settings");
         let (rows, paint) = render(&mut app, 100, 20);
         let bar = rows.get(1).expect("the tab bar");
@@ -962,7 +1041,7 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab).expect("a row tab");
+            let ids = rows_of(&work, tab, now()).expect("a row tab");
             assert!(ids.len() > 4, "{tab:?}: not enough rows to scroll");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 10);
@@ -972,7 +1051,7 @@ mod tests {
                 "{tab:?}: every row fits, nothing scrolls"
             );
             // G reaches the last page and the last row.
-            app.on_key(key(KeyCode::Char('G')), &work);
+            app.on_key(key(KeyCode::Char('G')), &work, now());
             render(&mut app, 100, 10);
             assert_eq!(
                 app.selection.as_deref(),
@@ -986,11 +1065,11 @@ mod tests {
                 "{tab:?}: the last page is not at the end"
             );
             // Down at the end moves nothing: the viewport clamps.
-            app.on_key(key(KeyCode::Down), &work);
+            app.on_key(key(KeyCode::Down), &work, now());
             render(&mut app, 100, 10);
             assert_eq!(app.view, bottom, "{tab:?}: down ran past the end");
             // g reaches the first row and the top.
-            app.on_key(key(KeyCode::Char('g')), &work);
+            app.on_key(key(KeyCode::Char('g')), &work, now());
             render(&mut app, 100, 10);
             assert_eq!(
                 app.selection.as_deref(),
@@ -999,7 +1078,7 @@ mod tests {
             );
             assert_eq!(app.view.first, 0, "{tab:?}: g did not reach the top");
             // Up at the top moves nothing.
-            app.on_key(key(KeyCode::Up), &work);
+            app.on_key(key(KeyCode::Up), &work, now());
             render(&mut app, 100, 10);
             assert_eq!(app.view.first, 0, "{tab:?}: up ran past the top");
             assert_eq!(
@@ -1011,16 +1090,180 @@ mod tests {
     }
 
     #[test]
+    fn one_now_per_frame_keeps_the_row_order_and_the_draw_in_step() {
+        // Two tasks at a boundary: before it both have waited zero seconds
+        // and the id breaks the tie; after it TSK02 has waited five and
+        // comes first. The instant is passed into the frame, so the row the
+        // cursor moves through is the row the frame drew. A fresh clock in
+        // the draw (the real one is before both stamps) would put TSK01
+        // first and fail the check.
+        let mut later = coding_lanes_core::Task::new("TSK01", "the later stamp");
+        later.status = coding_lanes_core::Status::Groomed;
+        later.status_since = "2030-01-01T00:00:10Z".to_string();
+        later.created = later.status_since.clone();
+        let mut earlier = coding_lanes_core::Task::new("TSK02", "the earlier stamp");
+        earlier.status = coding_lanes_core::Status::Groomed;
+        earlier.status_since = "2030-01-01T00:00:00Z".to_string();
+        earlier.created = earlier.status_since.clone();
+        let work = Work {
+            root: PathBuf::new(),
+            tasks: vec![later, earlier],
+            ..Work::default()
+        };
+        let before = "2029-12-31T23:59:55Z";
+        let after = "2030-01-01T00:00:05Z";
+        assert_eq!(
+            rows_of(&work, Tab::NeedsYou, before).expect("rows"),
+            ["TSK01", "TSK02"],
+            "the boundary moved: before it the id breaks a zero tie"
+        );
+        assert_eq!(
+            rows_of(&work, Tab::NeedsYou, after).expect("rows"),
+            ["TSK02", "TSK01"],
+            "the boundary moved: after it TSK02 has waited"
+        );
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::NeedsYou, false);
+        let (rows, paint) = render_work(&mut app, &work, 100, 40, after);
+        let text = rows.join("\n");
+        let first = text.find("TSK02").expect("TSK02 is drawn");
+        let second = text.find("TSK01").expect("TSK01 is drawn");
+        assert!(
+            first < second,
+            "the draw did not follow the frame's now: {text}"
+        );
+        // The cursor is painted on the drawn first row, and the next key
+        // moves to the drawn second one: one instant for the draw and both
+        // keys.
+        let (y, x) = cell_of(&rows, "TSK02").expect("the drawn first row");
+        assert_eq!(
+            paint[y][x],
+            paint_of(theme.text.selected),
+            "the cursor was not painted on the row the frame drew first: {text}"
+        );
+        assert_eq!(app.cursor(&work, after).as_deref(), Some("TSK02"));
+        app.on_key(key(KeyCode::Down), &work, after);
+        assert_eq!(app.selection.as_deref(), Some("TSK01"));
+    }
+
+    #[test]
+    fn a_pane_with_one_content_row_shows_the_cut_announcement() {
+        // One content row, and the first Path row wraps below it: no window
+        // can draw a row, so the pane shows only the cut announcement.
+        let rows = render(
+            &mut window(&Theme::preset(Preset::Dark), Tab::Path, false),
+            20,
+            6,
+        )
+        .0;
+        let text = rows.join("\n");
+        assert!(text.contains("EXECUTION · 1…"), "{text}");
+        assert!(!text.contains("TSK29"), "a row was drawn: {text}");
+        // view.rs says what it renders, not that it keeps a window with a
+        // row: at this height there is no such window.
+        let source = include_str!("view.rs");
+        assert!(
+            source.contains("one content row"),
+            "view.rs does not name the case that renders"
+        );
+        assert!(
+            source.contains("cut announcement"),
+            "view.rs does not name what renders"
+        );
+        assert!(
+            !source.contains("keeps the last window"),
+            "view.rs still promises a window that draws a row"
+        );
+    }
+
+    #[test]
+    fn the_help_popup_keeps_q_and_help_on_a_short_window() {
+        let theme = Theme::preset(Preset::Dark);
+        for height in [14u16, 10] {
+            let rows = render(&mut window(&theme, Tab::NeedsYou, true), 100, height).0;
+            let text = help_text(&rows, 100, height);
+            assert!(
+                text.contains("q  quit"),
+                "{height}: q is not in the popup: {text}"
+            );
+            assert!(
+                text.contains("?  this help"),
+                "{height}: ? is not in the popup: {text}"
+            );
+        }
+        // The drop order the comment states: at 14 the ends survive; at 10
+        // they are gone before q and ?.
+        let at_14 = help_text(
+            &render(&mut window(&theme, Tab::NeedsYou, true), 100, 14).0,
+            100,
+            14,
+        );
+        assert!(at_14.contains("g/G"), "{at_14}");
+        let at_10 = help_text(
+            &render(&mut window(&theme, Tab::NeedsYou, true), 100, 10).0,
+            100,
+            10,
+        );
+        assert!(!at_10.contains("g/G"), "{at_10}");
+        assert!(!at_10.contains("pgup/pgdn"), "{at_10}");
+    }
+
+    #[test]
+    fn help_rows_is_the_height_the_line_wraps_to() {
+        // Twenty columns of text in ten: the words break at three rows,
+        // though the column count says two. The estimate is the height, not
+        // a count.
+        let line = Line::from(Span::raw("aaaaaa bbbbbb cccccc"));
+        assert_eq!(
+            Paragraph::new(line.clone())
+                .wrap(Wrap { trim: true })
+                .line_count(10),
+            3
+        );
+        assert_eq!(help_rows(&line, 10), 3);
+    }
+
+    #[test]
+    fn the_help_popup_keeps_q_and_help_in_a_narrow_short_window() {
+        // A narrow popup wraps its lines, so a column count undercounts the
+        // rows: at 24x8 it would stop dropping too early and cut q. The last
+        // two lines are the ones a stuck human needs.
+        let theme = Theme::preset(Preset::Dark);
+        for (width, height) in [(40u16, 10u16), (30, 10), (24, 8)] {
+            let rows = render(&mut window(&theme, Tab::NeedsYou, true), width, height).0;
+            let text = help_text(&rows, width, height);
+            assert!(text.contains("q  quit"), "{width}x{height}: {text}");
+            assert!(text.contains("?  this help"), "{width}x{height}: {text}");
+        }
+    }
+
+    /// The text inside the help popup, without the window beneath it.
+    fn help_text(rows: &[String], width: u16, height: u16) -> String {
+        let popup = help_popup(Rect::new(0, 0, width, height));
+        rows.iter()
+            .skip(usize::from(popup.y))
+            .take(usize::from(popup.height))
+            .map(|row| {
+                row.chars()
+                    .skip(usize::from(popup.x))
+                    .take(usize::from(popup.width))
+                    .collect::<String>()
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
+    #[test]
     fn the_cursor_is_never_on_a_row_the_pane_does_not_show() {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab).expect("a row tab");
+            let ids = rows_of(&work, tab, now()).expect("a row tab");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 10);
             for _ in 0..ids.len() + 3 {
-                app.on_key(key(KeyCode::Down), &work);
+                app.on_key(key(KeyCode::Down), &work, now());
                 let (rows, paint) = render(&mut app, 100, 10);
                 let cursor = app.selection.clone().expect("a cursor");
                 let index = ids
@@ -1064,14 +1307,14 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab).expect("a row tab");
+            let ids = rows_of(&work, tab, now()).expect("a row tab");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 14);
             let page = app.view.page;
             assert!(page > 1, "{tab:?}: the pane shows {page} rows");
             // One page down moves the cursor by exactly the rows on
             // display.
-            app.on_key(key(KeyCode::PageDown), &work);
+            app.on_key(key(KeyCode::PageDown), &work, now());
             assert_eq!(
                 app.selection.as_deref(),
                 Some(ids[page.min(ids.len() - 1)].as_str()),
@@ -1079,7 +1322,7 @@ mod tests {
             );
             // Further pages clamp at the last row.
             for _ in 0..ids.len() {
-                app.on_key(key(KeyCode::PageDown), &work);
+                app.on_key(key(KeyCode::PageDown), &work, now());
             }
             assert_eq!(
                 app.selection.as_deref(),
@@ -1088,14 +1331,14 @@ mod tests {
             );
             // A page up moves back by the same distance, and clamps at the
             // first row.
-            app.on_key(key(KeyCode::PageUp), &work);
+            app.on_key(key(KeyCode::PageUp), &work, now());
             assert_eq!(
                 app.selection.as_deref(),
                 ids.get(ids.len() - 1 - page).map(String::as_str),
                 "{tab:?}: pgup did not move a page back"
             );
             for _ in 0..ids.len() {
-                app.on_key(key(KeyCode::PageUp), &work);
+                app.on_key(key(KeyCode::PageUp), &work, now());
             }
             assert_eq!(
                 app.selection.as_deref(),
@@ -1110,9 +1353,9 @@ mod tests {
         // The page is what the last draw held; a key pressed before any
         // draw moves one row rather than nothing.
         let work = mock_work();
-        let ids = rows_of(&work, Tab::NeedsYou).expect("a row tab");
+        let ids = rows_of(&work, Tab::NeedsYou, now()).expect("a row tab");
         let mut app = window(&Theme::preset(Preset::Dark), Tab::NeedsYou, false);
-        app.on_key(key(KeyCode::PageDown), &work);
+        app.on_key(key(KeyCode::PageDown), &work, now());
         assert_eq!(
             app.selection.as_deref(),
             Some(ids[1].as_str()),
@@ -1173,7 +1416,7 @@ mod tests {
         let work = mock_work();
         let app = window(&Theme::preset(Preset::Dark), Tab::Path, false);
         let text = |width: u16| {
-            app.footer(width, &work)
+            app.footer(width, &work, now())
                 .spans
                 .iter()
                 .map(|span| span.content.as_ref())
@@ -1233,7 +1476,7 @@ mod tests {
             };
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 12);
-            app.on_key(key(KeyCode::Char('G')), &work);
+            app.on_key(key(KeyCode::Char('G')), &work, now());
             let (rows, _) = render(&mut app, 100, 12);
             let text = rows.join("\n");
             assert!(
@@ -1252,13 +1495,13 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab).expect("a row tab");
+            let ids = rows_of(&work, tab, now()).expect("a row tab");
             for height in [7u16, 8, 10] {
                 let mut app = window(&theme, tab, false);
                 render(&mut app, 100, height);
                 for code in [KeyCode::Down, KeyCode::Up] {
                     for _ in 0..ids.len() + 2 {
-                        app.on_key(key(code), &work);
+                        app.on_key(key(code), &work, now());
                         let (rows, paint) = render(&mut app, 100, height);
                         let cursor = app.selection.clone().expect("a cursor");
                         let index = ids
@@ -1286,10 +1529,10 @@ mod tests {
         let work = mock_work();
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Path, false);
         render(&mut app, 100, 10);
-        app.on_key(key(KeyCode::Char('G')), &work);
+        app.on_key(key(KeyCode::Char('G')), &work, now());
         render(&mut app, 100, 10);
         assert!(app.view.first > 0, "the path did not scroll");
-        app.on_key(key(KeyCode::Char('1')), &work);
+        app.on_key(key(KeyCode::Char('1')), &work, now());
         assert_eq!(app.view, View::default(), "the window outlived its tab");
     }
 
@@ -1303,7 +1546,7 @@ mod tests {
         for tab in row_tabs() {
             let mut app = window(&theme, tab, false);
             let (rows, paint) = render(&mut app, 100, 40);
-            let ids = rows_of(&work, tab).expect("a row tab");
+            let ids = rows_of(&work, tab, now()).expect("a row tab");
             let first = ids.first().expect("a row");
             let (y, x) = cell_of(&rows, first)
                 .unwrap_or_else(|| panic!("{tab:?}: {first} is not on screen"));
@@ -1316,7 +1559,7 @@ mod tests {
                 paint[y][98], selection,
                 "{tab:?}: the selection bar stops short of the pane's edge"
             );
-            app.on_key(key(KeyCode::Enter), &work);
+            app.on_key(key(KeyCode::Enter), &work, now());
             assert_eq!(
                 app.detail.as_ref().expect("the pane opens").id,
                 *first,
@@ -1331,11 +1574,11 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab).expect("a row tab");
+            let ids = rows_of(&work, tab, now()).expect("a row tab");
             assert!(ids.len() >= 3, "{tab:?}: not enough rows to move through");
             let mut app = window(&theme, tab, false);
             // Down moves the paint to the second row.
-            app.on_key(key(KeyCode::Down), &work);
+            app.on_key(key(KeyCode::Down), &work, now());
             assert_eq!(app.selection.as_deref(), Some(ids[1].as_str()), "{tab:?}");
             let (rows, paint) = render(&mut app, 100, 40);
             let (y, x) = cell_of(&rows, &ids[1]).expect("the second row");
@@ -1344,29 +1587,29 @@ mod tests {
                 "{tab:?}: the paint did not follow the key"
             );
             // The row the paint is on is the row enter opens.
-            app.on_key(key(KeyCode::Enter), &work);
+            app.on_key(key(KeyCode::Enter), &work, now());
             assert_eq!(
                 app.detail.as_ref().expect("the pane opens").id,
                 ids[1],
                 "{tab:?}: enter opened another row than the painted one"
             );
-            app.on_key(key(KeyCode::Esc), &work);
+            app.on_key(key(KeyCode::Esc), &work, now());
             // Up returns the paint and the cursor to the first row.
-            app.on_key(key(KeyCode::Up), &work);
+            app.on_key(key(KeyCode::Up), &work, now());
             assert_eq!(app.selection.as_deref(), Some(ids[0].as_str()), "{tab:?}");
             let (rows, paint) = render(&mut app, 100, 40);
             let (y, x) = cell_of(&rows, &ids[0]).expect("the first row");
             assert_eq!(paint[y][x], selection, "{tab:?}: up did not repaint");
             // `j` and `k` are the same movement as down and up.
-            app.on_key(key(KeyCode::Char('j')), &work);
+            app.on_key(key(KeyCode::Char('j')), &work, now());
             assert_eq!(app.selection.as_deref(), Some(ids[1].as_str()), "{tab:?}");
-            app.on_key(key(KeyCode::Char('k')), &work);
+            app.on_key(key(KeyCode::Char('k')), &work, now());
             assert_eq!(app.selection.as_deref(), Some(ids[0].as_str()), "{tab:?}");
             // The cursor stops at the ends rather than running off them.
-            app.on_key(key(KeyCode::Up), &work);
+            app.on_key(key(KeyCode::Up), &work, now());
             assert_eq!(app.selection.as_deref(), Some(ids[0].as_str()), "{tab:?}");
             for _ in 0..ids.len() + 2 {
-                app.on_key(key(KeyCode::Down), &work);
+                app.on_key(key(KeyCode::Down), &work, now());
             }
             assert_eq!(
                 app.selection.as_deref(),
@@ -1382,18 +1625,18 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab).expect("a row tab");
+            let ids = rows_of(&work, tab, now()).expect("a row tab");
             let target = &ids[2];
             let mut app = window(&theme, tab, false);
-            app.on_key(key(KeyCode::Down), &work);
-            app.on_key(key(KeyCode::Down), &work);
-            app.on_key(key(KeyCode::Enter), &work);
+            app.on_key(key(KeyCode::Down), &work, now());
+            app.on_key(key(KeyCode::Down), &work, now());
+            app.on_key(key(KeyCode::Enter), &work, now());
             assert_eq!(
                 app.detail.as_ref().expect("the pane opens").id,
                 *target,
                 "{tab:?}"
             );
-            app.on_key(key(KeyCode::Esc), &work);
+            app.on_key(key(KeyCode::Esc), &work, now());
             assert_eq!(
                 app.selection.as_deref(),
                 Some(target.as_str()),
@@ -1436,21 +1679,21 @@ mod tests {
             let mut app = app();
             app.tab = tab;
             if !opens {
-                app.on_key(key(KeyCode::Enter), &work);
+                app.on_key(key(KeyCode::Enter), &work, now());
                 assert!(
                     app.detail.is_none(),
                     "{tab:?}: the pane opened where it does not"
                 );
                 continue;
             }
-            app.on_key(key(KeyCode::Enter), &work);
+            app.on_key(key(KeyCode::Enter), &work, now());
             let detail = app
                 .detail
                 .as_ref()
                 .unwrap_or_else(|| panic!("{tab:?}: the pane did not open"));
             assert_eq!(detail.tab, tab, "{tab:?}");
             let id = detail.id.clone();
-            app.on_key(key(KeyCode::Esc), &work);
+            app.on_key(key(KeyCode::Esc), &work, now());
             assert!(app.detail.is_none(), "{tab:?}: the pane did not close");
             assert_eq!(app.tab, tab, "{tab:?}: esc did not return to the tab");
             assert_eq!(
@@ -1458,7 +1701,7 @@ mod tests {
                 Some(id.as_str()),
                 "{tab:?}: esc did not return to the selection"
             );
-            app.on_key(key(KeyCode::Enter), &work);
+            app.on_key(key(KeyCode::Enter), &work, now());
             assert_eq!(
                 app.detail.as_ref().expect("reopened").id,
                 id,
@@ -1472,16 +1715,16 @@ mod tests {
         let work = mock_work();
         let mut app = app();
         app.tab = Tab::Backlog;
-        let ids = rows_of(&work, Tab::Backlog).expect("rows");
+        let ids = rows_of(&work, Tab::Backlog, now()).expect("rows");
         assert!(ids.len() >= 2, "{ids:?}");
         app.selection = Some(ids[1].clone());
-        app.on_key(key(KeyCode::Enter), &work);
+        app.on_key(key(KeyCode::Enter), &work, now());
         assert_eq!(
             app.detail.as_ref().expect("opened").id,
             ids[1],
             "enter opened another row than the one selected"
         );
-        app.on_key(key(KeyCode::Esc), &work);
+        app.on_key(key(KeyCode::Esc), &work, now());
         assert_eq!(
             app.selection.as_deref(),
             Some(ids[1].as_str()),
@@ -1497,7 +1740,7 @@ mod tests {
         for (tab, _) in reachability() {
             let mut app = app();
             app.tab = tab;
-            app.on_key(key(KeyCode::Enter), &work);
+            app.on_key(key(KeyCode::Enter), &work, now());
             assert!(app.detail.is_none(), "{tab:?}: the pane opened");
         }
     }
@@ -1525,7 +1768,7 @@ mod tests {
     fn the_footer_says_close_while_the_pane_is_open() {
         let work = mock_work();
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Path, false);
-        app.on_key(key(KeyCode::Enter), &work);
+        app.on_key(key(KeyCode::Enter), &work, now());
         let rows = render(&mut app, 100, 20).0;
         let footer = rows.last().expect("a footer row").trim_end().to_string();
         assert!(

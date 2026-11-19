@@ -229,15 +229,17 @@ impl Work {
         counts
     }
 
-    /// The tasks an agent could claim right now.
-    pub fn claimable(&self) -> Vec<&Task> {
-        let now = coding_lanes_core::now_rfc3339();
+    /// The tasks an agent could claim at `now`.
+    ///
+    /// `now` is the frame's instant when a screen draws: the claim test and
+    /// every count and row it feeds answer from the same clock.
+    pub fn claimable_at(&self, now: &str) -> Vec<&Task> {
         let mut claimable: Vec<&Task> = self
             .tasks
             .iter()
             .filter(|task| task.status == Status::Approved)
             .filter(|task| !has_overlay(task))
-            .filter(|task| !live_claim(task, &now))
+            .filter(|task| !live_claim(task, now))
             .filter(|task| self.dependencies_done(task))
             .collect();
         // Dependency order first: the shortest dependency chain comes first.
@@ -246,9 +248,9 @@ impl Work {
         claimable
     }
 
-    /// The first claimable task — what happens next.
-    pub fn next(&self) -> Option<&Task> {
-        self.claimable().into_iter().next()
+    /// The first claimable task at `now` — what happens next.
+    pub fn next_at(&self, now: &str) -> Option<&Task> {
+        self.claimable_at(now).into_iter().next()
     }
 
     /// Whether every dependency of the task is done.
@@ -342,6 +344,9 @@ mod tests {
         }
     }
 
+    /// The tests' clock: every fixture claim has expired by it.
+    const NOW: &str = "2026-11-19T08:00:00Z";
+
     fn approved(id: &str, depends_on: &[&str]) -> Task {
         let mut task = Task::new(id, format!("task {id}"));
         task.status = Status::Approved;
@@ -413,8 +418,11 @@ mod tests {
     #[test]
     fn a_claimable_task_is_approved_and_free() {
         let work = work_of(vec![approved("TSK01", &[])]);
-        assert_eq!(work.claimable().len(), 1);
-        assert_eq!(work.next().map(|task| task.id.as_str()), Some("TSK01"));
+        assert_eq!(work.claimable_at(NOW).len(), 1);
+        assert_eq!(
+            work.next_at(NOW).map(|task| task.id.as_str()),
+            Some("TSK01")
+        );
     }
 
     #[test]
@@ -422,8 +430,11 @@ mod tests {
         let mut dependency = approved("TSK01", &[]);
         dependency.status = Status::Done;
         let work = work_of(vec![dependency, approved("TSK02", &["TSK01"])]);
-        assert_eq!(work.claimable().len(), 1);
-        assert_eq!(work.next().map(|task| task.id.as_str()), Some("TSK02"));
+        assert_eq!(work.claimable_at(NOW).len(), 1);
+        assert_eq!(
+            work.next_at(NOW).map(|task| task.id.as_str()),
+            Some("TSK02")
+        );
     }
 
     #[test]
@@ -431,12 +442,15 @@ mod tests {
         let dependency = approved("TSK01", &[]);
         let work = work_of(vec![dependency, approved("TSK02", &["TSK01"])]);
         let claimable: Vec<&str> = work
-            .claimable()
+            .claimable_at(NOW)
             .iter()
             .map(|task| task.id.as_str())
             .collect();
         assert_eq!(claimable, vec!["TSK01"]);
-        assert_eq!(work.next().map(|task| task.id.as_str()), Some("TSK01"));
+        assert_eq!(
+            work.next_at(NOW).map(|task| task.id.as_str()),
+            Some("TSK01")
+        );
     }
 
     #[test]
@@ -449,7 +463,7 @@ mod tests {
             lease_expires_at: "2099-01-01T00:00:00Z".into(),
         });
         let work = work_of(vec![task]);
-        assert!(work.claimable().is_empty());
+        assert!(work.claimable_at(NOW).is_empty());
     }
 
     #[test]
@@ -461,7 +475,7 @@ mod tests {
             at: "2026-11-13T10:00Z".into(),
         });
         let work = work_of(vec![task]);
-        assert!(work.claimable().is_empty());
+        assert!(work.claimable_at(NOW).is_empty());
     }
 
     #[test]
@@ -471,7 +485,7 @@ mod tests {
         let second = approved("TSK02", &["TSK01"]);
         let third = approved("TSK03", &["TSK01"]);
         let work = work_of(vec![first, second, third]);
-        let next = work.next().expect("a claimable task");
+        let next = work.next_at(NOW).expect("a claimable task");
         assert_eq!(next.id, "TSK02");
     }
 
@@ -481,12 +495,15 @@ mod tests {
         // dependencies are done, so an agent can take it right now.
         let work = mock_work();
         let claimable: Vec<&str> = work
-            .claimable()
+            .claimable_at(NOW)
             .iter()
             .map(|task| task.id.as_str())
             .collect();
         assert_eq!(claimable, vec!["TSK29"]);
-        assert_eq!(work.next().map(|task| task.id.as_str()), Some("TSK29"));
+        assert_eq!(
+            work.next_at(NOW).map(|task| task.id.as_str()),
+            Some("TSK29")
+        );
     }
 
     #[test]

@@ -5,8 +5,10 @@
 //! visible row moves the window with it. The cursor's row wins over the
 //! announcement: when the pane is too short to draw the row and say what is
 //! hidden, the tab draws the row and leaves the count out. The cursor is only
-//! on a row the pane does not draw when the row itself is taller than the
-//! pane.
+//! on a row the pane does not draw when the pane is too short for that row:
+//! the row itself is taller than the pane, or the pane is one content row
+//! and no window can draw a row at all — then only the cut announcement
+//! shows.
 
 /// The window over a tab's rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -37,8 +39,11 @@ impl View {
     /// The cursor's row is the one thing the window may not leave out, so
     /// `shown` returns it whenever the pane can draw it whole, even when that
     /// leaves no room for the announcement. A row taller than the pane cannot
-    /// be drawn: then the window keeps the last window that draws a row, and
-    /// the tab says what it can.
+    /// be drawn: the window then walks back toward the top until it finds a
+    /// window that draws a row. When the pane is so short that no window
+    /// draws a row — one content row and a row taller than it — it settles at
+    /// the top and the tab shows what it can: the cut announcement, and no
+    /// row.
     pub fn settle(
         &mut self,
         total: usize,

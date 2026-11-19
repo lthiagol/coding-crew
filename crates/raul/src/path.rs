@@ -157,17 +157,20 @@ impl Tree {
     }
 }
 
-/// The tree of the live work in the folder.
-pub fn tree(work: &Work) -> Tree {
-    let now = coding_lanes_core::now_rfc3339();
+/// The tree of the live work in the folder, at `now`.
+///
+/// `now` is the frame's instant, read once by the caller: the spine's claim
+/// test, the BLOCKED branch's held test and the cursor's row list all answer
+/// from the same clock, so a lease cannot expire between them.
+pub fn tree(work: &Work, now: &str) -> Tree {
     let spine = work
-        .claimable()
+        .claimable_at(now)
         .into_iter()
         .map(|task| entry(task, work))
         .collect();
     let branches = Branch::ALL
         .iter()
-        .map(|branch| branch_view(work, *branch, &now))
+        .map(|branch| branch_view(work, *branch, now))
         .filter(|view| view.count > 0)
         .collect();
     Tree { spine, branches }
@@ -312,8 +315,8 @@ fn blocked(work: &Work, now: &str) -> BranchView {
 /// then the branches.
 ///
 /// The detail pane opens from this tab: the rows are what it can open.
-pub fn row_ids(work: &Work) -> Vec<String> {
-    let tree = tree(work);
+pub fn row_ids(work: &Work, now: &str) -> Vec<String> {
+    let tree = tree(work, now);
     let mut ids: Vec<String> = tree.spine.iter().map(|entry| entry.id.clone()).collect();
     ids.extend(
         tree.branches
@@ -325,18 +328,12 @@ pub fn row_ids(work: &Work) -> Vec<String> {
     ids
 }
 
-/// Draw the tab at the top of its rows.
-#[cfg(test)]
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
-    let mut view = View::default();
-    render_view(frame, area, work, theme, selected, &mut view);
-}
-
 /// Draw the tab through the window the keys move.
 ///
 /// `selected` is the row the cursor is on: its cells take the selection's
 /// paint. Every other row keeps its own. The window is settled so the cursor
-/// is on a row the pane shows.
+/// is on a row the pane shows. `now` is the frame's instant: the cursor's
+/// rows and the drawn tree answer from the same one.
 pub fn render_view(
     frame: &mut Frame,
     area: Rect,
@@ -344,6 +341,7 @@ pub fn render_view(
     theme: &Theme,
     selected: Option<&str>,
     view: &mut View,
+    now: &str,
 ) {
     let block = Block::bordered()
         .title("path tree")
@@ -371,7 +369,7 @@ pub fn render_view(
         );
         return;
     }
-    let tree = tree(work);
+    let tree = tree(work, now);
     if tree.is_empty() {
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled("no live work yet", theme.text.dim)))
@@ -382,7 +380,7 @@ pub fn render_view(
     }
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
-    let ids = row_ids(work);
+    let ids = row_ids(work, now);
     let cursor = selected
         .and_then(|id| ids.iter().position(|other| other == id))
         .unwrap_or(0);
@@ -1251,11 +1249,24 @@ mod tests {
         Theme::preset(crate::theme::Preset::Dark)
     }
 
+    /// The tests' clock: one instant for the tree and the draw that shows it.
+    const NOW: &str = "2026-11-19T08:00:00Z";
+
+    fn now() -> &'static str {
+        NOW
+    }
+
     /// Draw the tab and return the rows it shows.
     fn draw(work: &Work, width: u16, height: u16) -> Vec<String> {
+        let mut view = View::default();
+        draw_at(work, width, height, now(), &mut view)
+    }
+
+    /// Draw the tab at a given instant.
+    fn draw_at(work: &Work, width: u16, height: u16, now: &str, view: &mut View) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme(), None))
+            .draw(|frame| render_view(frame, frame.area(), work, &theme(), None, view, now))
             .expect("drawing the path");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -1315,7 +1326,7 @@ mod tests {
         // The tree of the mock data, in numbers: the spine, and the five
         // branches. The numbers are pinned here, so a tree that drifts from
         // the spec fails here.
-        let tree = tree(&mock_work());
+        let tree = tree(&mock_work(), now());
         assert_eq!(tree.spine.len(), 1, "the trunk of the fixtures");
         assert_eq!(tree.rows(Branch::AwaitingApproval), 2);
         assert_eq!(tree.rows(Branch::Blocked), 3);
@@ -1325,15 +1336,68 @@ mod tests {
     }
 
     #[test]
+    fn the_path_reads_one_instant_for_the_rows_and_the_draw() {
+        // A lease expiring between two instants: before it the task is held
+        // and sits under BLOCKED; at it the task is claimable and sits on the
+        // spine. The cursor's row list and the drawn tree answer from the
+        // instant they are given, so one frame cannot show the task in both
+        // places or in neither.
+        let mut task = Task::new("TSK01", "the claimed task");
+        task.status = Status::Approved;
+        task.claim = Some(coding_lanes_core::Claim {
+            by: "runner-01".into(),
+            session: Some("session-runner-01".into()),
+            at: "2029-12-31T23:00:00Z".into(),
+            lease_expires_at: "2030-01-01T00:00:00Z".into(),
+        });
+        let work = Work {
+            root: std::path::PathBuf::new(),
+            tasks: vec![task],
+            items: Vec::new(),
+            errors: Vec::new(),
+            missing: None,
+        };
+        let held = "2029-12-31T23:59:59Z";
+        let free = "2030-01-01T00:00:00Z";
+        let before = tree(&work, held);
+        assert!(
+            before.spine.is_empty(),
+            "a live claim is on the spine: {before:?}"
+        );
+        assert_eq!(before.rows(Branch::Blocked), 1, "the claim holds the task");
+        let after = tree(&work, free);
+        assert_eq!(after.spine.len(), 1, "the expired claim frees the task");
+        assert_eq!(after.rows(Branch::Blocked), 0, "the task is still blocked");
+        assert_eq!(row_ids(&work, free), vec!["TSK01".to_string()]);
+        let mut view = View::default();
+        let text = text_of(&draw_at(&work, 60, 12, free, &mut view));
+        assert!(text.contains(" ● TSK01"), "the spine is not drawn: {text}");
+        assert!(
+            !text.contains("BLOCKED"),
+            "a freed task is still blocked: {text}"
+        );
+        let text = text_of(&draw_at(&work, 60, 12, held, &mut view));
+        assert!(
+            text.contains("BLOCKED · 1"),
+            "the branch is not drawn: {text}"
+        );
+        assert!(
+            !text.contains(" ● TSK01"),
+            "a held task is on the spine: {text}"
+        );
+        assert!(text.contains("claim held elsewhere"), "{text}");
+    }
+
+    #[test]
     fn the_spine_is_the_claimable_task() {
-        let tree = tree(&mock_work());
+        let tree = tree(&mock_work(), now());
         assert_eq!(tree.spine[0].id, "TSK29");
         assert!(tree.spine[0].waits_on.is_empty(), "it waits on nothing");
     }
 
     #[test]
     fn the_blocked_tasks_are_forked_under_what_holds_them() {
-        let tree = tree(&mock_work());
+        let tree = tree(&mock_work(), now());
         let blocked = tree
             .branches
             .iter()
@@ -1360,7 +1424,7 @@ mod tests {
     fn the_fixtures_cover_every_blocking_reason() {
         // A dependency that is not done, an overlay, and a claim held
         // elsewhere: the three reasons a task is not claimable.
-        let tree = tree(&mock_work());
+        let tree = tree(&mock_work(), now());
         let blocked = tree
             .branches
             .iter()
@@ -1378,7 +1442,7 @@ mod tests {
     #[test]
     fn the_tree_holds_no_draft_and_no_done_task() {
         let work = mock_work();
-        let tree = tree(&work);
+        let tree = tree(&work, now());
         let mut seen: Vec<&str> = tree.spine.iter().map(|entry| entry.id.as_str()).collect();
         for view in &tree.branches {
             for group in &view.groups {
@@ -1524,7 +1588,7 @@ mod tests {
         // would be wrapped by ratatui, and the tree would ask for more rows
         // than the pane has.
         let work = mock_work();
-        let tree = tree(&work);
+        let tree = tree(&work, now());
         for width in [40usize, 60, 100] {
             for height in [8usize, 12, 24, 40] {
                 let rows = lines(&tree, width, height, &theme(), None);
@@ -1547,7 +1611,7 @@ mod tests {
         // Every size: no line is wider than the pane, and the tree asks for
         // no more rows than the pane has.
         let work = mock_work();
-        let tree = tree(&work);
+        let tree = tree(&work, now());
         for width in 20..=120 {
             for height in 4..=40 {
                 let rows = lines(&tree, width, height, &theme(), None);
@@ -1580,7 +1644,7 @@ mod tests {
         // What the tree asks for is what is drawn: nothing is wrapped, and
         // nothing is cut.
         let work = mock_work();
-        let tree = tree(&work);
+        let tree = tree(&work, now());
         for width in [40u16, 60, 100] {
             for height in [8u16, 12, 24, 40] {
                 let asked: Vec<String> = lines(
@@ -1606,7 +1670,7 @@ mod tests {
     #[test]
     fn no_title_is_cut_at_any_width() {
         let work = mock_work();
-        let tree = tree(&work);
+        let tree = tree(&work, now());
         for width in [40u16, 60, 100] {
             // A title that does not fit wraps under its own column: no
             // letter of it is lost. The pane is tall enough for the whole
@@ -1713,8 +1777,9 @@ mod tests {
     /// Draw the tab and return every cell, with its colour.
     fn draw_cells(work: &Work, width: u16, height: u16) -> Vec<Vec<(char, ratatui::style::Color)>> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
+        let mut view = View::default();
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme(), None))
+            .draw(|frame| render_view(frame, frame.area(), work, &theme(), None, &mut view, now()))
             .expect("drawing the path");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
