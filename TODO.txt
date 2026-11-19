@@ -1,4 +1,4 @@
-coding-lanes - orchestration state
+coding-crew - orchestration state
 
 updated 2026-11-18 by the orchestrator
 branch main, remote https://github.com/lthiagol/coding-lanes.git
@@ -10,7 +10,8 @@ SCOPE
   Two TUIs: raul for the work, hugo for the flow. The Autopilot tab is
   gone from raul; the automation's questions live in hugo, which is one
   sidebar for configuration and one main pane for what is running, with no
-  tabs. Its configuration is centralized under ~/.config/coding-crew/.
+  tabs. Its configuration is centralized under ~/.config/coding-crew/, and that
+  folder is created on demand when it does not exist.
   talita is not being built. Do not write talita code, do not extend its
   commands, do not wire raul to it, until that is said explicitly.
   crates/core is shared and stays editable.
@@ -95,7 +96,7 @@ WHERE WE ARE
   tests and 91 script assertions.
   Unit closed: the store discovery in core. Four build and review rounds.
   Core owns the project-boundary rule recorded in ADR 0010: the nearest
-  coding-lanes folder stops discovery, even when work is absent, and an
+  coding-crew folder stops discovery, even when work is absent, and an
   ancestor project's store is never borrowed. Raul calls the strict core
   rule and says no project and no work differently; talita stays untouched
   and keeps writing into the nearest project's work folder. The gate is
@@ -119,7 +120,7 @@ WHERE WE ARE
   VENDORED.md. sync.sh checks the pinned upstream and refuses to erase
   semantic deviations silently. The gate is green: 468 Rust tests and 91
   script assertions.
-  Unit closed: the coding-lanes code-review skill. Three build and review
+  Unit closed: the coding-crew code-review skill. Three build and review
   rounds adapted mattpocock/skills' two-axis review for this project. A first
   review opens fresh CODE and SPEC reviewers in parallel; fix rounds use a
   delta review over prior findings and changed hunks; low findings are
@@ -425,7 +426,7 @@ WHERE WE ARE
   hugo draws tasks only as items of a queue. The shape is settled: one
   sidebar for configuration - the agents, the models, the harness, the
   review-round limit, the order - and one main pane for the running state,
-  with no tabs; the configuration is centralized under ~/.config/coding-lanes/.
+  with no tabs; the configuration is centralized under ~/.config/coding-crew/.
   The theme is shared through crates/theme, so both TUIs paint with one
   palette. The work order: directives, then drop the Autopilot tab from
   raul, then the shared theme crate, then hugo. The three variants that
