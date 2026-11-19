@@ -364,10 +364,30 @@ WHERE WE ARE
   chronology over the committed tree.
   One low was fixed at the close: a README sentence made a universal
   claim that four fixtures contradicted.
-  Next unit: the batched low follow-ups - the render_view extraction, the
-  help popup sizing, the two terminal-column measures, the fenced-code
-  fixture, the --tab and --detail guard, the two-instants fix, and the
-  search-figure assertions home. Then the Autopilot design.
+  Unit closed: the small follow-ups. Three rounds. Four recorded lows
+  closed: the --tab with --detail combination is refused before anything
+  renders, with a message naming both flags; the help popup fits the
+  window and keeps q and ? at heights 14 and 10 and at the narrow widths
+  where lines wrap; the view.rs clause names the case that renders; and
+  one instant now serves a whole frame - the Needs, Path and Overview
+  paths all take the frames now, the fresh-clock wrappers are gone, and a
+  guard test scans the source tree so no other module can read the clock
+  again. The gate is green: 583 Rust tests and 197 script assertions.
+  The unit opened as four unrelated small lows and the reviews turned it
+  into the discovery that the one-instant guarantee was half implemented
+  across three tabs - a frame could answer from four instants and draw a
+  claimable count beside a next task the counts instant says is held,
+  two numbers on one screen disagreeing. Both the guard and the boundary
+  pins were probed: a rogue clock-reading module dropped into src fails
+  the guard, and a fresh clock fails the expired side by design.
+  Two lows carry into the next unit: the drawn-order id assembly exists in
+  three copies in path.rs, and the guard comment says the crate when the
+  scan covers src only.
+  Next unit: the render_view extraction - the triplicated ids-to-cursor-to-
+  settle-to-window block, one copy in view.rs - with those two lows in it.
+  Then the theme-side follow-ups: the two terminal-column measures, the
+  fenced-code fixture, and the search-figure assertions home. Then the
+  Autopilot design.
   Unit closed: the global flow. Three rounds. The flow skill and the
   review skill now live at ~/.config/opencode/skills, loaded by their IDs,
   and the repository points at them; the skill says where it lives, that
