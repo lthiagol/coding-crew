@@ -445,6 +445,9 @@ HAPPENED
   orchestrator repeated the mistake once more - it closed a reviewers tab
   while the wake command was still polling, so the wake ran to its bound
   blind - the rule is to wait for the wake to return before closing a tab.
+  It happened a third time, and the rule is now written into the skill:
+  the report often arrives before the wake notices the turn ended, so a
+  tab closed on the report leaves the wake polling a pane that is gone.
   A builder pane was blocked by an account setting, not a defect: the
   opencode-go DeepSeek V4.1 Flash model is region-blocked until the
   console's privacy region is set to Global. And a wake command was left
