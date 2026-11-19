@@ -324,10 +324,31 @@ WHERE WE ARE
   loud, not silent.
   One low stands recorded: the tab closer moved with no suite of its own,
   the humans pruning decision.
-  Next unit: the row-tab scrolling unit - scrolling on Needs you, Path and
-  Backlog, with pgup/pgdn and g/G, the cursor never stepping onto a
-  hidden row, and the movement keys named in the footer and the help
-  overlay. That is the unit the key-set deferral pointed at.
+  Unit closed: the row-tab scrolling. Two rounds. The three row tabs -
+  Needs you, Path and Backlog - scroll their rows: the viewport follows
+  the cursor, pgup and pgdn move it by the rows the pane shows, g and G
+  reach the first and last row, and the content pane row of screens.md
+  is now true. The cursor is never on a row the pane does not draw, and
+  the footer and the help name exactly the keys that work. The gate is
+  green: 571 Rust tests and 218 script assertions.
+  The first round found two blocking defects, both the projects own
+  classes: Paths announcement undercounted after scrolling - it named the
+  rows it cut but not the rows it scrolled past, so the summary could say
+  RUNNING 6 over four rows - and the cursor could sit on a row the pane
+  could not draw, because a blocked groups first row is a two-line chunk
+  and the window ignored a rows height. The fix round closed both, with
+  the reviewer's own probes: after G at content height 7 the announcement
+  reads 14 and 14 of 18 rows are hidden, and at content height 2 walking
+  Up through every Path row keeps the cursor drawn and painted.
+  Three follow-ups stand, none blocking: the triplicated render_view
+  orchestration across the three tabs is an extraction unit of its own;
+  the help popup clips the movement keys, q and ? on windows of 14 rows
+  or fewer, which is a design decision; and view.rs keeps one clause
+  about the last window that draws a row, which does not hold at content
+  height 1.
+  Next unit: the mock-data dependency graph unit - the fixture graph
+  still contradicts the dependencies.satisfied gate for fixtures past
+  approved, and the Path tab is built on it.
   Unit closed: the global flow. Three rounds. The flow skill and the
   review skill now live at ~/.config/opencode/skills, loaded by their IDs,
   and the repository points at them; the skill says where it lives, that
