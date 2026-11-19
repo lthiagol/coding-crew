@@ -562,7 +562,7 @@ phase and keeps every gate.
 ## 13a. Where the screens are
 
 The TUI's screens are specified in [tui/screens.md](../tui/screens.md): the
-window, the six tabs, the detail pane, the derived views. The state of the
+window, the five tabs, the detail pane, the derived views. The state of the
 work is in `TODO.txt`.
 
 ## 14. What this doc is not
