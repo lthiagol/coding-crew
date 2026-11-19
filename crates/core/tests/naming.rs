@@ -5,12 +5,10 @@
 //! rename fails the gate while it is still in flight.
 
 use std::fs;
-use std::path::{Path, PathBuf};
 
-/// The root of the repository, from this test crate.
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
+mod common;
+
+use common::{repo_root, working_files};
 
 /// The parts of the project's former name.
 const OLD_PARTS: [&str; 2] = ["coding", "lanes"];
@@ -25,34 +23,6 @@ fn old_names() -> [String; 2] {
 /// not a use of the old project name.
 fn allowed_remote() -> String {
     format!("https://github.com/lthiagol/{}.git", OLD_PARTS.join("-"))
-}
-
-/// Every file in the working tree, except the git directory and the build
-/// directory.
-fn working_files(root: &Path) -> Vec<PathBuf> {
-    fn walk(dir: &Path, files: &mut Vec<PathBuf>) {
-        let entries =
-            fs::read_dir(dir).unwrap_or_else(|error| panic!("{}: {error}", dir.display()));
-        for entry in entries {
-            let entry = entry.unwrap_or_else(|error| panic!("{}: {error}", dir.display()));
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if name == ".git" || name == "target" {
-                continue;
-            }
-            let path = entry.path();
-            let kind = entry.file_type().expect("a file type");
-            if kind.is_dir() {
-                walk(&path, files);
-            } else if kind.is_file() {
-                files.push(path);
-            }
-        }
-    }
-
-    let mut files = Vec::new();
-    walk(root, &mut files);
-    files.sort();
-    files
 }
 
 #[test]

@@ -4,10 +4,11 @@ An agentic todo list with superpowers.
 
 A task management tool for agents. Three interfaces:
 
-- **talita** — the CLI tool. Agent-facing. **T**ask **A**ccess and **L**ane
-  **I**nteraction **T**erminal **A**pp. Writes and manages tasks.
-- **raul** — the TUI for the work. Human-facing. **R**eview, **A**pprove,
-  **U**nderstand **L**ane. Shows them.
+- **talita** — the CLI tool. Agent-facing. **T**ask **A**dministration,
+  **L**ifecycle & **I**nteraction **T**erminal **A**pplication. Writes and
+  manages tasks.
+- **raul** — the TUI for the work. Human-facing. **R**eview, **A**ssess,
+  **U**nderstand & **L**earn. Shows them.
 - **hugo** — the TUI for the flow. Human-facing. **H**uman-guided **U**nified
   **G**overnance **&** **O**rchestration. Configures and watches the crew.
 

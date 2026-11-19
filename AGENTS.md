@@ -9,10 +9,11 @@ superpowers.
 
 - Three interfaces:
   - **talita** — the CLI tool. Agent-facing, not designed for humans.
-    **T**ask **A**ccess and **L**ane **I**nteraction **T**erminal **A**pp.
+    **T**ask **A**dministration, **L**ifecycle & **I**nteraction **T**erminal
+    **A**pplication.
   - **raul** — the TUI for the work. Human-facing, for reviewing tasks and
-    understanding the project's flow and status. **R**eview, **A**pprove,
-    **U**nderstand **L**ane.
+    understanding the project's flow and status. **R**eview, **A**ssess,
+    **U**nderstand & **L**earn.
   - **hugo** — the TUI for the flow. Human-facing, for configuring and
     governing the automation that runs the work. **H**uman-guided
     **U**nified **G**overnance **&** **O**rchestration.

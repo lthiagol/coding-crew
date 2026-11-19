@@ -1,6 +1,6 @@
 [package]
 name = "coding-crew-raul"
-description = "Review, Approve, Understand Lane — the TUI of coding-crew"
+description = "Review, Assess, Understand & Learn — the TUI for the work"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

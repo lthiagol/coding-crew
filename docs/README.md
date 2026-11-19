@@ -1,11 +1,12 @@
 # Design docs
 
 **coding-crew** — an agentic todo list with superpowers. Three interfaces:
-**talita**, the CLI tool that writes and manages tasks (**T**ask **A**ccess and
-**L**ane **I**nteraction **T**erminal **A**pp); **raul**, the TUI for the work
-that shows them (**R**eview, **A**pprove, **U**nderstand **L**ane); and
-**hugo**, the TUI for the flow that governs the automation (**H**uman-guided
-**U**nified **G**overnance **&** **O**rchestration).
+**talita**, the CLI tool that writes and manages tasks (**T**ask
+**A**dministration, **L**ifecycle & **I**nteraction **T**erminal
+**A**pplication); **raul**, the TUI for the work that shows them (**R**eview,
+**A**ssess, **U**nderstand & **L**earn); and **hugo**, the TUI for the flow that
+governs the automation (**H**uman-guided **U**nified **G**overnance &
+**O**rchestration).
 
 | doc | what |
 |---|---|

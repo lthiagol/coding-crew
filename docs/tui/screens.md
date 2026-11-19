@@ -1,6 +1,6 @@
 # raul — screens
 
-The TUI of coding-crew. It reads the work folder and shows it. It writes
+The TUI for the work. It reads the work folder and shows it. It writes
 nothing.
 
 The domain is in [tasks/task-model.md](../tasks/task-model.md); the names are

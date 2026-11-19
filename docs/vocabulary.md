@@ -1,6 +1,6 @@
 # Vocabulary — the decision of record
 
-coding-crew has two interfaces, two artifact kinds, four agent roles and one set
+coding-crew has three interfaces, two artifact kinds, four agent roles and one set
 of lifecycle states. This doc fixes the words. The reasoning behind each choice
 is in [decisions/](decisions/); where a doc and an ADR differ, this doc wins.
 
@@ -12,7 +12,7 @@ interfaces, the machine's records, the agents' jobs — takes plain words.**
 | Layer | Vocabulary | Examples |
 |---|---|---|
 | The place and its views | lane | the **lane**, the human lane, the agent lane, the backlog tab, the board |
-| The interfaces | plain words behind a coined name | **talita**, **raul** |
+| The interfaces | plain words behind a coined name | **talita**, **raul**, **hugo** |
 | The records | plain | **task**, **smaller task**, acceptance criterion, step, **evidence**, finding, comment, note, question |
 | The jobs | plain | **creator**, **runner**, **reviewer**, **orchestrator** |
 | The states | plain | `draft` `groomed` `approved` `executing` `code-review` `remediating` `needs-human` `done`; overlays `blocked` `deferred` `cancelled` |
@@ -33,10 +33,12 @@ derived from its latest evidence.
 | Thing | Name | Note |
 |---|---|---|
 | The project | **coding-crew** | *An agentic todo list with superpowers* |
-| The CLI tool | **talita** | agent-facing; writes and manages tasks. **T**ask **A**ccess and **L**ane **I**nteraction **T**erminal **A**pp |
-| The TUI | **raul** | human-facing; shows tasks. **R**eview, **A**pprove, **U**nderstand **L**ane |
+| The CLI tool | **talita** | agent-facing; writes and manages tasks. **T**ask **A**dministration, **L**ifecycle & **I**nteraction **T**erminal **A**pplication |
+| The TUI for the work | **raul** | human-facing; shows tasks. **R**eview, **A**ssess, **U**nderstand & **L**earn |
+| The TUI for the flow | **hugo** | human-facing; governs the automation. **H**uman-guided **U**nified **G**overnance & **O**rchestration |
 | The CLI binary | `talita` | package `coding-crew-talita`, crate `crates/talita` |
-| The TUI binary | `raul` | package `coding-crew-raul`, crate `crates/raul` |
+| The TUI binary for the work | `raul` | package `coding-crew-raul`, crate `crates/raul` |
+| The TUI binary for the flow | `hugo` | package `coding-crew-hugo`, crate `crates/hugo` (when built) |
 | The work folder | `coding-crew/work/` | inside each managed project, next to its code. No central store |
 | A task | **task**, id `TSK01` | the unit of work. Children `TSK03.1` |
 | A smaller task | **smaller task**, id `ITM01` | an idea, a bug or a small feature that is not a task yet |
@@ -47,8 +49,9 @@ derived from its latest evidence.
 | A comment | comment, id `CMT-01` | |
 | A note | note, id `NOTE-01` | |
 
-The two interfaces share one project name and take their own. `talita` names
-what the agent reaches for; `raul` names what the human reads.
+The three interfaces share one project name and take their own. `talita` names
+what the agent reaches for; `raul` names the work the human reads; `hugo` names
+the flow the human governs.
 
 ## The backlog: one artifact, three kinds
 
@@ -113,8 +116,8 @@ shown unchanged, so there is one word per state and one spelling per id.
 
 | Option | Lost because |
 |---|---|
-| Calling the CLI "the CLI tool" and the TUI "the TUI" | two surfaces with no names of their own; the human has no word for the tool they read, and the agent has none for the tool it writes. Both are named now: **talita** and **raul** |
-| Naming the CLI after the lane alone, and the TUI after the role | `talita` and `raul` are already that: *Lane Interaction* and *Understand Lane*. Naming them by role again would put a job where a surface belongs |
+| Calling the CLI "the CLI tool" and the TUIs "the TUIs" | three surfaces with no names of their own; the human has no word for the work they read or the flow they govern, and the agent has none for the tool it writes. All three are named now: **talita**, **raul** and **hugo** |
+| Naming the CLI after the lane alone, and raul after a role | `talita` already says what the tool does — *Task Administration* over the task's *Lifecycle*, with *Interaction* for the conversation — and `raul` says what the human does with the work — *Review, Assess, Understand & Learn*; neither is a job. `hugo` names governance, and a role is not a surface either. Naming a surface by role would put a job where a surface belongs |
 | Splitting tasks and smaller tasks into two folders | raul shows them in one backlog tab; a split on disk is a split a reader has to learn for no gain |
 | Giving a smaller task a light path with no review gate | work that closes with no proof — the hole this project exists to avoid |
 | Folding the kind into the task instead of a separate artifact | an idea, a bug and a task are not the same shape; folding them means either a task with empty fields or a second artifact wearing the task's name |

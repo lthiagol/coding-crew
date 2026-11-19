@@ -1,4 +1,4 @@
-//! raul — the TUI of coding-crew.
+//! raul — the TUI for the work.
 //!
 //! raul reads a work folder and shows it. It writes nothing.
 

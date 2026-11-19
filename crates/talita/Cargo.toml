@@ -1,6 +1,6 @@
 [package]
 name = "coding-crew-talita"
-description = "Task Access and Lane Interaction Terminal App — the CLI tool of coding-crew"
+description = "Task Administration, Lifecycle & Interaction Terminal Application — the CLI tool of coding-crew"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

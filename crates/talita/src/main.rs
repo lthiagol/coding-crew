@@ -3,7 +3,8 @@ use clap::{Parser, Subcommand};
 use coding_crew_core::{Store, Task};
 use std::path::{Path, PathBuf};
 
-/// Task Access and Lane Interaction Terminal App — the CLI tool of coding-crew.
+/// Task Administration, Lifecycle & Interaction Terminal Application — the CLI
+/// tool of coding-crew.
 #[derive(Debug, Parser)]
 #[command(name = "talita", version, about)]
 struct Talita {
