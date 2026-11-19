@@ -34,6 +34,52 @@ task whose dependencies are done, write the steps and the evidence, a
 reviewer who did not write the code gives the verdict, findings go back to
 the runner — read from `docs/roles/roles.md`.
 
+## The thirty sketches
+
+The three variants below are the ones carried over from the Autopilot era.
+The current comparison is thirty newer sketches, drawn as HTML pages so the
+human could look at them: `docs/hugo/tui-proposals/`, one directory per
+model family — `deepseek/`, `glm/`, `minimax/` — with the combined index at
+its root. It groups the thirty into the eight readings the set contains:
+
+1. the order leads — the policy is the screen
+2. the crew leads — who is acting, right now
+3. the findings lead — what is open decides the screen
+4. the queue leads — the work as an index
+5. the round leads — the review happening now
+6. the budget leads — the scarce thing is the subject
+7. the stamp leads — does it run, and why
+8. the flow is the subject — every fact cites its cause
+
+Readings 1–7 are reached by two or three families each; reading 8 only by
+glm. The human picks one, and the pick becomes the screen that gets built.
+
+The sketches are drawn as they are, defects included: a review round found
+seven real ones and the human chose not to have them fixed, so the index
+carries a known-issues block that names them. Read it before reading any
+sketch as a specification.
+
+## The rulings the review made
+
+A review round read the thirty sketches against the rules above and settled
+six points. They bind whatever gets built, so they are written down here:
+
+- **A held task belongs to the crew, not the queue.** The queue holds
+  unclaimed work; a task an agent holds is that agent's row.
+- **No invented interactions.** A screen may not paint a key for an action
+  the open question has not settled — whether hugo drives the loop or only
+  shows it. Where a design wants one, it says so in a line instead.
+- **The queue carries an id and a status**, plus derived review metadata —
+  rounds, focus — when that metadata is not the task's content. The title,
+  the notes and the intent stay out; they belong to raul.
+- **A count must name its set.** Sixteen live tasks is the automation's
+  queue; nineteen adds the three groomed. Both are computable, so the
+  screen has to say which it counts.
+- **The stamp says whether the automation runs *and* why.** A bare
+  "running" is half the settled content.
+- **The same fact has one home.** Not a summary and a detail of one count,
+  not a composition stated in two blocks.
+
 ---
 
 ## Variant A — the order first

@@ -844,3 +844,15 @@ NEXT
   The order is in docs/plan.md, and that is the only list of it. The plan
   holds the small units with their done-when lines, the grooming, and the
   open questions.
+  The next move is a decision, not a unit: the human picks one of the eight
+  readings in docs/hugo/tui-proposals/index.html, and that pick becomes
+  plan row 31 - the hugo shell. To look at them again in a fresh session:
+  python3 -m http.server 8848 --directory docs/hugo/tui-proposals, then
+  open http://localhost:8848/index.html.
+  If the three-family experiment is repeated, the family role configs lived
+  in /tmp and are gone. They are flow/builder.json with the builder's model
+  string changed: opencode-go/glm-5.3-flash#high and
+  minimax-coding-plan/MiniMax-M3.1-Flash-tuned. The families must not read
+  each other's directories, or the comparison is worth nothing.
+  The review's rulings are durable in docs/hugo/design-record.md, not in
+  /tmp/opencode/review-hugo-props/, which does not survive.
