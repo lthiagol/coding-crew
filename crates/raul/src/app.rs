@@ -135,11 +135,11 @@ impl App {
             KeyCode::Down | KeyCode::Char('j') => self.move_selection(work, 1, now),
             KeyCode::Up | KeyCode::Char('k') => self.move_selection(work, -1, now),
             KeyCode::PageDown => {
-                let page = self.view.page.max(1) as isize;
+                let page = self.view.page().max(1) as isize;
                 self.move_selection(work, page, now)
             }
             KeyCode::PageUp => {
-                let page = self.view.page.max(1) as isize;
+                let page = self.view.page().max(1) as isize;
                 self.move_selection(work, -page, now)
             }
             KeyCode::Char('g') => self.move_to(work, 0, now),
@@ -1090,6 +1090,28 @@ mod tests {
     }
 
     #[test]
+    fn the_three_row_tabs_draw_through_the_shared_window() {
+        // The window's fields and `settle` are private, so a tab cannot keep
+        // its own window. A tab could still stop drawing through
+        // `View::draw` and keep local state; `page` is set only by `draw`, so
+        // a fresh window that has a page after a render proves the tab went
+        // through the shared helper.
+        for tab in [Tab::NeedsYou, Tab::Path, Tab::Backlog] {
+            let mut app = window(&Theme::preset(Preset::Dark), tab, false);
+            assert_eq!(
+                app.view.page(),
+                0,
+                "{tab:?}: a fresh window already has a page"
+            );
+            render(&mut app, 100, 10);
+            assert!(
+                app.view.page() > 0,
+                "{tab:?}: the tab does not draw through View::draw"
+            );
+        }
+    }
+
+    #[test]
     fn the_viewport_clamps_at_both_ends() {
         // At a short pane the tabs have rows below the last visible one.
         let work = mock_work();
@@ -1099,9 +1121,9 @@ mod tests {
             assert!(ids.len() > 4, "{tab:?}: not enough rows to scroll");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 10);
-            assert!(app.view.page > 0, "{tab:?}: the pane shows no rows");
+            assert!(app.view.page() > 0, "{tab:?}: the pane shows no rows");
             assert!(
-                app.view.page < ids.len(),
+                app.view.page() < ids.len(),
                 "{tab:?}: every row fits, nothing scrolls"
             );
             // G reaches the last page and the last row.
@@ -1114,7 +1136,7 @@ mod tests {
             );
             let bottom = app.view;
             assert_eq!(
-                bottom.first + bottom.page,
+                bottom.first() + bottom.page(),
                 ids.len(),
                 "{tab:?}: the last page is not at the end"
             );
@@ -1130,11 +1152,11 @@ mod tests {
                 Some(ids[0].as_str()),
                 "{tab:?}: g did not reach the first row"
             );
-            assert_eq!(app.view.first, 0, "{tab:?}: g did not reach the top");
+            assert_eq!(app.view.first(), 0, "{tab:?}: g did not reach the top");
             // Up at the top moves nothing.
             app.on_key(key(KeyCode::Up), &work, now());
             render(&mut app, 100, 10);
-            assert_eq!(app.view.first, 0, "{tab:?}: up ran past the top");
+            assert_eq!(app.view.first(), 0, "{tab:?}: up ran past the top");
             assert_eq!(
                 app.selection.as_deref(),
                 Some(ids[0].as_str()),
@@ -1325,10 +1347,10 @@ mod tests {
                     .position(|id| *id == cursor)
                     .expect("the cursor's row");
                 assert!(
-                    index >= app.view.first && index < app.view.first + app.view.page,
+                    index >= app.view.first() && index < app.view.first() + app.view.page(),
                     "{tab:?}: {cursor} is at {index}, the window is {}..{}",
-                    app.view.first,
-                    app.view.first + app.view.page
+                    app.view.first(),
+                    app.view.first() + app.view.page()
                 );
                 assert!(
                     painted_selection(&rows, &paint, &cursor, selection),
@@ -1364,7 +1386,7 @@ mod tests {
             let ids = rows_of(&work, tab, now()).expect("a row tab");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 14);
-            let page = app.view.page;
+            let page = app.view.page();
             assert!(page > 1, "{tab:?}: the pane shows {page} rows");
             // One page down moves the cursor by exactly the rows on
             // display.
@@ -1563,10 +1585,10 @@ mod tests {
                             .position(|id| *id == cursor)
                             .expect("the cursor's row");
                         assert!(
-                            index >= app.view.first && index < app.view.first + app.view.page,
+                            index >= app.view.first() && index < app.view.first() + app.view.page(),
                             "{tab:?} {height}: {cursor} is at {index}, the window is {}..{}",
-                            app.view.first,
-                            app.view.first + app.view.page
+                            app.view.first(),
+                            app.view.first() + app.view.page()
                         );
                         assert!(
                             painted_selection(&rows, &paint, &cursor, selection),
@@ -1585,7 +1607,7 @@ mod tests {
         render(&mut app, 100, 10);
         app.on_key(key(KeyCode::Char('G')), &work, now());
         render(&mut app, 100, 10);
-        assert!(app.view.first > 0, "the path did not scroll");
+        assert!(app.view.first() > 0, "the path did not scroll");
         app.on_key(key(KeyCode::Char('1')), &work, now());
         assert_eq!(app.view, View::default(), "the window outlived its tab");
     }

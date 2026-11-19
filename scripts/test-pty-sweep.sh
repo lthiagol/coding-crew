@@ -86,6 +86,13 @@ for ((row = 1; row <= rows; row++)); do
     printf '\n'
     continue
   fi
+  if [[ $row == 1 && -n ${FAKE_CLUSTER_WIDTH:-} && $width == "$FAKE_CLUSTER_WIDTH" ]]; then
+    # Each woman-joiner-laptop sequence is one cluster of two columns; a
+    # per-codepoint measure would count four and overflow.
+    for ((cell = 0; cell < width / 2; cell++)); do printf '\U0001F469\u200D\U0001F4BB'; done
+    printf '\n'
+    continue
+  fi
   printf '%*s\n' "$columns" '' | tr ' ' 'x'
 done
 FAKE
@@ -108,7 +115,7 @@ new_case() {
   mkdir -p "$FAKE_STATE_DIR/tmp"
   export FAKE_STATE_DIR
   unset FAKE_FAIL_WIDTH FAKE_SHORT_WIDTH FAKE_OVERFLOW_WIDTH FAKE_HANG_WIDTH
-  unset FAKE_WIDE_WIDTH FAKE_COMBINING_WIDTH
+  unset FAKE_WIDE_WIDTH FAKE_COMBINING_WIDTH FAKE_CLUSTER_WIDTH
   # The default output folder is a fresh one under TMPDIR; keep it inside the
   # case so the suite's own trap removes it.
   export TMPDIR="$FAKE_STATE_DIR/tmp"
@@ -284,6 +291,12 @@ run_sweep --raul "$BIN/raul" --work work
 expect_rc 0 "combining characters"
 expect_contains "$STDOUT" 'every line fits' "a combining mark takes no column"
 
+new_case
+export FAKE_CLUSTER_WIDTH=40
+run_sweep --raul "$BIN/raul" --work work
+expect_rc 0 "joined clusters"
+expect_contains "$STDOUT" 'every line fits' "a joined emoji cluster counts once"
+
 # 7. A render that hangs is bounded: the gate fails instead of stalling.
 new_case
 export FAKE_HANG_WIDTH=40
@@ -339,6 +352,66 @@ expect_contains "$STDOUT" '40 to 120' "help names the range"
 expect_contains "$STDOUT" '--work' "help names the work flag"
 expect_contains "$STDOUT" '--out' "help names the output flag"
 expect_contains "$STDOUT" '--timeout' "help names the timeout flag"
+
+# 11. The column table is the one its rules generate: the committed table
+# passes the check, a hand-edited range fails it, and --write regenerates the
+# committed bytes.
+GENERATE="$HERE/generate-terminal-columns.py"
+run_generate() {
+  timeout "$CASE_TIMEOUT" python3 "$@" >"$STDOUT" 2>"$STDERR"
+  RC=$?
+  if ((RC == 124)); then
+    bad "generator case exceeded ${CASE_TIMEOUT}s wall-clock bound"
+  fi
+}
+
+new_case
+run_generate "$GENERATE" --check
+expect_rc 0 "column table agrees with its rules"
+expect_contains "$STDOUT" 'ranges agree with the rules' "the check counts the ranges"
+
+new_case
+cp "$GENERATE" "$HERE/terminal-columns.txt" "$FAKE_STATE_DIR/"
+sed -i 's/^0000-0008 0$/0000-0008 2/' "$FAKE_STATE_DIR/terminal-columns.txt"
+run_generate "$FAKE_STATE_DIR/generate-terminal-columns.py" --check
+expect_rc 1 "a hand-edited range"
+expect_contains "$STDERR" 'is not what its rules generate' "the edited range is named"
+run_generate "$FAKE_STATE_DIR/generate-terminal-columns.py" --write
+expect_rc 0 "the generator rewrites the ranges"
+run_generate "$FAKE_STATE_DIR/generate-terminal-columns.py" --check
+expect_rc 0 "the rewritten table agrees"
+if cmp -s "$HERE/terminal-columns.txt" "$FAKE_STATE_DIR/terminal-columns.txt"; then
+  ok
+else
+  bad "the generator does not reproduce the committed table byte for byte"
+fi
+
+# 12. The rules are the source: a rule edited in the table without
+# regenerating the ranges fails the check, and so does a default the range
+# readers do not take.
+new_case
+cp "$GENERATE" "$HERE/terminal-columns.txt" "$FAKE_STATE_DIR/"
+sed -i 's/^rule wide-and-fullwidth 2 east-asian-width W F$/rule wide-and-fullwidth 2 east-asian-width W/' \
+  "$FAKE_STATE_DIR/terminal-columns.txt"
+run_generate "$FAKE_STATE_DIR/generate-terminal-columns.py" --check
+expect_rc 1 "a rule edited in the table"
+expect_contains "$STDERR" 'is not what its rules generate' "the edited rule is named"
+
+new_case
+cp "$GENERATE" "$HERE/terminal-columns.txt" "$FAKE_STATE_DIR/"
+sed -i 's/^rule default 1$/rule default 2/' "$FAKE_STATE_DIR/terminal-columns.txt"
+run_generate "$FAKE_STATE_DIR/generate-terminal-columns.py" --check
+expect_rc 1 "a default rule the readers do not take"
+expect_contains "$STDERR" 'default rule says 2' "the default rule is read"
+
+# 13. A range planted outside the range block is read by the sweep and the
+# Rust check, so the probe must fail on it too.
+new_case
+cp "$GENERATE" "$HERE/terminal-columns.txt" "$FAKE_STATE_DIR/"
+printf '0061-0061 2\n' >>"$FAKE_STATE_DIR/terminal-columns.txt"
+run_generate "$FAKE_STATE_DIR/generate-terminal-columns.py" --check
+expect_rc 1 "a range outside the range block"
+expect_contains "$STDERR" 'range outside the range block' "the stray range is named"
 
 printf 'pty-sweep: %d passed, %d failed\n' "$PASS" "$FAIL"
 ((FAIL == 0))

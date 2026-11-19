@@ -35,12 +35,15 @@ build-talita: ## Build talita only
 run raul: ## Run raul (TUI) on the mock data
 	$(CARGO) run -p $(RAUL_PKG) -- mock-data/coding-crew/work
 
-.PHONY: test test-scripts
+.PHONY: test test-scripts columns
 test: ## Run the test suite
 	$(CARGO) test --workspace
 
 test-scripts: ## Run the shell script tests
 	bash scripts/test-pty-sweep.sh
+
+columns: ## Regenerate the terminal-column table from its rules and check it
+	python3 scripts/generate-terminal-columns.py --check
 
 .PHONY: test-flow
 test-flow: ## Run the flow skill's suites when the skill is installed
@@ -68,7 +71,7 @@ lint: ## Run clippy with warnings as errors
 	$(CARGO) clippy --all-targets -- -D warnings
 
 .PHONY: check ci
-check: fmt-check lint test test-scripts test-flow sweep ## The gate: fmt, clippy, tests, script tests, flow suites, width sweep
+check: fmt-check lint test test-scripts columns test-flow sweep ## The gate: fmt, clippy, tests, script tests, column table, flow suites, width sweep
 ci: check ## Alias for check
 
 .PHONY: doc

@@ -40,6 +40,15 @@ pub fn head_to(text: &str, budget: usize) -> String {
     head
 }
 
+/// The first grapheme of `text`: the smallest piece a terminal draws.
+pub fn first_grapheme(text: &str) -> String {
+    Span::raw(text.to_string())
+        .styled_graphemes(Style::default())
+        .next()
+        .map(|grapheme| grapheme.symbol.to_string())
+        .unwrap_or_default()
+}
+
 /// The text, padded to `width` columns.
 pub fn pad(text: &str, width: usize) -> String {
     let length = text_width(text);
@@ -47,4 +56,16 @@ pub fn pad(text: &str, width: usize) -> String {
         return text.to_string();
     }
     format!("{text}{}", " ".repeat(width - length))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_first_grapheme_is_what_the_terminal_draws_once() {
+        assert_eq!(first_grapheme("e\u{301}x"), "e\u{301}");
+        assert_eq!(first_grapheme("界x"), "界");
+        assert_eq!(first_grapheme(""), "");
+    }
 }

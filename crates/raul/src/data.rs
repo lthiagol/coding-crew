@@ -551,7 +551,11 @@ mod tests {
         // The helpers live in the theme crate. A private copy here is a
         // second rule for cutting and padding, and the two drift.
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let names = [format!("fn {}_to(", "cut"), format!("fn {}(", "pad")];
+        let names = [
+            format!("fn {}_to(", "cut"),
+            format!("fn {}(", "pad"),
+            format!("fn {}(", "first_grapheme"),
+        ];
         let mut copies: Vec<String> = Vec::new();
         let mut pending = vec![root.to_path_buf()];
         while let Some(dir) = pending.pop() {

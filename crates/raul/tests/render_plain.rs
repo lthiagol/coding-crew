@@ -96,12 +96,13 @@ fn column_table() -> &'static ColumnTable {
     })
 }
 
-/// The columns a range of codepoints takes, or the cell that advances to the
-/// next tab stop.
+/// The columns a range of codepoints takes, the cell that advances to the
+/// next tab stop, or a codepoint that joins the cluster before it.
 #[derive(Clone, Copy)]
 enum Columns {
     Fixed(usize),
     Tab,
+    Join,
 }
 
 struct ColumnRange {
@@ -118,6 +119,7 @@ struct ColumnCase {
 
 struct ColumnTable {
     tab_stop: usize,
+    join_after: char,
     ranges: Vec<ColumnRange>,
     cases: Vec<ColumnCase>,
 }
@@ -126,6 +128,7 @@ impl ColumnTable {
     fn load(path: &Path) -> Result<Self, String> {
         let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
         let mut tab_stop = None;
+        let mut join_after = None;
         let mut ranges: Vec<ColumnRange> = Vec::new();
         let mut cases = Vec::new();
         for (index, raw) in text.lines().enumerate() {
@@ -137,17 +140,41 @@ impl ColumnTable {
             let fields: Vec<&str> = line.split_whitespace().collect();
             let error = |message: String| format!("{}:{number}: {message}", path.display());
             match fields[0] {
-                "tab-stop" => {
-                    if fields.len() != 2 {
-                        return Err(error("want: tab-stop N".to_string()));
+                "rule" => {
+                    if fields.len() < 3 {
+                        return Err(error(
+                            "want: rule tab-stop N or rule join-after CP".to_string(),
+                        ));
                     }
-                    let stop: usize = fields[1]
-                        .parse()
-                        .map_err(|_| error(format!("not a positive number: {}", fields[1])))?;
-                    if stop == 0 {
-                        return Err(error("the tab stop must be positive".to_string()));
+                    match fields[1] {
+                        "tab-stop" => {
+                            if fields.len() != 3 {
+                                return Err(error("want: rule tab-stop N".to_string()));
+                            }
+                            let stop: usize = fields[2].parse().map_err(|_| {
+                                error(format!("not a positive number: {}", fields[2]))
+                            })?;
+                            if stop == 0 {
+                                return Err(error("the tab stop must be positive".to_string()));
+                            }
+                            tab_stop = Some(stop);
+                        }
+                        "join-after" => {
+                            if fields.len() != 3 {
+                                return Err(error("want: rule join-after CP".to_string()));
+                            }
+                            let value = u32::from_str_radix(fields[2], 16).map_err(|_| {
+                                error(format!("not a hex codepoint: {}", fields[2]))
+                            })?;
+                            let character = char::from_u32(value)
+                                .ok_or_else(|| error(format!("not a character: {}", fields[2])))?;
+                            join_after = Some(character);
+                        }
+                        // The other rule lines derive the ranges; the
+                        // generator reads them, so this reader only needs
+                        // the two above.
+                        _ => {}
                     }
-                    tab_stop = Some(stop);
                 }
                 "case" => {
                     if fields.len() != 4 {
@@ -183,12 +210,14 @@ impl ColumnTable {
                         .map_err(|_| error(format!("not a hex codepoint: {end}")))?;
                     let width = match fields[1] {
                         "tab" => Columns::Tab,
+                        "join" => Columns::Join,
                         other => match other.parse::<usize>() {
                             Ok(0) => Columns::Fixed(0),
+                            Ok(1) => Columns::Fixed(1),
                             Ok(2) => Columns::Fixed(2),
                             _ => {
                                 return Err(error(format!(
-                                    "a range takes 0 or 2 columns, not {other}"
+                                    "a range takes 0, 1, 2, tab or join, not {other}"
                                 )));
                             }
                         },
@@ -205,7 +234,9 @@ impl ColumnTable {
                 }
             }
         }
-        let tab_stop = tab_stop.ok_or_else(|| format!("{}: no tab-stop line", path.display()))?;
+        let tab_stop = tab_stop.ok_or_else(|| format!("{}: no tab-stop rule", path.display()))?;
+        let join_after =
+            join_after.ok_or_else(|| format!("{}: no join-after rule", path.display()))?;
         if ranges.is_empty() {
             return Err(format!("{}: no ranges", path.display()));
         }
@@ -214,6 +245,7 @@ impl ColumnTable {
         }
         Ok(Self {
             tab_stop,
+            join_after,
             ranges,
             cases,
         })
@@ -236,15 +268,44 @@ impl ColumnTable {
                 width: Columns::Fixed(width),
                 ..
             }) => *width,
+            Some(ColumnRange {
+                width: Columns::Join,
+                ..
+            }) => 0,
             Some(_) => self.tab_stop - column % self.tab_stop,
             None => 1,
         }
     }
 
+    /// Whether the table says `character` joins the cluster before it.
+    fn joins(&self, character: char) -> bool {
+        matches!(
+            self.range_at(character as u32),
+            Some(ColumnRange {
+                width: Columns::Join,
+                ..
+            })
+        )
+    }
+
+    /// The columns a line takes, by the table's grapheme-cluster rule.
+    ///
+    /// A cluster takes the columns of its first codepoint, and the codepoints
+    /// that join it take none. A codepoint joins when the table says `join`,
+    /// or when the one before it is the table's joiner.
     fn width_of(&self, text: &str) -> usize {
-        text.chars().fold(0, |column, character| {
-            column + self.advance(character, column)
-        })
+        let mut column = 0;
+        let mut open_cluster = false;
+        let mut previous_was_joiner = false;
+        for character in text.chars() {
+            let joins = self.joins(character) || (open_cluster && previous_was_joiner);
+            if !joins {
+                column += self.advance(character, column);
+                open_cluster = true;
+            }
+            previous_was_joiner = character == self.join_after;
+        }
+        column
     }
 
     fn case(&self, name: &str) -> Option<&ColumnCase> {
@@ -644,7 +705,8 @@ fn the_render_takes_the_requested_dimensions() {
 fn the_terminal_column_table_pins_the_cases_the_measures_used_to_disagree_about() {
     // The cases live in the table, so the two measures cannot drift on the
     // characters that differ: a combining mark, a zero-width joiner, a soft
-    // hyphen, a tab, a wide character, a fullwidth character and an emoji.
+    // hyphen, a tab, a wide character, a fullwidth character, an emoji, a
+    // joined emoji and the conjoining Hangul jamo.
     let table = column_table();
     for name in [
         "combining-mark",
@@ -654,6 +716,12 @@ fn the_terminal_column_table_pins_the_cases_the_measures_used_to_disagree_about(
         "east-asian-wide",
         "fullwidth",
         "emoji",
+        "joined-emoji",
+        "joined-emoji-chain",
+        "emoji-with-modifier",
+        "conjoining-hangul-leading",
+        "conjoining-hangul-medial",
+        "conjoining-hangul-final",
     ] {
         let case = table
             .case(name)
@@ -670,6 +738,58 @@ fn the_terminal_column_table_pins_the_cases_the_measures_used_to_disagree_about(
     assert_eq!(table.width_of("e\u{0301}"), 1, "a letter and its mark");
     assert_eq!(table.width_of("\t"), 8, "a tab from the first column");
     assert_eq!(table.width_of("a\tb"), 9, "a tab advances in place");
+}
+
+#[test]
+fn a_joined_cluster_counts_its_first_codepoint_once() {
+    // The rule the old per-codepoint measure broke: a joiner sequence is one
+    // cluster, and only its first codepoint's columns count. Summing the
+    // codepoints would count the emoji after each joiner again.
+    let table = column_table();
+    let joined = "\u{1f469}\u{200d}\u{1f4bb}";
+    assert_eq!(
+        table.width_of(joined),
+        2,
+        "a joined emoji sequence draws one grapheme"
+    );
+    let scalar: usize = joined.chars().fold(0, |column, character| {
+        column + table.advance(character, column)
+    });
+    assert_eq!(
+        scalar, 4,
+        "the cluster case is not vacuous: a scalar measure counts four"
+    );
+}
+
+#[test]
+fn a_conjoining_hangul_jamo_takes_one_column() {
+    // The table names the conjoining jamo and says one column; the leading
+    // consonants are East Asian wide, so the old table gave them two.
+    let table = column_table();
+    for jamo in ['\u{1100}', '\u{1161}', '\u{11a8}', '\u{a960}', '\u{d7b0}'] {
+        assert_eq!(
+            table.width_of(&jamo.to_string()),
+            1,
+            "the conjoining jamo {jamo:?} is not one column"
+        );
+    }
+}
+
+#[test]
+fn the_terminal_column_table_is_regenerated_from_its_rules() {
+    // The table's header claims its ranges are the rules unrolled. The
+    // generator is what makes that a claim a test reads: a range edited by
+    // hand, or a rule changed without regenerating, fails here.
+    let output = Command::new("python3")
+        .arg(repo_root().join("scripts/generate-terminal-columns.py"))
+        .arg("--check")
+        .output()
+        .expect("running the table's generator");
+    assert!(
+        output.status.success(),
+        "the committed table is not what its rules generate: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]

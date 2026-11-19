@@ -6,11 +6,11 @@ For every width from 40 to 120 the sweep runs
     raul --render --plain --width W --height H [work-folder]
 
 and writes the output to `<out>/<W>.txt`. It measures every line in terminal
-columns; a line wider than W fails the command, naming the width, the line
-number and the measured length. The rules live in `terminal-columns.txt`
-beside this file, which the Rust width check reads too. A render that does
-not finish within `--timeout` seconds fails too, so a hung raul cannot stall
-the gate.
+columns — per grapheme cluster, so a joined emoji counts once — and a line
+wider than W fails the command, naming the width, the line number and the
+measured length. The rules live in `terminal-columns.txt` beside this file,
+which the Rust width check reads too. A render that does not finish within
+`--timeout` seconds fails too, so a hung raul cannot stall the gate.
 
 The output folder is reported and kept, so a failing render can be read. It
 defaults to a fresh folder under the system temporary directory.
@@ -55,14 +55,18 @@ DEFAULT_COLUMNS = 1
 class ColumnTable:
     """The terminal-column rules in `terminal-columns.txt`.
 
-    A range gives a codepoint's fixed columns, or `tab` for the one cell that
-    advances to the next tab stop. A codepoint in no range takes
-    `DEFAULT_COLUMNS`. The cases at the foot of the file are the rules pinned
-    on named characters; `check` measures them through this same table.
+    A range gives a codepoint's fixed columns, `tab` for the one cell that
+    advances to the next tab stop, or `join` for a codepoint that continues
+    the cluster before it and adds no column. A codepoint in no range takes
+    `DEFAULT_COLUMNS`. `rule join-after CP` names the codepoint after which
+    the next codepoint joins the cluster. The cases at the foot of the file
+    are the rules pinned on named characters; `check` measures them through
+    this same table.
     """
 
-    def __init__(self, tab_stop, ranges, cases):
+    def __init__(self, tab_stop, join_after, ranges, cases):
         self.tab_stop = tab_stop
+        self.join_after = join_after
         self.ranges = ranges
         self.cases = cases
         self._starts = [start for start, _, _ in ranges]
@@ -71,6 +75,7 @@ class ColumnTable:
     def load(cls, path):
         """Read a table file, refusing a malformed one."""
         tab_stop = None
+        join_after = None
         ranges = []
         cases = []
         for number, raw in enumerate(
@@ -81,12 +86,23 @@ class ColumnTable:
                 continue
             fields = line.split()
             try:
-                if fields[0] == "tab-stop":
-                    if len(fields) != 2:
-                        raise ValueError("want: tab-stop N")
-                    tab_stop = int(fields[1])
-                    if tab_stop < 1:
-                        raise ValueError("the tab stop must be positive")
+                if fields[0] == "rule":
+                    if len(fields) < 3:
+                        raise ValueError(
+                            "want: rule tab-stop N or rule join-after CP"
+                        )
+                    if fields[1] == "tab-stop":
+                        if len(fields) != 3:
+                            raise ValueError("want: rule tab-stop N")
+                        tab_stop = int(fields[2])
+                        if tab_stop < 1:
+                            raise ValueError("the tab stop must be positive")
+                    elif fields[1] == "join-after":
+                        if len(fields) != 3:
+                            raise ValueError("want: rule join-after CP")
+                        join_after = chr(int(fields[2], 16))
+                    # The other rule lines derive the ranges; the generator
+                    # reads them, so this reader only needs the two above.
                 elif fields[0] == "case":
                     if len(fields) != 4:
                         raise ValueError("want: case NAME CODEPOINTS COLUMNS")
@@ -102,11 +118,11 @@ class ColumnTable:
                         int(bound, 16) for bound in fields[0].split("-")
                     )
                     width = fields[1]
-                    if width != "tab":
+                    if width not in ("tab", "join"):
                         width = int(width)
-                        if width not in (0, 2):
+                        if width not in (0, 1, 2):
                             raise ValueError(
-                                f"a range takes 0 or 2 columns, not {width}"
+                                f"a range takes 0, 1, 2, tab or join, not {width}"
                             )
                     if start > end:
                         raise ValueError(f"range {fields[0]} runs backwards")
@@ -114,7 +130,9 @@ class ColumnTable:
             except ValueError as error:
                 raise ValueError(f"{path}:{number}: {error}") from None
         if tab_stop is None:
-            raise ValueError(f"{path}: no tab-stop line")
+            raise ValueError(f"{path}: no tab-stop rule")
+        if join_after is None:
+            raise ValueError(f"{path}: no join-after rule")
         if not ranges:
             raise ValueError(f"{path}: no ranges")
         if not cases:
@@ -124,10 +142,10 @@ class ColumnTable:
             if start <= previous:
                 raise ValueError(f"{path}: ranges are not in order")
             previous = end
-        return cls(tab_stop, ranges, cases)
+        return cls(tab_stop, join_after, ranges, cases)
 
     def advance(self, character, column):
-        """The columns `character` adds when it starts at `column`."""
+        """The columns `character` adds when it starts a cluster at `column`."""
         codepoint = ord(character)
         index = bisect.bisect_right(self._starts, codepoint) - 1
         if index >= 0:
@@ -135,14 +153,39 @@ class ColumnTable:
             if start <= codepoint <= end:
                 if width == "tab":
                     return self.tab_stop - column % self.tab_stop
+                if width == "join":
+                    return 0
                 return width
         return DEFAULT_COLUMNS
 
+    def joins(self, character):
+        """Whether `character` continues the cluster before it."""
+        codepoint = ord(character)
+        index = bisect.bisect_right(self._starts, codepoint) - 1
+        if index >= 0:
+            start, end, width = self.ranges[index]
+            if start <= codepoint <= end:
+                return width == "join"
+        return False
+
     def display_width(self, text):
-        """The terminal columns a line takes, a tab advancing in place."""
+        """The terminal columns a line takes.
+
+        The measure is per grapheme cluster: a cluster takes the columns of
+        its first codepoint, and the codepoints that join it take none. A
+        codepoint joins when the table says `join`, or when the codepoint
+        before it is the table's joiner, so an emoji sequence counts once.
+        A tab advances in place.
+        """
         column = 0
+        open_cluster = False
+        previous_was_joiner = False
         for character in text:
-            column += self.advance(character, column)
+            joins = self.joins(character) or (open_cluster and previous_was_joiner)
+            if not joins:
+                column += self.advance(character, column)
+                open_cluster = True
+            previous_was_joiner = character == self.join_after
         return column
 
     def check(self):

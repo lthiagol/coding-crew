@@ -11,16 +11,33 @@
 //! shows.
 
 /// The window over a tab's rows.
+///
+/// The fields are private and `settle` is private: a tab reaches the window
+/// only through [`View::draw`]. A copy of the ids-to-cursor-to-settle-to-page
+/// block planted in another module cannot write the window back and does not
+/// build, so the block has one home.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct View {
     /// The index of the first row the content pane shows.
-    pub first: usize,
+    first: usize,
     /// The rows the pane showed at the last draw: the distance a page key
     /// moves.
-    pub page: usize,
+    page: usize,
 }
 
 impl View {
+    /// The index of the first row the pane shows, for the tests that check
+    /// the window the keys moved.
+    #[cfg(test)]
+    pub fn first(&self) -> usize {
+        self.first
+    }
+
+    /// The rows the pane showed at the last draw.
+    pub fn page(&self) -> usize {
+        self.page
+    }
+
     /// Back to the top, with no page measured yet.
     pub fn reset(&mut self) {
         *self = View::default();
@@ -70,7 +87,7 @@ impl View {
     /// draws a row — one content row and a row taller than it — it settles at
     /// the top and the tab shows what it can: the cut announcement, and no
     /// row.
-    pub fn settle(
+    fn settle(
         &mut self,
         total: usize,
         cursor: usize,
@@ -116,9 +133,6 @@ impl View {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use std::fs;
-    use std::path::Path;
 
     /// A list of `total` rows where a window at `first` shows three rows.
     fn three_row_window(total: usize) -> impl FnMut(usize) -> (Vec<usize>, bool) {
@@ -173,42 +187,5 @@ mod tests {
         assert_eq!(view.settle(10, 0, |_| ((0..10).collect(), true)), 0);
         assert_eq!(view.first, 0);
         assert_eq!(view.page, 10);
-    }
-
-    #[test]
-    fn the_three_row_tabs_draw_through_one_window_helper() {
-        // The ids-to-cursor-to-settle-to-re-window-to-page block lives in
-        // `View::draw`. A tab that copies it again settles its own window,
-        // and fails here before the copy can drift.
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let mut settlers: Vec<String> = Vec::new();
-        for entry in fs::read_dir(&dir).expect("the source folder") {
-            let path = entry.expect("a source entry").path();
-            if path.extension().and_then(|value| value.to_str()) != Some("rs") {
-                continue;
-            }
-            let source = fs::read_to_string(&path).expect("a source file");
-            if source.contains(".settle(") {
-                settlers.push(
-                    path.file_name()
-                        .and_then(|name| name.to_str())
-                        .expect("a file name")
-                        .to_string(),
-                );
-            }
-        }
-        settlers.sort();
-        assert_eq!(
-            settlers,
-            vec!["view.rs".to_string()],
-            "a module settles its own window: {settlers:?}"
-        );
-        for tab in ["needs.rs", "path.rs", "backlog.rs"] {
-            let source = fs::read_to_string(dir.join(tab)).expect("a row tab");
-            assert!(
-                source.contains("view.draw("),
-                "{tab} does not draw through the window helper"
-            );
-        }
     }
 }

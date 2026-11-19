@@ -16,7 +16,7 @@ use coding_crew_core::{Status, Task};
 
 use crate::data::{Work, has_overlay, live_claim};
 use crate::view::View;
-use coding_crew_theme::text::cut_to;
+use coding_crew_theme::text::{cut_to, first_grapheme, head_to, text_width};
 use coding_crew_theme::{Theme, block_title_style, phase_style, selected_line};
 
 /// The columns the border of the block takes.
@@ -1180,6 +1180,8 @@ fn announcement(count: usize, prefix: &str, width: usize, theme: &Theme) -> Line
 /// The text, wrapped into rows of `width` columns.
 ///
 /// A word longer than a row is broken over rows: no letter of it is lost.
+/// The break is on a grapheme boundary, as the shared helper cuts titles: a
+/// scalar break can leave a combining mark stranded on the next row.
 fn wrap(text: &str, width: usize) -> Vec<String> {
     if width == 0 {
         return Vec::new();
@@ -1188,17 +1190,25 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
     let mut current = String::new();
     for word in text.split_whitespace() {
         let mut rest = word.to_string();
-        while rest.chars().count() > width {
+        while text_width(&rest) > width {
             if !current.is_empty() {
                 lines.push(std::mem::take(&mut current));
             }
-            let head: String = rest.chars().take(width).collect();
+            let mut head = head_to(&rest, width);
+            if head.is_empty() {
+                // The first grapheme is wider than the row: it goes on a
+                // row of its own rather than looping here.
+                head = first_grapheme(&rest);
+            }
+            if head.is_empty() {
+                break;
+            }
+            rest = rest[head.len()..].to_string();
             lines.push(head);
-            rest = rest.chars().skip(width).collect();
         }
         if current.is_empty() {
             current = rest;
-        } else if current.chars().count() + 1 + rest.chars().count() <= width {
+        } else if text_width(&current) + 1 + text_width(&rest) <= width {
             current.push(' ');
             current.push_str(&rest);
         } else {
@@ -1218,6 +1228,7 @@ mod tests {
 
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
+    use ratatui::style::Style;
 
     use super::*;
     use crate::data::Missing;
@@ -1675,6 +1686,51 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_long_word_is_broken_on_a_grapheme_boundary() {
+        // A one-word title of joined graphemes: a scalar break would keep the
+        // `e` and leave its combining mark to head the next row. The break is
+        // the shared helper's, on the boundaries a terminal draws with.
+        let word = "e\u{301}".repeat(10);
+        for width in 1..=10 {
+            let rows = wrap(&word, width);
+            assert_eq!(rows.concat(), word, "{width}: a letter was lost");
+            for row in &rows {
+                assert!(
+                    is_grapheme_prefix(row, &word),
+                    "{width}: {row:?} cuts a grapheme"
+                );
+                assert!(
+                    !row.starts_with('\u{301}'),
+                    "{width}: {row:?} starts with a combining mark"
+                );
+            }
+        }
+        assert_eq!(
+            wrap(&word, 4),
+            vec![
+                "e\u{301}".repeat(4),
+                "e\u{301}".repeat(4),
+                "e\u{301}".repeat(2),
+            ]
+        );
+    }
+
+    /// Whether `head` is a run of whole graphemes of `text`.
+    fn is_grapheme_prefix(head: &str, text: &str) -> bool {
+        let mut built = String::new();
+        for grapheme in Span::raw(text.to_string()).styled_graphemes(Style::default()) {
+            built.push_str(grapheme.symbol);
+            if built == head {
+                return true;
+            }
+            if built.len() >= head.len() {
+                break;
+            }
+        }
+        built == head
     }
 
     #[test]
