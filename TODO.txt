@@ -20,7 +20,8 @@ HOW TO RESUME
   1. read AGENTS.md, then docs/
   2. read this file, and docs/plan.md - the plan holds the small units with
      their done-when lines, the grooming, and the open questions
-  3. read the last review's findings - the path is at the end of this section
+  3. read the last review's rulings - they are durable, in the design
+     record for the unit that was reviewed
   4. pick the first open item you can finish
   5. run make ci before you claim anything is done
   6. update this file when the item is closed
@@ -32,8 +33,10 @@ HOW TO RESUME
   .orchestration.json.
 
   The findings of the review rounds are not durable - /tmp does not survive.
-  Copy what matters into this file before the round is closed. This unit's
-  rounds are in /tmp/opencode/review-theme/round<N>-findings.md.
+  Copy what matters into this file, or into the design record, before the
+  round is closed. The hugo proposals' rulings are in
+  docs/hugo/design-record.md, and the defects the review found are in the
+  known-issues block of docs/hugo/tui-proposals/index.html.
 
 WHERE WE ARE
   Unit closed: raul window shell and Overview tab. Six build and review
