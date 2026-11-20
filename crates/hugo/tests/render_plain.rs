@@ -1,7 +1,8 @@
 //! `hugo --render --plain` through the real binary.
 //!
 //! The contract is raul's: the screen prints as plain text, deterministic,
-//! so every screen can be pinned byte for byte.
+//! so every screen can be pinned byte for byte. The screens are rendered in
+//! the mock project, so the runtime record is the one the fixtures hold.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -17,6 +18,12 @@ fn repo_root() -> PathBuf {
         .expect("the repository root")
 }
 
+/// The mock project: its `coding-crew/` folder holds the runtime record the
+/// screens show, and the store's own discovery finds it from here.
+fn mock_project() -> PathBuf {
+    repo_root().join("mock-data")
+}
+
 /// A scratch home every render shares: hugo writes its configuration home,
 /// and the test's own home folder must not be where it lands.
 fn home() -> PathBuf {
@@ -30,13 +37,13 @@ fn home() -> PathBuf {
 }
 
 fn run(args: &[&str]) -> Output {
-    run_in_home(&home(), args)
+    run_in(&mock_project(), &home(), args)
 }
 
-fn run_in_home(dir: &Path, args: &[&str]) -> Output {
+fn run_in(dir: &Path, home: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_hugo"))
-        .current_dir(repo_root())
-        .env("HOME", dir)
+        .current_dir(dir)
+        .env("HOME", home)
         .args(args)
         .output()
         .expect("running hugo")
@@ -87,7 +94,7 @@ fn assert_screen_at(width: u16, name: &str) {
 #[test]
 fn the_screen_matches_the_snapshot_at_every_canonical_width() {
     // The narrow design width, the width where the sidebar is dropped, and
-    // the default: the three screens the shell has.
+    // the default: the three screens the flow has.
     for (width, name) in [
         (40, "screen-40.txt"),
         (60, "screen-60.txt"),
@@ -167,10 +174,6 @@ fn the_sidebar_is_shown_wide_and_announced_where_it_is_dropped() {
             "{width}: the line does not name what is not shown: {narrow}"
         );
         assert!(
-            narrow.contains("nothing is running"),
-            "{width}: the flow went with the sidebar: {narrow}"
-        );
-        assert!(
             !narrow.contains("no configuration yet"),
             "{width}: the sidebar is still drawn: {narrow}"
         );
@@ -178,16 +181,97 @@ fn the_sidebar_is_shown_wide_and_announced_where_it_is_dropped() {
 }
 
 #[test]
-fn the_empty_states_are_named() {
+fn the_crew_leads_the_main_pane_the_shell_has_content() {
+    // The runtime record is read from the mock project's coding-crew folder,
+    // discovered from the current directory like the store is.
     let text = screen(100, 40);
-    assert!(
-        text.contains("no configuration yet"),
-        "the sidebar has no named empty state: {text}"
+    assert!(text.contains("the automation's queue"), "{text}");
+    for fact in [
+        "crew",
+        "orchestrator",
+        "runner",
+        "reviewer",
+        "TSK10",
+        "TSK13",
+        "one per role · the reviewer reviews",
+        "external rounds 18 of 45",
+        "21 open findings",
+        "running since",
+    ] {
+        assert!(text.contains(fact), "{fact} is not on screen: {text}");
+    }
+    assert!(!text.contains("nothing is running"), "{text}");
+    // The crew is the first block under the flow's title.
+    let rows: Vec<&str> = text.lines().collect();
+    let crew = rows
+        .iter()
+        .position(|row| row.contains("crew"))
+        .expect("crew");
+    let queue = rows
+        .iter()
+        .position(|row| row.contains("queue"))
+        .expect("queue");
+    assert!(crew < queue, "{crew} {queue}");
+}
+
+#[test]
+fn a_project_without_a_record_shows_the_named_empty_state() {
+    // The repository root is not a project: there is no coding-crew folder,
+    // so there is nothing to read and the pane says so.
+    let home = home();
+    let output = run_in(
+        &repo_root(),
+        &home,
+        &["--render", "--plain", "--width", "100", "--height", "12"],
     );
-    assert!(
-        text.contains("nothing is running"),
-        "the main pane has no named empty state: {text}"
+    assert!(output.status.success(), "hugo failed: {output:?}");
+    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    assert!(text.contains("nothing is running"), "{text}");
+    assert!(text.contains("no configuration yet"), "{text}");
+
+    // The same through a project whose coding-crew folder holds no record.
+    let dir = std::env::temp_dir().join(format!("hugo-no-record-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(dir.join("coding-crew/work")).expect("a project");
+    let output = run_in(
+        &dir,
+        &home,
+        &["--render", "--plain", "--width", "100", "--height", "12"],
     );
+    assert!(output.status.success(), "hugo failed: {output:?}");
+    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    assert!(text.contains("nothing is running"), "{text}");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_record_that_cannot_be_read_is_named_not_swallowed_as_no_run() {
+    // The files a writer bug leaves behind: malformed JSON, and a record
+    // without its required stamp. Both are unreadable, never "no run".
+    let home = home();
+    for (name, record) in [
+        ("broken", "{ not json"),
+        ("no-stamp", r#"{"started_at": "2026-11-19T09:00:00Z"}"#),
+    ] {
+        let dir = std::env::temp_dir().join(format!("hugo-{name}-record-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("coding-crew/work")).expect("a project");
+        fs::write(dir.join("coding-crew/runtime.json"), record).expect("a broken record");
+        let output = run_in(
+            &dir,
+            &home,
+            &["--render", "--plain", "--width", "100", "--height", "12"],
+        );
+        assert!(output.status.success(), "{name}: hugo failed: {output:?}");
+        let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+        assert!(text.contains("cannot be read"), "{name}: {text}");
+        assert!(text.contains("runtime.json"), "{name}: {text}");
+        assert!(
+            !text.contains("nothing is running"),
+            "{name}: an unreadable record reads as no run: {text}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
 
 #[test]
@@ -299,7 +383,7 @@ fn with_a_temporary_home_running_hugo_leaves_the_configuration_folder_there() {
     let _ = fs::remove_dir_all(&home);
     let config = home.join(".config").join("coding-crew");
     assert!(!config.exists(), "the test home is not fresh");
-    let output = run_in_home(&home, &["--render", "--plain"]);
+    let output = run_in(&mock_project(), &home, &["--render", "--plain"]);
     assert!(output.status.success(), "hugo failed: {output:?}");
     assert!(
         config.is_dir(),

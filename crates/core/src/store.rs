@@ -16,12 +16,23 @@ pub const WORK_DIR: &str = "work";
 /// Name of the project's activity journal, beside the work folder.
 pub const ACTIVITY_FILE: &str = "activity.json";
 
+/// Name of the flow's runtime record, beside the journal.
+pub const RUNTIME_FILE: &str = "runtime.json";
+
 /// The journal of a project, from its work folder.
 ///
 /// The journal sits beside `work/`, not inside it: the work folder holds one
 /// file per work unit, and a journal in there would be read as a task.
 pub fn activity_path(work: &Path) -> PathBuf {
     work.parent().unwrap_or(work).join(ACTIVITY_FILE)
+}
+
+/// The runtime record of a project, from its work folder.
+///
+/// The record sits beside the journal, and for the same reason outside
+/// `work/`: the work folder holds one file per work unit.
+pub fn runtime_path(work: &Path) -> PathBuf {
+    work.parent().unwrap_or(work).join(RUNTIME_FILE)
 }
 
 #[derive(Debug, Error)]
@@ -104,6 +115,11 @@ impl Store {
     /// Path of the project's journal: beside the work folder.
     pub fn activity_path(&self) -> PathBuf {
         activity_path(&self.root)
+    }
+
+    /// Path of the flow's runtime record: beside the journal.
+    pub fn runtime_path(&self) -> PathBuf {
+        runtime_path(&self.root)
     }
 
     /// Path of a task file.
@@ -458,6 +474,22 @@ mod tests {
         );
         let store = Store::new(&work);
         assert_eq!(store.activity_path(), project.join(ACTIVITY_FILE));
+    }
+
+    #[test]
+    fn the_runtime_record_sits_beside_the_journal() {
+        // The record is outside `work/` for the journal's reason: the work
+        // folder holds one file per work unit.
+        let project = Path::new("/project/coding-crew");
+        let work = project.join(WORK_DIR);
+        assert_eq!(
+            runtime_path(&work),
+            project.join(RUNTIME_FILE),
+            "the record is not beside the journal"
+        );
+        assert_eq!(runtime_path(&work).parent(), activity_path(&work).parent());
+        let store = Store::new(&work);
+        assert_eq!(store.runtime_path(), project.join(RUNTIME_FILE));
     }
 
     #[test]

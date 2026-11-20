@@ -553,6 +553,54 @@ settles them.
 Each event names a task and covers a step the lifecycle already has; the kinds
 add no state.
 
+### 11.2 The runtime record (provisional)
+
+```
+<project>/coding-crew/
+  activity.json         # the journal
+  runtime.json          # the flow's runtime
+  work/
+    TSK01-<slug>.json   # a task
+```
+
+The runtime record sits beside the journal, outside `work/`, for the journal's
+reason. It is **provisional**: nothing writes it yet, and the flow's writer
+settles the shape when it lands. Its types live in
+`crates/core/src/runtime.rs`, so the writer and the reader share them.
+
+The file is one object.
+
+| field | rule |
+|---|---|
+| `started_at` | when this run began, RFC 3339 |
+| `crew` | one entry per agent of the flow |
+| `queue` | the unclaimed work: an `id` and a `status`, never a task's title, note or intent |
+| `round` | the review in flight: the `task`, the `stage` (`self` or `external`) and the round's `number` |
+| `budget` | the external rounds `spent` of the `total` |
+| `findings` | the open findings, as a count |
+| `stamp` | whether the automation `runs`, and `why` when it does not |
+
+A crew entry:
+
+| field | rule |
+|---|---|
+| `role` | `orchestrator`, `runner` or `reviewer` |
+| `model` | the model the agent runs |
+| `holds` | the task it holds, or none |
+| `since` | when it took it, RFC 3339 |
+| `state` | `idle`, `executing` or `reviewing` |
+
+The crew's size is a **composition**, not a number: three agents are one per
+role and the reviewer reviews; two are an orchestrator and a worker, so the
+orchestrator reviews; one leaves the review to the human, because an agent
+cannot review itself. The rule is `runtime::composition`, derived from the
+roles, and the pane paints it in words. A crew with more than one agent in a
+role has no rule that says who reviews; it is named as what it is, never as
+one per role. A held task belongs to the crew, not the queue.
+
+The record is optional like the journal: a project without one has no runtime,
+not a broken one.
+
 ## 12. Derived, never stored
 
 | view | derived from |
@@ -563,6 +611,7 @@ add no state.
 | board views | the lanes, grouped and sorted |
 | children progress | the children's own statuses |
 | readiness to claim | would `start` be accepted right now, and if not, which gate refuses it |
+| who reviews | the crew's roles — § 11.2: a reviewer, else the orchestrator, else the human |
 
 A stored lane is a lane that can disagree with the status it was derived from.
 These are views, and they are recomputed on read.
@@ -624,6 +673,7 @@ work is in `TODO.txt`.
 - project config
 - talita's operation surface
 - autopilot
+- the runtime record's writer — the record is provisional (§ 11.2)
 
 **Specified here, now in `crates/core`:**
 

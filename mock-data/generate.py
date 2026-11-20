@@ -18,6 +18,15 @@ from datetime import datetime, timedelta
 ROOT = pathlib.Path(__file__).resolve().parent
 TASKS = ROOT / "coding-crew" / "work"
 ACTIVITY = ROOT / "coding-crew" / "activity.json"
+RUNTIME = ROOT / "coding-crew" / "runtime.json"
+
+# The models the flow's configuration names, in flow/builder.json and
+# flow/reviewer.json. The orchestrator reviews when the crew is two, so it
+# runs the reviewer's family: the reviewer is never the model that wrote the
+# code.
+ORCHESTRATOR_MODEL = "opencode-go/glm-5.3#high"
+RUNNER_MODEL = "opencode-go/deepseek-v4.1-flash#high"
+REVIEWER_MODEL = "opencode-go/glm-5.3#high"
 
 TITLES = [
     "Lorem ipsum dolor sit amet",
@@ -521,6 +530,182 @@ def check_activity(tasks, events):
             )
     # The block shows the last few: the source has more than it shows.
     assert len(events) > 5, len(events)
+
+
+# The instant the fixtures are read with, as in crates/core/tests/mock_data.rs:
+# it decides whether a claim's lease is still live.
+FIXTURE_NOW = "2026-11-19T08:00:00Z"
+
+
+def lease_is_live(claim):
+    """Whether a claim still holds its task at the fixtures' clock."""
+    if not claim:
+        return False
+    lease = claim.get("lease_expires_at") or ""
+    if not lease:
+        return True
+    try:
+        expires = datetime.fromisoformat(lease.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return expires > datetime.fromisoformat(FIXTURE_NOW.replace("Z", "+00:00"))
+
+
+def claimable(item, by_id):
+    """Whether an agent could claim the task at the fixtures' clock.
+
+    The claim gate is the model's: approved, no overlay, every dependency
+    done, and no live claim held elsewhere. It is the queue's one rule.
+    """
+    if item["status"] != "approved":
+        return False
+    if any(item["overlays"].get(kind) for kind in ("blocked", "deferred", "cancelled")):
+        return False
+    for dependency in item["depends_on"]:
+        if by_id[dependency]["status"] != "done":
+            return False
+    return not lease_is_live(item.get("claim"))
+
+
+def runtime_record(tasks):
+    """The flow's runtime, from the fixtures' own state.
+
+    The crew holds the live work: the runner the first executing task it
+    claimed, the reviewer the first task waiting for its external round.
+    The queue is every claimable task nobody holds. The round is the review
+    the reviewer is on. The budget counts the external rounds of the live
+    tasks that have rounds; the findings count the open ones.
+    """
+    by_id = {item["id"]: item for item in tasks}
+    runner_task = next(item for item in tasks if item["status"] == "executing")
+    reviewer_task = next(item for item in tasks if item["status"] == "code-review")
+    queue = [item for item in tasks if claimable(item, by_id)]
+    earliest = min(runner_task["claim"]["at"], reviewer_task["status_since"])
+    live = [
+        item
+        for item in tasks
+        if item["review"]["rounds"] and item["status"] != "done"
+    ]
+    return {
+        "started_at": minutes_before(earliest, 30),
+        "crew": [
+            {
+                "role": "orchestrator",
+                "model": ORCHESTRATOR_MODEL,
+                "state": "idle",
+            },
+            {
+                "role": "runner",
+                "model": RUNNER_MODEL,
+                "holds": runner_task["id"],
+                "since": runner_task["claim"]["at"],
+                "state": "executing",
+            },
+            {
+                "role": "reviewer",
+                "model": REVIEWER_MODEL,
+                "holds": reviewer_task["id"],
+                "since": reviewer_task["status_since"],
+                "state": "reviewing",
+            },
+        ],
+        "queue": [{"id": item["id"], "status": item["status"]} for item in queue],
+        "round": {
+            "task": reviewer_task["id"],
+            "stage": "external",
+            "number": max(round["n"] for round in reviewer_task["review"]["rounds"]) + 1,
+        },
+        "budget": {
+            "spent": sum(
+                1
+                for item in live
+                for round in item["review"]["rounds"]
+                if round["kind"] == "external"
+            ),
+            "total": sum(item["review"]["max_rounds"] for item in live),
+        },
+        "findings": sum(
+            1
+            for item in tasks
+            for finding in item["review"]["findings"]
+            if finding["status"] == "open"
+        ),
+        "stamp": {"runs": True},
+    }
+
+
+def check_runtime(record, tasks, events):
+    """The runtime record is computable from the fixtures, in their time."""
+    by_id = {item["id"]: item for item in tasks}
+    held = [member["holds"] for member in record["crew"] if member.get("holds")]
+    assert len(held) == len(set(held)), held
+    for task_id in held:
+        assert task_id in by_id, task_id
+    queued = [item["id"] for item in record["queue"]]
+    assert not set(queued) & set(held), (queued, held)
+    for task_id in queued:
+        assert claimable(by_id[task_id], by_id), task_id
+
+    # The stamp runs, and a record that stops says why.
+    if record["stamp"]["runs"]:
+        assert "why" not in record["stamp"], record["stamp"]
+    else:
+        assert record["stamp"].get("why"), record["stamp"]
+
+    # The numbers are the fixtures' own.
+    live = [
+        item
+        for item in tasks
+        if item["review"]["rounds"] and item["status"] != "done"
+    ]
+    assert record["budget"] == {
+        "spent": sum(
+            1
+            for item in live
+            for round in item["review"]["rounds"]
+            if round["kind"] == "external"
+        ),
+        "total": sum(item["review"]["max_rounds"] for item in live),
+    }, record["budget"]
+    assert record["findings"] == sum(
+        1
+        for item in tasks
+        for finding in item["review"]["findings"]
+        if finding["status"] == "open"
+    ), record["findings"]
+
+    # The round in flight is the reviewer's task, at the next round.
+    round_ = record["round"]
+    task = by_id[round_["task"]]
+    assert task["status"] == "code-review", task["id"]
+    assert round_["number"] == max(r["n"] for r in task["review"]["rounds"]) + 1
+    reviewer = next(
+        member for member in record["crew"] if member["role"] == "reviewer"
+    )
+    assert reviewer["holds"] == task["id"], reviewer
+    assert reviewer["since"] == task["status_since"], reviewer
+
+    # The crew is one per role, each entry naming the live work it holds.
+    roles = [member["role"] for member in record["crew"]]
+    assert sorted(roles) == ["orchestrator", "reviewer", "runner"], roles
+    runner = next(member for member in record["crew"] if member["role"] == "runner")
+    runner_task = by_id[runner["holds"]]
+    assert runner_task["status"] == "executing", runner_task["id"]
+    assert runner["since"] == runner_task["claim"]["at"], runner
+    assert runner_task["claim"]["by"].startswith("runner-"), runner_task["claim"]
+
+    # The run began before the first hold, and after every event before it.
+    started = stamp(record["started_at"])
+    earliest = min(stamp(member["since"]) for member in record["crew"] if member.get("since"))
+    assert started < earliest, (record["started_at"], earliest)
+    for event_ in events:
+        assert (
+            event_["at"] <= record["started_at"] or stamp(event_["at"]) >= earliest
+        ), event_
+    for member in record["crew"]:
+        if member.get("since"):
+            assert stamp(member["since"]) >= started, member
+
 
 
 def build():
@@ -1197,6 +1382,10 @@ def main():
         json.dumps({"events": events}, indent=2, ensure_ascii=False) + "\n"
     )
     print(ACTIVITY.relative_to(ROOT))
+    runtime = runtime_record(tasks)
+    check_runtime(runtime, tasks, events)
+    RUNTIME.write_text(json.dumps(runtime, indent=2, ensure_ascii=False) + "\n")
+    print(RUNTIME.relative_to(ROOT))
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ project as-is.
 mock-data/
   coding-crew/
     activity.json
+    runtime.json
     work/TSK*.json
 ```
 
@@ -84,6 +85,28 @@ and not inside it. Its events follow the fixtures' own histories: a task's
 and a claim comes after the completion of the work it waits on. The set is
 longer than the Overview's activity block shows, so the left-out count is
 real. The kinds are provisional; nothing writes the journal yet.
+
+## The runtime record
+
+`coding-crew/runtime.json` is the flow's runtime record, beside the journal.
+It is provisional: nothing writes it yet, and the shape is in
+[task-model.md § 11.2](../docs/tasks/task-model.md#112-the-runtime-record-provisional).
+
+Every value is computed from the fixtures:
+
+| what | how |
+|---|---|
+| the crew | one per role: the orchestrator idle, the runner on the first `executing` task it claimed, the reviewer on the first `code-review` task |
+| the holds | each agent's `since` is its task's own stamp — the claim for the runner, the review request for the reviewer |
+| the run | `started_at` is before the first hold and after the last journal event before it |
+| the queue | every `approved` task whose dependencies are done, with no overlay and no live claim held elsewhere: `TSK29` |
+| the round | the reviewer's task, at the next round after its last one |
+| the budget | 18 external rounds of 45, over the nine live tasks that have rounds |
+| the findings | 21 open findings |
+| the stamp | the flow runs |
+
+The record's tasks are the fixtures' tasks: a held task is never in the queue,
+and the counts are the fixtures' own.
 
 ## Not included
 

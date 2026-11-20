@@ -7,6 +7,7 @@ mod app;
 mod config;
 
 use std::io::{Stdout, Write};
+use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 use crossterm::event::{self, Event, KeyEventKind};
@@ -18,7 +19,10 @@ use ratatui::Terminal;
 use ratatui::backend::{CrosstermBackend, TestBackend};
 use ratatui::buffer::{Buffer, CellWidth};
 
-use app::{Action, App};
+use app::{Action, App, RENDER_NOW, ReadError, RuntimeRead};
+use coding_crew_core::runtime::{Runtime, RuntimeError};
+use coding_crew_core::store::RUNTIME_FILE;
+use coding_crew_core::{Store, StoreError};
 use coding_crew_theme::{Preset, Theme};
 
 const USAGE: &str = "usage: hugo [--theme dark|nord|catppuccin|dracula|terminal] [--render --plain [--width N] [--height N]]";
@@ -138,11 +142,17 @@ fn preset_of(name: &str) -> Result<Preset> {
     })
 }
 
-/// The window loop. The flow is read again on every redraw.
+/// The window loop. The runtime is read again on every redraw.
 fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> Result<()> {
     let app = App::new(options.theme);
+    let located = locate_runtime();
     loop {
-        terminal.draw(|frame| app.draw(frame))?;
+        let runtime = read_runtime(&located);
+        // One clock read per frame, as in raul: the crews' holds and every
+        // key that answers the draw see the instant the screen was measured
+        // at. No other module under `src/` reads a clock.
+        let now = coding_crew_core::now_rfc3339();
+        terminal.draw(|frame| app.draw(frame, &runtime, &now))?;
         if let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
             && app.on_key(key) == Action::Quit
@@ -158,15 +168,88 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
 /// No terminal is set up: the screen is drawn into a `TestBackend` buffer,
 /// which is converted to plain UTF-8 instead of being painted on a terminal.
 /// The contract is raul's, so hugo's screens can be pinned the same way.
+///
+/// A render draws at a fixed instant, not the wall clock: a pinned screen
+/// must be the same bytes on every run.
 fn render_plain(options: Options) -> Result<()> {
     let app = App::new(options.theme);
+    let located = locate_runtime();
+    let runtime = read_runtime(&located);
     let mut terminal = Terminal::new(TestBackend::new(options.width, options.height))?;
-    terminal.draw(|frame| app.draw(frame))?;
+    terminal.draw(|frame| app.draw(frame, &runtime, RENDER_NOW))?;
     let text = plain_text(terminal.backend().buffer());
     let mut stdout = std::io::stdout();
     stdout.write_all(text.as_bytes())?;
     stdout.flush()?;
     Ok(())
+}
+
+/// Where the runtime record was looked for.
+enum Located {
+    /// The record's path, in the nearest project.
+    Found(PathBuf),
+    /// There is no project: no record to read, not a broken one.
+    Absent,
+    /// The project could not be determined: that is not the empty state.
+    Unreadable(ReadError),
+}
+
+/// The nearest project's runtime record, discovered from the current
+/// directory.
+///
+/// The project boundary is the store's: the nearest `coding-crew/` folder is
+/// the project, and the record sits in it beside the journal. The work folder
+/// may be absent; the record is still the project's. `Absent` when there is
+/// no project. A discovery failure is not the empty state: it names the
+/// record and the error. The record itself may not exist yet: [`read_runtime`]
+/// says so, and the loop reads it again on every redraw.
+fn locate_runtime() -> Located {
+    let current = match std::env::current_dir() {
+        Ok(current) => current,
+        Err(error) => {
+            return Located::Unreadable(ReadError {
+                file: RUNTIME_FILE.to_string(),
+                error: error.to_string(),
+            });
+        }
+    };
+    match Store::discover(&current) {
+        Ok(store) => Located::Found(store.runtime_path()),
+        Err(StoreError::NoDataFolder | StoreError::NoWorkFolder(_)) => Located::Absent,
+        Err(error) => Located::Unreadable(ReadError {
+            file: RUNTIME_FILE.to_string(),
+            error: error.to_string(),
+        }),
+    }
+}
+
+/// Read the record, when there is one.
+///
+/// An absent record is the empty state. A record that cannot be read — a
+/// file that does not parse, a role the model does not know, a stamp that is
+/// missing — is not absent: it names the file and the error, as raul names a
+/// file it cannot read. The flow's writer owns the file's shape.
+fn read_runtime(located: &Located) -> RuntimeRead {
+    let path = match located {
+        Located::Found(path) => path,
+        Located::Absent => return RuntimeRead::Absent,
+        Located::Unreadable(error) => return RuntimeRead::Unreadable(error.clone()),
+    };
+    let file = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(RUNTIME_FILE)
+        .to_string();
+    match Runtime::read(path) {
+        Ok(runtime) => RuntimeRead::Record(runtime),
+        Err(RuntimeError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            RuntimeRead::Absent
+        }
+        Err(error) => RuntimeRead::Unreadable(ReadError {
+            file,
+            error: error.to_string(),
+        }),
+    }
 }
 
 /// The buffer as plain text: one row per line, no paint, and no trailing
@@ -356,6 +439,104 @@ mod tests {
         assert_eq!(
             config_home(),
             Some(home.join(".config").join("coding-crew"))
+        );
+    }
+
+    /// A scratch folder for the reader's tests.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("hugo-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a scratch folder");
+        dir
+    }
+
+    #[test]
+    fn an_absent_record_is_not_an_unreadable_one() {
+        let dir = scratch("runtime-absent");
+        let path = dir.join("runtime.json");
+        // No file: the empty state.
+        assert_eq!(
+            read_runtime(&Located::Found(path.clone())),
+            RuntimeRead::Absent
+        );
+        // A file that does not parse: reported, with its name and error.
+        std::fs::write(&path, "{ not json").expect("a broken record");
+        match read_runtime(&Located::Found(path)) {
+            RuntimeRead::Unreadable(error) => {
+                assert_eq!(error.file, "runtime.json");
+                assert!(error.error.contains("parse"), "{}", error.error);
+            }
+            other => panic!("{other:?}"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_missing_stamp_is_unreadable_not_no_run() {
+        // The stamp is required: a record without one is not a run that is
+        // silent, it is a record that cannot be read.
+        let dir = scratch("runtime-no-stamp");
+        let path = dir.join("runtime.json");
+        std::fs::write(&path, r#"{"started_at": "2026-11-19T09:00:00Z"}"#)
+            .expect("a record without its stamp");
+        match read_runtime(&Located::Found(path)) {
+            RuntimeRead::Unreadable(error) => {
+                assert_eq!(error.file, "runtime.json");
+                assert!(error.error.contains("parse"), "{}", error.error);
+            }
+            other => panic!("{other:?}"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_discovery_failure_is_not_the_empty_state() {
+        let read = read_runtime(&Located::Unreadable(ReadError {
+            file: "runtime.json".to_string(),
+            error: "the project could not be found".to_string(),
+        }));
+        assert!(matches!(&read, RuntimeRead::Unreadable(_)), "{read:?}");
+    }
+
+    #[test]
+    fn only_the_frame_reads_the_clock_and_a_render_is_fixed() {
+        // One instant per frame, and no other clock read under `src/`: a
+        // module that reads its own clock can disagree with the frame it is
+        // drawn in. The render mode draws at the fixed instant the doc names.
+        let clock = ["now", "_rfc3339"].concat();
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut readers: Vec<String> = Vec::new();
+        for entry in std::fs::read_dir(&dir).expect("the source folder") {
+            let path = entry.expect("a source entry").path();
+            if path.extension().and_then(|value| value.to_str()) != Some("rs") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).expect("a source file");
+            if source.contains(&clock) {
+                readers.push(
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .expect("a file name")
+                        .to_string(),
+                );
+            }
+        }
+        readers.sort();
+        assert_eq!(
+            readers,
+            vec!["main.rs".to_string()],
+            "a module outside the frame reads the clock: {readers:?}"
+        );
+        let main = std::fs::read_to_string(dir.join("main.rs")).expect("main.rs");
+        assert_eq!(
+            main.matches(&clock).count(),
+            1,
+            "the loop is the one clock read; a render is fixed"
+        );
+        let doc = include_str!("../../../docs/hugo/screens.md");
+        assert!(
+            doc.contains(RENDER_NOW),
+            "the doc does not name the instant"
         );
     }
 }

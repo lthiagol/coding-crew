@@ -4,6 +4,7 @@
 //! settles them. The home is `coding-crew/activity.json`, beside `work/`.
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// What happened to a task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,10 +61,28 @@ pub struct Activity {
 }
 
 impl Activity {
+    /// Read a journal from a file.
+    pub fn read(path: &std::path::Path) -> Result<Self, ActivityError> {
+        let text = std::fs::read_to_string(path)?;
+        Ok(serde_json::from_str(&text)?)
+    }
+
     /// Whether the journal holds no events.
     pub fn is_empty(&self) -> bool {
         self.events.is_empty()
     }
+}
+
+/// Why a journal could not be read.
+///
+/// A file that cannot be read and a file that does not parse are different
+/// failures, as they are for the runtime record.
+#[derive(Debug, Error)]
+pub enum ActivityError {
+    #[error("failed to read the journal: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("failed to parse the journal: {0}")]
+    Parse(#[from] serde_json::Error),
 }
 
 #[cfg(test)]
@@ -110,5 +129,51 @@ mod tests {
             let json = serde_json::to_string(&kind).expect("a kind");
             assert_eq!(json, format!("\"{word}\""));
         }
+    }
+
+    #[test]
+    fn a_journal_that_does_not_parse_is_a_parse_failure() {
+        let dir =
+            std::env::temp_dir().join(format!("coding-crew-broken-journal-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a folder");
+        let path = dir.join("activity.json");
+        std::fs::write(&path, "{ not json").expect("a broken journal");
+        let error = Activity::read(&path).expect_err("a broken journal");
+        assert!(matches!(&error, ActivityError::Parse(_)), "{error:?}");
+        assert!(error.to_string().contains("parse"), "{error}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_journal_that_is_not_there_is_an_io_failure() {
+        let path = std::env::temp_dir()
+            .join(format!("coding-crew-no-journal-{}", std::process::id()))
+            .join("activity.json");
+        let error = Activity::read(&path).expect_err("no journal");
+        assert!(matches!(&error, ActivityError::Io(_)), "{error:?}");
+        assert!(error.to_string().contains("read"), "{error}");
+    }
+
+    #[test]
+    fn a_parse_failure_is_a_parse_failure_in_both_readers() {
+        // The journal's reader and the runtime record's reader agree in
+        // kind: a file that does not parse is a parse failure in both.
+        let dir =
+            std::env::temp_dir().join(format!("coding-crew-parse-failure-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a folder");
+        let journal = dir.join("activity.json");
+        let record = dir.join("runtime.json");
+        std::fs::write(&journal, "{").expect("a broken journal");
+        std::fs::write(&record, "{").expect("a broken record");
+        let journal = Activity::read(&journal).expect_err("a broken journal");
+        let record = crate::runtime::Runtime::read(&record).expect_err("a broken runtime record");
+        assert!(matches!(&journal, ActivityError::Parse(_)), "{journal:?}");
+        assert!(
+            matches!(&record, crate::RuntimeError::Parse(_)),
+            "{record:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1,0 +1,43 @@
+{
+  "started_at": "2026-11-09T08:30Z",
+  "crew": [
+    {
+      "role": "orchestrator",
+      "model": "opencode-go/glm-5.3#high",
+      "state": "idle"
+    },
+    {
+      "role": "runner",
+      "model": "opencode-go/deepseek-v4.1-flash#high",
+      "holds": "TSK10",
+      "since": "2026-11-09T09:00Z",
+      "state": "executing"
+    },
+    {
+      "role": "reviewer",
+      "model": "opencode-go/glm-5.3#high",
+      "holds": "TSK13",
+      "since": "2026-11-10T16:00Z",
+      "state": "reviewing"
+    }
+  ],
+  "queue": [
+    {
+      "id": "TSK29",
+      "status": "approved"
+    }
+  ],
+  "round": {
+    "task": "TSK13",
+    "stage": "external",
+    "number": 2
+  },
+  "budget": {
+    "spent": 18,
+    "total": 45
+  },
+  "findings": 21,
+  "stamp": {
+    "runs": true
+  }
+}

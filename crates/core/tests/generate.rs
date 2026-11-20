@@ -84,4 +84,17 @@ fn the_generator_reproduces_the_committed_tree_byte_for_byte() {
         fs::read(&committed_activity).expect("reading the committed journal"),
         "activity.json differs from the committed journal"
     );
+
+    // The runtime record is generated beside the journal, and reproduces too.
+    let committed_runtime = root.join("mock-data/coding-crew/runtime.json");
+    let generated_runtime = scratch.join("coding-crew/runtime.json");
+    assert!(
+        committed_runtime.is_file(),
+        "the committed runtime record is missing"
+    );
+    assert_eq!(
+        fs::read(&generated_runtime).expect("reading the generated record"),
+        fs::read(&committed_runtime).expect("reading the committed record"),
+        "runtime.json differs from the committed record"
+    );
 }

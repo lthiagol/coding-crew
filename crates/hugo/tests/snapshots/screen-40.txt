@@ -1,7 +1,29 @@
  hugo
  sidebar not shown: configuration
 ┌flow──────────────────────────────────┐
-│nothing is running                    │
+│┌crew────────────────────────────────┐│
+││orchestrator  glm-5.3#high  idle    ││
+││  holds — · held —                  ││
+││runner · executing                  ││
+││  deepseek-v4.1-flash#high          ││
+││  holds TSK10 · held 10d            ││
+││reviewer  glm-5.3#high  reviewing   ││
+││  holds TSK13 · held 8d             ││
+││one per role · the reviewer reviews ││
+│└────────────────────────────────────┘│
+│┌queue───────────────────────────────┐│
+││the automation's queue · 1 task     ││
+││TSK29  approved                     ││
+│└────────────────────────────────────┘│
+│┌round───────────────────────────────┐│
+││TSK13 · external · round 2          ││
+│└────────────────────────────────────┘│
+│┌budget──────────────────────────────┐│
+││external rounds 18 of 45            ││
+│└────────────────────────────────────┘│
+│┌findings────────────────────────────┐│
+││21 open findings                    ││
+│└────────────────────────────────────┘│
 │                                      │
 │                                      │
 │                                      │
@@ -13,28 +35,6 @@
 │                                      │
 │                                      │
 │                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
-│                                      │
+│● running since 2026-11-09T08:30Z     │
 └──────────────────────────────────────┘
  q  quit
