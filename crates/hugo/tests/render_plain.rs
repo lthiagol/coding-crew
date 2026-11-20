@@ -286,13 +286,17 @@ fn the_window_has_a_title_line_a_footer_and_no_tabs() {
 }
 
 #[test]
-fn the_footer_names_the_quit_key_and_no_key_that_does_nothing() {
+fn the_footer_names_the_keys_that_work_and_no_key_that_does_nothing() {
+    // The render starts with the cursor on the builder, where enter opens
+    // nothing: the footer names quit, reload and help.
     let text = screen(100, 40);
     let footer = text.lines().last().expect("a footer").trim();
-    assert_eq!(footer, "q  quit", "{footer}");
-    for dead in ["help", "open", "move", "tab", "esc"] {
+    assert_eq!(footer, "q  quit r  reload ?  help", "{footer}");
+    for dead in ["open", "move", "tab", "esc", "choose", "pick"] {
         assert!(!footer.contains(dead), "{footer}: {dead}");
     }
+    // The same keys are in the help.
+    assert!(text.contains("reload"), "{text}");
 }
 
 #[test]

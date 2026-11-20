@@ -1,9 +1,13 @@
-//! The sidebar's content: the configuration, read-only.
+//! The sidebar's content: the configuration, and the cursor that picks the
+//! orchestrator's model.
 //!
 //! The groups, in the order the screen reads them: the **agents** and the
 //! model each runs, the **harness**, the **review-round limit**, and the
 //! **order** — the numbered steps with their gates. The configuration is
-//! provisional and lives in the tool's home; nothing here changes it.
+//! provisional and lives in the tool's home. The agents group has a cursor:
+//! the orchestrator's row is the one row a screen changes, because the
+//! orchestrator is the agent hugo starts. The builder's and the reviewer's
+//! rows are read-only.
 //!
 //! Nothing is dropped without a word: a row too wide for the pane is cut with
 //! the theme's marker, and a group that does not fit the height is left out
@@ -13,8 +17,8 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use coding_crew_core::config::Config;
-use coding_crew_theme::Theme;
 use coding_crew_theme::text::cut_to;
+use coding_crew_theme::{Theme, selected_line};
 
 use crate::config::{ConfigRead, ConfigState};
 
@@ -31,11 +35,16 @@ pub const UNREADABLE: &str = "configuration is unreadable";
 /// The line that says the defaults are what the tool would use, beside an
 /// error: the human sees both what is wrong and what is in force.
 pub const USING_DEFAULTS: &str = "using the defaults:";
+/// The line that says a pick could not be saved. The configuration on screen
+/// is the one still in force.
+pub const NOT_SAVED: &str = "the pick was not saved";
 
 /// One row of a group, before it is cut to the pane.
 struct Row {
     text: String,
     style: Style,
+    /// The cursor is on this row.
+    selected: bool,
 }
 
 /// One group of the sidebar: its title and its rows.
@@ -45,16 +54,34 @@ struct Group {
     rows: Vec<Row>,
 }
 
+/// What the sidebar drew, and whether the cursor's group is on screen.
+pub struct Drawn {
+    /// The lines, cut to the pane.
+    pub lines: Vec<Line<'static>>,
+    /// The agents group is drawn: the cursor has rows to be on.
+    pub agents: bool,
+}
+
 /// The sidebar's lines, at a width and a height, cut to fit.
 ///
-/// A group that does not fit the height is left out whole; one line under the
-/// groups says `not shown:` with each group's name and how much it held, the
-/// way the main pane names the blocks it leaves out. An unreadable
+/// `cursor` is the agents group's row the cursor is on; `usize::MAX` draws no
+/// cursor. A group that does not fit the height is left out whole; one line
+/// under the groups says `not shown:` with each group's name and how much it
+/// held, the way the main pane names the blocks it leaves out. An unreadable
 /// configuration names the file and the error, then shows the defaults beside
 /// them. An old `config.json` is named at the top: it is never read silently.
-pub fn lines(state: &ConfigRead, theme: &Theme, width: usize, height: usize) -> Vec<Line<'static>> {
+pub fn lines(
+    state: &ConfigRead,
+    theme: &Theme,
+    width: usize,
+    height: usize,
+    cursor: usize,
+) -> Drawn {
     if width == 0 || height == 0 {
-        return Vec::new();
+        return Drawn {
+            lines: Vec::new(),
+            agents: false,
+        };
     }
     let mut prefix = Vec::new();
     if let Some(file) = &state.legacy {
@@ -64,9 +91,14 @@ pub fn lines(state: &ConfigRead, theme: &Theme, width: usize, height: usize) -> 
         ConfigState::Absent => {
             prefix.push(line(EMPTY, theme.text.dim, width));
             prefix.truncate(height);
-            prefix
+            Drawn {
+                lines: prefix,
+                agents: false,
+            }
         }
-        ConfigState::Config(config) => fits(prefix, groups(config, theme), theme, width, height),
+        ConfigState::Config(config) => {
+            fits(prefix, groups(config, theme, cursor), theme, width, height)
+        }
         ConfigState::Unreadable(error) => {
             prefix.push(line(UNREADABLE, theme.text.normal, width));
             prefix.push(line(
@@ -77,7 +109,7 @@ pub fn lines(state: &ConfigRead, theme: &Theme, width: usize, height: usize) -> 
             prefix.push(line(USING_DEFAULTS, theme.text.dim, width));
             fits(
                 prefix,
-                groups(&Config::default(), theme),
+                groups(&Config::default(), theme, usize::MAX),
                 theme,
                 width,
                 height,
@@ -91,14 +123,31 @@ fn legacy_notice(file: &str) -> String {
     format!("{file} is not read")
 }
 
+/// The lines that name a pick that could not be saved: what failed, then the
+/// file and the error on the failure slot.
+pub fn notice_lines(
+    error: &crate::app::ReadError,
+    theme: &Theme,
+    width: usize,
+) -> Vec<Line<'static>> {
+    vec![
+        line(NOT_SAVED, theme.text.normal, width),
+        line(
+            &format!("{}: {}", error.file, error.error),
+            theme.semantic.error,
+            width,
+        ),
+    ]
+}
+
 /// The configuration's groups, in the order they are read.
-fn groups(config: &Config, theme: &Theme) -> Vec<Group> {
+fn groups(config: &Config, theme: &Theme, cursor: usize) -> Vec<Group> {
     let title = theme.text.strong;
     vec![
         Group {
             title: AGENTS_TITLE,
             style: title,
-            rows: agent_rows(config, theme),
+            rows: agent_rows(config, theme, cursor),
         },
         Group {
             title: HARNESS_TITLE,
@@ -107,10 +156,12 @@ fn groups(config: &Config, theme: &Theme) -> Vec<Group> {
                 Row {
                     text: config.harness.tool.clone(),
                     style: theme.text.normal,
+                    selected: false,
                 },
                 Row {
                     text: format!("  {}", config.harness.driven),
                     style: theme.text.dim,
+                    selected: false,
                 },
             ],
         },
@@ -120,6 +171,7 @@ fn groups(config: &Config, theme: &Theme) -> Vec<Group> {
             rows: vec![Row {
                 text: format!("{} build-and-fix rounds", config.round_limit),
                 style: theme.text.normal,
+                selected: false,
             }],
         },
         Group {
@@ -131,34 +183,40 @@ fn groups(config: &Config, theme: &Theme) -> Vec<Group> {
 }
 
 /// One entry per agent: its name and role, then its model — the provider and
-/// the model's own name — on the rows under it.
-fn agent_rows(config: &Config, theme: &Theme) -> Vec<Row> {
+/// the model's own name — on the rows under it. The cursor is on an entry's
+/// head row.
+fn agent_rows(config: &Config, theme: &Theme, cursor: usize) -> Vec<Row> {
     let mut rows = Vec::new();
-    for agent in &config.agents {
+    for (index, agent) in config.agents.iter().enumerate() {
         // A name that is its role is not said twice.
         let head = if agent.name == agent.role.as_str() {
             agent.name.clone()
         } else {
             format!("{} · {}", agent.name, agent.role.as_str())
         };
+        let selected = index == cursor;
         rows.push(Row {
             text: head,
             style: theme.text.normal,
+            selected,
         });
         match agent.model.split_once('/') {
             Some((provider, model)) => {
                 rows.push(Row {
                     text: format!("  {provider}"),
                     style: theme.text.dim,
+                    selected: false,
                 });
                 rows.push(Row {
                     text: format!("  {model}"),
                     style: theme.text.dim,
+                    selected: false,
                 });
             }
             None => rows.push(Row {
                 text: format!("  {}", agent.model),
                 style: theme.text.dim,
+                selected: false,
             }),
         }
     }
@@ -172,11 +230,13 @@ fn order_rows(config: &Config, theme: &Theme) -> Vec<Row> {
         rows.push(Row {
             text: format!("{} {} · {}", index + 1, step.step, step.role.as_str()),
             style: theme.text.normal,
+            selected: false,
         });
         for gate in &step.gates {
             rows.push(Row {
                 text: format!("  {}", gate.says()),
                 style: theme.text.dim,
+                selected: false,
             });
         }
     }
@@ -194,12 +254,15 @@ fn fits(
     theme: &Theme,
     width: usize,
     height: usize,
-) -> Vec<Line<'static>> {
+) -> Drawn {
     let total: usize = groups.iter().map(|group| group.rows.len() + 1).sum();
     if prefix.len() + total <= height {
         let mut lines = prefix;
-        lines.extend(drawn(&groups, width));
-        return lines;
+        lines.extend(drawn(&groups, width, theme));
+        return Drawn {
+            lines,
+            agents: !groups.is_empty(),
+        };
     }
     // One row is the announcement's: the groups that fit beside it are drawn
     // whole, and the rest are named with what they held.
@@ -215,7 +278,7 @@ fn fits(
         shown += 1;
     }
     let mut lines: Vec<Line<'static>> = prefix.into_iter().take(height).collect();
-    lines.extend(drawn(&groups[..shown], width));
+    lines.extend(drawn(&groups[..shown], width, theme));
     if shown < groups.len() && lines.len() < height {
         let hidden: Vec<String> = groups[shown..]
             .iter()
@@ -227,16 +290,25 @@ fn fits(
             width,
         ));
     }
-    lines
+    Drawn {
+        lines,
+        agents: shown >= 1,
+    }
 }
 
-/// The groups drawn: each title, then its rows.
-fn drawn(groups: &[Group], width: usize) -> Vec<Line<'static>> {
+/// The groups drawn: each title, then its rows. The cursor's row takes the
+/// selection's paint, bar to the pane's edge.
+fn drawn(groups: &[Group], width: usize, theme: &Theme) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for group in groups {
         lines.push(line(group.title, group.style, width));
         for row in &group.rows {
-            lines.push(line(&row.text, row.style, width));
+            let text = line(&row.text, row.style, width);
+            lines.push(if row.selected {
+                selected_line(text, width, theme)
+            } else {
+                text
+            });
         }
     }
     lines
@@ -282,7 +354,17 @@ mod tests {
     }
 
     fn rendered(state: &ConfigRead, width: usize, height: usize) -> Vec<String> {
-        text(&lines(state, &theme(), width, height))
+        rendered_with(state, width, height, usize::MAX)
+    }
+
+    /// The lines' text with the cursor on an agent row (or on none).
+    fn rendered_with(
+        state: &ConfigRead,
+        width: usize,
+        height: usize,
+        cursor: usize,
+    ) -> Vec<String> {
+        text(&lines(state, &theme(), width, height, cursor).lines)
     }
 
     #[test]
@@ -444,23 +526,32 @@ mod tests {
 
     #[test]
     fn the_empty_state_is_the_named_one_and_on_the_dim_slot() {
-        let lines = lines(&ConfigRead::of(ConfigState::Absent), &theme(), 30, 40);
-        assert_eq!(text(&lines), [EMPTY]);
-        assert_eq!(lines[0].spans[0].style, theme().text.dim);
+        let drawn = lines(
+            &ConfigRead::of(ConfigState::Absent),
+            &theme(),
+            30,
+            40,
+            usize::MAX,
+        );
+        assert_eq!(text(&drawn.lines), [EMPTY]);
+        assert!(!drawn.agents, "the cursor has no rows in the empty state");
+        assert_eq!(drawn.lines[0].spans[0].style, theme().text.dim);
     }
 
     #[test]
     fn a_configuration_that_cannot_be_read_is_named_not_called_empty() {
         let state = unreadable();
-        let lines = lines(&state, &theme(), 40, 40);
-        let rows = text(&lines);
+        let drawn = lines(&state, &theme(), 40, 40, usize::MAX);
+        let rows = text(&drawn.lines);
         assert_eq!(rows[0], UNREADABLE);
         assert!(rows[1].contains("config.toml"), "{rows:#?}");
         assert!(rows[1].contains("failed to parse"), "{rows:#?}");
         assert_eq!(rows[2], USING_DEFAULTS);
         assert!(!rows.iter().any(|row| row == EMPTY), "{rows:#?}");
+        // The defaults are drawn, but they are not the human's to change.
+        assert!(drawn.agents, "the defaults' agents are not drawn");
         // The error is painted on the failure slot, as raul paints one.
-        assert_eq!(lines[1].spans[0].style, theme().semantic.error);
+        assert_eq!(drawn.lines[1].spans[0].style, theme().semantic.error);
     }
 
     #[test]
@@ -509,8 +600,8 @@ mod tests {
             "{rows:#?}"
         );
         // The notice is secondary text, not the failure slot.
-        let lines = lines(&state, &theme(), 30, 40);
-        assert_eq!(lines[0].spans[0].style, theme().text.dim);
+        let drawn = lines(&state, &theme(), 30, 40, usize::MAX);
+        assert_eq!(drawn.lines[0].spans[0].style, theme().text.dim);
     }
 
     #[test]
@@ -545,6 +636,62 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn the_cursor_is_on_an_agents_head_row_and_the_bar_reaches_the_edge() {
+        let drawn = lines(&configured(), &theme(), 30, 40, 2);
+        let selected: Vec<&Line<'static>> = drawn
+            .lines
+            .iter()
+            .filter(|line| {
+                line.spans
+                    .iter()
+                    .any(|span| span.style == theme().text.selected)
+            })
+            .collect();
+        assert_eq!(selected.len(), 1, "the cursor covers more than one row");
+        let says: String = selected[0]
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(says.starts_with("orchestrator"), "{says:?}");
+        assert_eq!(
+            selected[0].width(),
+            30,
+            "the selection bar stops before the pane's edge"
+        );
+        assert!(drawn.agents, "the cursor's group is not drawn");
+    }
+
+    #[test]
+    fn no_cursor_paints_no_row() {
+        let drawn = lines(&configured(), &theme(), 30, 40, usize::MAX);
+        assert!(
+            !drawn.lines.iter().any(|line| {
+                line.spans
+                    .iter()
+                    .any(|span| span.style == theme().text.selected)
+            }),
+            "a cursor is painted where there is none"
+        );
+    }
+
+    #[test]
+    fn a_short_pane_that_leaves_the_agents_out_says_the_cursor_has_nowhere_to_be() {
+        // The agents group is left out whole, and the announcement says so:
+        // the cursor must not act on a row the pane does not draw.
+        let drawn = lines(&configured(), &theme(), 30, 5, 0);
+        assert!(!drawn.agents, "{:#?}", text(&drawn.lines));
+        assert!(
+            drawn
+                .lines
+                .iter()
+                .any(|line| line.spans[0].content.starts_with("not shown:")),
+            "{:#?}",
+            text(&drawn.lines)
+        );
     }
 
     #[test]

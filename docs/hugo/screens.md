@@ -53,15 +53,17 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 │                              ││                                                                  │
 │                              ││● running since 2026-11-09T08:30Z                                 │
 └──────────────────────────────┘└──────────────────────────────────────────────────────────────────┘
- q  quit
+ q  quit r  reload ?  help
 ```
 
 | part | behaviour |
 |---|---|
 | title line | the name of the tool, `hugo`; a window too narrow for it shows no title rather than a cut of the name |
-| sidebar | the configuration, on the left: the agents and the model each runs, the harness, the review-round limit and the order, in that order. It is read-only — nothing on it is changed from the screen, and the footer names no key that changes it |
+| sidebar | the configuration, on the left: the agents and the model each runs, the harness, the review-round limit and the order, in that order. The agents group has a cursor: `↑ k` and `↓ j` move it, and `enter` on the orchestrator's row chooses its model. The builder's and the reviewer's rows are read-only. `r` reloads the configuration from the file |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
-| footer | the keys that work — never a key that does nothing. The window's keys are `q quit` and `ctrl-c quit`; the footer carries `q quit` |
+| footer | the keys that work — never a key that does nothing. The window's keys are `q quit`, `ctrl-c quit`, `r reload`, `enter choose` (on the orchestrator's row) and `? help`; while the choice is open its keys replace them (`esc close`, `enter pick`, `↑ k` `↓ j` move) |
+| choice | the `orchestrator model`, as a small list of the catalogue's models with a cursor of its own; `enter` picks one and saves it, `esc` closes it without saving |
+| help | `?` opens the keys, in the sidebar and over the choice; any key closes it and gives the choice back |
 | tab bar | none: the flow has one screen, not a set of tabs |
 
 The two empty states are painted on `text.dim`, as raul's empty states are.
@@ -125,8 +127,8 @@ the stamp is the last fact to give way.
 
 ## The configuration
 
-The sidebar is the configuration: what the human governs, read-only. It shows
-four groups, in this order:
+The sidebar is the configuration: what the human governs. It shows four
+groups, in this order:
 
 | order | group | shows |
 |---|---|---|
@@ -154,9 +156,34 @@ format is provisional and a conversion would guess. When one sits beside the
 configuration, the sidebar says so — `config.json is not read` — rather than
 ignoring it silently.
 
-Nothing on the sidebar is changed from the screen: whether hugo drives the loop
-or only shows it is still open, so no key changes the configuration and no key
-starts a run. The footer names only `q quit`.
+The sidebar acts in two small ways. `r` reloads the configuration: the file is
+read again and the sidebar shows it at once, so a hand-edited file takes effect
+without a restart. Reloading is not starting the tool: the runtime record is
+already read on every redraw, so the reload touches the configuration only. A
+file that does not parse after a reload is handled as it is at startup — the
+file and the error are named, the file is left alone, and the defaults are
+shown beside it — and a reload with no configuration file writes the defaults.
+
+The orchestrator's row in the agents group is the one editable thing: the
+human moves the cursor to it and presses `enter` to choose the model the
+orchestrator would run on. The choice is a small list with a cursor of its
+own; `enter` saves the model and returns to the sidebar, and `esc` closes it
+without saving anything. The builder's and the reviewer's models are
+read-only: the flow starts those, not hugo, so their rows open nothing.
+
+**The models are the catalogue's.** The list is `opencode models`, derived at
+the moment the choice opens, never written out by hand. A pick is checked
+against the same catalogue the list comes from, so the configuration cannot
+hold a model that does not exist. The read is bounded: the choice opens at
+once and says `reading the model catalog` while the tool runs, and the window
+keeps drawing and taking its keys meanwhile. A tool that takes longer than
+5 seconds is given up, and one that is missing or fails names its error in the
+choice — `the model catalog cannot be read` and the reason — so no key waits
+on a harness tool.
+
+Nothing else on the sidebar is changed from the screen: whether hugo drives the
+loop or only shows it is still open, so no key starts a run and no other
+setting is written.
 
 **Nothing is dropped without a word.** A row too wide for the pane is cut with
 the theme's marker — the provider and the model's own name are on rows of their
@@ -216,8 +243,10 @@ there, hugo creates it — the tool creates its home rather than failing. When
 machine with no home folder has nowhere for hugo to write: the shell still
 runs, and the sidebar says `no configuration yet`.
 
-The configuration is read at launch. hugo changes nothing of it from the
-screen: whether hugo drives the loop or only shows it is still open.
+The configuration is read at launch, and `r` reads it again without a
+restart. The only thing hugo writes there from the screen is the
+orchestrator's picked model; whether hugo drives the loop or only shows it is
+still open.
 
 The records are not part of this file and do not follow it: the journal and
 the runtime record are machine-written, so they stay JSON.

@@ -5,19 +5,24 @@
 //! reading the human picked — then the unclaimed queue, the round, the budget
 //! and the findings, with the stamp at its foot.
 
+use std::path::PathBuf;
+use std::thread::JoinHandle;
+
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::{Block, Clear, Paragraph};
 
+use coding_crew_core::config::{CONFIG_FILE, Config};
 use coding_crew_core::runtime::{AgentState, CrewMember, Runtime};
-use coding_crew_core::{age_text, parse_rfc3339};
+use coding_crew_core::{Role, age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, text_width};
-use coding_crew_theme::{Theme, block_title_style, phase_style};
+use coding_crew_theme::{Theme, block_title_style, phase_style, selected_line};
 
-use crate::config::ConfigRead;
+use crate::catalog::Catalog;
+use crate::config::{self, ConfigRead, ConfigState};
 use crate::sidebar;
 
 /// The columns the sidebar takes when it is shown, its border included.
@@ -34,6 +39,23 @@ pub const RENDER_NOW: &str = "2026-11-19T09:00:00Z";
 
 /// The title line's text: the name of the tool.
 const NAME: &str = " hugo ";
+
+/// The key that reads the configuration again.
+pub const RELOAD_KEY: &str = "r";
+/// The key that opens the orchestrator's model choice.
+pub const CHOOSE_KEY: &str = "enter";
+/// The key that leaves the choice without saving.
+pub const CLOSE_KEY: &str = "esc";
+/// The choice's block title.
+pub const CHOICE_TITLE: &str = "orchestrator model";
+/// The help's block title.
+pub const HELP_TITLE: &str = "keys";
+/// The choice's state when the catalogue cannot be read.
+pub const CATALOG_UNREADABLE: &str = "the model catalog cannot be read";
+/// The choice's state while the catalogue's tool runs.
+pub const CATALOG_READING: &str = "reading the model catalog";
+/// The choice's state when the catalogue lists no model.
+pub const NO_MODELS: &str = "no models in the catalog";
 
 /// The sidebar's block title.
 pub const SIDEBAR_TITLE: &str = "configuration";
@@ -81,59 +103,160 @@ pub enum Action {
     Redraw,
 }
 
+/// The model choice: the catalogue's models, and the cursor on them.
+struct Choice {
+    /// The catalogue the list came from, and the list a pick is checked
+    /// against.
+    catalog: Catalog,
+    /// The model the cursor is on.
+    cursor: usize,
+    /// What the choice has to show.
+    state: ChoiceState,
+}
+
+/// What the choice has to show, while the catalogue may not be there yet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ChoiceState {
+    /// The catalogue's tool is still running: nothing to pick yet.
+    Reading,
+    /// The catalogue's models are the list.
+    Listed,
+    /// The catalogue is there and lists nothing.
+    Empty,
+    /// The catalogue cannot be read: why.
+    Failed(String),
+}
+
 /// The state of the window.
 pub struct App {
     /// The colours of the window.
     pub theme: Theme,
+    /// The configuration as read, and what a pick is saved into.
+    pub config: ConfigRead,
+    /// The user's home, when there is one: the configuration lives under it.
+    home: Option<PathBuf>,
+    /// The agents group's row the cursor is on.
+    cursor: usize,
+    /// The agents group is drawn, so the cursor has rows on screen.
+    agents_drawn: bool,
+    /// The open model choice, when one is open.
+    choice: Option<Choice>,
+    /// The catalogue read in flight, when the choice waits on one. It runs
+    /// off the window's thread, so no key handling waits on a harness tool.
+    reading: Option<JoinHandle<Result<Catalog, String>>>,
+    /// The help overlay is open.
+    help: bool,
+    /// A pick that could not be saved, named so nothing fails silently.
+    notice: Option<ReadError>,
 }
 
 impl App {
-    /// A window with a theme of its own.
-    pub fn new(theme: Theme) -> Self {
-        Self { theme }
+    /// A window with a theme and a configuration of its own.
+    pub fn new(theme: Theme, config: ConfigRead, home: Option<PathBuf>) -> Self {
+        Self {
+            theme,
+            config,
+            home,
+            cursor: 0,
+            agents_drawn: true,
+            choice: None,
+            reading: None,
+            help: false,
+            notice: None,
+        }
     }
 
-    /// Handle a key. The window shows; it does not act on the flow.
+    /// Handle a key. The window shows; it acts on its configuration only.
     ///
-    /// `q` quits, and `ctrl-c` quits as it does in raul; every other key is
-    /// left alone. The footer names the only key a screen has room for, and
-    /// no key is painted with nothing behind it.
-    pub fn on_key(&self, key: KeyEvent) -> Action {
+    /// `q` and `ctrl-c` quit from anywhere, as in raul. The sidebar's keys
+    /// move the cursor between the agents, open the orchestrator's model
+    /// choice, reload the configuration, and open the help. The choice's keys
+    /// move its cursor, pick a model, and close it. No other key does
+    /// anything.
+    pub fn on_key(&mut self, key: KeyEvent) -> Action {
         if key.kind != KeyEventKind::Press {
             return Action::Redraw;
         }
+        // Quit is the one key that works in every place.
+        if key.code == KeyCode::Char('q')
+            || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
+        {
+            return Action::Quit;
+        }
+        if self.help {
+            // The help is a dismissal: any key closes it, and the choice it
+            // was opened over is still there.
+            self.help = false;
+            return Action::Redraw;
+        }
+        if self.choice.is_some() {
+            self.choice_key(key);
+            return Action::Redraw;
+        }
         match key.code {
-            KeyCode::Char('q') => Action::Quit,
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Action::Quit,
-            _ => Action::Redraw,
+            KeyCode::Char('?') => self.help = true,
+            KeyCode::Char('r') => self.reload(),
+            KeyCode::Up | KeyCode::Char('k') => self.move_cursor(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_cursor(1),
+            KeyCode::Enter => self.open_choice(),
+            _ => {}
+        }
+        Action::Redraw
+    }
+
+    /// Handle a key while the choice covers the sidebar.
+    fn choice_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('?') => self.help = true,
+            KeyCode::Esc => self.close_choice(),
+            KeyCode::Up | KeyCode::Char('k') => {
+                if let Some(choice) = self.choice.as_mut() {
+                    choice.cursor = choice.cursor.saturating_sub(1);
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if let Some(choice) = self.choice.as_mut()
+                    && choice.cursor + 1 < choice.catalog.models().len()
+                {
+                    choice.cursor += 1;
+                }
+            }
+            KeyCode::Enter => self.pick(),
+            _ => {}
         }
     }
 
     /// Draw the window.
-    pub fn draw(&self, frame: &mut Frame, runtime: &RuntimeRead, config: &ConfigRead, now: &str) {
+    pub fn draw(&mut self, frame: &mut Frame, runtime: &RuntimeRead, now: &str) {
         let screen = screen(frame.area());
         frame.render_widget(self.title_line(screen.title.width), screen.title);
         if let Some(area) = screen.announcement {
             frame.render_widget(self.hidden_line(area.width), area);
         }
-        if let Some(area) = screen.sidebar {
-            self.config_pane(frame, area, config);
-        }
+        self.agents_drawn = screen
+            .sidebar
+            .is_some_and(|area| self.config_pane(frame, area));
         match runtime {
             RuntimeRead::Record(runtime) => self.flow(frame, screen.flow, runtime, now),
             RuntimeRead::Absent => self.empty_pane(frame, screen.flow, FLOW_TITLE, FLOW_EMPTY),
             RuntimeRead::Unreadable(error) => self.unreadable_pane(frame, screen.flow, error),
         }
         frame.render_widget(self.footer_line(screen.footer.width), screen.footer);
+        if self.help {
+            self.help_pane(frame, frame.area());
+        } else if self.choice.is_some() {
+            self.choice_pane(frame, frame.area());
+        }
     }
 
-    /// The configuration: the sidebar's content, read-only.
+    /// The configuration: the sidebar's content, with the cursor on an agent.
     ///
     /// A pane too short for a box gives the box up and keeps the words, as the
-    /// main pane does.
-    fn config_pane(&self, frame: &mut Frame, area: Rect, config: &ConfigRead) {
+    /// main pane does. Returns whether the agents group — the cursor's rows —
+    /// is on screen.
+    fn config_pane(&mut self, frame: &mut Frame, area: Rect) -> bool {
         if area.height == 0 || area.width == 0 {
-            return;
+            return false;
         }
         let (inner, width, height) = if area.height >= 3 && area.width >= 4 {
             let block = Block::bordered()
@@ -146,8 +269,223 @@ impl App {
         } else {
             (area, area.width, area.height)
         };
-        let lines = sidebar::lines(config, &self.theme, usize::from(width), usize::from(height));
-        frame.render_widget(Paragraph::new(lines), inner);
+        let cursor = if self.loaded().is_some() {
+            self.cursor
+        } else {
+            usize::MAX
+        };
+        let mut drawn = sidebar::lines(
+            &self.config,
+            &self.theme,
+            usize::from(width),
+            usize::from(height),
+            cursor,
+        );
+        if let Some(error) = &self.notice {
+            // A pick that could not be saved is named, never swallowed: the
+            // configuration on screen is the one still in force.
+            let notice = sidebar::notice_lines(error, &self.theme, usize::from(width));
+            for (offset, line) in notice.into_iter().enumerate() {
+                drawn.lines.insert(offset, line);
+            }
+            drawn.lines.truncate(usize::from(height));
+        }
+        frame.render_widget(Paragraph::new(drawn.lines), inner);
+        drawn.agents
+    }
+
+    /// The configuration as loaded, when the file parsed.
+    fn loaded(&self) -> Option<&Config> {
+        match &self.config.state {
+            ConfigState::Config(config) => Some(config),
+            _ => None,
+        }
+    }
+
+    /// The agent the cursor is on, when there is one.
+    fn cursor_agent(&self) -> Option<&coding_crew_core::config::Agent> {
+        self.loaded()
+            .and_then(|config| config.agents.get(self.cursor))
+    }
+
+    /// The orchestrator's model, as the configuration holds it.
+    fn orchestrator_model(&self) -> Option<&str> {
+        self.loaded()
+            .and_then(|config| {
+                config
+                    .agents
+                    .iter()
+                    .find(|agent| agent.role == Role::Orchestrator)
+            })
+            .map(|agent| agent.model.as_str())
+    }
+
+    /// Whether `enter` has a choice to open: the cursor is on the
+    /// orchestrator's row, the configuration parsed, and its group is drawn.
+    fn can_choose(&self) -> bool {
+        self.agents_drawn
+            && self
+                .cursor_agent()
+                .is_some_and(|agent| agent.role == Role::Orchestrator)
+    }
+
+    /// Move the cursor between the agents, and no further.
+    fn move_cursor(&mut self, delta: isize) {
+        if !self.agents_drawn {
+            return;
+        }
+        let Some(count) = self.loaded().map(|config| config.agents.len()) else {
+            return;
+        };
+        if count == 0 {
+            return;
+        }
+        let next = self.cursor as isize + delta;
+        self.cursor = next.clamp(0, count as isize - 1) as usize;
+    }
+
+    /// Read the configuration again: the sidebar shows the file as it is now.
+    ///
+    /// This is the configuration only. The runtime record is already read on
+    /// every redraw, and the catalogue is read when a choice opens.
+    fn reload(&mut self) {
+        self.config = config::load(self.home.as_deref());
+        self.notice = None;
+        self.cursor = match self.loaded() {
+            Some(config) => self.cursor.min(config.agents.len().saturating_sub(1)),
+            None => 0,
+        };
+    }
+
+    /// Open the orchestrator's model choice, and start reading the catalogue.
+    ///
+    /// The read runs beside the window: the choice opens at once, says it is
+    /// reading, and takes the list — or the error — when the harness's tool
+    /// answers. A tool that hangs is bounded by [`Catalog::read`], and the
+    /// window keeps drawing and taking keys meanwhile.
+    fn open_choice(&mut self) {
+        if !self.can_choose() {
+            return;
+        }
+        let Some(tool) = self.loaded().map(|config| config.harness.tool.clone()) else {
+            return;
+        };
+        let reading = std::thread::spawn(move || Catalog::read(&tool));
+        self.begin_choice(reading);
+    }
+
+    /// Open the choice on a read that has not answered yet.
+    fn begin_choice(&mut self, reading: JoinHandle<Result<Catalog, String>>) {
+        self.help = false;
+        self.reading = Some(reading);
+        self.choice = Some(Choice {
+            catalog: Catalog::default(),
+            cursor: 0,
+            state: ChoiceState::Reading,
+        });
+    }
+
+    /// Whether the choice is waiting on the catalogue.
+    pub fn catalog_pending(&self) -> bool {
+        self.reading.is_some()
+    }
+
+    /// Take the catalogue when the read has finished, without waiting on it.
+    ///
+    /// Returns whether the read finished, so the caller can draw at once. A
+    /// choice the human closed while the read ran stays closed: its answer is
+    /// dropped, not reopened.
+    pub fn poll_choice(&mut self) -> bool {
+        let Some(reading) = self.reading.as_ref() else {
+            return false;
+        };
+        if !reading.is_finished() {
+            return false;
+        }
+        let reading = self.reading.take().expect("the read in flight");
+        let loaded = reading
+            .join()
+            .unwrap_or_else(|_| Err("the model catalog reader stopped".to_string()));
+        if self.choice.is_some() {
+            // The choice is already open: the answer fills it rather than
+            // opening it again.
+            self.fill_choice(loaded);
+        }
+        true
+    }
+
+    /// Close the choice, abandoning a read in flight with it.
+    fn close_choice(&mut self) {
+        self.choice = None;
+        self.reading = None;
+    }
+
+    /// Put a catalogue — or the reason there is none — in the open choice.
+    ///
+    /// The cursor starts on the model in force, so a pick is a move from
+    /// where the configuration is rather than from the top of the list.
+    fn fill_choice(&mut self, loaded: Result<Catalog, String>) {
+        let (catalog, state) = match loaded {
+            Ok(catalog) if catalog.models().is_empty() => (catalog, ChoiceState::Empty),
+            Ok(catalog) => (catalog, ChoiceState::Listed),
+            Err(error) => (Catalog::default(), ChoiceState::Failed(error)),
+        };
+        let cursor = self
+            .orchestrator_model()
+            .and_then(|current| catalog.index_of(current))
+            .unwrap_or(0);
+        self.choice = Some(Choice {
+            catalog,
+            cursor,
+            state,
+        });
+    }
+
+    /// Save the model under the choice's cursor and return to the sidebar.
+    ///
+    /// The pick is checked against the catalogue the list came from, so a
+    /// configuration can never hold a model that does not exist.
+    fn pick(&mut self) {
+        let Some(choice) = self.choice.as_ref() else {
+            return;
+        };
+        let Some(model) = choice.catalog.models().get(choice.cursor).cloned() else {
+            self.close_choice();
+            return;
+        };
+        if !choice.catalog.knows(&model) {
+            self.close_choice();
+            return;
+        }
+        let Some(mut config) = self.loaded().cloned() else {
+            self.close_choice();
+            return;
+        };
+        let Some(agent) = config
+            .agents
+            .iter_mut()
+            .find(|agent| agent.role == Role::Orchestrator)
+        else {
+            self.close_choice();
+            return;
+        };
+        agent.model = model.clone();
+        let saved = match &self.home {
+            Some(home) => config::save_pick_at(home, &config, &model),
+            None => Err(ReadError {
+                file: CONFIG_FILE.to_string(),
+                error: "there is no home to save the configuration in".to_string(),
+            }),
+        };
+        match saved {
+            Ok(saved) => {
+                self.config.state = ConfigState::Config(saved);
+                self.notice = None;
+            }
+            Err(error) => self.notice = Some(error),
+        }
+        self.close_choice();
+        self.cursor = self.cursor.min(config.agents.len().saturating_sub(1));
     }
 
     /// The title line: the name of the tool.
@@ -587,21 +925,256 @@ impl App {
         Line::from(out)
     }
 
-    /// The footer: the keys that work. The window has `q quit`, and `ctrl-c`
-    /// quits as in raul; the footer names the key a narrow line can carry.
-    fn footer_line(&self, width: u16) -> Line<'static> {
-        let spans = vec![
-            Span::styled(" q ", self.theme.chrome.key),
-            Span::styled(" quit", self.theme.chrome.footer),
-        ];
-        let used = spans
-            .iter()
-            .map(|span| text_width(span.content.as_ref()))
-            .sum::<usize>();
-        if used > usize::from(width) {
-            return Line::from("");
+    /// The model choice: a small list of the catalogue's models, centred.
+    ///
+    /// The list scrolls to keep its cursor on screen; the row under the
+    /// cursor takes the selection's paint. A choice the catalogue has not
+    /// answered yet says it is reading; one that cannot be filled says why on
+    /// the failure slot rather than opening empty.
+    fn choice_pane(&self, frame: &mut Frame, area: Rect) {
+        let Some(choice) = &self.choice else {
+            return;
+        };
+        let rows = match &choice.state {
+            ChoiceState::Reading | ChoiceState::Failed(_) => 2,
+            ChoiceState::Empty => 0,
+            ChoiceState::Listed => choice.catalog.models().len().min(CHOICE_ROWS),
+        };
+        let popup = choice_popup(area, rows);
+        if popup.width < 4 || popup.height < 3 {
+            return;
         }
-        Line::from(spans)
+        frame.render_widget(Clear, popup);
+        let block = Block::bordered()
+            .title(CHOICE_TITLE)
+            .title_style(block_title_style(&self.theme))
+            .border_style(self.theme.chrome.border_focus);
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+        let width = usize::from(inner.width);
+        if width == 0 || inner.height == 0 {
+            return;
+        }
+        let mut lines = Vec::new();
+        match &choice.state {
+            ChoiceState::Reading => lines.push(Line::from(Span::styled(
+                cut_to(CATALOG_READING, width),
+                self.theme.text.dim,
+            ))),
+            ChoiceState::Failed(error) => {
+                lines.push(Line::from(Span::styled(
+                    cut_to(CATALOG_UNREADABLE, width),
+                    self.theme.text.normal,
+                )));
+                lines.push(Line::from(Span::styled(
+                    cut_to(error, width),
+                    self.theme.semantic.error,
+                )));
+            }
+            ChoiceState::Empty => lines.push(Line::from(Span::styled(
+                cut_to(NO_MODELS, width),
+                self.theme.text.dim,
+            ))),
+            ChoiceState::Listed => {
+                let models = choice.catalog.models();
+                let height = usize::from(inner.height);
+                let start = if choice.cursor < height {
+                    0
+                } else {
+                    choice.cursor + 1 - height
+                };
+                let end = (start + height).min(models.len());
+                for (offset, model) in models[start..end].iter().enumerate() {
+                    let line =
+                        Line::from(Span::styled(cut_to(model, width), self.theme.text.normal));
+                    if start + offset == choice.cursor {
+                        lines.push(selected_line(line, width, &self.theme));
+                    } else {
+                        lines.push(line);
+                    }
+                }
+            }
+        }
+        frame.render_widget(Paragraph::new(lines), inner);
+    }
+
+    /// The help: the keys that work, in the sidebar and in the choice, with
+    /// the least useful lines giving way first on a small window.
+    fn help_pane(&self, frame: &mut Frame, area: Rect) {
+        let popup = help_popup(area);
+        if popup.width < 4 || popup.height < 3 {
+            return;
+        }
+        frame.render_widget(Clear, popup);
+        let block = Block::bordered()
+            .title(HELP_TITLE)
+            .title_style(block_title_style(&self.theme))
+            .border_style(self.theme.chrome.border_focus);
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+        let width = usize::from(inner.width);
+        let room = usize::from(inner.height);
+        if width == 0 || room == 0 {
+            return;
+        }
+        let mut lines = self.help_lines(width);
+        if lines.len() > room {
+            // The lines give way from the least to the most useful: the keys
+            // a human who is stuck needs most stay to the end.
+            let mut order: Vec<usize> = (0..lines.len()).collect();
+            order.sort_by_key(|index| lines[*index].0);
+            let mut dropped = vec![false; lines.len()];
+            let mut held = lines.len();
+            for index in order {
+                if held <= room {
+                    break;
+                }
+                if lines[index].0 == u8::MAX {
+                    continue;
+                }
+                dropped[index] = true;
+                held -= 1;
+            }
+            lines = lines
+                .into_iter()
+                .enumerate()
+                .filter(|(index, _)| !dropped[*index])
+                .map(|(_, pair)| pair)
+                .collect();
+        }
+        let shown: Vec<Line<'static>> = lines.into_iter().map(|(_, line)| line).collect();
+        frame.render_widget(Paragraph::new(shown), inner);
+    }
+
+    /// The help's lines, with the rank that decides which one gives way
+    /// first. Zero gives way first; `u8::MAX` never gives way.
+    fn help_lines(&self, width: usize) -> Vec<(u8, Line<'static>)> {
+        let line = |key: &str, says: &str| {
+            let key = cut_to(&format!(" {key} "), width);
+            let used = text_width(&key);
+            let says = cut_to(&format!(" {says}"), width.saturating_sub(used));
+            Line::from(vec![
+                Span::styled(key, self.theme.chrome.key),
+                Span::styled(says, self.theme.text.normal),
+            ])
+        };
+        vec![
+            (0, line("↑↓ j/k", "move")),
+            (1, line("ctrl-c", "quit")),
+            (2, line(RELOAD_KEY, "reload")),
+            (3, line(CHOOSE_KEY, "choose")),
+            (4, line(CHOOSE_KEY, "pick (choice)")),
+            (4, line(CLOSE_KEY, "close (choice)")),
+            (0, line("↑↓ j/k", "move (choice)")),
+            (u8::MAX, line("q", "quit")),
+            (u8::MAX, line("?", "this help")),
+        ]
+    }
+
+    /// The footer: the keys that work. The window has `q quit`, and `ctrl-c`
+    /// quits as in raul; the footer names what a line can carry, and the
+    /// choice's keys while the choice is open.
+    fn footer_line(&self, width: u16) -> Line<'static> {
+        let part = |key: &str, says: &str| {
+            vec![
+                Span::styled(format!(" {key} "), self.theme.chrome.key),
+                Span::styled(format!(" {says}"), self.theme.chrome.footer),
+            ]
+        };
+        if self.help {
+            return footer(
+                vec![
+                    (0, part("q", "quit"), true),
+                    (1, part(CLOSE_KEY, "close help"), true),
+                    (2, part("?", "help"), false),
+                ],
+                width,
+            );
+        }
+        if self.choice.is_some() {
+            return footer(
+                vec![
+                    (0, part(CLOSE_KEY, "close"), true),
+                    (1, part(CHOOSE_KEY, "pick"), true),
+                    (2, part("↑↓ j/k", "move"), false),
+                ],
+                width,
+            );
+        }
+        let mut parts = vec![
+            (0, part("q", "quit"), true),
+            (1, part(RELOAD_KEY, "reload"), false),
+            (3, part("?", "help"), true),
+        ];
+        if self.can_choose() {
+            parts.push((2, part(CHOOSE_KEY, "choose"), false));
+        }
+        footer(parts, width)
+    }
+}
+
+/// The footer line: the parts that fit, the ones that matter most first.
+fn footer(parts: Vec<(u8, Vec<Span<'static>>, bool)>, width: u16) -> Line<'static> {
+    let mut chosen = vec![false; parts.len()];
+    let mut used = 0usize;
+    for matters in [true, false] {
+        for (index, (_, spans, needed)) in parts.iter().enumerate() {
+            if *needed != matters {
+                continue;
+            }
+            let columns = spans
+                .iter()
+                .map(|span| text_width(span.content.as_ref()))
+                .sum::<usize>();
+            if used + columns <= usize::from(width) {
+                chosen[index] = true;
+                used += columns;
+            }
+        }
+    }
+    let mut order: Vec<usize> = (0..parts.len()).collect();
+    order.sort_by_key(|index| parts[*index].0);
+    let mut spans = Vec::new();
+    for index in order {
+        if chosen[index] {
+            spans.extend(parts[index].1.clone());
+        }
+    }
+    Line::from(spans)
+}
+
+/// The rows the choice's popup holds when the catalogue is longer.
+const CHOICE_ROWS: usize = 18;
+
+/// Where the choice sits: a small list, centred.
+fn choice_popup(area: Rect, rows: usize) -> Rect {
+    // The title and the footer stay on screen: the choice's keys are the
+    // window's footer, and a popup must not cover them.
+    let room = area.height.saturating_sub(2);
+    let height = u16::try_from(rows.saturating_add(2))
+        .unwrap_or(u16::MAX)
+        .min(CHOICE_ROWS as u16 + 2)
+        .min(room)
+        .max(3)
+        .min(area.height);
+    let width = 56.min(area.width);
+    Rect {
+        x: area.x + (area.width - width) / 2,
+        y: area.y + (area.height - height) / 2,
+        width,
+        height,
+    }
+}
+
+/// Where the help sits: three fifths of the window, centred.
+fn help_popup(area: Rect) -> Rect {
+    let width = area.width.saturating_mul(3) / 5;
+    let height = area.height.saturating_mul(3) / 5;
+    Rect {
+        x: area.x + (area.width - width) / 2,
+        y: area.y + (area.height - height) / 2,
+        width,
+        height,
     }
 }
 
@@ -714,19 +1287,32 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::style::Color;
 
+    use std::fs;
+
     use super::*;
     use coding_crew_core::RoundKind;
-    use coding_crew_core::config::{CONFIG_FILE, Config, LEGACY_CONFIG_FILE};
+    use coding_crew_core::config::LEGACY_CONFIG_FILE;
     use coding_crew_core::runtime::{
         Budget, Composition, CrewMember, QueueItem, RuntimeRound, Stamp,
     };
     use coding_crew_core::{Role, Status};
     use coding_crew_theme::Preset;
 
-    use crate::config::ConfigState;
-
     fn theme() -> Theme {
         Theme::preset(Preset::Dark)
+    }
+
+    /// A key press with no modifier.
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    /// A scratch home folder for one test.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("hugo-app-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch home");
+        dir
     }
 
     fn member(
@@ -819,6 +1405,11 @@ mod tests {
         ConfigRead::of(ConfigState::Config(Config::default()))
     }
 
+    /// A window on the project's own configuration.
+    fn app() -> App {
+        App::new(theme(), sidebar_config(), None)
+    }
+
     /// Draw the window with a configuration of its own.
     fn render_all(
         width: u16,
@@ -826,10 +1417,20 @@ mod tests {
         runtime: &RuntimeRead,
         config: &ConfigRead,
     ) -> (Vec<String>, Vec<Vec<Paint>>) {
-        let app = App::new(theme());
+        let mut app = App::new(theme(), config.clone(), None);
+        render_app(&mut app, width, height, runtime)
+    }
+
+    /// Draw a window of the caller's own.
+    fn render_app(
+        app: &mut App,
+        width: u16,
+        height: u16,
+        runtime: &RuntimeRead,
+    ) -> (Vec<String>, Vec<Vec<Paint>>) {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| app.draw(frame, runtime, config, RENDER_NOW))
+            .draw(|frame| app.draw(frame, runtime, RENDER_NOW))
             .expect("drawing the window");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -995,14 +1596,28 @@ mod tests {
     }
 
     #[test]
-    fn the_footer_names_quit_and_no_key_that_does_nothing() {
+    fn the_footer_names_the_keys_that_work_and_no_key_that_does_nothing() {
+        // The cursor starts on the builder, where enter opens nothing: the
+        // footer names quit, reload and help, and not choose.
         let (rows, _) = render(100, 20);
         let footer = rows.last().expect("a footer row");
-        assert!(footer.contains('q'), "{footer}");
-        assert!(footer.contains("quit"), "{footer}");
-        for dead in ["help", "open", "tab", "esc", "move"] {
+        for works in ["q", "quit", "r", "reload", "?", "help"] {
+            assert!(footer.contains(works), "{footer}: {works}");
+        }
+        for dead in ["open", "tab", "esc", "move", "choose", "pick"] {
             assert!(!footer.contains(dead), "{footer}: {dead}");
         }
+        // On the orchestrator's row, enter has a choice to open.
+        let mut app = App::new(theme(), sidebar_config(), None);
+        app.cursor = 2;
+        app.agents_drawn = true;
+        let line: String = app
+            .footer_line(100)
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(line.contains("enter") && line.contains("choose"), "{line}");
         // A window too narrow for the key shows no half footer.
         let (rows, _) = render(4, 8);
         assert_eq!(rows.last().expect("a footer row").trim(), "");
@@ -1012,16 +1627,20 @@ mod tests {
     fn q_quits_and_other_keys_do_nothing() {
         use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-        let app = App::new(theme());
+        let mut app = app();
         assert_eq!(
             app.on_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)),
             Action::Quit
         );
         for code in [
             KeyCode::Char('x'),
-            KeyCode::Char('?'),
-            KeyCode::Enter,
+            KeyCode::Char('+'),
+            KeyCode::Char('-'),
+            KeyCode::Char('h'),
+            KeyCode::Char('l'),
             KeyCode::Esc,
+            KeyCode::PageUp,
+            KeyCode::PageDown,
         ] {
             assert_eq!(
                 app.on_key(KeyEvent::new(code, KeyModifiers::NONE)),
@@ -1035,7 +1654,7 @@ mod tests {
     fn ctrl_c_quits_as_it_does_in_raul() {
         use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-        let app = App::new(theme());
+        let mut app = app();
         assert_eq!(
             app.on_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
             Action::Quit
@@ -1049,7 +1668,7 @@ mod tests {
 
     #[test]
     fn the_title_names_the_tool_and_a_narrow_one_is_dropped_whole() {
-        let app = App::new(theme());
+        let app = app();
         for width in 0..=8u16 {
             let line = app.title_line(width);
             let text: String = line
@@ -1396,7 +2015,7 @@ mod tests {
     }
 
     #[test]
-    fn the_sidebar_carries_the_configuration_and_no_key_changes_it() {
+    fn the_sidebar_carries_the_configuration_and_reads_it() {
         let (rows, _) = render(100, 40);
         let text = rows.join("\n");
         for fact in [
@@ -1422,31 +2041,51 @@ mod tests {
         assert!(at("harness") < at("review-round limit"), "{text}");
         assert!(at("review-round limit") < at("order"), "{text}");
 
-        // Nothing on the sidebar is changed from the screen: no key but quit
-        // does anything, and a redraw draws the same configuration.
-        let app = App::new(theme());
-        for code in [
-            KeyCode::Char('j'),
-            KeyCode::Char('k'),
-            KeyCode::Char('+'),
-            KeyCode::Char('-'),
-            KeyCode::Char('h'),
-            KeyCode::Char('l'),
-            KeyCode::Enter,
-            KeyCode::Esc,
-            KeyCode::Up,
-            KeyCode::Down,
-            KeyCode::PageUp,
-            KeyCode::PageDown,
-        ] {
-            assert_eq!(
-                app.on_key(KeyEvent::new(code, KeyModifiers::NONE)),
-                Action::Redraw,
-                "{code:?} acts on the configuration"
-            );
-        }
+        // A redraw draws the same configuration: the keys only change what
+        // the cursor points at, and a cursor paints no word.
         let again = render(100, 40).0;
         assert_eq!(rows, again, "a redraw changed the configuration");
+    }
+
+    #[test]
+    fn the_cursor_moves_between_the_agents_and_enter_opens_only_the_orchestrator() {
+        let mut app = app();
+        app.agents_drawn = true;
+        // The cursor starts on the first agent, the builder: enter has
+        // nothing to open there.
+        assert_eq!(app.cursor, 0);
+        assert_eq!(
+            app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            Action::Redraw
+        );
+        assert!(app.choice.is_none(), "enter opened a choice on the builder");
+        // It stops at the last row and comes back to the first.
+        for _ in 0..5 {
+            app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        }
+        assert_eq!(app.cursor, 2);
+        assert!(app.can_choose(), "the last row is the orchestrator's");
+        for _ in 0..5 {
+            app.on_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        }
+        assert_eq!(app.cursor, 0);
+        // The other keys do not move it.
+        for code in [KeyCode::Char('h'), KeyCode::Char('l'), KeyCode::PageDown] {
+            app.on_key(KeyEvent::new(code, KeyModifiers::NONE));
+            assert_eq!(app.cursor, 0, "{code:?} moved the cursor");
+        }
+    }
+
+    #[test]
+    fn the_cursor_has_nothing_to_stand_on_when_its_group_is_not_drawn() {
+        // A pane too short for the agents leaves them out whole: the cursor
+        // must not walk rows the pane does not draw, and enter opens nothing.
+        let mut app = app();
+        app.agents_drawn = false;
+        app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.cursor, 0);
+        app.cursor = 2;
+        assert!(!app.can_choose(), "the hidden cursor can choose");
     }
 
     #[test]
@@ -1523,6 +2162,36 @@ mod tests {
     }
 
     #[test]
+    fn the_choice_and_the_help_fit_the_window_at_every_size() {
+        // A popup that draws past its width is a cut screen, as any part is.
+        for width in [20u16, 40, 60, 79, 80, 100, 120] {
+            for height in [1u16, 2, 3, 5, 8, 12, 20, 40] {
+                let mut window = on_orchestrator(None);
+                window.fill_choice(Ok(Catalog::from_lines("p/m0\np/m1\np/m2\n")));
+                let (rows, _) = render_app(&mut window, width, height, &RuntimeRead::Absent);
+                assert_eq!(rows.len(), usize::from(height), "{width}x{height}");
+                for row in &rows {
+                    assert!(
+                        row.chars().count() <= usize::from(width),
+                        "{width}x{height}: {row:?}"
+                    );
+                }
+
+                let mut window = app();
+                window.help = true;
+                let (rows, _) = render_app(&mut window, width, height, &RuntimeRead::Absent);
+                assert_eq!(rows.len(), usize::from(height), "{width}x{height}");
+                for row in &rows {
+                    assert!(
+                        row.chars().count() <= usize::from(width),
+                        "{width}x{height}: {row:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn every_height_keeps_the_empty_state_or_the_stamp() {
         for height in 1..=12u16 {
             let runtime = runtime();
@@ -1564,6 +2233,15 @@ mod tests {
             sidebar::ORDER_TITLE.to_string(),
             sidebar::UNREADABLE.to_string(),
             sidebar::USING_DEFAULTS.to_string(),
+            RELOAD_KEY.to_string(),
+            CHOOSE_KEY.to_string(),
+            CLOSE_KEY.to_string(),
+            CHOICE_TITLE.to_string(),
+            CATALOG_READING.to_string(),
+            CATALOG_UNREADABLE.to_string(),
+            format!("{} seconds", crate::catalog::READ_BOUND.as_secs()),
+            HELP_TITLE.to_string(),
+            "opencode models".to_string(),
             CREW_TITLE.to_string(),
             QUEUE_TITLE.to_string(),
             ROUND_TITLE.to_string(),
@@ -1645,6 +2323,485 @@ mod tests {
             };
             assert_eq!(runtime.composition(), says);
             assert!(doc.contains(says.says()), "the doc does not say {says:?}");
+        }
+    }
+
+    /// A window on the project's configuration, with its cursor on the
+    /// orchestrator's row: the only row a pick can be made from.
+    fn on_orchestrator(home: Option<PathBuf>) -> App {
+        let mut app = App::new(
+            theme(),
+            ConfigRead::of(ConfigState::Config(Config::default())),
+            home,
+        );
+        app.agents_drawn = true;
+        app.cursor = 2;
+        app
+    }
+
+    fn text_of(rows: &[String]) -> String {
+        rows.join("\n")
+    }
+
+    /// A configuration whose harness tool is the script at `tool`.
+    fn config_with_tool(tool: &std::path::Path) -> ConfigRead {
+        let mut config = Config::default();
+        config.harness.tool = tool.to_string_lossy().into_owned();
+        ConfigRead::of(ConfigState::Config(config))
+    }
+
+    /// Wait for a catalogue read to answer the way the loop does: by polling
+    /// it, never by waiting on it.
+    fn wait_for_catalog(window: &mut App) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while window.catalog_pending() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the catalogue never answered"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            window.poll_choice();
+        }
+    }
+
+    /// A window on the orchestrator's row, with a harness tool of its own.
+    fn on_orchestrator_with(tool: &std::path::Path) -> App {
+        let mut window = App::new(theme(), config_with_tool(tool), None);
+        window.agents_drawn = true;
+        window.cursor = 2;
+        window
+    }
+
+    #[test]
+    fn enter_opens_the_choice_before_the_catalogue_is_read() {
+        // The catalogue is a subprocess: the choice opens at once and the list
+        // lands when the tool answers. The window is never held on the tool.
+        let tool = crate::catalog::scratch_tool("app-reading", "#!/bin/sh\nsleep 0.3\necho p/m0\n");
+        let mut window = on_orchestrator_with(&tool);
+        assert_eq!(
+            window.on_key(press(KeyCode::Enter)),
+            Action::Redraw,
+            "opening the choice quit the window"
+        );
+        assert!(
+            window.catalog_pending(),
+            "the window waited on the harness tool"
+        );
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains(CATALOG_READING),
+            "{}",
+            text_of(&rows)
+        );
+        // The keys are still read while the tool runs: quit is one of them.
+        assert_eq!(window.on_key(press(KeyCode::Char('q'))), Action::Quit);
+
+        wait_for_catalog(&mut window);
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains("p/m0"),
+            "the catalogue did not land in the choice: {}",
+            text_of(&rows)
+        );
+        let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
+    }
+
+    #[test]
+    fn a_catalogue_that_cannot_be_read_is_named_in_the_choice() {
+        // A tool that fails is an error the choice shows, end to end.
+        let tool = crate::catalog::scratch_tool(
+            "app-failing",
+            "#!/bin/sh\necho 'no harness here' >&2\nexit 9\n",
+        );
+        let mut window = on_orchestrator_with(&tool);
+        window.on_key(press(KeyCode::Enter));
+        wait_for_catalog(&mut window);
+        match &window.choice.as_ref().expect("the choice").state {
+            ChoiceState::Failed(why) => {
+                assert!(why.contains("failed"), "{why}");
+                assert!(why.contains("no harness here"), "{why}");
+            }
+            other => panic!("a failing tool is {other:?}"),
+        }
+        let (rows, paint) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        assert!(text.contains(CATALOG_UNREADABLE), "{text}");
+        assert_eq!(
+            colour_of(&rows, &paint, "models f"),
+            theme().semantic.error.fg.expect("the error colour")
+        );
+        // Nothing is picked from a catalogue that could not be read.
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_none());
+        let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
+    }
+
+    #[test]
+    fn a_catalogue_that_lands_after_esc_does_not_reopen_the_choice() {
+        let tool = crate::catalog::scratch_tool("app-late", "#!/bin/sh\nsleep 0.2\necho p/m0\n");
+        let mut window = on_orchestrator_with(&tool);
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.catalog_pending());
+        window.on_key(press(KeyCode::Esc));
+        assert!(window.choice.is_none(), "esc left the choice open");
+        assert!(
+            !window.catalog_pending(),
+            "the read outlived the choice it was opened for"
+        );
+        let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
+    }
+
+    #[test]
+    fn r_reads_the_configuration_again_and_the_sidebar_shows_it_at_once() {
+        let home = scratch("reload");
+        let path = config::config_path(&home);
+        let mut app = App::new(theme(), config::load_at(&home), Some(home.clone()));
+        assert_eq!(app.loaded().expect("the configuration").round_limit, 5);
+        // A human edits the file while hugo runs.
+        let mine = Config {
+            round_limit: 2,
+            ..Config::default()
+        };
+        mine.write(&path).expect("the hand-edited file");
+
+        assert_eq!(
+            app.on_key(press(KeyCode::Char('r'))),
+            Action::Redraw,
+            "reload quit the window"
+        );
+        assert_eq!(app.loaded().expect("the configuration").round_limit, 2);
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains("2 build-and-fix rounds"),
+            "{}",
+            text_of(&rows)
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_reload_that_does_not_parse_is_handled_as_at_startup() {
+        // The file is named with its error, left alone, and the defaults are
+        // shown beside it — the same state a broken file has at launch.
+        let home = scratch("reload-broken");
+        fs::create_dir_all(config::home_at(&home)).expect("the home");
+        let path = config::config_path(&home);
+        let broken = "round_limit = \n";
+        fs::write(&path, broken).expect("a broken file");
+        let mut app = App::new(theme(), sidebar_config(), Some(home.clone()));
+
+        app.on_key(press(KeyCode::Char('r')));
+        assert!(
+            matches!(app.config.state, ConfigState::Unreadable(_)),
+            "{:?}",
+            app.config.state
+        );
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        assert!(text.contains("configuration is unreadable"), "{text}");
+        assert!(text.contains(CONFIG_FILE), "{text}");
+        assert!(text.contains("using the defaults:"), "{text}");
+        assert!(text.contains("5 build-and-fix rounds"), "{text}");
+        assert_eq!(
+            fs::read_to_string(&path).expect("the file"),
+            broken,
+            "the reload wrote over a file it could not read"
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_reload_with_no_configuration_writes_the_defaults() {
+        let home = scratch("reload-absent");
+        let mut app = App::new(
+            theme(),
+            ConfigRead::of(ConfigState::Absent),
+            Some(home.clone()),
+        );
+        let path = config::config_path(&home);
+        assert!(!path.exists(), "the test home is not fresh");
+
+        app.on_key(press(KeyCode::Char('r')));
+        assert!(path.is_file(), "the reload wrote no defaults");
+        assert!(matches!(app.config.state, ConfigState::Config(_)));
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains("5 build-and-fix rounds"),
+            "{}",
+            text_of(&rows)
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_choice_lists_the_catalogue_and_starts_on_the_model_in_force() {
+        let home = scratch("choice");
+        let mut app = on_orchestrator(Some(home.clone()));
+        app.fill_choice(Ok(Catalog::from_lines(
+            "opencode-go/kimi-k3\nopencode-go/glm-5.3\nopencode-go/deepseek-v4.1-flash\n",
+        )));
+        let choice = app.choice.as_ref().expect("the choice");
+        assert_eq!(
+            choice.catalog.models(),
+            [
+                "opencode-go/kimi-k3",
+                "opencode-go/glm-5.3",
+                "opencode-go/deepseek-v4.1-flash"
+            ],
+            "the list is not the catalogue's"
+        );
+        // The orchestrator runs glm-5.3#high: the cursor starts there.
+        assert_eq!(choice.cursor, 1);
+        let models: Vec<String> = choice.catalog.models().to_vec();
+
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        assert!(text.contains(CHOICE_TITLE), "{text}");
+        for model in models {
+            assert!(text.contains(&model), "{model} is not in the list: {text}");
+        }
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_pick_is_saved_and_the_sidebar_shows_what_it_saved() {
+        let home = scratch("pick");
+        let mut app = on_orchestrator(Some(home.clone()));
+        app.fill_choice(Ok(Catalog::from_lines(
+            "opencode-go/kimi-k3\nopencode-go/glm-5.3\nopencode-go/deepseek-v4.1-flash\n",
+        )));
+        // The cursor starts on glm-5.3; move up to kimi-k3 and pick it.
+        app.on_key(press(KeyCode::Char('k')));
+        assert_eq!(app.choice.as_ref().expect("the choice").cursor, 0);
+        assert_eq!(
+            app.on_key(press(KeyCode::Enter)),
+            Action::Redraw,
+            "a pick quit the window"
+        );
+        assert!(app.choice.is_none(), "the choice stayed open");
+        let saved = app.loaded().expect("the configuration");
+        assert_eq!(
+            saved
+                .agents
+                .iter()
+                .find(|agent| agent.role == Role::Orchestrator)
+                .map(|agent| agent.model.as_str()),
+            Some("opencode-go/kimi-k3"),
+            "the sidebar does not show the pick"
+        );
+        // The flow's own agents are untouched.
+        assert_eq!(
+            saved
+                .agents
+                .iter()
+                .find(|agent| agent.role == Role::Runner)
+                .map(|agent| agent.model.as_str()),
+            Some("opencode-go/deepseek-v4.1-flash#high")
+        );
+        assert_eq!(
+            saved
+                .agents
+                .iter()
+                .find(|agent| agent.role == Role::Reviewer)
+                .map(|agent| agent.model.as_str()),
+            Some("opencode-go/glm-5.3#high")
+        );
+
+        // The pick survives a restart: the file holds it, and only it.
+        let on_disk = Config::read(&config::config_path(&home)).expect("the saved configuration");
+        assert_eq!(on_disk, *saved);
+        let text = fs::read_to_string(config::config_path(&home)).expect("the file");
+        assert!(text.contains("model = \"opencode-go/kimi-k3\""), "{text}");
+        assert!(
+            text.contains("model = \"opencode-go/deepseek-v4.1-flash#high\""),
+            "{text}"
+        );
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains("kimi-k3"),
+            "the sidebar does not draw the pick: {}",
+            text_of(&rows)
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn esc_closes_the_choice_and_saves_nothing() {
+        let home = scratch("choice-esc");
+        let mut app = on_orchestrator(Some(home.clone()));
+        app.fill_choice(Ok(Catalog::from_lines(
+            "opencode-go/kimi-k3\nopencode-go/glm-5.3\n",
+        )));
+        app.on_key(press(KeyCode::Char('k')));
+        app.on_key(press(KeyCode::Esc));
+        assert!(app.choice.is_none(), "esc left the choice open");
+        assert!(
+            !config::config_path(&home).exists(),
+            "esc wrote a configuration"
+        );
+        assert_eq!(
+            app.orchestrator_model(),
+            Some("opencode-go/glm-5.3#high"),
+            "esc changed the model in force"
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_choice_with_no_catalogue_says_why_and_picks_nothing() {
+        let home = scratch("choice-error");
+        let mut app = on_orchestrator(Some(home.clone()));
+        app.fill_choice(Err("opencode models: not found".to_string()));
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        assert!(text.contains(CATALOG_UNREADABLE), "{text}");
+        assert!(text.contains("not found"), "{text}");
+        app.on_key(press(KeyCode::Enter));
+        assert!(app.choice.is_none());
+        assert!(
+            !config::config_path(&home).exists(),
+            "a pick was saved from an empty catalogue"
+        );
+        let _ = fs::remove_dir_all(&home);
+
+        // A catalogue that lists nothing says so, rather than opening blank.
+        let home = scratch("choice-empty");
+        let mut app = on_orchestrator(Some(home.clone()));
+        app.fill_choice(Ok(Catalog::default()));
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        assert!(text_of(&rows).contains(NO_MODELS), "{}", text_of(&rows));
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_choice_scrolls_to_keep_its_cursor_on_screen() {
+        let home = scratch("choice-scroll");
+        let mut app = on_orchestrator(Some(home.clone()));
+        let list: String = (0..40)
+            .map(|index| format!("provider/model-{index:02}\n"))
+            .collect();
+        app.fill_choice(Ok(Catalog::from_lines(&list)));
+        app.choice.as_mut().expect("the choice").cursor = 30;
+        let (rows, _) = render_app(&mut app, 100, 20, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        assert!(
+            text.contains("model-30"),
+            "the cursor is off screen: {text}"
+        );
+        assert!(
+            !text.contains("model-00"),
+            "the list did not scroll: {text}"
+        );
+        // The footer keeps the choice's keys on screen.
+        assert!(
+            rows.last().expect("a footer").contains("close"),
+            "{}",
+            rows.last().expect("a footer")
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_choice_footer_names_its_keys_and_the_help_names_both_scopes() {
+        let mut choosing = on_orchestrator(None);
+        choosing.fill_choice(Ok(Catalog::from_lines("a/b\nc/d\n")));
+        let line: String = choosing
+            .footer_line(100)
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        for works in [CLOSE_KEY, "close", CHOOSE_KEY, "pick", "move"] {
+            assert!(line.contains(works), "{line}: {works}");
+        }
+        // A narrow footer gives the movement up before the keys that close
+        // and pick.
+        let narrow: String = choosing
+            .footer_line(25)
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(
+            narrow.contains("close") && narrow.contains("pick"),
+            "{narrow}"
+        );
+        assert!(!narrow.contains("move"), "{narrow}");
+
+        // The help opens over the choice, and closing it gives the choice
+        // back rather than dropping it.
+        choosing.on_key(press(KeyCode::Char('?')));
+        assert!(choosing.help, "? did not open the help over the choice");
+        assert!(choosing.choice.is_some(), "the help closed the choice");
+        choosing.on_key(press(KeyCode::Char('x')));
+        assert!(!choosing.help, "a key left the help open");
+        assert!(
+            choosing.choice.is_some(),
+            "closing the help lost the choice"
+        );
+
+        // The help is one key away, and it names the sidebar's and the
+        // choice's keys.
+        let mut window = app();
+        window.on_key(press(KeyCode::Char('?')));
+        assert!(window.help, "? did not open the help");
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        assert!(text.contains(HELP_TITLE), "{text}");
+        for says in ["reload", "choose", "pick", "close", "move", "quit"] {
+            assert!(text.contains(says), "{says} is not in the help: {text}");
+        }
+        let footer = rows.last().expect("a footer");
+        assert!(footer.contains("close help"), "{footer}");
+        // Any key closes it; q still quits.
+        window.on_key(press(KeyCode::Char('x')));
+        assert!(!window.help, "a key left the help open");
+        window.on_key(press(KeyCode::Char('?')));
+        assert_eq!(window.on_key(press(KeyCode::Char('q'))), Action::Quit);
+    }
+
+    #[test]
+    fn a_pick_that_cannot_be_saved_is_named_on_the_sidebar() {
+        // The configuration keeps the model in force, and the sidebar says
+        // the pick did not land.
+        let home = scratch("pick-failure");
+        fs::write(home.join(crate::config::CONFIG_DIR), "not a folder").expect("a blocking file");
+        let mut app = on_orchestrator(Some(home.clone()));
+        app.fill_choice(Ok(Catalog::from_lines(
+            "opencode-go/kimi-k3\nopencode-go/glm-5.3\n",
+        )));
+        app.on_key(press(KeyCode::Char('k')));
+        app.on_key(press(KeyCode::Enter));
+        assert!(app.choice.is_none());
+        assert!(app.notice.is_some(), "the failed save is silent");
+        assert_eq!(
+            app.orchestrator_model(),
+            Some("opencode-go/glm-5.3#high"),
+            "a failed save changed the configuration on screen"
+        );
+        let (rows, paint) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        assert!(text.contains(sidebar::NOT_SAVED), "{text}");
+        assert!(text.contains(CONFIG_FILE), "{text}");
+        // The failure is painted on the failure slot.
+        assert_eq!(
+            colour_of(&rows, &paint, "config.toml"),
+            theme().semantic.error.fg.expect("the error colour")
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn enter_on_a_read_only_agent_opens_nothing() {
+        // The builder and the reviewer are the flow's: their rows name a
+        // model, and the screen changes none of it.
+        let mut app = app();
+        app.agents_drawn = true;
+        for cursor in [0usize, 1] {
+            app.cursor = cursor;
+            assert!(!app.can_choose(), "agent {cursor} is choosable");
+            app.on_key(press(KeyCode::Enter));
+            assert!(app.choice.is_none(), "agent {cursor} opened a choice");
         }
     }
 }

@@ -58,7 +58,11 @@ impl Config {
 
     /// Write a configuration, atomically, as the store writes a task.
     pub fn write(&self, path: &Path) -> Result<(), ConfigError> {
-        let text = self.to_toml();
+        Self::write_text(path, &self.to_toml())
+    }
+
+    /// Write TOML text, atomically, as the store writes a task.
+    pub fn write_text(path: &Path, text: &str) -> Result<(), ConfigError> {
         let tmp = path.with_extension("toml.tmp");
         {
             let mut file = fs::File::create(&tmp)?;
@@ -67,6 +71,57 @@ impl Config {
         }
         fs::rename(&tmp, path)?;
         Ok(())
+    }
+
+    /// The configuration's text with the orchestrator's model replaced.
+    ///
+    /// The configuration is the one file a human edits, so a pick is written
+    /// into the text they wrote: the orchestrator's table keeps every other
+    /// line, comments included. `None` when the text holds no orchestrator
+    /// table or no `model` line in it.
+    pub fn with_orchestrator_model(text: &str, model: &str) -> Option<String> {
+        let lines: Vec<&str> = text.split_inclusive('\n').collect();
+        let mut block: Option<usize> = None;
+        let mut at: Option<usize> = None;
+        for (index, line) in lines.iter().enumerate() {
+            let head = line.trim_start();
+            if head.starts_with('[') {
+                if let Some(start) = block
+                    && is_orchestrator(&lines[start..index])
+                {
+                    at = model_line(&lines[start..index]).map(|line| start + line);
+                    break;
+                }
+                block = head.starts_with("[[agents]]").then_some(index);
+            }
+        }
+        if at.is_none() {
+            let start = block?;
+            if is_orchestrator(&lines[start..]) {
+                at = model_line(&lines[start..]).map(|line| start + line);
+            }
+        }
+        let at = at?;
+        let line = lines[at];
+        let indent = &line[..line.len() - line.trim_start().len()];
+        let comment = comment_of(line);
+        let ending = if line.ends_with("\r\n") {
+            "\r\n"
+        } else if line.ends_with('\n') {
+            "\n"
+        } else {
+            ""
+        };
+        let mut out = String::with_capacity(text.len() + model.len());
+        for (index, line) in lines.iter().enumerate() {
+            if index == at {
+                out.push_str(indent);
+                out.push_str(&format!("model = {}{comment}{ending}", quote(model)));
+            } else {
+                out.push_str(line);
+            }
+        }
+        Some(out)
     }
 
     /// The configuration as TOML, with the comments the file carries.
@@ -81,9 +136,10 @@ impl Config {
              # This is the one file a human edits, so it is TOML and can carry\n\
              # comments. The format is provisional: it may change when the flow\n\
              # writes one itself. hugo reads this file at startup, writes the\n\
-             # defaults only when it is absent, and never writes over a file it\n\
-             # cannot read. The machine-written records - the journal and the\n\
-             # runtime record - stay JSON.\n\
+             # defaults only when it is absent, saves the orchestrator's picked\n\
+             # model in place, and never writes over a file it cannot read. The\n\
+             # machine-written records - the journal and the runtime record -\n\
+             # stay JSON.\n\
              \n",
         );
         out.push_str("# The build-and-fix cycles a task gets.\n");
@@ -165,6 +221,67 @@ fn quote(value: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// Whether an agent table's lines name the orchestrator.
+fn is_orchestrator(lines: &[&str]) -> bool {
+    lines.iter().any(|line| {
+        pair(line).is_some_and(|(key, value)| {
+            key == "role" && value == quote(Role::Orchestrator.as_str())
+        })
+    })
+}
+
+/// The line of an agent table that sets the model, when it has one.
+fn model_line(lines: &[&str]) -> Option<usize> {
+    lines
+        .iter()
+        .position(|line| pair(line).is_some_and(|(key, _)| key == "model"))
+}
+
+/// A line's key and value, the comment beside them taken away.
+///
+/// A `#` inside a string is not a comment: a model's variant is written
+/// `provider/model#high`.
+fn pair(line: &str) -> Option<(&str, &str)> {
+    let body = line.trim_end_matches(['\r', '\n']);
+    let body = match comment_start(body) {
+        Some(at) => &body[..at],
+        None => body,
+    };
+    let (key, value) = body.split_once('=')?;
+    Some((key.trim(), value.trim()))
+}
+
+/// The comment beside a line, with the space before it, when it has one.
+fn comment_of(line: &str) -> &str {
+    let body = line.trim_end_matches(['\r', '\n']);
+    match comment_start(body) {
+        Some(at) => &body[body[..at].trim_end().len()..],
+        None => "",
+    }
+}
+
+/// Where a line's comment starts, when it has one.
+fn comment_start(body: &str) -> Option<usize> {
+    let mut in_string = false;
+    let mut escaped = false;
+    for (index, character) in body.char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+        } else if character == '"' {
+            in_string = true;
+        } else if character == '#' {
+            return Some(index);
+        }
+    }
+    None
 }
 
 /// Where in a document a parse error sits, in words: ` at line 3, column 5`.
@@ -443,6 +560,141 @@ mod tests {
         let json = serde_json::to_string(&Config::default()).expect("the old shape");
         let error = Config::from_toml(&json).expect_err("JSON is not the configuration");
         assert!(error.to_string().contains("parse"), "{error}");
+    }
+
+    #[test]
+    fn the_written_defaults_say_that_a_pick_is_saved_in_place() {
+        let text = Config::default().to_toml();
+        assert!(text.contains("saves the orchestrator's picked"), "{text}");
+        assert!(text.contains("model in place"), "{text}");
+    }
+
+    #[test]
+    fn a_pick_replaces_only_the_orchestrators_model_line() {
+        let text = Config::default().to_toml();
+        let picked = Config::with_orchestrator_model(&text, "opencode-go/glm-5.3")
+            .expect("the orchestrator's model line");
+        let config = Config::from_toml(&picked).expect("the edited text still parses");
+        let orchestrator = config
+            .agents
+            .iter()
+            .find(|agent| agent.role == Role::Orchestrator)
+            .expect("the orchestrator");
+        assert_eq!(orchestrator.model, "opencode-go/glm-5.3");
+        // The other agents are their own: the flow starts those, so a pick
+        // does not touch them.
+        let builder = config
+            .agents
+            .iter()
+            .find(|agent| agent.role == Role::Runner)
+            .expect("the builder");
+        assert_eq!(builder.model, "opencode-go/deepseek-v4.1-flash#high");
+        let reviewer = config
+            .agents
+            .iter()
+            .find(|agent| agent.role == Role::Reviewer)
+            .expect("the reviewer");
+        assert_eq!(reviewer.model, "opencode-go/glm-5.3#high");
+        // Every other line is byte-identical: the file is the human's.
+        let before: Vec<&str> = text.lines().collect();
+        let after: Vec<&str> = picked.lines().collect();
+        assert_eq!(before.len(), after.len(), "{picked}");
+        let changed: Vec<usize> = (0..before.len())
+            .filter(|index| before[*index] != after[*index])
+            .collect();
+        assert_eq!(changed.len(), 1, "{picked}");
+        assert!(after[changed[0]].contains("glm-5.3"), "{picked}");
+    }
+
+    #[test]
+    fn a_pick_keeps_a_comment_beside_the_line_it_replaces() {
+        // The comments are the human's: the pick changes the value, not the
+        // notes beside it, and not the rest of the file.
+        let text = "\
+# the flow's configuration
+round_limit = 5
+
+# One entry per agent.
+[[agents]]
+# the builder
+name = \"builder\"
+role = \"runner\"
+model = \"opencode-go/deepseek-v4.1-flash#high\"
+
+[[agents]]
+name = \"orchestrator\"
+role = \"orchestrator\"
+model = \"opencode-go/glm-5.3#high\" # the orchestrator's lens
+
+# the harness
+[harness]
+tool = \"opencode\"
+driven = \"--standalone\"
+
+# the order
+[[order]]
+step = \"groom\"
+role = \"creator\"
+gates = [{ from = \"groomed\", to = \"approved\" }]
+";
+        assert!(text.contains("the orchestrator's lens"), "{text}");
+        let picked = Config::with_orchestrator_model(text, "opencode-go/kimi-k3")
+            .expect("the orchestrator's model line");
+        assert!(
+            picked.contains("model = \"opencode-go/kimi-k3\" # the orchestrator's lens"),
+            "{picked}"
+        );
+        for kept in [
+            "# the flow's configuration",
+            "# the builder",
+            "# the harness",
+            "# the order",
+            "model = \"opencode-go/deepseek-v4.1-flash#high\"",
+        ] {
+            assert!(picked.contains(kept), "{kept}: {picked}");
+        }
+        assert_eq!(
+            Config::from_toml(&picked)
+                .expect("the edited text parses")
+                .agents
+                .iter()
+                .find(|agent| agent.role == Role::Orchestrator)
+                .map(|agent| agent.model.as_str()),
+            Some("opencode-go/kimi-k3")
+        );
+    }
+
+    #[test]
+    fn a_pick_reads_a_hash_inside_a_model_as_part_of_the_value() {
+        // `#high` is the model's variant, not a comment: the line it is on
+        // is still the model line.
+        let text = Config::default().to_toml();
+        let picked = Config::with_orchestrator_model(&text, "opencode-go/glm-5.3#low")
+            .expect("the orchestrator's model line");
+        assert!(
+            picked.contains("model = \"opencode-go/glm-5.3#low\""),
+            "{picked}"
+        );
+    }
+
+    #[test]
+    fn text_without_an_orchestrator_has_no_pick_to_make() {
+        let text = Config::default().to_toml();
+        let without = text
+            .lines()
+            .filter(|line| !line.contains("orchestrator"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+        // Drop the now-empty agent table: the text no longer parses as the
+        // same configuration, but the function only reads the model lines.
+        assert_eq!(
+            Config::with_orchestrator_model(&without, "opencode-go/kimi-k3"),
+            None
+        );
+        assert_eq!(
+            Config::with_orchestrator_model("round_limit = 5\n", "opencode-go/kimi-k3"),
+            None
+        );
     }
 
     #[test]

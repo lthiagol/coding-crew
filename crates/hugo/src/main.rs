@@ -4,11 +4,13 @@
 //! writes nothing but its own configuration home.
 
 mod app;
+mod catalog;
 mod config;
 mod sidebar;
 
 use std::io::{Stdout, Write};
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::{Result, bail};
 use crossterm::event::{self, Event, KeyEventKind};
@@ -21,7 +23,6 @@ use coding_crew_core::screen::{plain_text, restore, setup};
 use coding_crew_core::store::RUNTIME_FILE;
 use coding_crew_core::{Store, StoreError};
 use coding_crew_theme::{Preset, Theme};
-use config::ConfigRead;
 
 const USAGE: &str = "usage: hugo [--theme dark|nord|catppuccin|dracula|terminal] [--render --plain [--width N] [--height N]]";
 /// The columns of a plain render when --width is not given.
@@ -33,20 +34,27 @@ const DEFAULT_HEIGHT: u16 = 40;
 /// memory than the machine has.
 const MAX_DIMENSION: u16 = 1000;
 
+/// How often the loop looks for a catalogue while one is being read: the
+/// window draws and takes keys between looks, so a slow tool costs the screen
+/// a few frames, not its keys.
+const CATALOG_POLL: Duration = Duration::from_millis(50);
+
 fn main() -> Result<()> {
     let options = parse_args(std::env::args().skip(1))?;
     // The configuration is the tool's, so it is read — and its defaults
     // written when it is absent — before the window is drawn, in render mode
     // too. A configuration that cannot be read is a state of the screen, not
-    // a reason to fail.
-    let config = config::load_home();
+    // a reason to fail. The home is kept: a pick is saved under it.
+    let home = config::user_home();
+    let config = config::load(home.as_deref());
+    let app = App::new(options.theme, config, home);
 
     if options.render {
-        return render_plain(options, &config);
+        return render_plain(options, app);
     }
 
     let mut terminal = setup()?;
-    let result = run(&mut terminal, options, &config);
+    let result = run(&mut terminal, app);
     restore(&mut terminal)?;
     result
 }
@@ -142,12 +150,7 @@ fn preset_of(name: &str) -> Result<Preset> {
 }
 
 /// The window loop. The runtime is read again on every redraw.
-fn run(
-    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
-    options: Options,
-    config: &ConfigRead,
-) -> Result<()> {
-    let app = App::new(options.theme);
+fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Result<()> {
     let located = locate_runtime();
     loop {
         let runtime = read_runtime(&located);
@@ -155,7 +158,18 @@ fn run(
         // key that answers the draw see the instant the screen was measured
         // at. No other module under `src/` reads a clock.
         let now = coding_crew_core::now_rfc3339();
-        terminal.draw(|frame| app.draw(frame, &runtime, config, &now))?;
+        terminal.draw(|frame| app.draw(frame, &runtime, &now))?;
+        // The catalogue is a harness's, so it is read beside the window: while
+        // a read is in flight the loop polls for the answer as well as for a
+        // key, so a slow tool never leaves raw mode without a reader.
+        if app.catalog_pending() {
+            if app.poll_choice() {
+                continue;
+            }
+            if !event::poll(CATALOG_POLL)? {
+                continue;
+            }
+        }
         if let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
             && app.on_key(key) == Action::Quit
@@ -174,12 +188,11 @@ fn run(
 ///
 /// A render draws at a fixed instant, not the wall clock: a pinned screen
 /// must be the same bytes on every run.
-fn render_plain(options: Options, config: &ConfigRead) -> Result<()> {
-    let app = App::new(options.theme);
+fn render_plain(options: Options, mut app: App) -> Result<()> {
     let located = locate_runtime();
     let runtime = read_runtime(&located);
     let mut terminal = Terminal::new(TestBackend::new(options.width, options.height))?;
-    terminal.draw(|frame| app.draw(frame, &runtime, config, RENDER_NOW))?;
+    terminal.draw(|frame| app.draw(frame, &runtime, RENDER_NOW))?;
     let text = plain_text(terminal.backend().buffer());
     let mut stdout = std::io::stdout();
     stdout.write_all(text.as_bytes())?;

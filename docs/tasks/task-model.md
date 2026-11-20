@@ -681,6 +681,13 @@ five build-and-fix cycles; and the order [roles.md](../roles/roles.md#the-order)
 records. A test reads that table and the two role configs, so the defaults and
 the flow cannot drift.
 
+**The orchestrator's model is the one hugo writes.** The orchestrator is the
+agent hugo starts, so its model is picked in hugo's sidebar and saved into this
+file, where hugo can use it. The models offered are the ones the catalogue
+knows — `opencode models` — so the file cannot hold a model that does not
+exist. The builder's and the reviewer's models are the flow's: hugo reads them
+and writes none of them.
+
 ## 12. Derived, never stored
 
 | view | derived from |

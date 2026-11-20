@@ -112,15 +112,40 @@ pub fn load_at(home: &Path) -> ConfigRead {
     ConfigRead { state, legacy }
 }
 
-/// Read the running user's configuration.
+/// Read the configuration under a home, or the named empty state when the
+/// machine has no home.
 ///
 /// A machine without a home has nowhere for a configuration to live, and that
 /// is not a reason to fail: the sidebar says there is no configuration yet.
-pub fn load_home() -> ConfigRead {
-    match user_home() {
-        Some(home) => load_at(&home),
+pub fn load(home: Option<&Path>) -> ConfigRead {
+    match home {
+        Some(home) => load_at(home),
         None => ConfigRead::of(ConfigState::Absent),
     }
+}
+
+/// Save the orchestrator's model into the configuration under `home`.
+///
+/// The pick goes into the text the human wrote: the orchestrator's `model`
+/// line is the one line replaced, so every comment and every other setting
+/// stays. When the file is gone, the configuration in hand is written whole.
+/// Returns the configuration as saved, so the sidebar shows what the file
+/// holds.
+pub fn save_pick_at(home: &Path, config: &Config, model: &str) -> Result<Config, ReadError> {
+    let _ = ensure_at(home).map_err(|error| unreadable(error.to_string()))?;
+    let path = config_path(home);
+    let text = match fs::read_to_string(&path) {
+        // The model goes into the line the human wrote; a file that no
+        // longer holds the orchestrator is not overwritten with one guess.
+        Ok(text) => Config::with_orchestrator_model(&text, model)
+            .ok_or_else(|| unreadable("the file has no orchestrator's model line".to_string()))?,
+        // The file is gone: the configuration in hand is written whole.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => config.to_toml(),
+        Err(error) => return Err(unreadable(error.to_string())),
+    };
+    let saved = Config::from_toml(&text).map_err(|error| unreadable(error.to_string()))?;
+    Config::write_text(&path, &text).map_err(|error| unreadable(error.to_string()))?;
+    Ok(saved)
 }
 
 /// The name of the old configuration beside the new one, when it is there.
@@ -301,6 +326,86 @@ mod tests {
             old_text,
             "the old file was converted"
         );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_pick_is_saved_into_the_text_the_human_wrote() {
+        let home = scratch("pick");
+        fs::create_dir_all(home_at(&home)).expect("the home");
+        let path = config_path(&home);
+        let text = "\
+# Mine: three cycles is enough.
+round_limit = 3
+
+# One entry per agent.
+[[agents]]
+name = \"builder\"
+role = \"runner\"
+model = \"opencode-go/deepseek-v4.1-flash#high\"
+
+[[agents]]
+name = \"orchestrator\"
+role = \"orchestrator\"
+model = \"opencode-go/glm-5.3#high\"
+
+[harness]
+tool = \"opencode\"
+driven = \"--standalone\"
+
+[[order]]
+step = \"groom\"
+role = \"creator\"
+gates = [{ from = \"groomed\", to = \"approved\" }]
+";
+        let config = Config::from_toml(text).expect("the configuration");
+        fs::write(&path, text).expect("a human's configuration");
+
+        let saved = save_pick_at(&home, &config, "opencode-go/kimi-k3").expect("the pick");
+        assert_eq!(
+            saved
+                .agents
+                .iter()
+                .find(|agent| agent.role == coding_crew_core::Role::Orchestrator)
+                .map(|agent| agent.model.as_str()),
+            Some("opencode-go/kimi-k3")
+        );
+        assert_eq!(saved.round_limit, 3, "the pick lost another setting");
+        let after = fs::read_to_string(&path).expect("the file");
+        assert!(after.contains("Mine: three cycles"), "{after}");
+        assert!(after.contains("model = \"opencode-go/kimi-k3\""), "{after}");
+        // The builder is the flow's: the pick did not touch it.
+        assert!(
+            after.contains("model = \"opencode-go/deepseek-v4.1-flash#high\""),
+            "{after}"
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_pick_with_no_file_writes_the_configuration_whole() {
+        let home = scratch("pick-absent");
+        let mut config = Config::default();
+        config.agents.iter_mut().for_each(|agent| {
+            if agent.role == coding_crew_core::Role::Orchestrator {
+                agent.model = "opencode-go/kimi-k3".to_string();
+            }
+        });
+        let saved = save_pick_at(&home, &config, "opencode-go/kimi-k3").expect("the pick");
+        let after = fs::read_to_string(config_path(&home)).expect("the file");
+        assert!(after.contains("model = \"opencode-go/kimi-k3\""), "{after}");
+        assert_eq!(saved, config);
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_pick_that_cannot_be_written_names_the_configuration() {
+        let home = scratch("pick-blocked");
+        fs::write(home.join(CONFIG_DIR), "not a folder").expect("a blocking file");
+        let error = save_pick_at(&home, &Config::default(), "opencode-go/kimi-k3")
+            .expect_err("the home cannot be made");
+        assert_eq!(error.file, CONFIG_FILE);
+        assert!(!error.error.is_empty(), "{error:?}");
         let _ = fs::remove_dir_all(&home);
     }
 
