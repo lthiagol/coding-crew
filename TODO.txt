@@ -1056,92 +1056,56 @@ HAPPENED
   worth keeping becomes a unit of its own.
 
 OPEN
-  raul, the TUI for the work, is not finished. What is open, in the order
-  of the plan:
-    - plan 35, the announcements - closed.
-    - plan 36, the mocked journal - closed.
-    - plan 37, Settings has content - closed.
-  The Backlog review left low follow-ups, none blocking: a one- or two-row
-  pane below 39 columns gives a total hidden count without naming the groups;
-  the compact announcement can resemble the group header's shape; very narrow
-  panes cut or drop group names and counts.
-  The Needs you review left low follow-ups, none blocking: the external
-  review rounds are numbered 2 to 6 although the budget counts external
-  rounds; Task::new reads the clock three times; the leap-second rule does
-  not check the year; and the span-by-span cut path is currently unreachable.
-  The batched-lows round left two lows, none blocking: the shared-helper
-  copy scan covers three of the five helpers, so a private copy of head_to
-  or text_width passes it; and the description pin checks the phrase, not
-  the attribution, and knows four connectives.
-  The Path tab left one low follow-up, none blocking: the footer drops the
-  hidden count at the widths where it would fit beside the keys - 17 and 18
-  columns on the Needs you tab - because the count part carries a fixed
-  three-column gap.
-  The Settings round left two lows, none blocking: a test comment names a
-  help footer that does not exist, and the Settings announcement names
-  wholly-in-view groups where the Backlog tab names only the hidden ones.
-  The journal's writer is grooming item G2: the kinds are provisional and
-  nothing writes activity.json yet. Four lows from the journal round stand
-  recorded: one unknown kind or missing field blanks the whole history, and
-  the kinds are provisional; a present but unparseable journal makes the
-  block say "no activity yet" while the errors panel names the file; the
-  mock's approved stamps are minutes before the claim and no fixture holds
-  them; and a comment beside the activity panel inverts the order the
-  panels give up their rows.
-  The autopilot: the orchestrator role has no job yet.
-  The plain-render review left low follow-ups, none blocking: the duplicate-id
-  loader test can be made less filesystem-sensitive with more pairs; --width
-  and --height are accepted and ignored outside render mode; some test
-  fixtures leave temp folders; and the new flags are documented only in
-  --help.
-  The panes run the regular opencode, not mini, with
-  OPENCODE_CONFIG=flow/builder.json or flow/reviewer.json and --standalone,
-  so the role config is read. The builder is
-  opencode-go/deepseek-v4.1-flash#high; the reviewer is
-  opencode-go/glm-5.3#high. Herdr's agent wait --until idle is
-  broken on herdr 0.9.5: it missed turns that finished in 4-8 seconds and
-  waited for its whole timeout. The flow uses scripts/herdr-wake.sh instead.
-  The wake script's low follow-ups are non-blocking: bash SECONDS gives a
-  timeout budget that is off by up to a second; a killed pane read can leave
-  partial stdout; a non-JSON Herdr failure loses its message; a Herdr warning
-  on stderr can break the merged JSON parse; and the test's wall-clock
-  windows can flake on a loaded CI runner.
-  The builders may add or edit the mock data when a finding needs data the
-  fixtures do not have - through mock-data/generate.py, and the generator must
-  keep reproducing the committed tree byte for byte.
-  The store-discovery review left one low follow-up: its Windows-only path
-  tests are compile-checked but CI runs Ubuntu only.
-  The light themes are deferred: our light preset and the light variants of
-  the families (Catppuccin Latte, Dracula Alucard, Nord Light).
-  The hugo shell left three lows, none blocking: hugo does not treat ctrl-c
-  as quit the way raul does; the plain-render plumbing is copied from raul
-  and can drift; and the core dependency is declared but unused until the
-  crew lands. The crew round left two more: the age units now exist twice,
-  re-implemented beside raul's own, and nothing pins the two vocabularies
-  together. The configuration round left six: the sidebar's unreadable
-  state drops a row when the pane is one row tall; a home that cannot be
-  made names a file that was never touched; two instances on a fresh home
-  share one temporary name and the loser shows a false unreadable state; the
-  configuration is read at startup and not on every redraw - the human's
-  answer: a key reloads it, which is the next unit; the orchestrator's
-  default model is the reviewer's - the human's answer: the orchestrator's
-  model is picked in hugo's TUI, because the orchestrator is the agent
-  hugo will start, which is the unit after next; and the review-round
-  limit's pin rests on a phrase this unit added to the model doc, so it has
-  no provenance of its own.
-  The TOML round left five more: the on-screen error text is not pinned end
-  to end; a sidebar three rows tall can show "using the defaults:" with
-  nothing after it; a wrong-type value and a syntax error are told apart
-  only by their message text; with an old config.json and a broken
-  config.toml at once, the legacy notice outranks the error and the error
-  is the first line cut; and a config.json that is a directory is not named.
-  The sidebar round left four more, which the batched unit takes: the
-  footers under-name the keys that work; every line the catalogue tool
-  prints becomes a pickable model; a hand-edited configuration with TOML
-  single quotes breaks the pick; and the help lists enter choose
-  unqualified on rows where it does nothing.
+  raul and hugo are built, and the plan holds no open row. What is left is
+  the recorded follow-ups and the three things that wait on the flow.
+  The follow-ups still open, none blocking:
+    - the Backlog: a one- or two-row pane below 39 columns gives a total
+      hidden count without naming the groups; the compact announcement can
+      resemble the group header's shape; very narrow panes cut or drop group
+      names and counts.
+    - the shared-helper copy scan covers three of the five helpers, so a
+      private copy of head_to or text_width passes it - the same limitation
+      the cut_to, pad and View::draw pins have.
+    - the description pin checks the phrase, not the attribution, and knows
+      four connectives.
+    - the footer drops the hidden count at the widths where it would fit
+      beside the keys - 17 and 18 columns on the Needs you tab.
+    - the Settings announcement names wholly-in-view groups where the
+      Backlog names only the hidden ones, and a test comment names a help
+      footer that does not exist.
+    - the journal: the mock's approved stamps are minutes before the claim
+      and no fixture holds them; a comment beside the activity panel
+      inverts the order the panels give up their rows; the kinds are
+      provisional.
+    - hugo: with an old config.json and a broken config.toml, the notice
+      and the defaults line can be cut silently at a two- or three-row
+      sidebar; the activity cut marker drops the count of unreadable
+      events; two row-level tests still hand-write an error wording the
+      pipeline never produces.
+    - the plain render: the duplicate-id loader test can be made less
+      filesystem-sensitive with more pairs; some test fixtures leave temp
+      folders; the flags are documented only in --help.
+    - the wake script - in the global skill, not in this repository: bash
+      SECONDS gives a timeout budget that is off by up to a second; a
+      killed pane read can leave partial stdout; a non-JSON Herdr failure
+      loses its message; a Herdr warning on stderr can break the merged
+      JSON parse; the test's wall-clock windows can flake on a loaded CI
+      runner.
+    - the store discovery's Windows-only path tests are compile-checked but
+      CI runs Ubuntu only.
+  What waits on the flow:
+    - the journal's writer (grooming item G2): the kinds are provisional
+      and nothing writes activity.json.
+    - the runtime record's writer: nothing writes runtime.json, so the crew
+      hugo shows is the mock's.
+    - the orchestrator's job: the orchestrator role has no job yet. hugo
+      picks the model for the agent it will start; opening the herdr tab
+      and starting it is its own unit, and it is the first step towards
+      hugo driving the loop rather than only showing it.
+  Deferred by the human: the light themes - our light preset and the light
+  variants of the families (Catppuccin Latte, Dracula Alucard, Nord Light).
   talita's own verbs. Out of scope, and it stays out of scope until it is
-  asked for explicitly. Do not start it because the other tabs are done.
+  asked for explicitly.
 
 NEXT
   The order is in docs/plan.md, and that is the only list of it. The plan
