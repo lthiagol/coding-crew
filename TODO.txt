@@ -861,6 +861,27 @@ WHERE WE ARE
   and the plan rows for the three units the human asked for sit beside this
   one.
   Next unit: hugo's configuration is TOML (plan 41).
+  Unit closed: hugo's configuration is TOML (plan 41). One clean build and
+  review round. The configuration is ~/.config/coding-crew/config.toml - a
+  file a human edits, so the defaults hugo writes carry a comment above
+  every part. The old config.json is named, never read, never deleted and
+  never converted: the format is provisional and a conversion would guess.
+  A configuration that does not parse is named with the file and the error
+  and left byte-identical, with the defaults shown beside it; one that
+  parses is used as it is; an absent one is the defaults, written on
+  demand. The pins hold and each can fail on its own: the default models
+  against flow/builder.json and flow/reviewer.json, the default order
+  against docs/roles/roles.md. The records stay JSON - they are written by
+  machines. The gate is green: 817 Rust tests and 212 script assertions.
+  Five lows stand recorded, and they go to the batched follow-ups: the
+  on-screen error text is not pinned end to end, the row-level tests assert
+  a wording the real pipeline never produces; a sidebar three rows tall can
+  show "using the defaults:" with nothing after it; a wrong-type value and
+  a syntax error are told apart only by their message text; with an old
+  config.json and a broken config.toml at once, the legacy notice outranks
+  the error and the error is the first line cut; and a config.json that is
+  a directory is not named.
+  Next unit: hugo's sidebar acts (plan 42).
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
@@ -1050,10 +1071,19 @@ OPEN
   state drops a row when the pane is one row tall; a home that cannot be
   made names a file that was never touched; two instances on a fresh home
   share one temporary name and the loser shows a false unreadable state; the
-  configuration is read at startup and not on every redraw; the
-  orchestrator's default model is the reviewer's, for the flow to confirm;
-  and the review-round limit's pin rests on a phrase this unit added to the
-  model doc, so it has no provenance of its own.
+  configuration is read at startup and not on every redraw - the human's
+  answer: a key reloads it, which is the next unit; the orchestrator's
+  default model is the reviewer's - the human's answer: the orchestrator's
+  model is picked in hugo's TUI, because the orchestrator is the agent
+  hugo will start, which is the unit after next; and the review-round
+  limit's pin rests on a phrase this unit added to the model doc, so it has
+  no provenance of its own.
+  The TOML round left five more: the on-screen error text is not pinned end
+  to end; a sidebar three rows tall can show "using the defaults:" with
+  nothing after it; a wrong-type value and a syntax error are told apart
+  only by their message text; with an old config.json and a broken
+  config.toml at once, the legacy notice outranks the error and the error
+  is the first line cut; and a config.json that is a directory is not named.
   talita's own verbs. Out of scope, and it stays out of scope until it is
   asked for explicitly. Do not start it because the other tabs are done.
 
