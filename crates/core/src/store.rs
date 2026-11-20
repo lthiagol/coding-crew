@@ -13,6 +13,17 @@ pub const DATA_DIR: &str = "coding-crew";
 /// Name of the work folder inside the data folder.
 pub const WORK_DIR: &str = "work";
 
+/// Name of the project's activity journal, beside the work folder.
+pub const ACTIVITY_FILE: &str = "activity.json";
+
+/// The journal of a project, from its work folder.
+///
+/// The journal sits beside `work/`, not inside it: the work folder holds one
+/// file per work unit, and a journal in there would be read as a task.
+pub fn activity_path(work: &Path) -> PathBuf {
+    work.parent().unwrap_or(work).join(ACTIVITY_FILE)
+}
+
 #[derive(Debug, Error)]
 pub enum StoreError {
     #[error("failed to read: {0}")]
@@ -88,6 +99,11 @@ impl Store {
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Path of the project's journal: beside the work folder.
+    pub fn activity_path(&self) -> PathBuf {
+        activity_path(&self.root)
     }
 
     /// Path of a task file.
@@ -427,6 +443,21 @@ mod tests {
         let data = nearest_project(&root, Some(&root)).expect("the project");
         assert_eq!(data, root.join(DATA_DIR));
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_journal_sits_beside_the_work_folder() {
+        // The journal is a sibling of `work/`, not a file inside it: the
+        // work folder reads every json file in it as a work unit.
+        let project = Path::new("/project/coding-crew");
+        let work = project.join(WORK_DIR);
+        assert_eq!(
+            activity_path(&work),
+            project.join(ACTIVITY_FILE),
+            "the journal is not beside work/"
+        );
+        let store = Store::new(&work);
+        assert_eq!(store.activity_path(), project.join(ACTIVITY_FILE));
     }
 
     #[test]

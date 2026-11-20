@@ -59,7 +59,7 @@ Not a list — a summary the human reads in one screen.
 | counts | tasks per status; smaller tasks per kind |
 | needs you | the same count *Needs you* shows, with the three reasons: to approve, to review, escalated |
 | claimable | how many tasks an agent could take right now |
-| activity | the last few events, when the journal exists |
+| activity | the last few events; when there is no journal, the block says so |
 | next | the first task of *Path* — what happens next |
 
 ### Needs you
@@ -234,7 +234,8 @@ runs it. The Overview is pinned byte for byte at 40, 60 and 100 columns in
 
 - the automation's internals — not a raul tab; the design record is
   [docs/hugo/design-record.md](../hugo/design-record.md)
-- the journal — *Activity* is not a tab until the event kinds exist
+- the journal — *Activity* is a block in the Overview, not a tab; the event
+  kinds are provisional until the writer lands
 - persisted sort keys and keybinds — the Settings tab is a placeholder too
 - the review's interaction: **raul reads**. A finding is shown, never acted on — acting on one
   needs a writer, a gate and talita's verbs, which are out of scope for now
@@ -242,5 +243,6 @@ runs it. The Overview is pinned byte for byte at 40, 60 and 100 columns in
 ## Mock data
 
 raul reads `mock-data/coding-crew/work/` — one task per phase, the edge
-cases, and the smaller tasks — so the screens can be built against real shapes
-before any data exists to manage. `make raul` points at it.
+cases, and the smaller tasks — and the journal beside it,
+`mock-data/coding-crew/activity.json` — so the screens can be built against
+real shapes before any data exists to manage. `make raul` points at it.

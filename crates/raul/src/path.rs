@@ -1387,6 +1387,7 @@ mod tests {
             tasks: vec![task],
             items: Vec::new(),
             errors: Vec::new(),
+            activity: None,
             missing: None,
         };
         let held = "2029-12-31T23:59:59Z";

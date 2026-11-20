@@ -7,7 +7,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use coding_crew_core::{Item, ItemKind, Status, Task};
+use coding_crew_core::store::{ACTIVITY_FILE, activity_path};
+use coding_crew_core::{Activity, Item, ItemKind, Status, Task};
 
 // The human lane's vocabulary is the model's, beside the statuses it names.
 pub use coding_crew_core::Reason;
@@ -49,6 +50,8 @@ pub struct Work {
     pub tasks: Vec<Task>,
     pub items: Vec<Item>,
     pub errors: Vec<ReadError>,
+    /// The project's journal, when it has one.
+    pub activity: Option<Activity>,
     /// Why the folder is not there, when it is not.
     pub missing: Option<Missing>,
 }
@@ -118,6 +121,24 @@ impl Work {
         }
         work.tasks.sort_by(|a, b| a.id.cmp(&b.id));
         work.items.sort_by(|a, b| a.id.cmp(&b.id));
+        // The journal is optional: a project without one has no activity,
+        // not a broken one. A journal that is there but does not parse is a
+        // file that could not be read, like a task that does not parse.
+        let path = activity_path(root);
+        match fs::read_to_string(&path) {
+            Ok(contents) => match serde_json::from_str::<Activity>(&contents) {
+                Ok(activity) => work.activity = Some(activity),
+                Err(error) => work.errors.push(ReadError {
+                    file: ACTIVITY_FILE.to_string(),
+                    error: error.to_string(),
+                }),
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => work.errors.push(ReadError {
+                file: ACTIVITY_FILE.to_string(),
+                error: error.to_string(),
+            }),
+        }
         // The message breaks the file-name tie, so the error order is total.
         work.errors
             .sort_by(|a, b| a.file.cmp(&b.file).then_with(|| a.error.cmp(&b.error)));
@@ -319,6 +340,7 @@ mod tests {
             tasks,
             items: Vec::new(),
             errors: Vec::new(),
+            activity: None,
             missing: None,
         }
     }
@@ -349,6 +371,79 @@ mod tests {
         assert_eq!(work.tasks.len(), 29);
         assert_eq!(work.items.len(), 5);
         assert!(work.errors.is_empty());
+    }
+
+    #[test]
+    fn reads_the_mock_journal_beside_the_work_folder() {
+        let work = mock_work();
+        let activity = work.activity.as_ref().expect("the mock journal");
+        assert!(!activity.is_empty(), "the mock journal has no events");
+        // The journal sits beside work/, not inside it.
+        let journal =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/activity.json");
+        assert!(journal.is_file(), "{} is not a file", journal.display());
+        assert!(
+            !work.root.join("activity.json").exists(),
+            "the journal is inside the work folder"
+        );
+        assert!(work.errors.is_empty(), "{:?}", work.errors);
+    }
+
+    #[test]
+    fn a_project_without_a_journal_has_no_activity_and_no_error() {
+        let dir = std::env::temp_dir().join(format!("raul-no-journal-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a work folder");
+        let work = Work::load(&dir);
+        assert!(work.activity.is_none());
+        assert!(work.errors.is_empty(), "{:?}", work.errors);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_journal_that_does_not_parse_is_reported_not_fatal() {
+        let dir = std::env::temp_dir().join(format!("raul-broken-journal-{}", std::process::id()));
+        let work_dir = dir.join("work");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&work_dir).expect("a work folder");
+        fs::write(dir.join("activity.json"), "{ not json").expect("a broken journal");
+        let work = Work::load(&work_dir);
+        assert!(work.activity.is_none());
+        assert_eq!(work.errors.len(), 1);
+        assert_eq!(work.errors[0].file, "activity.json");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_journal_is_read_again_on_every_load() {
+        let dir = std::env::temp_dir().join(format!("raul-journal-reload-{}", std::process::id()));
+        let work_dir = dir.join("work");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&work_dir).expect("a work folder");
+        let journal = dir.join("activity.json");
+        let write = |kind: &str| {
+            fs::write(
+                &journal,
+                format!(
+                    r#"{{"events":[{{"at":"2026-11-01T09:00Z","kind":"{kind}","task":"TSK01","by":"human"}}]}}"#
+                ),
+            )
+            .expect("writing the journal");
+        };
+        write("created");
+        let first = Work::load(&work_dir);
+        assert_eq!(
+            first.activity.as_ref().expect("a journal").events[0].kind,
+            coding_crew_core::EventKind::Created
+        );
+        write("completed");
+        let second = Work::load(&work_dir);
+        assert_eq!(
+            second.activity.as_ref().expect("a journal").events[0].kind,
+            coding_crew_core::EventKind::Completed,
+            "the journal was remembered between loads"
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

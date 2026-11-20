@@ -1,0 +1,913 @@
+{
+  "events": [
+    {
+      "at": "2026-11-02T09:00Z",
+      "kind": "created",
+      "task": "TSK01",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-02T09:00Z",
+      "kind": "created",
+      "task": "TSK25",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-02T11:00Z",
+      "kind": "created",
+      "task": "TSK19",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-02T13:00Z",
+      "kind": "created",
+      "task": "TSK13",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-02T15:00Z",
+      "kind": "created",
+      "task": "TSK07",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-02T15:00Z",
+      "kind": "created",
+      "task": "TSK29",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-03T10:00Z",
+      "kind": "created",
+      "task": "TSK02",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-03T10:00Z",
+      "kind": "created",
+      "task": "TSK26",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-03T12:00Z",
+      "kind": "created",
+      "task": "TSK20",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-03T14:00Z",
+      "kind": "created",
+      "task": "TSK14",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-03T16:00Z",
+      "kind": "created",
+      "task": "TSK08",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-04T09:00Z",
+      "kind": "created",
+      "task": "TSK09",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-04T11:00Z",
+      "kind": "created",
+      "task": "TSK03",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-04T11:00Z",
+      "kind": "created",
+      "task": "TSK28",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-04T13:00Z",
+      "kind": "created",
+      "task": "TSK21",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-04T15:00Z",
+      "kind": "created",
+      "task": "TSK15",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-05T10:00Z",
+      "kind": "created",
+      "task": "TSK10",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-05T12:00Z",
+      "kind": "created",
+      "task": "TSK04",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-05T14:00Z",
+      "kind": "created",
+      "task": "TSK22",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-05T14:30Z",
+      "kind": "approved",
+      "task": "TSK22",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-05T15:00Z",
+      "kind": "claimed",
+      "task": "TSK22",
+      "by": "runner",
+      "note": "claimed by runner-04"
+    },
+    {
+      "at": "2026-11-05T16:00Z",
+      "kind": "created",
+      "task": "TSK16",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-05T16:00Z",
+      "kind": "approved",
+      "task": "TSK07",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-05T17:00Z",
+      "kind": "review_requested",
+      "task": "TSK22",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-05T18:00Z",
+      "kind": "completed",
+      "task": "TSK22",
+      "by": "reviewer",
+      "note": "reviewed clean"
+    },
+    {
+      "at": "2026-11-06T09:00Z",
+      "kind": "created",
+      "task": "TSK17",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-06T11:00Z",
+      "kind": "created",
+      "task": "TSK11",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-06T13:00Z",
+      "kind": "created",
+      "task": "TSK05",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-06T13:00Z",
+      "kind": "created",
+      "task": "TSK27",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-06T15:00Z",
+      "kind": "created",
+      "task": "TSK23",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-06T15:30Z",
+      "kind": "approved",
+      "task": "TSK23",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-06T16:00Z",
+      "kind": "claimed",
+      "task": "TSK23",
+      "by": "runner",
+      "note": "claimed by runner-05"
+    },
+    {
+      "at": "2026-11-06T17:00Z",
+      "kind": "approved",
+      "task": "TSK08",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-06T18:00Z",
+      "kind": "review_requested",
+      "task": "TSK23",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-06T19:00Z",
+      "kind": "completed",
+      "task": "TSK23",
+      "by": "reviewer",
+      "note": "reviewed clean"
+    },
+    {
+      "at": "2026-11-07T10:00Z",
+      "kind": "created",
+      "task": "TSK18",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-07T10:00Z",
+      "kind": "commented",
+      "task": "TSK04",
+      "by": "human",
+      "note": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe."
+    },
+    {
+      "at": "2026-11-07T12:00Z",
+      "kind": "created",
+      "task": "TSK12",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-07T14:00Z",
+      "kind": "created",
+      "task": "TSK06",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-07T16:00Z",
+      "kind": "created",
+      "task": "TSK24",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-07T16:30Z",
+      "kind": "approved",
+      "task": "TSK24",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-07T17:00Z",
+      "kind": "claimed",
+      "task": "TSK24",
+      "by": "runner",
+      "note": "claimed by runner-06"
+    },
+    {
+      "at": "2026-11-07T18:00Z",
+      "kind": "approved",
+      "task": "TSK09",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-07T19:00Z",
+      "kind": "review_requested",
+      "task": "TSK24",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-07T20:00Z",
+      "kind": "approved",
+      "task": "TSK25",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-07T20:00Z",
+      "kind": "completed",
+      "task": "TSK24",
+      "by": "reviewer",
+      "note": "reviewed clean"
+    },
+    {
+      "at": "2026-11-07T20:30Z",
+      "kind": "claimed",
+      "task": "TSK25",
+      "by": "runner",
+      "note": "claimed by runner-07"
+    },
+    {
+      "at": "2026-11-07T20:50Z",
+      "kind": "review_requested",
+      "task": "TSK25",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-07T21:00Z",
+      "kind": "completed",
+      "task": "TSK25",
+      "by": "reviewer",
+      "note": "reviewed clean"
+    },
+    {
+      "at": "2026-11-08T08:30Z",
+      "kind": "approved",
+      "task": "TSK26",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-08T09:00Z",
+      "kind": "claimed",
+      "task": "TSK26",
+      "by": "runner",
+      "note": "claimed by runner-08"
+    },
+    {
+      "at": "2026-11-08T11:00Z",
+      "kind": "review_requested",
+      "task": "TSK26",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-08T12:00Z",
+      "kind": "completed",
+      "task": "TSK26",
+      "by": "reviewer",
+      "note": "reviewed clean"
+    },
+    {
+      "at": "2026-11-09T08:30Z",
+      "kind": "approved",
+      "task": "TSK10",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-09T09:00Z",
+      "kind": "claimed",
+      "task": "TSK10",
+      "by": "runner",
+      "note": "claimed by runner-01"
+    },
+    {
+      "at": "2026-11-09T13:00Z",
+      "kind": "commented",
+      "task": "TSK10",
+      "by": "runner",
+      "note": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe."
+    },
+    {
+      "at": "2026-11-10T08:30Z",
+      "kind": "approved",
+      "task": "TSK11",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-10T08:30Z",
+      "kind": "approved",
+      "task": "TSK13",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-10T09:00Z",
+      "kind": "claimed",
+      "task": "TSK11",
+      "by": "runner",
+      "note": "claimed by runner-02"
+    },
+    {
+      "at": "2026-11-10T09:00Z",
+      "kind": "claimed",
+      "task": "TSK13",
+      "by": "runner",
+      "note": "claimed by runner-01"
+    },
+    {
+      "at": "2026-11-10T13:00Z",
+      "kind": "commented",
+      "task": "TSK11",
+      "by": "runner",
+      "note": "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip."
+    },
+    {
+      "at": "2026-11-10T16:00Z",
+      "kind": "review_requested",
+      "task": "TSK13",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-10T16:00Z",
+      "kind": "finding_raised",
+      "task": "TSK13",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-11T08:30Z",
+      "kind": "approved",
+      "task": "TSK12",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-11T08:30Z",
+      "kind": "approved",
+      "task": "TSK14",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-11T09:00Z",
+      "kind": "claimed",
+      "task": "TSK12",
+      "by": "runner",
+      "note": "claimed by runner-03"
+    },
+    {
+      "at": "2026-11-11T09:00Z",
+      "kind": "claimed",
+      "task": "TSK14",
+      "by": "runner",
+      "note": "claimed by runner-02"
+    },
+    {
+      "at": "2026-11-11T09:00Z",
+      "kind": "commented",
+      "task": "TSK13",
+      "by": "runner",
+      "note": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe. The ==key finding== is marked for the next round."
+    },
+    {
+      "at": "2026-11-11T12:00Z",
+      "kind": "commented",
+      "task": "TSK06",
+      "by": "human",
+      "note": "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum."
+    },
+    {
+      "at": "2026-11-11T13:00Z",
+      "kind": "commented",
+      "task": "TSK12",
+      "by": "runner",
+      "note": "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum."
+    },
+    {
+      "at": "2026-11-11T16:00Z",
+      "kind": "review_requested",
+      "task": "TSK14",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-11T16:00Z",
+      "kind": "finding_raised",
+      "task": "TSK14",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-12T08:30Z",
+      "kind": "approved",
+      "task": "TSK15",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-12T09:00Z",
+      "kind": "claimed",
+      "task": "TSK15",
+      "by": "runner",
+      "note": "claimed by runner-03"
+    },
+    {
+      "at": "2026-11-12T09:00Z",
+      "kind": "commented",
+      "task": "TSK14",
+      "by": "runner",
+      "note": "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip."
+    },
+    {
+      "at": "2026-11-12T16:00Z",
+      "kind": "review_requested",
+      "task": "TSK15",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-12T16:00Z",
+      "kind": "finding_raised",
+      "task": "TSK15",
+      "by": "reviewer",
+      "note": "raised FIND-03"
+    },
+    {
+      "at": "2026-11-13T08:30Z",
+      "kind": "approved",
+      "task": "TSK16",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-13T09:00Z",
+      "kind": "claimed",
+      "task": "TSK16",
+      "by": "runner",
+      "note": "claimed by runner-02"
+    },
+    {
+      "at": "2026-11-13T09:00Z",
+      "kind": "commented",
+      "task": "TSK15",
+      "by": "runner",
+      "note": "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum."
+    },
+    {
+      "at": "2026-11-13T09:30Z",
+      "kind": "approved",
+      "task": "TSK17",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-13T10:00Z",
+      "kind": "claimed",
+      "task": "TSK17",
+      "by": "runner",
+      "note": "claimed by runner-03"
+    },
+    {
+      "at": "2026-11-13T15:00Z",
+      "kind": "review_requested",
+      "task": "TSK16",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-13T16:00Z",
+      "kind": "review_requested",
+      "task": "TSK17",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-13T17:00Z",
+      "kind": "finding_raised",
+      "task": "TSK16",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-13T18:00Z",
+      "kind": "finding_raised",
+      "task": "TSK17",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-14T00:30Z",
+      "kind": "approved",
+      "task": "TSK19",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-14T01:00Z",
+      "kind": "claimed",
+      "task": "TSK19",
+      "by": "runner",
+      "note": "claimed by runner-03"
+    },
+    {
+      "at": "2026-11-14T05:00Z",
+      "kind": "review_requested",
+      "task": "TSK19",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-14T06:00Z",
+      "kind": "finding_raised",
+      "task": "TSK19",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-14T06:30Z",
+      "kind": "remediated",
+      "task": "TSK19",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-14T07:00Z",
+      "kind": "finding_raised",
+      "task": "TSK19",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-14T07:30Z",
+      "kind": "remediated",
+      "task": "TSK19",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-14T08:00Z",
+      "kind": "finding_raised",
+      "task": "TSK19",
+      "by": "reviewer",
+      "note": "raised FIND-03"
+    },
+    {
+      "at": "2026-11-14T08:30Z",
+      "kind": "approved",
+      "task": "TSK18",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-14T08:30Z",
+      "kind": "remediated",
+      "task": "TSK19",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-14T09:00Z",
+      "kind": "claimed",
+      "task": "TSK09",
+      "by": "runner",
+      "note": "claimed by runner-09"
+    },
+    {
+      "at": "2026-11-14T09:00Z",
+      "kind": "claimed",
+      "task": "TSK18",
+      "by": "runner",
+      "note": "claimed by runner-04"
+    },
+    {
+      "at": "2026-11-14T09:00Z",
+      "kind": "finding_raised",
+      "task": "TSK19",
+      "by": "reviewer",
+      "note": "raised FIND-04"
+    },
+    {
+      "at": "2026-11-14T09:30Z",
+      "kind": "remediated",
+      "task": "TSK19",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-14T10:00Z",
+      "kind": "finding_raised",
+      "task": "TSK19",
+      "by": "reviewer",
+      "note": "raised FIND-05"
+    },
+    {
+      "at": "2026-11-14T10:00Z",
+      "kind": "escalated",
+      "task": "TSK19",
+      "by": "reviewer",
+      "note": "the review budget is spent"
+    },
+    {
+      "at": "2026-11-14T12:00Z",
+      "kind": "commented",
+      "task": "TSK19",
+      "by": "reviewer",
+      "note": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe."
+    },
+    {
+      "at": "2026-11-14T15:00Z",
+      "kind": "review_requested",
+      "task": "TSK18",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-14T17:00Z",
+      "kind": "finding_raised",
+      "task": "TSK18",
+      "by": "reviewer",
+      "note": "raised FIND-03"
+    },
+    {
+      "at": "2026-11-15T00:30Z",
+      "kind": "approved",
+      "task": "TSK20",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-15T01:00Z",
+      "kind": "claimed",
+      "task": "TSK20",
+      "by": "runner",
+      "note": "claimed by runner-04"
+    },
+    {
+      "at": "2026-11-15T05:00Z",
+      "kind": "review_requested",
+      "task": "TSK20",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-15T06:00Z",
+      "kind": "finding_raised",
+      "task": "TSK20",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-15T06:30Z",
+      "kind": "remediated",
+      "task": "TSK20",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-15T07:00Z",
+      "kind": "finding_raised",
+      "task": "TSK20",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-15T07:30Z",
+      "kind": "remediated",
+      "task": "TSK20",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-15T08:00Z",
+      "kind": "finding_raised",
+      "task": "TSK20",
+      "by": "reviewer",
+      "note": "raised FIND-03"
+    },
+    {
+      "at": "2026-11-15T08:30Z",
+      "kind": "remediated",
+      "task": "TSK20",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-15T09:00Z",
+      "kind": "finding_raised",
+      "task": "TSK20",
+      "by": "reviewer",
+      "note": "raised FIND-04"
+    },
+    {
+      "at": "2026-11-15T09:30Z",
+      "kind": "remediated",
+      "task": "TSK20",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-15T10:00Z",
+      "kind": "finding_raised",
+      "task": "TSK20",
+      "by": "reviewer",
+      "note": "raised FIND-05"
+    },
+    {
+      "at": "2026-11-15T10:00Z",
+      "kind": "escalated",
+      "task": "TSK20",
+      "by": "reviewer",
+      "note": "the review budget is spent"
+    },
+    {
+      "at": "2026-11-15T12:00Z",
+      "kind": "commented",
+      "task": "TSK20",
+      "by": "reviewer",
+      "note": "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip."
+    },
+    {
+      "at": "2026-11-16T00:30Z",
+      "kind": "approved",
+      "task": "TSK21",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-16T01:00Z",
+      "kind": "claimed",
+      "task": "TSK21",
+      "by": "runner",
+      "note": "claimed by runner-05"
+    },
+    {
+      "at": "2026-11-16T05:00Z",
+      "kind": "review_requested",
+      "task": "TSK21",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-16T06:00Z",
+      "kind": "finding_raised",
+      "task": "TSK21",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-16T06:30Z",
+      "kind": "remediated",
+      "task": "TSK21",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-16T07:00Z",
+      "kind": "finding_raised",
+      "task": "TSK21",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-16T07:30Z",
+      "kind": "remediated",
+      "task": "TSK21",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-16T08:00Z",
+      "kind": "finding_raised",
+      "task": "TSK21",
+      "by": "reviewer",
+      "note": "raised FIND-03"
+    },
+    {
+      "at": "2026-11-16T08:30Z",
+      "kind": "remediated",
+      "task": "TSK21",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-16T09:00Z",
+      "kind": "finding_raised",
+      "task": "TSK21",
+      "by": "reviewer",
+      "note": "raised FIND-04"
+    },
+    {
+      "at": "2026-11-16T09:30Z",
+      "kind": "remediated",
+      "task": "TSK21",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-16T10:00Z",
+      "kind": "finding_raised",
+      "task": "TSK21",
+      "by": "reviewer",
+      "note": "raised FIND-05"
+    },
+    {
+      "at": "2026-11-16T10:00Z",
+      "kind": "escalated",
+      "task": "TSK21",
+      "by": "reviewer",
+      "note": "the review budget is spent"
+    },
+    {
+      "at": "2026-11-16T12:00Z",
+      "kind": "approved",
+      "task": "TSK29",
+      "by": "human",
+      "note": "left the human lane"
+    },
+    {
+      "at": "2026-11-16T12:00Z",
+      "kind": "commented",
+      "task": "TSK21",
+      "by": "reviewer",
+      "note": "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum."
+    }
+  ]
+}

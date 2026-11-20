@@ -15,6 +15,7 @@ project as-is.
 ```
 mock-data/
   coding-crew/
+    activity.json
     work/TSK*.json
 ```
 
@@ -75,7 +76,15 @@ let task = store.load("TSK07")?;
 `crates/core/tests/mock_data.rs` checks the set: it loads, covers every
 phase, keeps the gates, and has a sound dependency graph.
 
+## The journal
+
+`coding-crew/activity.json` is the project's activity journal, beside `work/`
+and not inside it. Its events follow the fixtures' own histories: a task's
+`created` comes first, its events keep the order its status history has them,
+and a claim comes after the completion of the work it waits on. The set is
+longer than the Overview's activity block shows, so the left-out count is
+real. The kinds are provisional; nothing writes the journal yet.
+
 ## Not included
 
-- `activity.json` — the journal format is not defined yet
 - `config.json` — not defined yet

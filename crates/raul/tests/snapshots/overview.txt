@@ -10,18 +10,18 @@
 ┌smaller tasks───────────────────────────────────┐│1 task an agent could claim right now           │
 │smaller tasks by kind                           ││approved, free, dependencies done               │
 │idea        1                                   │└────────────────────────────────────────────────┘
-│feature     2                                   │┌next────────────────────────────────────────────┐
-│bug         2                                   ││TSK29 Lorem ipsum dolor sit amet                │
-└────────────────────────────────────────────────┘│the first task of the path                      │
+│feature     2                                   │┌activity────────────────────────────────────────┐
+│bug         2                                   ││+129 earlier events                             │
+└────────────────────────────────────────────────┘│2026-11-16T09:30Z remediated TSK21 answered the…│
+                                                  │2026-11-16T10:00Z finding_raised TSK21 raised F…│
+                                                  │2026-11-16T10:00Z escalated TSK21 the review bu…│
+                                                  │2026-11-16T12:00Z approved TSK29 left the human…│
+                                                  │2026-11-16T12:00Z commented TSK21 Et harum quid…│
                                                   └────────────────────────────────────────────────┘
-
-
-
-
-
-
-
-
+                                                  ┌next────────────────────────────────────────────┐
+                                                  │TSK29 Lorem ipsum dolor sit amet                │
+                                                  │the first task of the path                      │
+                                                  └────────────────────────────────────────────────┘
 
 
 

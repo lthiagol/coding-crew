@@ -1342,6 +1342,7 @@ mod tests {
             tasks,
             items,
             errors: Vec::new(),
+            activity: None,
             missing: None,
         }
     }

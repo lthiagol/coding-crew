@@ -1186,6 +1186,7 @@ mod tests {
             tasks,
             items: Vec::new(),
             errors: Vec::new(),
+            activity: None,
             missing: None,
         }
     }

@@ -71,4 +71,17 @@ fn the_generator_reproduces_the_committed_tree_byte_for_byte() {
             "{name} differs from the committed fixture"
         );
     }
+
+    // The journal is generated beside the work folder, and reproduces too.
+    let committed_activity = root.join("mock-data/coding-crew/activity.json");
+    let generated_activity = scratch.join("coding-crew/activity.json");
+    assert!(
+        committed_activity.is_file(),
+        "the committed journal is missing"
+    );
+    assert_eq!(
+        fs::read(&generated_activity).expect("reading the generated journal"),
+        fs::read(&committed_activity).expect("reading the committed journal"),
+        "activity.json differs from the committed journal"
+    );
 }

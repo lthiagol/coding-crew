@@ -83,5 +83,7 @@ diff and in a shell glob, without the path being parsed.
 
 ### Follow-up
 
-- The activity journal, project config and any other non-task artifact will need
-  a home. This ADR does not decide it; the folder stays flat until then.
+- The activity journal's home is settled for the mock: `coding-crew/activity.json`,
+  a sibling of `work/` — see [task-model.md § 11.1](../tasks/task-model.md#111-the-journal-provisional).
+  Project config and any other non-task artifact still need a home. This ADR
+  does not decide that; the folder stays flat until then.

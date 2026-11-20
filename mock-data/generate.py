@@ -13,9 +13,11 @@ Run from the repo root:
 import json
 import pathlib
 import shutil
+from datetime import datetime, timedelta
 
 ROOT = pathlib.Path(__file__).resolve().parent
 TASKS = ROOT / "coding-crew" / "work"
+ACTIVITY = ROOT / "coding-crew" / "activity.json"
 
 TITLES = [
     "Lorem ipsum dolor sit amet",
@@ -336,6 +338,189 @@ def check_claims_follow_dependencies(tasks):
                 dependency,
                 done["status_since"],
             )
+
+
+# The journal's event kinds, in the order one task's history has them when
+# they share an instant. The kinds are provisional: the writer settles them.
+EVENT_KINDS = [
+    "created",
+    "approved",
+    "claimed",
+    "review_requested",
+    "finding_raised",
+    "remediated",
+    "commented",
+    "escalated",
+    "completed",
+]
+EVENT_RANK = {kind: rank for rank, kind in enumerate(EVENT_KINDS)}
+
+
+def stamp(text):
+    return datetime.strptime(text, "%Y-%m-%dT%H:%MZ")
+
+
+def at_minute(moment):
+    return moment.replace(second=0, microsecond=0).strftime("%Y-%m-%dT%H:%MZ")
+
+
+def minutes_before(text, minutes):
+    return at_minute(stamp(text) - timedelta(minutes=minutes))
+
+
+def between(first, second):
+    """The whole minute midway between two events."""
+    return at_minute(stamp(first) + (stamp(second) - stamp(first)) / 2)
+
+
+def event(at, kind, task_id, by, note=""):
+    record = {"at": at, "kind": kind, "task": task_id, "by": by}
+    if note:
+        record["note"] = note
+    return record
+
+
+def actor(author):
+    """The role or kind an event names from a fixture's author."""
+    if author.startswith("runner"):
+        return "runner"
+    if author.startswith("reviewer"):
+        return "reviewer"
+    return "human"
+
+
+def approval_at(item):
+    """When the task left the human lane, from its own history."""
+    for note in reversed(item["notes"]):
+        if note["body"].startswith("Approved by"):
+            return note["at"]
+    if item["status"] == "approved":
+        return item["status_since"]
+    if item.get("claim"):
+        # An older fixture records the claim but not the approval: the
+        # claim is the next event, and the approval is shortly before it.
+        return minutes_before(item["claim"]["at"], 30)
+    return None
+
+
+def activity_events(tasks):
+    """The journal of the tasks' own histories, oldest first."""
+    events = []
+    for item in tasks:
+        task_id = item["id"]
+        events.append(event(item["created"], "created", task_id, "human"))
+        approved = approval_at(item)
+        if approved:
+            events.append(
+                event(approved, "approved", task_id, "human", "left the human lane")
+            )
+        claim = item.get("claim")
+        if claim:
+            events.append(
+                event(claim["at"], "claimed", task_id, "runner", f"claimed by {claim['by']}")
+            )
+        rounds = item.get("review", {}).get("rounds", [])
+        if rounds:
+            events.append(
+                event(rounds[0]["at"], "review_requested", task_id, "runner", "sent to review")
+            )
+        for finding in item.get("review", {}).get("findings", []):
+            events.append(
+                event(
+                    finding["created"],
+                    "finding_raised",
+                    task_id,
+                    "reviewer",
+                    f"raised {finding['id']}",
+                )
+            )
+        # A re-review is the runner answering a finding and sending the work
+        # back: it sits between two external rounds.
+        external = [round for round in rounds if round["kind"] == "external"]
+        for first, second in zip(external, external[1:]):
+            events.append(
+                event(
+                    between(first["at"], second["at"]),
+                    "remediated",
+                    task_id,
+                    "runner",
+                    "answered the findings",
+                )
+            )
+        if item["status"] == "needs-human":
+            events.append(
+                event(
+                    item["status_since"],
+                    "escalated",
+                    task_id,
+                    "reviewer",
+                    "the review budget is spent",
+                )
+            )
+        if item["status"] == "done":
+            events.append(
+                event(item["status_since"], "completed", task_id, "reviewer", "reviewed clean")
+            )
+        for note in item.get("notes", []):
+            if note["body"].startswith("Groomed by") or note["body"].startswith(
+                "Approved by"
+            ):
+                continue
+            # The journal's note is one line, so a multi-line note gives its
+            # first line.
+            body = note["body"].splitlines()[0] if note["body"] else ""
+            events.append(
+                event(note["at"], "commented", task_id, actor(note["author"]), body)
+            )
+    events.sort(key=lambda record: (record["at"], EVENT_RANK[record["kind"]], record["task"]))
+    return events
+
+
+def check_activity(tasks, events):
+    """The journal tells the chronology the fixtures already tell."""
+    by_id = {item["id"]: item for item in tasks}
+    for record in events:
+        assert record["kind"] in EVENT_RANK, record
+        assert record["task"] in by_id, record
+        item = by_id[record["task"]]
+        assert record["at"] >= item["created"], (record, item["created"])
+    for task_id, item in by_id.items():
+        task_events = [record for record in events if record["task"] == task_id]
+        assert task_events, f"{task_id} has no activity"
+        assert task_events[0]["kind"] == "created", (task_id, task_events[0])
+        stamps = [record["at"] for record in task_events]
+        assert stamps == sorted(stamps), (task_id, stamps)
+        kinds = [record["kind"] for record in task_events]
+        if "claimed" in kinds:
+            assert "approved" in kinds, task_id
+            assert kinds.index("approved") < kinds.index("claimed"), task_id
+            if "review_requested" in kinds:
+                assert kinds.index("claimed") < kinds.index("review_requested"), task_id
+        if item["status"] == "done":
+            assert "completed" in kinds, task_id
+        if item["status"] == "needs-human":
+            assert "escalated" in kinds, task_id
+    # The dependency rule holds in time as it does in the fixtures: a claim
+    # comes after the completion of every done task it waits on.
+    for record in events:
+        if record["kind"] != "claimed":
+            continue
+        item = by_id[record["task"]]
+        for dependency in item["depends_on"]:
+            completed = [
+                done["at"]
+                for done in events
+                if done["task"] == dependency and done["kind"] == "completed"
+            ]
+            assert completed, (record["task"], dependency, "not completed")
+            assert record["at"] > completed[0], (
+                record["task"],
+                record["at"],
+                dependency,
+                completed[0],
+            )
+    # The block shows the last few: the source has more than it shows.
+    assert len(events) > 5, len(events)
 
 
 def build():
@@ -1006,6 +1191,12 @@ def main():
         path = TASKS / f"{record['id']}-{record['slug']}.json"
         path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n")
         print(path.relative_to(ROOT))
+    events = activity_events(tasks)
+    check_activity(tasks, events)
+    ACTIVITY.write_text(
+        json.dumps({"events": events}, indent=2, ensure_ascii=False) + "\n"
+    )
+    print(ACTIVITY.relative_to(ROOT))
 
 
 if __name__ == "__main__":

@@ -512,6 +512,47 @@ lives in the project it describes, next to the code it is about.
 The store is **discovered**, not configured: from any path, walk up until a
 `coding-crew` folder appears.
 
+### 11.1 The journal (provisional)
+
+```
+<project>/coding-crew/
+  activity.json         # the journal
+  work/
+    TSK01-<slug>.json   # a task
+```
+
+The journal sits beside `work/`, not inside it: the work folder holds one file
+per work unit, and a journal in there would be read as a task. It is optional —
+a project without one has no journal, not a broken one.
+
+The file is one object with an `events` array, oldest first.
+
+| field | rule |
+|---|---|
+| `at` | when it happened, RFC 3339 |
+| `kind` | one of the kinds below |
+| `task` | the task id it happened to — `TSK01` |
+| `by` | who did it: the actor's role or kind — `runner`, `reviewer`, `human`, `orchestrator` |
+| `note` | optional, one line of free text |
+
+The kinds are **provisional**: nothing writes the journal yet, and the writer
+settles them.
+
+| kind | what happened |
+|---|---|
+| `created` | a task was created |
+| `approved` | a task left the human lane and became claimable |
+| `claimed` | an agent took a task |
+| `review_requested` | a runner sent the work to review |
+| `finding_raised` | a reviewer raised a finding |
+| `remediated` | a runner answered a finding and sent the work back |
+| `escalated` | the work needs a human again |
+| `completed` | the task is done |
+| `commented` | someone left a note on the task |
+
+Each event names a task and covers a step the lifecycle already has; the kinds
+add no state.
+
 ## 12. Derived, never stored
 
 | view | derived from |
@@ -573,7 +614,6 @@ work is in `TODO.txt`.
 | **Not raul's screens** | the tabs, the columns and the key bindings are not defined yet |
 | **Not the smaller-task model** | that is [smaller-tasks.md](smaller-tasks.md) |
 | **Not the role model** | that is [roles/roles.md](../roles/roles.md) |
-| **Not the journal** | `activity.json` and its event kinds are not defined yet |
 | **Not the project config** | not defined yet |
 | **Not autopilot** | the orchestrator role exists; what it drives does not |
 
@@ -581,7 +621,6 @@ work is in `TODO.txt`.
 
 **Not defined yet:**
 
-- journal event kinds (`activity.json`) and its home in the work folder
 - project config
 - talita's operation surface
 - autopilot

@@ -8,10 +8,10 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 
-use coding_crew_core::Status;
+use coding_crew_core::{ActivityEvent, Status};
 
 use crate::data::{Missing, Reason, Work};
-use coding_crew_theme::text::cut_to;
+use coding_crew_theme::text::{cut_to, head_to, text_width};
 use coding_crew_theme::{Theme, block_title_style, phase_style, reason_style};
 
 /// Below this width the blocks are stacked in one column.
@@ -20,6 +20,8 @@ const NARROW: u16 = 58;
 const BORDER: u16 = 2;
 /// The columns the label of a count takes, so the counts line up.
 const LABEL_WIDTH: usize = 12;
+/// The events the activity block shows: the last few of the journal.
+const ACTIVITY_SHOWN: usize = 5;
 
 /// Draw the tab.
 ///
@@ -189,6 +191,7 @@ fn render_wide(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, now: &
     let right = vec![
         needs_you_panel(work, columns[1].width, theme),
         claimable_panel(work, theme, now),
+        activity_panel(work, columns[1].width, theme),
         next_panel(work, theme, now),
     ];
     let fits = column_fits(
@@ -221,6 +224,10 @@ fn render_stacked(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, now
         panels.push(errors_panel(work, theme));
     }
     panels.push(kinds_panel(work, area.width, theme));
+    // The activity block is the last to give up its rows: a short pane keeps
+    // the counts and the next task, and the block says how many events it
+    // left out.
+    panels.push(activity_panel(work, area.width, theme));
     let width = area.width.saturating_sub(BORDER);
     let fits = column_fits(&panels, width, area.height);
     let area = summary_area(frame, area, work, fits, theme, now);
@@ -906,6 +913,121 @@ fn claimable_panel(work: &Work, theme: &Theme, now: &str) -> Panel {
     }
 }
 
+/// The last few events of the journal, newest last.
+///
+/// The block is the record's own: it takes the last events in the file's
+/// order, and never adds, sorts or invents one. An optional journal that is
+/// not there says so in one line, and says nothing else.
+fn activity_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
+    let events = work
+        .activity
+        .as_ref()
+        .map(|activity| activity.events.as_slice())
+        .unwrap_or(&[]);
+    if events.is_empty() {
+        return Panel {
+            title: "activity",
+            lines: vec![Line::from(Span::styled("no activity yet", theme.text.dim))],
+            compact: None,
+            compact_whole: false,
+            optional: 0,
+            atomic: true,
+            more: "events",
+            marker: Some(Marker {
+                text: "no activity yet".to_string(),
+                style: theme.text.dim,
+            }),
+        };
+    }
+    let shown = events.len().min(ACTIVITY_SHOWN);
+    let hidden = events.len() - shown;
+    let mut lines = Vec::new();
+    if hidden > 0 {
+        lines.push(Line::from(Span::styled(
+            format!("+{hidden} earlier {}", event_word(hidden)),
+            theme.text.dim,
+        )));
+    }
+    lines.extend(
+        events[events.len() - shown..]
+            .iter()
+            .map(|event| event_line(event, width.saturating_sub(BORDER), theme)),
+    );
+    let count = events.len();
+    Panel {
+        title: "activity",
+        lines,
+        compact: None,
+        compact_whole: false,
+        optional: 0,
+        // The block shows its last few events whole or not at all: a cut
+        // would keep the oldest and hide the newest, which is not the tail.
+        atomic: true,
+        more: "events",
+        marker: Some(Marker {
+            text: format!("activity not shown: {count} {}", event_word(count)),
+            style: theme.text.dim,
+        }),
+    }
+}
+
+/// One event: when it happened, the kind, the task, and the note when there
+/// is one. The event is one row: a line that does not fit is cut, never
+/// wrapped into the rows of the event below it.
+fn event_line(event: &ActivityEvent, width: u16, theme: &Theme) -> Line<'static> {
+    let mut spans = vec![
+        Span::styled(format!("{} ", event.at), theme.text.dim),
+        Span::styled(format!("{} ", event.kind.as_str()), theme.semantic.info),
+        Span::styled(event.task.clone(), theme.text.strong),
+    ];
+    if let Some(note) = event.note.as_deref().filter(|note| !note.is_empty()) {
+        spans.push(Span::styled(format!(" {note}"), theme.text.normal));
+    }
+    fit_line(spans, width)
+}
+
+/// The spans, cut to one row of `width` columns.
+///
+/// The styles are kept up to the cut; the cut is on a grapheme boundary, with
+/// an ellipsis where the text continues.
+fn fit_line(spans: Vec<Span<'static>>, width: u16) -> Line<'static> {
+    let width = usize::from(width);
+    let total: usize = spans
+        .iter()
+        .map(|span| text_width(span.content.as_ref()))
+        .sum();
+    if total <= width {
+        return Line::from(spans);
+    }
+    if width == 0 {
+        return Line::from(Span::raw(""));
+    }
+    let mut out = Vec::new();
+    let mut used = 0usize;
+    for span in spans {
+        if used >= width {
+            break;
+        }
+        let style = span.style;
+        let text = span.content.into_owned();
+        let span_width = text_width(&text);
+        if used + span_width <= width {
+            used += span_width;
+            out.push(Span::styled(text, style));
+        } else {
+            let head = head_to(&text, width - used - 1);
+            out.push(Span::styled(format!("{head}…"), style));
+            break;
+        }
+    }
+    Line::from(out)
+}
+
+/// The word for a number of events.
+fn event_word(count: usize) -> &'static str {
+    if count == 1 { "event" } else { "events" }
+}
+
 /// What happens next: the first claimable task at `now`.
 fn next_panel(work: &Work, theme: &Theme, now: &str) -> Panel {
     let lines = match work.next_at(now) {
@@ -1092,6 +1214,7 @@ mod tests {
             tasks: Vec::new(),
             items: Vec::new(),
             errors: Vec::new(),
+            activity: None,
             missing: Some(reason),
         }
     }
@@ -1142,6 +1265,114 @@ mod tests {
         assert!(text.contains("TSK29"), "{text}");
     }
 
+    /// A work folder whose journal holds the events given, newest last as
+    /// the record keeps them.
+    fn with_activity(events: Vec<coding_crew_core::ActivityEvent>) -> Work {
+        let mut work = mock_work();
+        work.activity = Some(coding_crew_core::Activity { events });
+        work
+    }
+
+    /// One event, with a note that names it.
+    fn journal_event(n: usize) -> coding_crew_core::ActivityEvent {
+        coding_crew_core::ActivityEvent {
+            at: format!("2026-11-{:02}T{:02}:00Z", 1 + n % 10, 9 + n % 8),
+            kind: coding_crew_core::EventKind::Commented,
+            task: "TSK01".to_string(),
+            by: "human".to_string(),
+            note: Some(format!("note {n}")),
+        }
+    }
+
+    #[test]
+    fn the_overview_shows_the_last_events_and_how_many_it_left_out() {
+        let work = with_activity((1..=8).map(journal_event).collect());
+        let text = draw(&work, 100, 60).join("\n");
+        assert!(text.contains("activity"), "{text}");
+        // The last five are shown, oldest first, so the newest is last.
+        assert!(text.contains("+3 earlier events"), "{text}");
+        let positions: Vec<usize> = (4..=8)
+            .map(|n| {
+                text.find(&format!("note {n}"))
+                    .unwrap_or_else(|| panic!("note {n} is not drawn: {text}"))
+            })
+            .collect();
+        assert!(
+            positions.windows(2).all(|pair| pair[0] < pair[1]),
+            "the events are not in the record's order: {text}"
+        );
+        assert!(!text.contains("note 3"), "an older event is drawn: {text}");
+    }
+
+    #[test]
+    fn the_activity_block_keeps_the_record_order_and_shows_no_invented_event() {
+        let mut events: Vec<coding_crew_core::ActivityEvent> = (1..=8).map(journal_event).collect();
+        // The record is not sorted here: the block must not sort it either.
+        events.swap(4, 5);
+        let work = with_activity(events);
+        let text = draw(&work, 100, 60).join("\n");
+        let first = text.find("note 6").expect("note 6");
+        let second = text.find("note 5").expect("note 5");
+        assert!(first < second, "the block reordered the record: {text}");
+        // Every drawn event is one the file holds.
+        for n in 4..=8 {
+            assert!(text.contains(&format!("note {n}")), "note {n}: {text}");
+        }
+    }
+
+    #[test]
+    fn without_a_journal_the_activity_block_says_no_activity_yet() {
+        for activity in [None, Some(coding_crew_core::Activity::default())] {
+            let mut work = mock_work();
+            work.activity = activity;
+            let text = draw(&work, 100, 40).join("\n");
+            assert!(text.contains("no activity yet"), "{text}");
+            assert!(!text.contains("earlier"), "{text}");
+            assert!(!text.contains("not shown: "), "{text}");
+            assert!(!text.contains("created "), "an event was invented: {text}");
+        }
+    }
+
+    #[test]
+    fn the_activity_block_reads_the_record_on_every_draw() {
+        // The block keeps no state: the same frame drawn twice shows what
+        // the record holds at that moment.
+        let mut work = with_activity(vec![journal_event(1)]);
+        let first = draw(&work, 100, 60).join("\n");
+        assert!(first.contains("note 1"), "{first}");
+        assert!(!first.contains("note 2"), "{first}");
+        work.activity
+            .as_mut()
+            .expect("a journal")
+            .events
+            .push(journal_event(2));
+        let second = draw(&work, 100, 60).join("\n");
+        assert!(
+            second.contains("note 2"),
+            "the block kept a state: {second}"
+        );
+    }
+
+    #[test]
+    fn a_dropped_activity_block_says_how_many_events_it_left_out() {
+        let work = with_activity((1..=8).map(journal_event).collect());
+        let panel = activity_panel(&work, 50, &theme());
+        let marker = panel.marker.as_ref().expect("a marker");
+        assert!(
+            marker.text.contains("activity not shown"),
+            "{}",
+            marker.text
+        );
+        assert!(marker.text.contains('8'), "{}", marker.text);
+        // A project without a journal says the same one thing when the block
+        // does not fit.
+        let mut work = mock_work();
+        work.activity = None;
+        let panel = activity_panel(&work, 50, &theme());
+        let marker = panel.marker.as_ref().expect("a marker");
+        assert_eq!(marker.text, "no activity yet");
+    }
+
     #[test]
     fn the_overview_draws_from_one_instant() {
         // A lease expiring at a boundary: before it the task is held, at it
@@ -1162,6 +1393,7 @@ mod tests {
             tasks: vec![task],
             items: Vec::new(),
             errors: Vec::new(),
+            activity: None,
             missing: None,
         };
         let held = "2029-12-31T23:59:59Z";

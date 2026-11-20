@@ -3,6 +3,7 @@
 //! The model is specified in `docs/tasks/task-model.md`; this crate is its
 //! code. Both frontends — talita (CLI) and raul (TUI) — build on it.
 
+pub mod activity;
 pub mod actor;
 pub mod clock;
 pub mod item;
@@ -11,6 +12,7 @@ pub mod markdown;
 pub mod store;
 pub mod task;
 
+pub use activity::{Activity, ActivityEvent, EventKind};
 pub use actor::{Actor, ActorKind, Role};
 pub use clock::{now_rfc3339, parse_rfc3339};
 pub use item::{Item, ItemError, ItemKind, ItemStatus};
