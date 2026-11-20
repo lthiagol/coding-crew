@@ -780,6 +780,36 @@ WHERE WE ARE
   copied verbatim from raul and can drift, and the project has a rule
   against two copies of one thing; and the core dependency is declared but
   unused until the crew unit lands.
+  Unit closed: hugo's runtime record and the crew (plan 38). Two build and
+  review rounds. The crew is runtime state, so it comes from a runtime
+  record the flow would write - coding-crew/runtime.json, beside the
+  journal, its types in crates/core, documented as provisional because
+  nothing writes it yet. The main pane leads with the crew, the reading the
+  human picked: one row per agent with its role, its model, what it holds
+  and how long it has held it. The crew's size is a composition and not a
+  number - three agents means one per role, two means the orchestrator
+  reviews, one means the human reviews, because an agent cannot review
+  itself - and a crew the rule does not cover says what it is. A held task
+  belongs to the crew and never to the queue; the queue carries an id and a
+  status and no content, which belongs to raul. Then the round, the budget
+  and the findings, and the stamp at the foot, which says whether the
+  automation runs and why. The mock is written only through
+  mock-data/generate.py and every number in it is computable from the
+  fixtures. The gate is green: 764 Rust tests and 212 script assertions.
+  The first round found three blocking defects, and one of them was a
+  truthfulness defect: a record that cannot be read read as "nothing is
+  running", so a writer bug that corrupted the record would have shown the
+  governance pane the one thing it exists to hide. Absent and unreadable
+  are different states now. The second was a duration that was not one -
+  "since 09:00Z" for a hold ten days old reads as today - so the row paints
+  the length, from one instant per frame, with the render mode on a fixed
+  instant so the pinned screens do not move with the wall clock. The third
+  was an announcement that named the hidden sets without saying how much
+  was hidden.
+  Two lows stand recorded: the age units now exist twice, re-implemented
+  beside raul's own, and nothing pins the two vocabularies together; and
+  the plain-render plumbing is still copied from raul.
+  Next unit: hugo's configuration and the order (plan 39).
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
@@ -944,7 +974,9 @@ OPEN
   The hugo shell left three lows, none blocking: hugo does not treat ctrl-c
   as quit the way raul does; the plain-render plumbing is copied from raul
   and can drift; and the core dependency is declared but unused until the
-  crew lands.
+  crew lands. The crew round left two more: the age units now exist twice,
+  re-implemented beside raul's own, and nothing pins the two vocabularies
+  together.
   talita's own verbs. Out of scope, and it stays out of scope until it is
   asked for explicitly. Do not start it because the other tabs are done.
 
