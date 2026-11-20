@@ -710,6 +710,29 @@ WHERE WE ARE
   where it would fit beside the keys - 17 and 18 columns on the Needs you
   tab - because the count part carries a fixed three-column gap.
   Next unit: the mocked journal (plan 36).
+  Unit closed: the mocked journal (plan 36). One clean build and review
+  round. The journal lives at coding-crew/activity.json - beside the work
+  folder, not inside it, because the work folder holds one file per work
+  unit - and the path is derived from the store's work folder, not by a new
+  discovery rule. Nine event kinds, each event carrying at, kind, task, by
+  and an optional note, defined provisionally in docs/tasks/task-model.md
+  11.1: the kinds add no state the lifecycle does not have, and they are
+  marked provisional because nothing writes the file yet. The mock is 134
+  events written only through mock-data/generate.py, following the
+  fixtures' own chronology - no event before the task it names exists, and
+  every claim after the dependency's completion - and the generator still
+  reproduces the tree byte for byte. The Overview draws the block: the last
+  five events newest last, one line each, how many it left out, and "no
+  activity yet" alone when there is no journal. The block is a pure
+  function of the record, re-read every redraw.
+  Four lows stand recorded: one event with an unknown kind or a missing
+  field makes the whole journal unreadable, and the kinds are provisional,
+  so writer version-skew blanks the history until the reader catches up; a
+  present but unparseable journal makes the block say "no activity yet"
+  while the errors panel names the file; the mock's approved stamps are
+  minutes before the claim and no fixture holds them; and a comment beside
+  the activity panel inverts the order the panels give up their rows.
+  Next unit: Settings has content (plan 37).
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
@@ -817,10 +840,7 @@ OPEN
   raul, the TUI for the work, is not finished. What is open, in the order
   of the plan:
     - plan 35, the announcements - closed.
-    - plan 36, the mocked journal: the Overview's activity block against a
-      mocked coding-crew/activity.json, written only through
-      mock-data/generate.py. Nothing writes the journal yet; the kinds are
-      provisional until the flow's writer lands.
+    - plan 36, the mocked journal - closed.
     - plan 37, Settings has content: the themes, the keys that work and the
       sort each tab uses, all derived.
   The Backlog review left low follow-ups, none blocking: a one- or two-row
@@ -839,8 +859,14 @@ OPEN
   hidden count at the widths where it would fit beside the keys - 17 and 18
   columns on the Needs you tab - because the count part carries a fixed
   three-column gap.
-  The journal's writer is grooming item G2: activity.json exists in the
-  model, nothing writes it, and the kinds are provisional.
+  The journal's writer is grooming item G2: the kinds are provisional and
+  nothing writes activity.json yet. Four lows from the journal round stand
+  recorded: one unknown kind or missing field blanks the whole history, and
+  the kinds are provisional; a present but unparseable journal makes the
+  block say "no activity yet" while the errors panel names the file; the
+  mock's approved stamps are minutes before the claim and no fixture holds
+  them; and a comment beside the activity panel inverts the order the
+  panels give up their rows.
   The autopilot: the orchestrator role has no job yet.
   The plain-render review left low follow-ups, none blocking: the duplicate-id
   loader test can be made less filesystem-sensitive with more pairs; --width
