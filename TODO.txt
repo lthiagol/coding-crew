@@ -810,6 +810,30 @@ WHERE WE ARE
   beside raul's own, and nothing pins the two vocabularies together; and
   the plain-render plumbing is still copied from raul.
   Next unit: hugo's configuration and the order (plan 39).
+  Unit closed: hugo's configuration and the order (plan 39). One clean build
+  and review round. The configuration is a provisional file in the tool's
+  home, ~/.config/coding-crew/config.json, and hugo writes the defaults when
+  it is absent - the same home it creates on demand. The defaults are the
+  project's own flow: the agents one per role with the models the project
+  runs, pinned against flow/builder.json and flow/reviewer.json; the
+  harness; the review-round limit of five; and the order - the steps and
+  their gates - pinned against docs/roles/roles.md by a test that parses the
+  table, so an edit to either side alone fails the gate. The sidebar shows
+  the four groups in order, reads and changes nothing, cuts a row that does
+  not fit with a marker, names a group it leaves out with its count, and is
+  still dropped whole at a narrow width with the drop announced. The gate is
+  green: 794 Rust tests and 212 script assertions.
+  Six lows stand recorded: the sidebar's unreadable state drops its second
+  row when the pane is one row tall, with no marker; a home that cannot be
+  made names a file that was never touched; two hugo instances on a fresh
+  home share one temporary name and the loser shows a false unreadable
+  state; the configuration is read at startup and not on every redraw, so a
+  human who fixes a broken file keeps seeing the old state until restart;
+  the orchestrator's default model is the reviewer's, a choice the flow has
+  to confirm; and the review-round limit's pin rests on a phrase this unit
+  added to the model doc, so it has no provenance of its own.
+  Next: hugo's shell, its runtime record and its crew, and its
+  configuration are built. The plan holds no open row for raul or hugo.
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
@@ -855,6 +879,18 @@ HAPPENED
   orchestrators commit. The rule: commit the paths you mean - git commit --
   <paths> - or check what is staged before committing, not only what you
   added.
+  /tmp is shared between the projects that run the flow, and this session
+  paid for it: one project's round files sat in the same /tmp/opencode
+  directory as another project's, and a SPEC reviewer read the other
+  project's kickoff and reviewed a unit that does not exist here. The rule:
+  the round files live under a project-prefixed path - /tmp/opencode/cl-<unit>
+  - and a review brief says so in its first line, so a reviewer that guesses
+  a path finds nothing to guess wrong about.
+  The known defect came back: both reviewers prompts arrived unsubmitted,
+  sitting in the input box while herdr reported the panes idle, and the
+  wake commands ran to their bound. The recovery worked - a bare Enter
+  through herdr pane send-text, and then the turns ran to the end. The rule
+  stands: after every wake, read the pane and check the input box.
   The orchestrator passed pane ids to herdr tab close - wX:p7 where herdr
   wants a tab id, wX:t7 - and herdr answered tab_not_found every time. The
   orchestrator read that as already closed and moved on, so no tab closed
@@ -976,7 +1012,14 @@ OPEN
   and can drift; and the core dependency is declared but unused until the
   crew lands. The crew round left two more: the age units now exist twice,
   re-implemented beside raul's own, and nothing pins the two vocabularies
-  together.
+  together. The configuration round left six: the sidebar's unreadable
+  state drops a row when the pane is one row tall; a home that cannot be
+  made names a file that was never touched; two instances on a fresh home
+  share one temporary name and the loser shows a false unreadable state; the
+  configuration is read at startup and not on every redraw; the
+  orchestrator's default model is the reviewer's, for the flow to confirm;
+  and the review-round limit's pin rests on a phrase this unit added to the
+  model doc, so it has no provenance of its own.
   talita's own verbs. Out of scope, and it stays out of scope until it is
   asked for explicitly. Do not start it because the other tabs are done.
 
