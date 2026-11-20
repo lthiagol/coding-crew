@@ -2,7 +2,9 @@
 //!
 //! The configuration is **provisional**: the flow has not written one yet, and
 //! the format may change when it does. It lives on the tool's side, at
-//! `~/.config/coding-crew/config.json`, because it is policy rather than work.
+//! `~/.config/coding-crew/config.toml`, because it is policy rather than work.
+//! It is TOML rather than JSON because it is the one file a human edits, and
+//! TOML carries comments: the defaults hugo writes explain themselves.
 //! What it holds is settled in `docs/tasks/task-model.md` § 11.3: the agents
 //! and their models, the harness they run in, the review-round limit and the
 //! order — the project's own flow.
@@ -18,7 +20,10 @@ use crate::actor::Role;
 use crate::lifecycle::Status;
 
 /// The configuration's file name under the tool's home.
-pub const CONFIG_FILE: &str = "config.json";
+pub const CONFIG_FILE: &str = "config.toml";
+/// The file the configuration used before it was TOML. It is no longer read;
+/// hugo names it when it finds one, so a human knows why it is ignored.
+pub const LEGACY_CONFIG_FILE: &str = "config.json";
 
 /// The flow's configuration, as the file holds it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,22 +42,142 @@ impl Config {
     /// Read a configuration from a file.
     pub fn read(path: &Path) -> Result<Self, ConfigError> {
         let text = fs::read_to_string(path)?;
-        Ok(serde_json::from_str(&text)?)
+        Self::from_toml(&text)
+    }
+
+    /// Read a configuration from TOML text.
+    pub fn from_toml(text: &str) -> Result<Self, ConfigError> {
+        toml::from_str(text).map_err(|error| ConfigError::Parse {
+            at: error
+                .span()
+                .map(|span| location(text, span.start))
+                .unwrap_or_default(),
+            message: error.message().to_string(),
+        })
     }
 
     /// Write a configuration, atomically, as the store writes a task.
     pub fn write(&self, path: &Path) -> Result<(), ConfigError> {
-        let json = serde_json::to_string_pretty(self)?;
-        let tmp = path.with_extension("json.tmp");
+        let text = self.to_toml();
+        let tmp = path.with_extension("toml.tmp");
         {
             let mut file = fs::File::create(&tmp)?;
-            file.write_all(json.as_bytes())?;
-            file.write_all(b"\n")?;
+            file.write_all(text.as_bytes())?;
             file.sync_all()?;
         }
         fs::rename(&tmp, path)?;
         Ok(())
     }
+
+    /// The configuration as TOML, with the comments the file carries.
+    ///
+    /// Comments are the reason this format was chosen: each part says what it
+    /// is, so a human who opens the file can read it without the model doc.
+    pub fn to_toml(&self) -> String {
+        let mut out = String::new();
+        out.push_str(
+            "# coding-crew's flow configuration.\n\
+             #\n\
+             # This is the one file a human edits, so it is TOML and can carry\n\
+             # comments. The format is provisional: it may change when the flow\n\
+             # writes one itself. hugo reads this file at startup, writes the\n\
+             # defaults only when it is absent, and never writes over a file it\n\
+             # cannot read. The machine-written records - the journal and the\n\
+             # runtime record - stay JSON.\n\
+             \n",
+        );
+        out.push_str("# The build-and-fix cycles a task gets.\n");
+        out.push_str(&format!("round_limit = {}\n\n", self.round_limit));
+        if self.agents.is_empty() {
+            out.push_str("# One entry per agent of the automation: none is configured.\n");
+            out.push_str("agents = []\n\n");
+        }
+        // An empty order is a root key, not an array of tables: it has to be
+        // written before the first table, where root keys still live.
+        if self.order.is_empty() {
+            out.push_str("# The order the flow follows: no step is configured.\n");
+            out.push_str("order = []\n\n");
+        }
+        for (index, agent) in self.agents.iter().enumerate() {
+            if index == 0 {
+                out.push_str(
+                    "# One entry per agent of the automation: the name its role config\n\
+                     # gives it, the role it fills, and the model it runs.\n",
+                );
+            }
+            out.push_str("[[agents]]\n");
+            out.push_str(&format!("name = {}\n", quote(&agent.name)));
+            out.push_str(&format!("role = {}\n", quote(agent.role.as_str())));
+            out.push_str(&format!("model = {}\n\n", quote(&agent.model)));
+        }
+        out.push_str(
+            "# The tool the agents run in, and the way it is driven.\n\
+             [harness]\n",
+        );
+        out.push_str(&format!("tool = {}\n", quote(&self.harness.tool)));
+        out.push_str(&format!("driven = {}\n\n", quote(&self.harness.driven)));
+        for (index, step) in self.order.iter().enumerate() {
+            if index == 0 {
+                out.push_str(
+                    "# The order the flow follows: the steps in the order they run, each\n\
+                     # with the gates it passes, from one status to another.\n",
+                );
+            }
+            out.push_str("[[order]]\n");
+            out.push_str(&format!("step = {}\n", quote(&step.step)));
+            out.push_str(&format!("role = {}\n", quote(step.role.as_str())));
+            let gates: Vec<String> = step
+                .gates
+                .iter()
+                .map(|gate| {
+                    format!(
+                        "{{ from = {}, to = {} }}",
+                        quote(gate.from.as_str()),
+                        quote(gate.to.as_str())
+                    )
+                })
+                .collect();
+            out.push_str(&format!("gates = [{}]\n\n", gates.join(", ")));
+        }
+        while out.ends_with("\n\n") {
+            out.pop();
+        }
+        out
+    }
+}
+
+/// A TOML string, escaped.
+fn quote(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for character in value.chars() {
+        match character {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            character if (character as u32) < 0x20 || character == '\u{7f}' => {
+                out.push_str(&format!("\\u{:04X}", character as u32));
+            }
+            character => out.push(character),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Where in a document a parse error sits, in words: ` at line 3, column 5`.
+fn location(text: &str, index: usize) -> String {
+    let before = text.get(..index).unwrap_or(text);
+    let line = before.matches('\n').count() + 1;
+    let column = before
+        .rsplit('\n')
+        .next()
+        .map(|line| line.chars().count())
+        .unwrap_or(0)
+        + 1;
+    format!(" at line {line}, column {column}")
 }
 
 impl Default for Config {
@@ -172,8 +297,8 @@ impl Gate {
 pub enum ConfigError {
     #[error("failed to read the configuration: {0}")]
     Io(#[from] std::io::Error),
-    #[error("failed to parse the configuration: {0}")]
-    Parse(#[from] serde_json::Error),
+    #[error("parse error{at}: {message}")]
+    Parse { at: String, message: String },
 }
 
 #[cfg(test)]
@@ -222,17 +347,107 @@ mod tests {
     }
 
     #[test]
+    fn the_written_defaults_are_toml_and_explain_themselves() {
+        let text = Config::default().to_toml();
+        // A comment beside every part, and a header that says what the file
+        // is: that is why the format is TOML.
+        let comments: Vec<&str> = text.lines().filter(|line| line.starts_with('#')).collect();
+        assert!(
+            comments.len() >= 4,
+            "the defaults carry no comments:\n{text}"
+        );
+        assert!(text.contains("provisional"), "{text}");
+        for part in ["round_limit", "[[agents]]", "[harness]", "[[order]]"] {
+            assert!(text.contains(part), "{part} is not in the shape:\n{text}");
+        }
+        // The comments are not a second copy of the shape: they sit above it.
+        assert_eq!(
+            Config::from_toml(&text).expect("the written shape parses"),
+            Config::default()
+        );
+    }
+
+    #[test]
+    fn an_escaped_string_round_trips() {
+        let config = Config {
+            harness: Harness {
+                tool: "a \"quoted\" \\ tool".to_string(),
+                driven: "one\ttab\u{7f}".to_string(),
+            },
+            ..Config::default()
+        };
+        assert_eq!(
+            Config::from_toml(&config.to_toml()).expect("the written shape parses"),
+            config
+        );
+    }
+
+    #[test]
+    fn the_file_names_are_the_toml_one_and_the_old_json_one() {
+        assert_eq!(CONFIG_FILE, "config.toml");
+        assert_eq!(LEGACY_CONFIG_FILE, "config.json");
+    }
+
+    #[test]
     fn a_partial_configuration_is_unreadable_rather_than_filled_in() {
         // A file that does not say the order does not get the default order
         // silently: the tool says it cannot read the file.
-        let error = serde_json::from_str::<Config>(r#"{"round_limit": 5}"#)
+        let error = Config::from_toml("round_limit = 5\n")
             .expect_err("a partial configuration is not a configuration");
+        assert!(error.to_string().contains("parse"), "{error}");
         assert!(error.to_string().contains("missing field"), "{error}");
     }
 
     #[test]
+    fn an_empty_crew_and_order_round_trip() {
+        // The writer writes its own type, empty vectors included: an empty
+        // list is a root key, written where root keys still live.
+        let config = Config {
+            agents: Vec::new(),
+            order: Vec::new(),
+            ..Config::default()
+        };
+        let text = config.to_toml();
+        assert!(text.contains("agents = []"), "{text}");
+        assert!(text.contains("order = []"), "{text}");
+        assert_eq!(
+            Config::from_toml(&text).expect("the written shape parses"),
+            config
+        );
+    }
+
+    #[test]
+    fn a_hand_written_configuration_keeps_its_comments_beside_it() {
+        // The point of TOML: a human adds a comment and a different value.
+        let mine = Config::default().to_toml().replace(
+            "# The build-and-fix cycles a task gets.\nround_limit = 5",
+            "# Three rounds is enough for this project.\nround_limit = 3",
+        );
+        assert!(mine.contains("Three rounds"), "{mine}");
+        let config = Config::from_toml(&mine).expect("a commented configuration");
+        assert_eq!(config.round_limit, 3);
+    }
+
+    #[test]
+    fn a_parse_error_names_where_it_is() {
+        let error = Config::from_toml("round_limit = \n").expect_err("a broken value");
+        let says = error.to_string();
+        assert!(says.contains("parse"), "{says}");
+        assert!(says.contains("line 1"), "{says}");
+        assert!(says.contains("column"), "{says}");
+    }
+
+    #[test]
+    fn an_old_json_configuration_is_not_a_toml_one() {
+        // The old file is not read: its JSON text is not TOML.
+        let json = serde_json::to_string(&Config::default()).expect("the old shape");
+        let error = Config::from_toml(&json).expect_err("JSON is not the configuration");
+        assert!(error.to_string().contains("parse"), "{error}");
+    }
+
+    #[test]
     fn a_role_and_a_status_keep_their_stored_words() {
-        let json = serde_json::to_string(&Config::default()).expect("the configuration");
+        let toml = Config::default().to_toml();
         for word in [
             "\"runner\"",
             "\"reviewer\"",
@@ -241,7 +456,7 @@ mod tests {
             "\"code-review\"",
             "\"needs-human\"",
         ] {
-            assert!(json.contains(word), "{word}: {json}");
+            assert!(toml.contains(word), "{word}: {toml}");
         }
     }
 }

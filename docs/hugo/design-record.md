@@ -214,7 +214,9 @@ agents would read "2 agents — the orchestrator reviews", one would read
 
 - **The layout**: one sidebar, one main pane, no tabs. The sidebar is
   configuration; the main pane is the running state.
-- **The configuration is centralized** under `~/.config/coding-crew/`.
+- **The configuration is centralized** under `~/.config/coding-crew/`, in
+  `config.toml`: it is the one file a human edits, so it is TOML, where a
+  comment can explain what a setting is.
 - **The seam**: raul reads the work folder; hugo reads the runtime.
 - **One interface, the build loop first**: the runtime is an abstraction,
   and the flow this repository runs itself is its first implementation.
@@ -223,4 +225,3 @@ agents would read "2 agents — the orchestrator reviews", one would read
 
 - Whether the autopilot runs at all, or hugo describes a policy the human
   applies by hand. That is the question behind the interface.
-- The configuration's format and its file layout under `~/.config/`.

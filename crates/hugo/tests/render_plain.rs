@@ -411,7 +411,7 @@ fn an_absent_configuration_is_written_with_the_defaults() {
     // The tool writes the defaults into the home it creates, and the sidebar
     // shows them. The model strings are the project's own flow.
     let home = fresh_home("defaults");
-    let config = home.join(".config").join("coding-crew").join("config.json");
+    let config = home.join(".config").join("coding-crew").join("config.toml");
     assert!(!config.exists(), "the test home is not fresh");
     let text = screen_in(&mock_project(), &home);
     for fact in [
@@ -425,8 +425,17 @@ fn an_absent_configuration_is_written_with_the_defaults() {
         assert!(text.contains(fact), "{fact} is not on screen: {text}");
     }
     assert!(config.is_file(), "hugo did not write {}", config.display());
-    let written = coding_crew_core::Config::read(&config).expect("the configuration parses");
-    assert_eq!(written, coding_crew_core::Config::default());
+    // The format a human opens is TOML, and it explains itself.
+    let written = fs::read_to_string(&config).expect("the configuration");
+    assert!(written.contains("[[agents]]"), "{written}");
+    assert!(
+        written.lines().any(|line| line.starts_with('#')),
+        "the written defaults carry no comment: {written}"
+    );
+    assert_eq!(
+        coding_crew_core::Config::read(&config).expect("the configuration parses"),
+        coding_crew_core::Config::default()
+    );
     let _ = fs::remove_dir_all(&home);
 }
 
@@ -435,7 +444,7 @@ fn a_configuration_that_is_there_is_read_and_never_overwritten() {
     // A human's configuration is the one the pane shows, and the tool writes
     // nothing over it — not even when it differs from the defaults.
     let home = fresh_home("kept");
-    let config = home.join(".config").join("coding-crew").join("config.json");
+    let config = home.join(".config").join("coding-crew").join("config.toml");
     fs::create_dir_all(config.parent().expect("the home")).expect("the configuration home");
     let mine = coding_crew_core::Config {
         round_limit: 2,
@@ -463,24 +472,54 @@ fn a_configuration_that_is_there_is_read_and_never_overwritten() {
 #[test]
 fn a_configuration_that_cannot_be_read_is_named_and_left_alone() {
     // Absent and unreadable are different states: a file that does not parse
-    // is named with its error, and the tool does not replace it.
+    // is named with its error, the defaults are shown beside it, and the tool
+    // does not replace it.
     let home = fresh_home("broken");
-    let config = home.join(".config").join("coding-crew").join("config.json");
+    let config = home.join(".config").join("coding-crew").join("config.toml");
     fs::create_dir_all(config.parent().expect("the home")).expect("the configuration home");
-    fs::write(&config, "{ not a configuration").expect("a broken configuration");
+    fs::write(&config, "round_limit = \n").expect("a broken configuration");
 
     let text = screen_in(&mock_project(), &home);
     assert!(text.contains("configuration is unreadable"), "{text}");
-    assert!(text.contains("config.json"), "{text}");
+    assert!(text.contains("config.toml"), "{text}");
     assert!(!text.contains("no configuration yet"), "{text}");
     assert!(
-        !text.contains("build-and-fix rounds"),
-        "a broken configuration was drawn as the defaults: {text}"
+        text.contains("using the defaults:"),
+        "the defaults are not shown beside the error: {text}"
     );
+    assert!(text.contains("5 build-and-fix rounds"), "{text}");
     assert_eq!(
         fs::read_to_string(&config).expect("the configuration"),
-        "{ not a configuration",
+        "round_limit = \n",
         "hugo overwrote a configuration it could not read"
+    );
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn an_old_json_configuration_is_named_and_not_read() {
+    // The old file is not converted and not silently ignored: hugo names it
+    // and uses the defaults, which it writes beside it.
+    let home = fresh_home("legacy");
+    let dir = home.join(".config").join("coding-crew");
+    fs::create_dir_all(&dir).expect("the configuration home");
+    let old = dir.join("config.json");
+    let old_text = r#"{"round_limit": 9}"#;
+    fs::write(&old, old_text).expect("an old configuration");
+
+    let text = screen_in(&mock_project(), &home);
+    assert!(text.contains("config.json"), "{text}");
+    assert!(text.contains("not read"), "{text}");
+    assert!(text.contains("5 build-and-fix rounds"), "{text}");
+    assert!(!text.contains("9 build-and-fix rounds"), "{text}");
+    assert!(
+        dir.join("config.toml").is_file(),
+        "no defaults were written"
+    );
+    assert_eq!(
+        fs::read_to_string(&old).expect("the old file"),
+        old_text,
+        "hugo converted the old configuration"
     );
     let _ = fs::remove_dir_all(&home);
 }

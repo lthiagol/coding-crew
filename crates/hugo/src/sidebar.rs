@@ -16,7 +16,7 @@ use coding_crew_core::config::Config;
 use coding_crew_theme::Theme;
 use coding_crew_theme::text::cut_to;
 
-use crate::config::ConfigRead;
+use crate::config::{ConfigRead, ConfigState};
 
 /// The sidebar's groups, in the order they are read.
 pub const AGENTS_TITLE: &str = "agents";
@@ -28,6 +28,9 @@ pub const ORDER_TITLE: &str = "order";
 pub const EMPTY: &str = "no configuration yet";
 /// The sidebar's state when the file is there but cannot be read.
 pub const UNREADABLE: &str = "configuration is unreadable";
+/// The line that says the defaults are what the tool would use, beside an
+/// error: the human sees both what is wrong and what is in force.
+pub const USING_DEFAULTS: &str = "using the defaults:";
 
 /// One row of a group, before it is cut to the pane.
 struct Row {
@@ -46,23 +49,46 @@ struct Group {
 ///
 /// A group that does not fit the height is left out whole; one line under the
 /// groups says `not shown:` with each group's name and how much it held, the
-/// way the main pane names the blocks it leaves out.
+/// way the main pane names the blocks it leaves out. An unreadable
+/// configuration names the file and the error, then shows the defaults beside
+/// them. An old `config.json` is named at the top: it is never read silently.
 pub fn lines(state: &ConfigRead, theme: &Theme, width: usize, height: usize) -> Vec<Line<'static>> {
     if width == 0 || height == 0 {
         return Vec::new();
     }
-    match state {
-        ConfigRead::Absent => vec![line(EMPTY, theme.text.dim, width)],
-        ConfigRead::Unreadable(error) => vec![
-            line(UNREADABLE, theme.text.normal, width),
-            line(
+    let mut prefix = Vec::new();
+    if let Some(file) = &state.legacy {
+        prefix.push(line(&legacy_notice(file), theme.text.dim, width));
+    }
+    match &state.state {
+        ConfigState::Absent => {
+            prefix.push(line(EMPTY, theme.text.dim, width));
+            prefix.truncate(height);
+            prefix
+        }
+        ConfigState::Config(config) => fits(prefix, groups(config, theme), theme, width, height),
+        ConfigState::Unreadable(error) => {
+            prefix.push(line(UNREADABLE, theme.text.normal, width));
+            prefix.push(line(
                 &format!("{}: {}", error.file, error.error),
                 theme.semantic.error,
                 width,
-            ),
-        ],
-        ConfigRead::Config(config) => fits(groups(config, theme), theme, width, height),
+            ));
+            prefix.push(line(USING_DEFAULTS, theme.text.dim, width));
+            fits(
+                prefix,
+                groups(&Config::default(), theme),
+                theme,
+                width,
+                height,
+            )
+        }
     }
+}
+
+/// The notice that an old configuration is beside the new one.
+fn legacy_notice(file: &str) -> String {
+    format!("{file} is not read")
 }
 
 /// The configuration's groups, in the order they are read.
@@ -158,15 +184,27 @@ fn order_rows(config: &Config, theme: &Theme) -> Vec<Row> {
 }
 
 /// The groups as lines, with the ones that do not fit named under them.
-fn fits(groups: Vec<Group>, theme: &Theme, width: usize, height: usize) -> Vec<Line<'static>> {
+///
+/// The prefix — an old file's notice, an error and the line that says the
+/// defaults follow — is drawn first: what is wrong is never hidden by what
+/// would be used.
+fn fits(
+    prefix: Vec<Line<'static>>,
+    groups: Vec<Group>,
+    theme: &Theme,
+    width: usize,
+    height: usize,
+) -> Vec<Line<'static>> {
     let total: usize = groups.iter().map(|group| group.rows.len() + 1).sum();
-    if total <= height {
-        return drawn(&groups, width);
+    if prefix.len() + total <= height {
+        let mut lines = prefix;
+        lines.extend(drawn(&groups, width));
+        return lines;
     }
     // One row is the announcement's: the groups that fit beside it are drawn
     // whole, and the rest are named with what they held.
-    let room = height - 1;
-    let mut used = 0;
+    let room = height.saturating_sub(1);
+    let mut used = prefix.len();
     let mut shown = 0;
     for group in &groups {
         let held = group.rows.len() + 1;
@@ -176,16 +214,19 @@ fn fits(groups: Vec<Group>, theme: &Theme, width: usize, height: usize) -> Vec<L
         used += held;
         shown += 1;
     }
-    let mut lines = drawn(&groups[..shown], width);
-    let hidden: Vec<String> = groups[shown..]
-        .iter()
-        .map(|group| format!("{} ({} hidden)", group.title, group.rows.len()))
-        .collect();
-    lines.push(line(
-        &format!("not shown: {}", hidden.join(", ")),
-        theme.text.dim,
-        width,
-    ));
+    let mut lines: Vec<Line<'static>> = prefix.into_iter().take(height).collect();
+    lines.extend(drawn(&groups[..shown], width));
+    if shown < groups.len() && lines.len() < height {
+        let hidden: Vec<String> = groups[shown..]
+            .iter()
+            .map(|group| format!("{} ({} hidden)", group.title, group.rows.len()))
+            .collect();
+        lines.push(line(
+            &format!("not shown: {}", hidden.join(", ")),
+            theme.text.dim,
+            width,
+        ));
+    }
     lines
 }
 
@@ -208,7 +249,7 @@ fn line(text: &str, style: Style, width: usize) -> Line<'static> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use coding_crew_core::config::{Agent, Harness, OrderStep};
+    use coding_crew_core::config::{Agent, CONFIG_FILE, Harness, OrderStep};
     use coding_crew_theme::Preset;
 
     fn theme() -> Theme {
@@ -216,7 +257,15 @@ mod tests {
     }
 
     fn configured() -> ConfigRead {
-        ConfigRead::Config(Config::default())
+        ConfigRead::of(ConfigState::Config(Config::default()))
+    }
+
+    fn unreadable() -> ConfigRead {
+        ConfigRead::of(ConfigState::Unreadable(crate::app::ReadError {
+            file: CONFIG_FILE.to_string(),
+            error: "failed to parse the configuration at line 1, column 15: expected a value"
+                .to_string(),
+        }))
     }
 
     /// The lines' text, one string per line.
@@ -395,25 +444,107 @@ mod tests {
 
     #[test]
     fn the_empty_state_is_the_named_one_and_on_the_dim_slot() {
-        let lines = lines(&ConfigRead::Absent, &theme(), 30, 40);
+        let lines = lines(&ConfigRead::of(ConfigState::Absent), &theme(), 30, 40);
         assert_eq!(text(&lines), [EMPTY]);
         assert_eq!(lines[0].spans[0].style, theme().text.dim);
     }
 
     #[test]
     fn a_configuration_that_cannot_be_read_is_named_not_called_empty() {
-        let state = ConfigRead::Unreadable(crate::app::ReadError {
-            file: "config.json".to_string(),
-            error: "failed to parse the configuration: expected value".to_string(),
-        });
+        let state = unreadable();
         let lines = lines(&state, &theme(), 40, 40);
         let rows = text(&lines);
         assert_eq!(rows[0], UNREADABLE);
-        assert!(rows[1].contains("config.json"), "{rows:#?}");
+        assert!(rows[1].contains("config.toml"), "{rows:#?}");
         assert!(rows[1].contains("failed to parse"), "{rows:#?}");
+        assert_eq!(rows[2], USING_DEFAULTS);
         assert!(!rows.iter().any(|row| row == EMPTY), "{rows:#?}");
         // The error is painted on the failure slot, as raul paints one.
         assert_eq!(lines[1].spans[0].style, theme().semantic.error);
+    }
+
+    #[test]
+    fn an_unreadable_configuration_shows_the_defaults_beside_it() {
+        // The human sees what is wrong and what the tool would use: both.
+        let rows = rendered(&unreadable(), 30, 40);
+        let text = rows.join("\n");
+        for fact in [
+            UNREADABLE,
+            "failed to parse",
+            USING_DEFAULTS,
+            AGENTS_TITLE,
+            "builder · runner",
+            HARNESS_TITLE,
+            LIMIT_TITLE,
+            "5 build-and-fix rounds",
+            ORDER_TITLE,
+            "groomed → approved",
+        ] {
+            assert!(
+                text.contains(fact),
+                "{fact} is not beside the error: {text}"
+            );
+        }
+        // The error outranks the defaults: at two rows the error is whole and
+        // the defaults' line is the one that gives way.
+        let rows = rendered(&unreadable(), 30, 2);
+        assert_eq!(rows[0], UNREADABLE);
+        assert!(rows[1].contains("failed to parse"), "{rows:#?}");
+        assert!(!rows.iter().any(|row| row == USING_DEFAULTS), "{rows:#?}");
+    }
+
+    #[test]
+    fn an_old_json_configuration_is_named_and_never_read() {
+        let state = ConfigRead {
+            state: ConfigState::Config(Config::default()),
+            legacy: Some("config.json".to_string()),
+        };
+        let rows = rendered(&state, 30, 40);
+        let notice = rows.first().expect("the notice");
+        assert!(notice.contains("config.json"), "{rows:#?}");
+        assert!(notice.contains("not read"), "{rows:#?}");
+        // The configuration is still drawn under it.
+        assert!(
+            rows.join("\n").contains("build-and-fix rounds"),
+            "{rows:#?}"
+        );
+        // The notice is secondary text, not the failure slot.
+        let lines = lines(&state, &theme(), 30, 40);
+        assert_eq!(lines[0].spans[0].style, theme().text.dim);
+    }
+
+    #[test]
+    fn an_old_json_file_is_named_beside_an_unreadable_one() {
+        let state = ConfigRead {
+            state: ConfigState::Unreadable(crate::app::ReadError {
+                file: CONFIG_FILE.to_string(),
+                error: "failed to parse the configuration".to_string(),
+            }),
+            legacy: Some("config.json".to_string()),
+        };
+        let rows = rendered(&state, 30, 40);
+        assert!(rows[0].contains("config.json"), "{rows:#?}");
+        assert_eq!(rows[1], UNREADABLE);
+        assert!(
+            rows.join("\n").contains("build-and-fix rounds"),
+            "{rows:#?}"
+        );
+    }
+
+    #[test]
+    fn a_short_pane_never_drops_a_group_without_a_word() {
+        // With the three prefix rows of an unreadable configuration, the
+        // groups still give way whole and are named.
+        for height in 1..=24usize {
+            let rows = rendered(&unreadable(), 30, height);
+            assert!(rows.len() <= height, "{height}: {rows:#?}");
+            if height >= 4 {
+                assert!(
+                    rows.iter().any(|row| row.starts_with("not shown:")),
+                    "{height}: the hidden groups are not named: {rows:#?}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -447,7 +578,7 @@ mod tests {
                 }],
             }],
         };
-        let rows = rendered(&ConfigRead::Config(config), 30, 40);
+        let rows = rendered(&ConfigRead::of(ConfigState::Config(config)), 30, 40);
         let text = rows.join("\n");
         for fact in [
             "2 build-and-fix rounds",

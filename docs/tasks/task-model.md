@@ -605,7 +605,8 @@ not a broken one.
 
 ```
 ~/.config/coding-crew/
-  config.json           # the flow's configuration
+  config.toml           # the flow's configuration
+  config.json           # the old shape: not read any more
 ```
 
 The configuration sits on the tool's side, under `~/.config/coding-crew/`,
@@ -613,8 +614,17 @@ because it is policy rather than work. It is **provisional**: the flow has not
 written one yet, and the format may change when it does. Its types live in
 `crates/core/src/config.rs`, so the writer and the reader share them.
 
-The file is one object. When it is absent, hugo writes the defaults into the
-home it creates on demand.
+The format is **TOML**, because the configuration is the one file a human
+edits, and a comment is how a configuration explains itself. The defaults hugo
+writes carry a short note beside each part. The records — the journal and the
+runtime record — are machine-written and stay JSON.
+
+The file is one TOML document. When it is absent, hugo writes the defaults into
+the home it creates on demand. A configuration that parses is used as it is. A
+configuration that does not parse is named with its error, and the defaults are
+shown beside it, so the human sees both what is wrong and what the tool would
+use; the file is never replaced. The old `config.json` is not read: when one is
+found beside the configuration, hugo says so and converts nothing.
 
 | field | rule |
 |---|---|
@@ -622,6 +632,30 @@ home it creates on demand.
 | `harness` | the `tool` the agents run in, and the way it is `driven` |
 | `round_limit` | the build-and-fix cycles a task gets: five |
 | `order` | the flow's steps, in the order they run |
+
+The TOML shape:
+
+```toml
+# The build-and-fix cycles a task gets.
+round_limit = 5
+
+# One entry per agent of the automation.
+[[agents]]
+name = "builder"
+role = "runner"
+model = "opencode-go/deepseek-v4.1-flash#high"
+
+# The tool the agents run in, and the way it is driven.
+[harness]
+tool = "opencode"
+driven = "--standalone · role config"
+
+# The order the flow follows: one step per entry, in the order they run.
+[[order]]
+step = "groom"
+role = "creator"
+gates = [{ from = "groomed", to = "approved" }]
+```
 
 An agent entry:
 

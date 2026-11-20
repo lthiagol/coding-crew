@@ -23,6 +23,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "default-themes", "regex-onig"] }
 thiserror = "2"
+toml = "0.9"
 unicode-width = "0.2"
 unicode-segmentation = "1"
 unicodeit = "0.2"

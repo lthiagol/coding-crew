@@ -139,12 +139,20 @@ The configuration is **provisional**: the flow has not written one yet, and the
 format may change when it does. Its shape is
 [tasks/task-model.md § 11.3](../tasks/task-model.md#113-the-configuration-provisional).
 
-The configuration file is `~/.config/coding-crew/config.json`. When it is
-absent, hugo writes the defaults — the project's own flow: the builder on
+The configuration file is `~/.config/coding-crew/config.toml`, and its format
+is **TOML**: it is the one file a human edits, and a comment is how a
+configuration explains itself, so the defaults hugo writes carry a short note
+beside each part. When the file is absent, hugo writes the defaults — the
+project's own flow: the builder on
 `opencode-go/deepseek-v4.1-flash#high` and the reviewer on
 `opencode-go/glm-5.3#high`, with the orchestrator beside them; the `opencode`
 harness, `--standalone` with each agent's role config; five build-and-fix
 cycles; and the order [roles/roles.md](../roles/roles.md#the-order) records.
+
+The old `config.json` is **not read** any more, and it is never converted: the
+format is provisional and a conversion would guess. When one sits beside the
+configuration, the sidebar says so — `config.json is not read` — rather than
+ignoring it silently.
 
 Nothing on the sidebar is changed from the screen: whether hugo drives the loop
 or only shows it is still open, so no key changes the configuration and no key
@@ -157,9 +165,11 @@ fit the height is left out whole, and one line under the groups says
 `not shown:` with each group's name and how much it held: `order (14 hidden)`.
 
 A configuration file that is there but cannot be read is not the empty state:
-the sidebar says `configuration is unreadable`, names the file and the
-error, and paints the error on the failure slot. hugo only writes the defaults
-over an absent file, never over one a human has edited.
+the sidebar says `configuration is unreadable`, names the file and the error,
+and paints the error on the failure slot. Under them it shows the defaults,
+named by `using the defaults:`, so the human sees both what is wrong and what
+the tool would use. hugo only writes the defaults over an absent file, never
+over one a human has edited.
 
 ## The runtime record
 
@@ -202,12 +212,15 @@ The same degradation is raul's: the words matter more than the chrome.
 
 The configuration lives in `~/.config/coding-crew/`. When the folder is not
 there, hugo creates it — the tool creates its home rather than failing. When
-`config.json` is not there, it writes the defaults. A machine with no home
-folder has nowhere for hugo to write: the shell still runs, and the sidebar
-says `no configuration yet`.
+`config.toml` is not there, it writes the defaults, comments included. A
+machine with no home folder has nowhere for hugo to write: the shell still
+runs, and the sidebar says `no configuration yet`.
 
 The configuration is read at launch. hugo changes nothing of it from the
 screen: whether hugo drives the loop or only shows it is still open.
+
+The records are not part of this file and do not follow it: the journal and
+the runtime record are machine-written, so they stay JSON.
 
 ## The render mode
 

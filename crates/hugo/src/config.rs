@@ -3,15 +3,20 @@
 //!
 //! hugo's policy lives on the tool's side, under the user's configuration
 //! folder. The folder is the tool's own: when it is not there, hugo creates
-//! it rather than failing. When `config.json` is not there, hugo writes the
+//! it rather than failing. When `config.toml` is not there, hugo writes the
 //! defaults — the project's own flow — and shows them.
+//!
+//! The file is TOML because a human edits it, and a comment is how a
+//! configuration explains itself. The old `config.json` is not read: when one
+//! sits beside the configuration, hugo names it rather than ignoring it, and
+//! converts nothing.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use coding_crew_core::config::{CONFIG_FILE, Config};
+use coding_crew_core::config::{CONFIG_FILE, Config, LEGACY_CONFIG_FILE};
 
 use crate::app::ReadError;
 
@@ -45,15 +50,35 @@ pub fn config_path(home: &Path) -> PathBuf {
     home_at(home).join(CONFIG_FILE)
 }
 
-/// What hugo found when it looked for its configuration.
+/// The state of the configuration itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConfigRead {
+pub enum ConfigState {
     /// There is no home to hold a configuration: the named empty state.
     Absent,
     /// The configuration, as read — or as written when it was absent.
     Config(Config),
-    /// The file is there but cannot be read, or cannot be written.
+    /// The file is there but cannot be read, or cannot be written. The
+    /// defaults are what the tool would use; the sidebar shows both.
     Unreadable(ReadError),
+}
+
+/// What hugo found when it looked for its configuration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigRead {
+    /// The configuration and its state.
+    pub state: ConfigState,
+    /// An old `config.json` beside it, named so nothing is ignored silently.
+    pub legacy: Option<String>,
+}
+
+impl ConfigRead {
+    /// A configuration and no old file beside it.
+    pub fn of(state: ConfigState) -> Self {
+        Self {
+            state,
+            legacy: None,
+        }
+    }
 }
 
 /// Read the configuration under `home`, writing the defaults when the file is
@@ -61,23 +86,30 @@ pub enum ConfigRead {
 ///
 /// The defaults are the project's own flow. The write is the tool's, not the
 /// user's: only an absent file is written, so a configuration a human has
-/// edited — even one that does not parse — is never overwritten.
+/// edited — even one that does not parse — is never overwritten. An old
+/// `config.json` is never read and never converted; it is named instead.
 pub fn load_at(home: &Path) -> ConfigRead {
-    if let Err(error) = ensure_at(home) {
-        return unreadable(error.to_string());
-    }
+    let dir = match ensure_at(home) {
+        Ok(dir) => dir,
+        Err(error) => {
+            return ConfigRead::of(ConfigState::Unreadable(unreadable(error.to_string())));
+        }
+    };
+    let legacy = legacy_at(&dir);
     let path = config_path(home);
-    if path.exists() {
-        return match Config::read(&path) {
-            Ok(config) => ConfigRead::Config(config),
-            Err(error) => unreadable(error.to_string()),
-        };
-    }
-    let config = Config::default();
-    match config.write(&path) {
-        Ok(()) => ConfigRead::Config(config),
-        Err(error) => unreadable(error.to_string()),
-    }
+    let state = if path.exists() {
+        match Config::read(&path) {
+            Ok(config) => ConfigState::Config(config),
+            Err(error) => ConfigState::Unreadable(unreadable(error.to_string())),
+        }
+    } else {
+        let config = Config::default();
+        match config.write(&path) {
+            Ok(()) => ConfigState::Config(config),
+            Err(error) => ConfigState::Unreadable(unreadable(error.to_string())),
+        }
+    };
+    ConfigRead { state, legacy }
 }
 
 /// Read the running user's configuration.
@@ -87,15 +119,22 @@ pub fn load_at(home: &Path) -> ConfigRead {
 pub fn load_home() -> ConfigRead {
     match user_home() {
         Some(home) => load_at(&home),
-        None => ConfigRead::Absent,
+        None => ConfigRead::of(ConfigState::Absent),
     }
 }
 
-fn unreadable(error: String) -> ConfigRead {
-    ConfigRead::Unreadable(ReadError {
+/// The name of the old configuration beside the new one, when it is there.
+fn legacy_at(dir: &Path) -> Option<String> {
+    dir.join(LEGACY_CONFIG_FILE)
+        .is_file()
+        .then(|| LEGACY_CONFIG_FILE.to_string())
+}
+
+fn unreadable(error: String) -> ReadError {
+    ReadError {
         file: CONFIG_FILE.to_string(),
         error,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -103,6 +142,7 @@ mod tests {
     use std::fs;
 
     use super::*;
+    use coding_crew_core::config::LEGACY_CONFIG_FILE;
 
     /// A scratch home folder for one test.
     fn scratch(name: &str) -> PathBuf {
@@ -120,6 +160,11 @@ mod tests {
             PathBuf::from("/home/someone")
                 .join(".config")
                 .join("coding-crew")
+        );
+        assert_eq!(
+            config_path(home),
+            home_at(home).join("config.toml"),
+            "the configuration is not the TOML file"
         );
     }
 
@@ -165,7 +210,10 @@ mod tests {
     fn a_configuration_that_is_absent_is_written_with_the_defaults() {
         let home = scratch("written");
         match load_at(&home) {
-            ConfigRead::Config(config) => assert_eq!(config, Config::default()),
+            ConfigRead {
+                state: ConfigState::Config(config),
+                legacy: None,
+            } => assert_eq!(config, Config::default()),
             other => panic!("{other:?}"),
         }
         let path = config_path(&home);
@@ -189,7 +237,10 @@ mod tests {
         kept.write(&path).expect("the configuration");
         let before = fs::read_to_string(&path).expect("the file");
         match load_at(&home) {
-            ConfigRead::Config(config) => assert_eq!(config, kept),
+            ConfigRead {
+                state: ConfigState::Config(config),
+                ..
+            } => assert_eq!(config, kept),
             other => panic!("{other:?}"),
         }
         assert_eq!(
@@ -205,9 +256,12 @@ mod tests {
         let home = scratch("broken");
         fs::create_dir_all(home_at(&home)).expect("the home");
         let path = config_path(&home);
-        fs::write(&path, "{ not a configuration").expect("a broken configuration");
+        fs::write(&path, "round_limit = \n").expect("a broken configuration");
         match load_at(&home) {
-            ConfigRead::Unreadable(error) => {
+            ConfigRead {
+                state: ConfigState::Unreadable(error),
+                ..
+            } => {
                 assert_eq!(error.file, CONFIG_FILE);
                 assert!(error.error.contains("parse"), "{}", error.error);
             }
@@ -215,8 +269,37 @@ mod tests {
         }
         assert_eq!(
             fs::read_to_string(&path).expect("the file"),
-            "{ not a configuration",
+            "round_limit = \n",
             "the load wrote over a configuration it could not read"
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn an_old_json_configuration_is_named_not_read() {
+        let home = scratch("legacy");
+        fs::create_dir_all(home_at(&home)).expect("the home");
+        let old = home_at(&home).join(LEGACY_CONFIG_FILE);
+        let old_text = r#"{"round_limit": 9}"#;
+        fs::write(&old, old_text).expect("an old configuration");
+
+        match load_at(&home) {
+            ConfigRead {
+                state: ConfigState::Config(config),
+                legacy: Some(file),
+            } => {
+                assert_eq!(file, LEGACY_CONFIG_FILE);
+                // The old file is not read: the configuration is the
+                // defaults, written beside it, not the nine rounds it holds.
+                assert_eq!(config, Config::default());
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(old.is_file(), "the old file was removed instead of named");
+        assert_eq!(
+            fs::read_to_string(&old).expect("the old file"),
+            old_text,
+            "the old file was converted"
         );
         let _ = fs::remove_dir_all(&home);
     }
@@ -228,7 +311,10 @@ mod tests {
         let home = scratch("blocked-home");
         fs::write(home.join(CONFIG_DIR), "not a folder").expect("a blocking file");
         match load_at(&home) {
-            ConfigRead::Unreadable(error) => {
+            ConfigRead {
+                state: ConfigState::Unreadable(error),
+                ..
+            } => {
                 assert_eq!(error.file, CONFIG_FILE);
                 assert!(!error.error.is_empty());
             }

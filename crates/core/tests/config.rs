@@ -122,6 +122,24 @@ fn the_round_limit_is_the_budget_the_model_doc_names() {
 }
 
 #[test]
+fn the_model_doc_shows_the_configurations_toml_shape() {
+    // The configuration is TOML, and the doc that defines its shape shows it:
+    // the file, the format, and a shape a human can copy.
+    let doc = include_str!("../../../docs/tasks/task-model.md");
+    for fact in [
+        "config.toml",
+        "config.json",
+        "TOML",
+        "[[agents]]",
+        "[harness]",
+        "[[order]]",
+        "provisional",
+    ] {
+        assert!(doc.contains(fact), "the model doc does not name {fact:?}");
+    }
+}
+
+#[test]
 fn a_role_runs_the_same_model_in_the_configuration_and_in_the_crew() {
     // The sidebar names the configured model and the main pane names the one
     // the run's record says: one role, one model, or the screen contradicts

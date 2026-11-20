@@ -716,12 +716,14 @@ mod tests {
 
     use super::*;
     use coding_crew_core::RoundKind;
-    use coding_crew_core::config::Config;
+    use coding_crew_core::config::{CONFIG_FILE, Config, LEGACY_CONFIG_FILE};
     use coding_crew_core::runtime::{
         Budget, Composition, CrewMember, QueueItem, RuntimeRound, Stamp,
     };
     use coding_crew_core::{Role, Status};
     use coding_crew_theme::Preset;
+
+    use crate::config::ConfigState;
 
     fn theme() -> Theme {
         Theme::preset(Preset::Dark)
@@ -814,7 +816,7 @@ mod tests {
 
     /// The configuration the window draws: the project's own flow.
     fn sidebar_config() -> ConfigRead {
-        ConfigRead::Config(Config::default())
+        ConfigRead::of(ConfigState::Config(Config::default()))
     }
 
     /// Draw the window with a configuration of its own.
@@ -962,7 +964,12 @@ mod tests {
     fn the_empty_states_are_named_on_the_dim_slot() {
         // No home to hold a configuration, and no runtime record: both states
         // are named, and both are painted on the dim slot.
-        let (rows, paint) = render_all(100, 40, &RuntimeRead::Absent, &ConfigRead::Absent);
+        let (rows, paint) = render_all(
+            100,
+            40,
+            &RuntimeRead::Absent,
+            &ConfigRead::of(ConfigState::Absent),
+        );
         let text = rows.join("\n");
         assert!(text.contains("no configuration yet"), "{text}");
         assert!(text.contains("nothing is running"), "{text}");
@@ -1445,22 +1452,45 @@ mod tests {
     #[test]
     fn a_configuration_that_cannot_be_read_is_named_on_the_sidebar() {
         let error = ReadError {
-            file: "config.json".to_string(),
-            error: "failed to parse the configuration: expected value at line 1".to_string(),
+            file: CONFIG_FILE.to_string(),
+            error: "failed to parse the configuration at line 1, column 15: expected a value"
+                .to_string(),
         };
         let (rows, paint) = render_all(
             100,
-            20,
+            40,
             &RuntimeRead::Absent,
-            &ConfigRead::Unreadable(error),
+            &ConfigRead::of(ConfigState::Unreadable(error)),
         );
         let text = rows.join("\n");
         assert!(text.contains("configuration is unreadable"), "{text}");
-        assert!(text.contains("config.json"), "{text}");
+        assert!(text.contains(CONFIG_FILE), "{text}");
         assert!(!text.contains("no configuration yet"), "{text}");
         assert_eq!(
             colour_of(&rows, &paint, "failed to parse"),
             theme().semantic.error.fg.expect("the error colour")
+        );
+        // The defaults are shown beside the error: what is wrong, and what
+        // the tool would use.
+        assert!(text.contains(sidebar::USING_DEFAULTS), "{text}");
+        assert!(text.contains("5 build-and-fix rounds"), "{text}");
+        assert!(text.contains("builder · runner"), "{text}");
+    }
+
+    #[test]
+    fn an_old_json_configuration_is_named_on_the_sidebar() {
+        let config = ConfigRead {
+            state: ConfigState::Config(Config::default()),
+            legacy: Some(LEGACY_CONFIG_FILE.to_string()),
+        };
+        let (rows, paint) = render_all(100, 40, &RuntimeRead::Absent, &config);
+        let text = rows.join("\n");
+        assert!(text.contains(LEGACY_CONFIG_FILE), "{text}");
+        assert!(text.contains("not read"), "{text}");
+        assert!(text.contains("5 build-and-fix rounds"), "{text}");
+        assert_eq!(
+            colour_of(&rows, &paint, "not read"),
+            theme().text.dim.fg.expect("the dim colour")
         );
     }
 
@@ -1521,7 +1551,9 @@ mod tests {
             FLOW_EMPTY.to_string(),
             "sidebar not shown: configuration".to_string(),
             "~/.config/coding-crew/".to_string(),
-            "config.json".to_string(),
+            CONFIG_FILE.to_string(),
+            LEGACY_CONFIG_FILE.to_string(),
+            "TOML".to_string(),
             "read-only".to_string(),
             "--render --plain".to_string(),
             "100 by 40".to_string(),
@@ -1531,6 +1563,7 @@ mod tests {
             sidebar::LIMIT_TITLE.to_string(),
             sidebar::ORDER_TITLE.to_string(),
             sidebar::UNREADABLE.to_string(),
+            sidebar::USING_DEFAULTS.to_string(),
             CREW_TITLE.to_string(),
             QUEUE_TITLE.to_string(),
             ROUND_TITLE.to_string(),

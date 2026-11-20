@@ -110,4 +110,5 @@ and the counts are the fixtures' own.
 
 ## Not included
 
-- `config.json` — not defined yet
+- `config.toml` — hugo's configuration, which lives in the tool's home under
+  `~/.config/coding-crew/`, not in the project
