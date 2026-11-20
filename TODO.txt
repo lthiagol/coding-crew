@@ -906,6 +906,33 @@ WHERE WE ARE
   quotes breaks the pick; and the help lists enter choose unqualified on
   rows where it does nothing.
   Next unit: the batched follow-ups (plan 43).
+  Unit closed: the batched follow-ups (plan 43). One clean build and review
+  round. Twenty recorded lows closed in one batch, each with a test that
+  pins it: the journal keeps the history when one event is bad and names a
+  journal it cannot parse instead of calling it empty; the shared age words
+  and raul's test agree; the configuration's error is pinned end to end and
+  a wrong-type value is told from a syntax error by kind; the unreadable
+  state keeps its rows, the error outranks the legacy notice, a home that
+  cannot be made is named, two instances on a fresh home do not collide, a
+  directory named config.json is still named, and the review-round limit's
+  pin rests on a phrase the project carried before the unit wrote it; the
+  footers name the keys that work in the scope they work in, the catalogue
+  offers only model ids, single-quoted TOML is read as TOML, and the help
+  names a key only where it works; raul's external review rounds are
+  numbered 1 to 5 with the self pre-screen at 0, Task::new reads the clock
+  once, the leap-second rule checks the year, and --width and --height are
+  refused outside render mode. The gate is green: 871 Rust tests and 212
+  script assertions.
+  Five lows stand recorded, and they go to a later batch: with an old
+  config.json and a broken config.toml, the notice and the defaults line can
+  be cut silently at a two- or three-row sidebar; docs/hugo/screens.md no
+  longer named the footer the shell builds - the orchestrator fixed that
+  prose in this round; the activity cut marker drops the count of unreadable
+  events; two row-level tests still hand-write an error wording the pipeline
+  never produces; and the review-round numbering rule in the model doc was
+  stale - the orchestrator fixed that too.
+  Next: the plan holds no open row. The interfaces are built; the
+  follow-ups stay recorded.
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
