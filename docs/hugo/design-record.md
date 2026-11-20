@@ -59,6 +59,28 @@ seven real ones and the human chose not to have them fixed, so the index
 carries a known-issues block that names them. Read it before reading any
 sketch as a specification.
 
+## The pick
+
+The human picked **the crew leads**: *who is acting, right now*. The agents
+and what they hold are the first thing read in the main pane; the order and
+the rest of the policy fold into the sidebar, which is where the
+configuration lives anyway.
+
+| reading | what leads the main pane |
+|---|---|
+| **the crew leads** | **the agents and what they hold — the pick** |
+| the queue leads | the live work as an index |
+| the findings lead | the open findings |
+| the round leads | the review in flight |
+| the budget leads | the external rounds spent |
+| the order leads | the policy |
+| the stamp leads | whether the automation runs |
+| the flow is the subject | every fact cites the step that produced it |
+
+The pick does not change the shape: one sidebar for the configuration, one
+main pane for what is running, no tabs. It fixes what the main pane reads
+**first** — the crew, then the work it holds.
+
 ## The rulings the review made
 
 A review round read the thirty sketches against the rules above and settled

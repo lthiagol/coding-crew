@@ -758,6 +758,28 @@ WHERE WE ARE
   Next: raul is built. The plan's remaining row is 31, hugo - the TUI for
   the flow - which waits on the human's pick of one of the eight readings
   in docs/hugo/tui-proposals/index.html.
+  The human picked the reading: the crew leads. The pick is recorded in
+  docs/hugo/design-record.md, and the plan's row 31 is split into three
+  units - 31 the shell, 38 the runtime record and the crew, 39 the
+  configuration and the order.
+  Unit closed: hugo's shell (plan 31). One clean build and review round.
+  crates/hugo is the crate - package coding-crew-hugo, binary hugo - and it
+  depends on the theme and core crates and not on the engine. The window is
+  one sidebar and one main pane, no tabs and no tab bar; below 80 columns
+  the sidebar is dropped whole before the main pane is squeezed, and the
+  drop is announced in a dim line that names what is not shown. hugo
+  --render --plain prints the screen as plain text, bounded and
+  deterministic, and the screens are pinned byte for byte at 40, 60 and 100
+  columns. The configuration home ~/.config/coding-crew/ is created on
+  demand, and a test proves it with a temporary home. The empty states are
+  named - "no configuration yet" and "nothing is running" - on the theme's
+  dim slot. The gate is green: 720 Rust tests and 212 script assertions.
+  Three lows stand recorded: hugo does not treat ctrl-c as quit the way
+  raul does, so a user carrying the habit is trapped in the alternate
+  screen; the plain-render plumbing - plain_text, setup and restore - is
+  copied verbatim from raul and can drift, and the project has a rule
+  against two copies of one thing; and the core dependency is declared but
+  unused until the crew unit lands.
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
@@ -919,6 +941,10 @@ OPEN
   tests are compile-checked but CI runs Ubuntu only.
   The light themes are deferred: our light preset and the light variants of
   the families (Catppuccin Latte, Dracula Alucard, Nord Light).
+  The hugo shell left three lows, none blocking: hugo does not treat ctrl-c
+  as quit the way raul does; the plain-render plumbing is copied from raul
+  and can drift; and the core dependency is declared but unused until the
+  crew lands.
   talita's own verbs. Out of scope, and it stays out of scope until it is
   asked for explicitly. Do not start it because the other tabs are done.
 
