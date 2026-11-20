@@ -111,12 +111,14 @@ fn the_default_models_are_the_ones_the_flows_role_configs_name() {
 }
 
 #[test]
-fn the_round_limit_is_the_budget_the_model_doc_names() {
+fn the_round_limit_is_the_models_budget() {
+    // The provenance is the model's own round budget, not a phrase the
+    // configuration unit wrote about itself.
     let config = Config::default();
     let doc = include_str!("../../../docs/tasks/task-model.md");
     assert!(
-        doc.contains("five build-and-fix cycles"),
-        "the model doc does not name the round limit"
+        doc.contains("`review.max_rounds` is `5` and counts **external** rounds"),
+        "the model doc does not name the round budget"
     );
     assert_eq!(config.round_limit, 5);
 }

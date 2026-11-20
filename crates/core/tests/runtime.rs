@@ -184,10 +184,18 @@ fn the_round_is_the_review_in_flight() {
     let round = runtime.round.as_ref().expect("a review in flight");
     let task = &tasks[&round.task];
     assert_eq!(task.status, Status::CodeReview, "{}", round.task);
-    let last = task.review.rounds.last().expect("a round");
-    assert_eq!(round.number, last.n + 1, "the next round");
+    let external = task
+        .review
+        .rounds
+        .iter()
+        .filter(|round| round.kind == coding_crew_core::RoundKind::External)
+        .count();
+    assert_eq!(round.number, external as u32 + 1, "the next round");
     assert_eq!(round.stage, coding_crew_core::RoundKind::External);
-    assert!(round.number > 1, "a self round comes first");
+    assert_eq!(
+        round.number, 1,
+        "the fixture has a self pre-screen and no external round yet"
+    );
 }
 
 #[test]

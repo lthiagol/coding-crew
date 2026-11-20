@@ -58,18 +58,51 @@ pub struct ActivityEvent {
 pub struct Activity {
     #[serde(default)]
     pub events: Vec<ActivityEvent>,
+    /// The events the journal holds that this reader could not read: an
+    /// unknown kind, or a missing field. They are counted, not fatal.
+    #[serde(default, skip)]
+    pub unreadable: usize,
+}
+
+/// The journal before its events are read: the file's own list.
+#[derive(Deserialize)]
+struct RawActivity {
+    #[serde(default)]
+    events: Vec<serde_json::Value>,
 }
 
 impl Activity {
     /// Read a journal from a file.
+    ///
+    /// One bad event does not blank the history: the reader keeps the events
+    /// it can read and counts the ones it cannot.
     pub fn read(path: &std::path::Path) -> Result<Self, ActivityError> {
         let text = std::fs::read_to_string(path)?;
-        Ok(serde_json::from_str(&text)?)
+        Self::from_json(&text)
+    }
+
+    /// Read a journal from its JSON text.
+    pub fn from_json(text: &str) -> Result<Self, ActivityError> {
+        let raw: RawActivity = serde_json::from_str(text)?;
+        let mut events = Vec::new();
+        let mut unreadable = 0;
+        for value in raw.events {
+            match serde_json::from_value(value) {
+                Ok(event) => events.push(event),
+                Err(_) => unreadable += 1,
+            }
+        }
+        Ok(Activity { events, unreadable })
     }
 
     /// Whether the journal holds no events.
     pub fn is_empty(&self) -> bool {
         self.events.is_empty()
+    }
+
+    /// Whether the history is there to read.
+    pub fn has_events(&self) -> bool {
+        !self.events.is_empty() || self.unreadable > 0
     }
 }
 
@@ -143,6 +176,32 @@ mod tests {
         assert!(matches!(&error, ActivityError::Parse(_)), "{error:?}");
         assert!(error.to_string().contains("parse"), "{error}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_bad_event_is_counted_and_the_readable_events_stay() {
+        let text = r#"{
+          "events": [
+            {"at": "2026-11-01T09:00Z", "kind": "created", "task": "TSK01", "by": "human"},
+            {"at": "2026-11-02T09:00Z", "kind": "not_a_kind", "task": "TSK01", "by": "human"},
+            {"at": "2026-11-03T09:00Z", "kind": "claimed", "by": "runner"},
+            {"at": "2026-11-04T09:00Z", "kind": "completed", "task": "TSK01", "by": "reviewer"}
+          ]
+        }"#;
+        let activity = Activity::from_json(text).expect("a journal with bad events");
+        assert_eq!(activity.events.len(), 2);
+        assert_eq!(activity.events[0].kind, EventKind::Created);
+        assert_eq!(activity.events[1].kind, EventKind::Completed);
+        assert_eq!(activity.unreadable, 2);
+        assert!(activity.has_events());
+        assert!(!activity.is_empty());
+    }
+
+    #[test]
+    fn a_journal_whose_events_are_not_a_list_does_not_parse() {
+        let error = Activity::from_json(r#"{"events": "not a list"}"#)
+            .expect_err("the journal has no list of events");
+        assert!(matches!(&error, ActivityError::Parse(_)), "{error:?}");
     }
 
     #[test]

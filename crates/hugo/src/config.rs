@@ -92,7 +92,12 @@ pub fn load_at(home: &Path) -> ConfigRead {
     let dir = match ensure_at(home) {
         Ok(dir) => dir,
         Err(error) => {
-            return ConfigRead::of(ConfigState::Unreadable(unreadable(error.to_string())));
+            // The home is what could not be made: naming the file inside it
+            // would name a file the tool never touched.
+            return ConfigRead::of(ConfigState::Unreadable(unreadable(
+                home_at(home).display().to_string(),
+                error.to_string(),
+            )));
         }
     };
     let legacy = legacy_at(&dir);
@@ -100,13 +105,17 @@ pub fn load_at(home: &Path) -> ConfigRead {
     let state = if path.exists() {
         match Config::read(&path) {
             Ok(config) => ConfigState::Config(config),
-            Err(error) => ConfigState::Unreadable(unreadable(error.to_string())),
+            Err(error) => {
+                ConfigState::Unreadable(unreadable(CONFIG_FILE.to_string(), error.to_string()))
+            }
         }
     } else {
         let config = Config::default();
         match config.write(&path) {
             Ok(()) => ConfigState::Config(config),
-            Err(error) => ConfigState::Unreadable(unreadable(error.to_string())),
+            Err(error) => {
+                ConfigState::Unreadable(unreadable(CONFIG_FILE.to_string(), error.to_string()))
+            }
         }
     };
     ConfigRead { state, legacy }
@@ -132,34 +141,43 @@ pub fn load(home: Option<&Path>) -> ConfigRead {
 /// Returns the configuration as saved, so the sidebar shows what the file
 /// holds.
 pub fn save_pick_at(home: &Path, config: &Config, model: &str) -> Result<Config, ReadError> {
-    let _ = ensure_at(home).map_err(|error| unreadable(error.to_string()))?;
+    let _ = ensure_at(home)
+        .map_err(|error| unreadable(home_at(home).display().to_string(), error.to_string()))?;
     let path = config_path(home);
     let text = match fs::read_to_string(&path) {
         // The model goes into the line the human wrote; a file that no
         // longer holds the orchestrator is not overwritten with one guess.
-        Ok(text) => Config::with_orchestrator_model(&text, model)
-            .ok_or_else(|| unreadable("the file has no orchestrator's model line".to_string()))?,
+        Ok(text) => Config::with_orchestrator_model(&text, model).ok_or_else(|| {
+            unreadable(
+                CONFIG_FILE.to_string(),
+                "the file has no orchestrator's model line".to_string(),
+            )
+        })?,
         // The file is gone: the configuration in hand is written whole.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => config.to_toml(),
-        Err(error) => return Err(unreadable(error.to_string())),
+        Err(error) => {
+            return Err(unreadable(CONFIG_FILE.to_string(), error.to_string()));
+        }
     };
-    let saved = Config::from_toml(&text).map_err(|error| unreadable(error.to_string()))?;
-    Config::write_text(&path, &text).map_err(|error| unreadable(error.to_string()))?;
+    let saved = Config::from_toml(&text)
+        .map_err(|error| unreadable(CONFIG_FILE.to_string(), error.to_string()))?;
+    Config::write_text(&path, &text)
+        .map_err(|error| unreadable(CONFIG_FILE.to_string(), error.to_string()))?;
     Ok(saved)
 }
 
 /// The name of the old configuration beside the new one, when it is there.
+///
+/// The old file is named by its existence, not by being a regular file: a
+/// `config.json` that is a directory is still a file the human left behind.
 fn legacy_at(dir: &Path) -> Option<String> {
     dir.join(LEGACY_CONFIG_FILE)
-        .is_file()
+        .exists()
         .then(|| LEGACY_CONFIG_FILE.to_string())
 }
 
-fn unreadable(error: String) -> ReadError {
-    ReadError {
-        file: CONFIG_FILE.to_string(),
-        error,
-    }
+fn unreadable(file: String, error: String) -> ReadError {
+    ReadError { file, error }
 }
 
 #[cfg(test)]
@@ -288,7 +306,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(error.file, CONFIG_FILE);
-                assert!(error.error.contains("parse"), "{}", error.error);
+                assert!(error.error.contains("syntax"), "{}", error.error);
             }
             other => panic!("{other:?}"),
         }
@@ -297,6 +315,22 @@ mod tests {
             "round_limit = \n",
             "the load wrote over a configuration it could not read"
         );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn an_old_json_that_is_a_directory_is_still_named() {
+        // The old file is named by its existence, not by being a regular
+        // file: a human who left a directory there is still told.
+        let home = scratch("legacy-dir");
+        fs::create_dir_all(home_at(&home)).expect("the home");
+        fs::create_dir_all(home_at(&home).join(LEGACY_CONFIG_FILE)).expect("a directory");
+        match load_at(&home) {
+            ConfigRead {
+                legacy: Some(file), ..
+            } => assert_eq!(file, LEGACY_CONFIG_FILE),
+            other => panic!("{other:?}"),
+        }
         let _ = fs::remove_dir_all(&home);
     }
 
@@ -399,12 +433,12 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     }
 
     #[test]
-    fn a_pick_that_cannot_be_written_names_the_configuration() {
+    fn a_pick_that_cannot_be_written_names_the_home() {
         let home = scratch("pick-blocked");
         fs::write(home.join(CONFIG_DIR), "not a folder").expect("a blocking file");
         let error = save_pick_at(&home, &Config::default(), "opencode-go/kimi-k3")
             .expect_err("the home cannot be made");
-        assert_eq!(error.file, CONFIG_FILE);
+        assert_eq!(error.file, home_at(&home).display().to_string());
         assert!(!error.error.is_empty(), "{error:?}");
         let _ = fs::remove_dir_all(&home);
     }
@@ -412,7 +446,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     #[test]
     fn a_home_that_cannot_be_made_is_an_unreadable_configuration() {
         // A file where the configuration folder must go is not an empty
-        // state: the sidebar names the file and the error.
+        // state: the sidebar names the home and the error.
         let home = scratch("blocked-home");
         fs::write(home.join(CONFIG_DIR), "not a folder").expect("a blocking file");
         match load_at(&home) {
@@ -420,7 +454,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
                 state: ConfigState::Unreadable(error),
                 ..
             } => {
-                assert_eq!(error.file, CONFIG_FILE);
+                assert_eq!(error.file, home_at(&home).display().to_string());
                 assert!(!error.error.is_empty());
             }
             other => panic!("{other:?}"),

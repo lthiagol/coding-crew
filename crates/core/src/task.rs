@@ -69,6 +69,8 @@ impl Task {
     /// A new task in `draft`.
     pub fn new(id: impl Into<String>, title: impl Into<String>) -> Self {
         let title = title.into();
+        // One reading of the clock: the three stamps are the same instant.
+        let now = crate::now_rfc3339();
         Self {
             schema_version: SCHEMA_VERSION,
             slug: slugify(&title),
@@ -78,9 +80,9 @@ impl Task {
             children: Vec::new(),
             kind: TaskKind::Task,
             promoted_from: None,
-            created: crate::now_rfc3339(),
-            updated: crate::now_rfc3339(),
-            status_since: crate::now_rfc3339(),
+            created: now.clone(),
+            updated: now.clone(),
+            status_since: now,
             status: Status::Draft,
             overlays: Overlays::default(),
             claim: None,

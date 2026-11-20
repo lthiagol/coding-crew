@@ -1341,7 +1341,8 @@ mod tests {
             .iter()
             .find(|row| row.contains("TSK04"))
             .unwrap_or_else(|| panic!("no row for TSK04: {rows:?}"));
-        // The age is a number and a unit: days, hours or minutes.
+        // The age is the shared vocabulary: days, hours, minutes, or the
+        // words for a wait under a minute.
         let age = row
             .chars()
             .rev()
@@ -1351,9 +1352,25 @@ mod tests {
             .rev()
             .collect::<String>();
         assert!(
-            age.ends_with('d') || age.ends_with('h') || age.ends_with('m'),
+            age.ends_with('d')
+                || age.ends_with('h')
+                || age.ends_with('m')
+                || row.trim_end().ends_with("under a minute"),
             "{row:?} has no age"
         );
+    }
+
+    #[test]
+    fn a_wait_under_a_minute_says_so() {
+        // The shared vocabulary names the sub-minute wait; the row is not
+        // zero minutes, and a fixture that reaches the state must not fail
+        // on correct behaviour.
+        let mut task = waiting_task("TSK01");
+        task.status_since = "2026-11-19T07:59:40Z".to_string();
+        let work = work_of(vec![task]);
+        let rows = draw(&work, 100, 12);
+        let text = text_of(&rows);
+        assert!(text.contains("under a minute"), "{text}");
     }
 
     #[test]

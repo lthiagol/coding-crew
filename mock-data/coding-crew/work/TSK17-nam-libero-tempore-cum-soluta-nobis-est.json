@@ -77,7 +77,7 @@
     "max_rounds": 5,
     "rounds": [
       {
-        "n": 1,
+        "n": 0,
         "kind": "self",
         "focus": "spec-compliance",
         "reviewer": "runner-03",
@@ -87,7 +87,7 @@
         "findings": []
       },
       {
-        "n": 2,
+        "n": 1,
         "kind": "external",
         "focus": "security",
         "reviewer": "reviewer-02",

@@ -61,7 +61,7 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 | title line | the name of the tool, `hugo`; a window too narrow for it shows no title rather than a cut of the name |
 | sidebar | the configuration, on the left: the agents and the model each runs, the harness, the review-round limit and the order, in that order. The agents group has a cursor: `↑ k` and `↓ j` move it, and `enter` on the orchestrator's row chooses its model. The builder's and the reviewer's rows are read-only. `r` reloads the configuration from the file |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
-| footer | the keys that work — never a key that does nothing. The window's keys are `q quit`, `ctrl-c quit`, `r reload`, `enter choose` (on the orchestrator's row) and `? help`; while the choice is open its keys replace them (`esc close`, `enter pick`, `↑ k` `↓ j` move) |
+| footer | the keys that work — never a key that does nothing. The window's keys are `q quit`, `ctrl-c quit`, `r reload`, `↑ k` `↓ j` move, `enter choose` (on the orchestrator's row) and `? help`; while the choice is open its keys are `esc close`, `enter pick`, `↑ k` `↓ j` move, and `q quit` and `? help` still work |
 | choice | the `orchestrator model`, as a small list of the catalogue's models with a cursor of its own; `enter` picks one and saves it, `esc` closes it without saving |
 | help | `?` opens the keys, in the sidebar and over the choice; any key closes it and gives the choice back |
 | tab bar | none: the flow has one screen, not a set of tabs |

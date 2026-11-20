@@ -11,7 +11,8 @@
 
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,14 +47,26 @@ impl Config {
     }
 
     /// Read a configuration from TOML text.
+    ///
+    /// A document that is not TOML and a document whose value has the wrong
+    /// type are different failures: the first is a syntax error, the second
+    /// is a shape error. The document is parsed once to tell them apart.
     pub fn from_toml(text: &str) -> Result<Self, ConfigError> {
-        toml::from_str(text).map_err(|error| ConfigError::Parse {
-            at: error
-                .span()
-                .map(|span| location(text, span.start))
-                .unwrap_or_default(),
-            message: error.message().to_string(),
-        })
+        match toml::from_str(text) {
+            Ok(config) => Ok(config),
+            Err(error) => {
+                let at = error
+                    .span()
+                    .map(|span| location(text, span.start))
+                    .unwrap_or_default();
+                let message = error.message().to_string();
+                if toml::from_str::<toml::Value>(text).is_err() {
+                    Err(ConfigError::Syntax { at, message })
+                } else {
+                    Err(ConfigError::Shape { at, message })
+                }
+            }
+        }
     }
 
     /// Write a configuration, atomically, as the store writes a task.
@@ -62,8 +75,11 @@ impl Config {
     }
 
     /// Write TOML text, atomically, as the store writes a task.
+    ///
+    /// The temporary name is unique to the write: two hugo instances on one
+    /// home must not rename each other's file.
     pub fn write_text(path: &Path, text: &str) -> Result<(), ConfigError> {
-        let tmp = path.with_extension("toml.tmp");
+        let tmp = temp_path(path);
         {
             let mut file = fs::File::create(&tmp)?;
             file.write_all(text.as_bytes())?;
@@ -202,6 +218,17 @@ impl Config {
     }
 }
 
+/// A temporary name beside `path`, unique to the write.
+fn temp_path(path: &Path) -> PathBuf {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "config.toml".to_string());
+    let nonce = NEXT.fetch_add(1, Ordering::Relaxed);
+    path.with_file_name(format!(".{name}.{}.{nonce}.tmp", std::process::id()))
+}
+
 /// A TOML string, escaped.
 fn quote(value: &str) -> String {
     let mut out = String::with_capacity(value.len() + 2);
@@ -227,9 +254,25 @@ fn quote(value: &str) -> String {
 fn is_orchestrator(lines: &[&str]) -> bool {
     lines.iter().any(|line| {
         pair(line).is_some_and(|(key, value)| {
-            key == "role" && value == quote(Role::Orchestrator.as_str())
+            key == "role" && unquote(value) == Some(Role::Orchestrator.as_str())
         })
     })
+}
+
+/// A TOML string's contents, whether it is basic or literal.
+///
+/// A hand-edited file may use single quotes (`role = 'orchestrator'`); the
+/// value is the same value. A value that is not one quoted string is `None`.
+fn unquote(value: &str) -> Option<&str> {
+    let first = value.chars().next()?;
+    if first != '"' && first != '\'' {
+        return None;
+    }
+    let last = value.chars().last()?;
+    if value.len() < 2 || last != first {
+        return None;
+    }
+    value.get(1..value.len() - 1)
 }
 
 /// The line of an agent table that sets the model, when it has one.
@@ -263,22 +306,41 @@ fn comment_of(line: &str) -> &str {
 }
 
 /// Where a line's comment starts, when it has one.
+///
+/// A `#` inside a string is not a comment. Both TOML strings are read: the
+/// basic string (`"..."`), where a backslash escapes the next character, and
+/// the literal string (`'...'`), where nothing is escaped.
 fn comment_start(body: &str) -> Option<usize> {
-    let mut in_string = false;
+    #[derive(Clone, Copy)]
+    enum Quote {
+        None,
+        Basic,
+        Literal,
+    }
+    let mut quote = Quote::None;
     let mut escaped = false;
     for (index, character) in body.char_indices() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if character == '\\' {
-                escaped = true;
-            } else if character == '"' {
-                in_string = false;
+        match quote {
+            Quote::Basic => {
+                if escaped {
+                    escaped = false;
+                } else if character == '\\' {
+                    escaped = true;
+                } else if character == '"' {
+                    quote = Quote::None;
+                }
             }
-        } else if character == '"' {
-            in_string = true;
-        } else if character == '#' {
-            return Some(index);
+            Quote::Literal => {
+                if character == '\'' {
+                    quote = Quote::None;
+                }
+            }
+            Quote::None => match character {
+                '"' => quote = Quote::Basic,
+                '\'' => quote = Quote::Literal,
+                '#' => return Some(index),
+                _ => {}
+            },
         }
     }
     None
@@ -414,8 +476,13 @@ impl Gate {
 pub enum ConfigError {
     #[error("failed to read the configuration: {0}")]
     Io(#[from] std::io::Error),
-    #[error("parse error{at}: {message}")]
-    Parse { at: String, message: String },
+    /// The document is not TOML at all.
+    #[error("syntax error{at}: {message}")]
+    Syntax { at: String, message: String },
+    /// The document is TOML, but not this configuration: a value has the
+    /// wrong type, or a field is missing.
+    #[error("invalid configuration{at}: {message}")]
+    Shape { at: String, message: String },
 }
 
 #[cfg(test)]
@@ -511,8 +578,26 @@ mod tests {
         // silently: the tool says it cannot read the file.
         let error = Config::from_toml("round_limit = 5\n")
             .expect_err("a partial configuration is not a configuration");
-        assert!(error.to_string().contains("parse"), "{error}");
+        assert!(matches!(&error, ConfigError::Shape { .. }), "{error:?}");
         assert!(error.to_string().contains("missing field"), "{error}");
+    }
+
+    #[test]
+    fn a_syntax_error_is_a_syntax_error() {
+        let error = Config::from_toml("round_limit = \n").expect_err("a broken value");
+        assert!(matches!(&error, ConfigError::Syntax { .. }), "{error:?}");
+        assert!(error.to_string().contains("syntax"), "{error}");
+    }
+
+    #[test]
+    fn a_wrong_type_is_a_shape_error_not_a_syntax_error() {
+        let error = Config::from_toml(
+            "round_limit = \"five\"\nagents = []\norder = []\n[harness]\ntool = \"x\"\ndriven = \"y\"\n",
+        )
+        .expect_err("a string is not a round limit");
+        assert!(matches!(&error, ConfigError::Shape { .. }), "{error:?}");
+        assert!(!error.to_string().contains("syntax"), "{error}");
+        assert!(error.to_string().contains("invalid"), "{error}");
     }
 
     #[test]
@@ -549,7 +634,7 @@ mod tests {
     fn a_parse_error_names_where_it_is() {
         let error = Config::from_toml("round_limit = \n").expect_err("a broken value");
         let says = error.to_string();
-        assert!(says.contains("parse"), "{says}");
+        assert!(says.contains("syntax"), "{says}");
         assert!(says.contains("line 1"), "{says}");
         assert!(says.contains("column"), "{says}");
     }
@@ -559,7 +644,7 @@ mod tests {
         // The old file is not read: its JSON text is not TOML.
         let json = serde_json::to_string(&Config::default()).expect("the old shape");
         let error = Config::from_toml(&json).expect_err("JSON is not the configuration");
-        assert!(error.to_string().contains("parse"), "{error}");
+        assert!(error.to_string().contains("syntax"), "{error}");
     }
 
     #[test]
@@ -662,6 +747,90 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
                 .map(|agent| agent.model.as_str()),
             Some("opencode-go/kimi-k3")
         );
+    }
+
+    #[test]
+    fn a_single_quoted_toml_string_is_read_as_toml() {
+        // A human may write the literal string form. The role is the same
+        // role, and a `#` inside the string is not a comment.
+        let text = "\
+round_limit = 5
+[[agents]]
+name = 'builder'
+role = 'runner'
+model = 'opencode-go/deepseek-v4.1-flash#high'
+[[agents]]
+name = 'orchestrator'
+role = 'orchestrator'
+model = 'opencode-go/glm-5.3#high' # the orchestrator's lens
+[harness]
+tool = 'opencode'
+driven = '--standalone'
+[[order]]
+step = 'groom'
+role = 'creator'
+gates = [{ from = 'groomed', to = 'approved' }]
+";
+        let config = Config::from_toml(text).expect("single-quoted TOML");
+        assert_eq!(
+            config
+                .agents
+                .iter()
+                .find(|agent| agent.role == Role::Orchestrator)
+                .map(|agent| agent.model.as_str()),
+            Some("opencode-go/glm-5.3#high")
+        );
+        assert_eq!(config.harness.tool, "opencode");
+        let picked = Config::with_orchestrator_model(text, "opencode-go/kimi-k3#low")
+            .expect("the orchestrator's model line");
+        assert!(
+            picked.contains("model = \"opencode-go/kimi-k3#low\" # the orchestrator's lens"),
+            "{picked}"
+        );
+    }
+
+    #[test]
+    fn a_hash_inside_a_literal_string_is_not_a_comment() {
+        assert_eq!(comment_start("name = 'a#b'"), None);
+        assert_eq!(comment_start("name = 'a#b' # note"), Some(13));
+        assert_eq!(pair("name = 'a#b'"), Some(("name", "'a#b'")));
+    }
+
+    #[test]
+    fn two_writers_of_one_configuration_do_not_collide() {
+        // Two instances on a fresh home wrote to one fixed temporary name:
+        // the loser's rename failed. Each write has its own name now.
+        let dir =
+            std::env::temp_dir().join(format!("coding-crew-config-race-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch folder");
+        let path = dir.join(CONFIG_FILE);
+        let mut handles = Vec::new();
+        for n in 0..8u32 {
+            let path = path.clone();
+            handles.push(std::thread::spawn(move || {
+                let config = Config {
+                    round_limit: n,
+                    ..Config::default()
+                };
+                config.write(&path).expect("a concurrent write");
+            }));
+        }
+        for handle in handles {
+            handle.join().expect("a writer");
+        }
+        // One of the writes is the file, whole and parsable.
+        let saved = Config::read(&path).expect("the configuration");
+        assert!((0..8).contains(&saved.round_limit));
+        // The temporary files are gone: each writer renamed its own.
+        let leftovers: Vec<String> = fs::read_dir(&dir)
+            .expect("the folder")
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

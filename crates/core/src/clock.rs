@@ -100,10 +100,46 @@ pub fn parse_rfc3339(text: &str) -> Option<i64> {
     Some(days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second - offset)
 }
 
+/// The days on which a leap second was inserted, at 23:59:60 UTC.
+///
+/// A leap second is not a shape of the calendar: it happens only when one is
+/// announced. `:60` on 30 June or 31 December is not enough; the year has to
+/// be one that carried a leap second. The table is the announced set through
+/// 2016, the last one inserted.
+const LEAP_SECOND_DAYS: [(i64, u32, u32); 27] = [
+    (1972, 6, 30),
+    (1972, 12, 31),
+    (1973, 12, 31),
+    (1974, 12, 31),
+    (1975, 12, 31),
+    (1976, 12, 31),
+    (1977, 12, 31),
+    (1978, 12, 31),
+    (1979, 12, 31),
+    (1981, 6, 30),
+    (1982, 6, 30),
+    (1983, 6, 30),
+    (1985, 6, 30),
+    (1987, 12, 31),
+    (1989, 12, 31),
+    (1990, 12, 31),
+    (1992, 6, 30),
+    (1993, 6, 30),
+    (1994, 6, 30),
+    (1995, 12, 31),
+    (1997, 6, 30),
+    (1998, 12, 31),
+    (2005, 12, 31),
+    (2008, 12, 31),
+    (2012, 6, 30),
+    (2015, 6, 30),
+    (2016, 12, 31),
+];
+
 /// Whether a second is one the civil clock has.
 ///
-/// A leap second is `:60`, and it exists only at 23:59:60 UTC on 30 June
-/// or 31 December. The stamp is converted to UTC, date rollover included,
+/// A leap second is `:60`, and it exists only at 23:59:60 UTC on a day the
+/// year carried one. The stamp is converted to UTC, date rollover included,
 /// before the decision: an offset changes the local reading, not the
 /// instant.
 fn second_is_valid(
@@ -125,10 +161,10 @@ fn second_is_valid(
     let utc = days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + 59 - offset;
     let days = utc.div_euclid(86_400);
     let rem = utc.rem_euclid(86_400);
-    let (_, utc_month, utc_day) = civil_from_days(days);
+    let (utc_year, utc_month, utc_day) = civil_from_days(days);
     rem / 3_600 == 23
         && (rem % 3_600) / 60 == 59
-        && matches!((utc_month, utc_day), (6, 30) | (12, 31))
+        && LEAP_SECOND_DAYS.contains(&(utc_year, utc_month, utc_day))
 }
 
 /// The days in a month of the civil calendar.
@@ -313,25 +349,30 @@ mod tests {
     }
 
     #[test]
-    fn reads_a_leap_second_only_at_the_utc_end_of_june_or_december() {
-        // RFC 3339 writes a leap second as `:60` at 23:59:60 UTC on 30 June
-        // or 31 December. A stamp in another zone names the same instant at
-        // a different local reading.
-        assert!(parse_rfc3339("2026-12-31T23:59:60Z").is_some());
-        assert!(parse_rfc3339("2026-06-30T23:59:60Z").is_some());
+    fn reads_a_leap_second_only_on_a_day_the_year_carried_one() {
+        // RFC 3339 writes a leap second as `:60` at 23:59:60 UTC on a day
+        // that had one. A stamp in another zone names the same instant at a
+        // different local reading.
+        assert!(parse_rfc3339("2016-12-31T23:59:60Z").is_some());
+        assert!(parse_rfc3339("2015-06-30T23:59:60Z").is_some());
         // An offset moves the reading, not the instant: this is the
-        // 2026-12-31T23:59:60Z leap second.
-        assert!(parse_rfc3339("2026-12-31T15:59:60-08:00").is_some());
+        // 2016-12-31T23:59:60Z leap second.
+        assert!(parse_rfc3339("2016-12-31T15:59:60-08:00").is_some());
         // The local date rolls over; the instant is still 31 December UTC.
-        assert!(parse_rfc3339("2027-01-01T01:59:60+02:00").is_some());
+        assert!(parse_rfc3339("2017-01-01T01:59:60+02:00").is_some());
         // The other way: 21:59:60Z, which is not a leap second.
-        assert_eq!(parse_rfc3339("2026-12-31T23:59:60+02:00"), None);
+        assert_eq!(parse_rfc3339("2016-12-31T23:59:60+02:00"), None);
+        // A year that carried no leap second is not a leap second, even on
+        // the two days of the year the calendar allows.
+        assert_eq!(parse_rfc3339("2026-12-31T23:59:60Z"), None);
+        assert_eq!(parse_rfc3339("2026-06-30T23:59:60Z"), None);
+        assert_eq!(parse_rfc3339("1971-12-31T23:59:60Z"), None);
         // `:60` anywhere else is not a leap second.
-        assert_eq!(parse_rfc3339("2026-11-07T23:59:60Z"), None);
-        assert_eq!(parse_rfc3339("2026-06-29T23:59:60Z"), None);
-        assert_eq!(parse_rfc3339("2026-07-01T23:59:60Z"), None);
-        assert_eq!(parse_rfc3339("2026-12-31T23:58:60Z"), None);
-        assert_eq!(parse_rfc3339("2026-12-31T13:00:60Z"), None);
-        assert_eq!(parse_rfc3339("2026-12-31T13:00:61Z"), None);
+        assert_eq!(parse_rfc3339("2016-11-07T23:59:60Z"), None);
+        assert_eq!(parse_rfc3339("2016-06-29T23:59:60Z"), None);
+        assert_eq!(parse_rfc3339("2016-07-01T23:59:60Z"), None);
+        assert_eq!(parse_rfc3339("2016-12-31T23:58:60Z"), None);
+        assert_eq!(parse_rfc3339("2016-12-31T13:00:60Z"), None);
+        assert_eq!(parse_rfc3339("2016-12-31T13:00:61Z"), None);
     }
 }

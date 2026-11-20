@@ -22,6 +22,8 @@ const BORDER: u16 = 2;
 const LABEL_WIDTH: usize = 12;
 /// The events the activity block shows: the last few of the journal.
 const ACTIVITY_SHOWN: usize = 5;
+/// What the activity block says when the journal itself cannot be read.
+const JOURNAL_UNREADABLE: &str = "the journal cannot be read";
 
 /// Draw the tab.
 ///
@@ -919,12 +921,33 @@ fn claimable_panel(work: &Work, theme: &Theme, now: &str) -> Panel {
 /// order, and never adds, sorts or invents one. An optional journal that is
 /// not there says so in one line, and says nothing else.
 fn activity_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
-    let events = work
-        .activity
-        .as_ref()
+    // A journal that is there but cannot be read is named. It is not the
+    // same state as a project that has no journal, and it must not read as
+    // one: the errors panel names the file, and this block names the state.
+    if work.activity_unreadable() {
+        return Panel {
+            title: "activity",
+            lines: vec![Line::from(Span::styled(
+                JOURNAL_UNREADABLE,
+                theme.text.normal,
+            ))],
+            compact: None,
+            compact_whole: false,
+            optional: 0,
+            atomic: true,
+            more: "events",
+            marker: Some(Marker {
+                text: JOURNAL_UNREADABLE.to_string(),
+                style: theme.text.normal,
+            }),
+        };
+    }
+    let activity = work.activity.as_ref();
+    let events = activity
         .map(|activity| activity.events.as_slice())
         .unwrap_or(&[]);
-    if events.is_empty() {
+    let unreadable = activity.map(|activity| activity.unreadable).unwrap_or(0);
+    if events.is_empty() && unreadable == 0 {
         return Panel {
             title: "activity",
             lines: vec![Line::from(Span::styled("no activity yet", theme.text.dim))],
@@ -953,6 +976,12 @@ fn activity_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
             .iter()
             .map(|event| event_line(event, width.saturating_sub(BORDER), theme)),
     );
+    if unreadable > 0 {
+        lines.push(Line::from(Span::styled(
+            format!("{unreadable} {} could not be read", event_word(unreadable)),
+            theme.text.dim,
+        )));
+    }
     let count = events.len();
     Panel {
         title: "activity",
@@ -965,7 +994,11 @@ fn activity_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
         atomic: true,
         more: "events",
         marker: Some(Marker {
-            text: format!("activity not shown: {count} {}", event_word(count)),
+            text: if events.is_empty() {
+                format!("{unreadable} {} could not be read", event_word(unreadable))
+            } else {
+                format!("activity not shown: {count} {}", event_word(count))
+            },
             style: theme.text.dim,
         }),
     }
@@ -1269,7 +1302,10 @@ mod tests {
     /// the record keeps them.
     fn with_activity(events: Vec<coding_crew_core::ActivityEvent>) -> Work {
         let mut work = mock_work();
-        work.activity = Some(coding_crew_core::Activity { events });
+        work.activity = Some(coding_crew_core::Activity {
+            events,
+            ..Default::default()
+        });
         work
     }
 
@@ -1331,6 +1367,47 @@ mod tests {
             assert!(!text.contains("not shown: "), "{text}");
             assert!(!text.contains("created "), "an event was invented: {text}");
         }
+    }
+
+    #[test]
+    fn a_bad_event_is_counted_and_the_readable_history_stays() {
+        let text = r#"{
+          "events": [
+            {"at": "2026-11-01T09:00Z", "kind": "created", "task": "TSK01", "by": "human", "note": "kept"},
+            {"at": "2026-11-02T09:00Z", "kind": "not_a_kind", "task": "TSK01", "by": "human"},
+            {"at": "2026-11-03T09:00Z", "kind": "claimed", "by": "runner"},
+            {"at": "2026-11-04T09:00Z", "kind": "completed", "task": "TSK01", "by": "reviewer", "note": "also kept"}
+          ]
+        }"#;
+        let mut work = mock_work();
+        work.activity = Some(coding_crew_core::Activity::from_json(text).expect("a journal"));
+        let text = draw(&work, 100, 60).join("\n");
+        assert!(text.contains("kept"), "the readable event is gone: {text}");
+        assert!(text.contains("also kept"), "{text}");
+        assert!(text.contains("2 events could not be read"), "{text}");
+        assert!(!text.contains("no activity yet"), "{text}");
+    }
+
+    #[test]
+    fn a_journal_that_does_not_parse_is_named_not_called_empty() {
+        let dir = scratch_dir("journal-unreadable");
+        let work_dir = dir.join("work");
+        fs::create_dir_all(&work_dir).expect("a work folder");
+        let mut task = coding_crew_core::Task::new("TSK01", "a task");
+        task.status = coding_crew_core::Status::Approved;
+        fs::write(
+            work_dir.join("TSK01-a-task.json"),
+            serde_json::to_string_pretty(&task).expect("writing a task"),
+        )
+        .expect("writing a task");
+        fs::write(dir.join("activity.json"), "{ not json").expect("a broken journal");
+        let work = Work::load(&work_dir);
+        assert!(work.activity_unreadable());
+        let text = draw(&work, 100, 40).join("\n");
+        assert!(text.contains(JOURNAL_UNREADABLE), "{text}");
+        assert!(text.contains("activity.json"), "{text}");
+        assert!(!text.contains("no activity yet"), "{text}");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -613,7 +613,14 @@ def runtime_record(tasks):
         "round": {
             "task": reviewer_task["id"],
             "stage": "external",
-            "number": max(round["n"] for round in reviewer_task["review"]["rounds"]) + 1,
+            # The round number is what the budget counts: the external
+            # rounds spent, plus the one in flight.
+            "number": sum(
+                1
+                for round in reviewer_task["review"]["rounds"]
+                if round["kind"] == "external"
+            )
+            + 1,
         },
         "budget": {
             "spent": sum(
@@ -674,11 +681,14 @@ def check_runtime(record, tasks, events):
         if finding["status"] == "open"
     ), record["findings"]
 
-    # The round in flight is the reviewer's task, at the next round.
+    # The round in flight is the reviewer's task, at the next external round.
     round_ = record["round"]
     task = by_id[round_["task"]]
     assert task["status"] == "code-review", task["id"]
-    assert round_["number"] == max(r["n"] for r in task["review"]["rounds"]) + 1
+    external_spent = sum(
+        1 for r in task["review"]["rounds"] if r["kind"] == "external"
+    )
+    assert round_["number"] == external_spent + 1
     reviewer = next(
         member for member in record["crew"] if member["role"] == "reviewer"
     )
@@ -951,8 +961,10 @@ def build():
             review={
                 "max_rounds": 5,
                 "rounds": [
+                    # `n` counts external rounds; the self pre-screen is
+                    # round 0 and does not spend the budget.
                     round_(
-                        1,
+                        0,
                         "self",
                         "spec-compliance",
                         f"runner-{i + 1:02d}",
@@ -1038,7 +1050,7 @@ def build():
                 "max_rounds": 5,
                 "rounds": [
                     round_(
-                        1,
+                        0,
                         "self",
                         "spec-compliance",
                         f"runner-{i + 2:02d}",
@@ -1047,7 +1059,7 @@ def build():
                         ts(claim_day, self_hour),
                     ),
                     round_(
-                        2,
+                        1,
                         "external",
                         pick(FOCI, i + 1),
                         f"reviewer-{i + 1:02d}",
@@ -1071,7 +1083,7 @@ def build():
         claim_day = 14 + i
         rounds = [
             round_(
-                1,
+                0,
                 "self",
                 "spec-compliance",
                 f"runner-{i + 3:02d}",
@@ -1081,19 +1093,19 @@ def build():
             )
         ]
         findings = []
-        for n in range(2, 7):
-            at = ts(claim_day, 4 + n)
-            findings.append(finding(n - 1, at))
+        for n in range(1, 6):
+            at = ts(claim_day, 5 + n)
+            findings.append(finding(n, at))
             rounds.append(
                 round_(
                     n,
                     "external",
                     pick(FOCI, n),
-                    f"reviewer-{n - 1:02d}",
+                    f"reviewer-{n:02d}",
                     "changes-needed",
                     n,
                     at,
-                    [f"FIND-{n - 1:02d}"],
+                    [f"FIND-{n:02d}"],
                 )
             )
         item = task(
@@ -1207,7 +1219,7 @@ def build():
                 "max_rounds": 5,
                 "rounds": [
                     round_(
-                        1,
+                        0,
                         "self",
                         "spec-compliance",
                         f"runner-{i + 4:02d}",
@@ -1216,7 +1228,7 @@ def build():
                         self_at,
                     ),
                     round_(
-                        2,
+                        1,
                         "external",
                         pick(FOCI, i),
                         f"reviewer-{i + 5:02d}",

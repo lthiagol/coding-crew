@@ -1048,6 +1048,10 @@ impl App {
 
     /// The help's lines, with the rank that decides which one gives way
     /// first. Zero gives way first; `u8::MAX` never gives way.
+    ///
+    /// The keys are the ones that work where the help was opened: the
+    /// sidebar's in the window, the choice's over the choice. `enter` is
+    /// named only when the cursor is on the row it opens.
     fn help_lines(&self, width: usize) -> Vec<(u8, Line<'static>)> {
         let line = |key: &str, says: &str| {
             let key = cut_to(&format!(" {key} "), width);
@@ -1058,17 +1062,34 @@ impl App {
                 Span::styled(says, self.theme.text.normal),
             ])
         };
-        vec![
-            (0, line("↑↓ j/k", "move")),
-            (1, line("ctrl-c", "quit")),
-            (2, line(RELOAD_KEY, "reload")),
-            (3, line(CHOOSE_KEY, "choose")),
-            (4, line(CHOOSE_KEY, "pick (choice)")),
-            (4, line(CLOSE_KEY, "close (choice)")),
-            (0, line("↑↓ j/k", "move (choice)")),
-            (u8::MAX, line("q", "quit")),
-            (u8::MAX, line("?", "this help")),
-        ]
+        if let Some(choice) = &self.choice {
+            let mut lines = Vec::new();
+            if choice.catalog.models().len() > 1 {
+                lines.push((0, line("↑↓ j/k", "move")));
+            }
+            lines.push((1, line("ctrl-c", "quit")));
+            lines.push((2, line(CLOSE_KEY, "close")));
+            lines.push((3, line(CHOOSE_KEY, "pick")));
+            lines.push((u8::MAX, line("q", "quit")));
+            lines.push((u8::MAX, line("?", "this help")));
+            return lines;
+        }
+        let mut lines = Vec::new();
+        if self.agents_drawn
+            && self
+                .loaded()
+                .is_some_and(|config| !config.agents.is_empty())
+        {
+            lines.push((0, line("↑↓ j/k", "move")));
+        }
+        lines.push((1, line("ctrl-c", "quit")));
+        lines.push((2, line(RELOAD_KEY, "reload")));
+        if self.can_choose() {
+            lines.push((3, line(CHOOSE_KEY, "choose")));
+        }
+        lines.push((u8::MAX, line("q", "quit")));
+        lines.push((u8::MAX, line("?", "this help")));
+        lines
     }
 
     /// The footer: the keys that work. The window has `q quit`, and `ctrl-c`
@@ -1091,23 +1112,32 @@ impl App {
                 width,
             );
         }
-        if self.choice.is_some() {
-            return footer(
-                vec![
-                    (0, part(CLOSE_KEY, "close"), true),
-                    (1, part(CHOOSE_KEY, "pick"), true),
-                    (2, part("↑↓ j/k", "move"), false),
-                ],
-                width,
-            );
+        if let Some(choice) = &self.choice {
+            let mut parts = vec![
+                (0, part(CLOSE_KEY, "close"), true),
+                (1, part(CHOOSE_KEY, "pick"), true),
+                (2, part("q", "quit"), false),
+                (4, part("?", "help"), false),
+            ];
+            if choice.catalog.models().len() > 1 {
+                parts.push((3, part("↑↓ j/k", "move"), false));
+            }
+            return footer(parts, width);
         }
         let mut parts = vec![
             (0, part("q", "quit"), true),
             (1, part(RELOAD_KEY, "reload"), false),
             (3, part("?", "help"), true),
         ];
+        if self.agents_drawn
+            && self
+                .loaded()
+                .is_some_and(|config| !config.agents.is_empty())
+        {
+            parts.push((2, part("↑↓ j/k", "move"), false));
+        }
         if self.can_choose() {
-            parts.push((2, part(CHOOSE_KEY, "choose"), false));
+            parts.push((4, part(CHOOSE_KEY, "choose"), false));
         }
         footer(parts, width)
     }
@@ -1598,13 +1628,13 @@ mod tests {
     #[test]
     fn the_footer_names_the_keys_that_work_and_no_key_that_does_nothing() {
         // The cursor starts on the builder, where enter opens nothing: the
-        // footer names quit, reload and help, and not choose.
+        // footer names quit, reload, move and help, and not choose.
         let (rows, _) = render(100, 20);
         let footer = rows.last().expect("a footer row");
-        for works in ["q", "quit", "r", "reload", "?", "help"] {
+        for works in ["q", "quit", "r", "reload", "↑↓ j/k", "move", "?", "help"] {
             assert!(footer.contains(works), "{footer}: {works}");
         }
-        for dead in ["open", "tab", "esc", "move", "choose", "pick"] {
+        for dead in ["open", "tab", "esc", "choose", "pick"] {
             assert!(!footer.contains(dead), "{footer}: {dead}");
         }
         // On the orchestrator's row, enter has a choice to open.
@@ -1618,6 +1648,16 @@ mod tests {
             .map(|span| span.content.as_ref())
             .collect();
         assert!(line.contains("enter") && line.contains("choose"), "{line}");
+        // With the sidebar dropped, the move keys would do nothing: they are
+        // not named.
+        app.agents_drawn = false;
+        let line: String = app
+            .footer_line(100)
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(!line.contains("move"), "{line}");
         // A window too narrow for the key shows no half footer.
         let (rows, _) = render(4, 8);
         assert_eq!(rows.last().expect("a footer row").trim(), "");
@@ -2092,7 +2132,8 @@ mod tests {
     fn a_configuration_that_cannot_be_read_is_named_on_the_sidebar() {
         let error = ReadError {
             file: CONFIG_FILE.to_string(),
-            error: "failed to parse the configuration at line 1, column 15: expected a value"
+            error: Config::from_toml("round_limit = \n")
+                .expect_err("a broken configuration")
                 .to_string(),
         };
         let (rows, paint) = render_all(
@@ -2106,7 +2147,7 @@ mod tests {
         assert!(text.contains(CONFIG_FILE), "{text}");
         assert!(!text.contains("no configuration yet"), "{text}");
         assert_eq!(
-            colour_of(&rows, &paint, "failed to parse"),
+            colour_of(&rows, &paint, "syntax error"),
             theme().semantic.error.fg.expect("the error colour")
         );
         // The defaults are shown beside the error: what is wrong, and what
@@ -2114,6 +2155,36 @@ mod tests {
         assert!(text.contains(sidebar::USING_DEFAULTS), "{text}");
         assert!(text.contains("5 build-and-fix rounds"), "{text}");
         assert!(text.contains("builder · runner"), "{text}");
+    }
+
+    #[test]
+    fn the_error_on_screen_is_the_one_the_pipeline_produces() {
+        // The row-level wording and the real reader's wording are one: the
+        // file is read through the pipeline, and what the sidebar paints is
+        // what that reader said.
+        let home = scratch("error-pinned");
+        fs::create_dir_all(config::home_at(&home)).expect("the home");
+        let path = config::config_path(&home);
+        fs::write(&path, "round_limit = \n").expect("a broken configuration");
+        let read = config::load_at(&home);
+        let expected = Config::read(&path)
+            .expect_err("a broken configuration")
+            .to_string();
+        match &read.state {
+            ConfigState::Unreadable(error) => assert_eq!(error.error, expected),
+            other => panic!("{other:?}"),
+        }
+        let mut app = App::new(theme(), read, Some(home.clone()));
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        // The sidebar's inner width is 30 columns: the row is the error cut
+        // to the pane, exactly, not a shorter wording a test invented.
+        let visible = cut_to(&format!("{CONFIG_FILE}: {expected}"), 30);
+        assert!(
+            rows.iter().any(|row| row.contains(&visible)),
+            "the screen does not carry {visible:?}: {}",
+            text_of(&rows)
+        );
+        let _ = fs::remove_dir_all(&home);
     }
 
     #[test]
@@ -2711,7 +2782,9 @@ mod tests {
             .iter()
             .map(|span| span.content.as_ref())
             .collect();
-        for works in [CLOSE_KEY, "close", CHOOSE_KEY, "pick", "move"] {
+        for works in [
+            CLOSE_KEY, "close", CHOOSE_KEY, "pick", "move", "q", "quit", "?", "help",
+        ] {
             assert!(line.contains(works), "{line}: {works}");
         }
         // A narrow footer gives the movement up before the keys that close
@@ -2733,6 +2806,18 @@ mod tests {
         choosing.on_key(press(KeyCode::Char('?')));
         assert!(choosing.help, "? did not open the help over the choice");
         assert!(choosing.choice.is_some(), "the help closed the choice");
+        let (rows, _) = render_app(&mut choosing, 100, 40, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        for says in ["close", "pick", "move", "quit"] {
+            assert!(
+                text.contains(says),
+                "{says} is not in the choice's help: {text}"
+            );
+        }
+        assert!(
+            !text.contains("reload"),
+            "the choice's help names reload: {text}"
+        );
         choosing.on_key(press(KeyCode::Char('x')));
         assert!(!choosing.help, "a key left the help open");
         assert!(
@@ -2740,19 +2825,34 @@ mod tests {
             "closing the help lost the choice"
         );
 
-        // The help is one key away, and it names the sidebar's and the
-        // choice's keys.
+        // The help is one key away. In the window it names the sidebar's
+        // keys only: enter is on the builder's row, where it opens nothing.
         let mut window = app();
         window.on_key(press(KeyCode::Char('?')));
         assert!(window.help, "? did not open the help");
         let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
         let text = text_of(&rows);
         assert!(text.contains(HELP_TITLE), "{text}");
-        for says in ["reload", "choose", "pick", "close", "move", "quit"] {
+        for says in ["reload", "move", "quit"] {
             assert!(text.contains(says), "{says} is not in the help: {text}");
+        }
+        let body = rows[..rows.len() - 1].join("\n");
+        for dead in ["choose", "pick", "close"] {
+            assert!(
+                !body.contains(dead),
+                "{dead} is in the window's help: {text}"
+            );
         }
         let footer = rows.last().expect("a footer");
         assert!(footer.contains("close help"), "{footer}");
+        // On the orchestrator's row, enter has a choice to open, and the
+        // help names it.
+        window.on_key(press(KeyCode::Char('x')));
+        window.cursor = 2;
+        window.agents_drawn = true;
+        window.on_key(press(KeyCode::Char('?')));
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(text_of(&rows).contains("choose"), "{}", text_of(&rows));
         // Any key closes it; q still quits.
         window.on_key(press(KeyCode::Char('x')));
         assert!(!window.help, "a key left the help open");
@@ -2782,10 +2882,14 @@ mod tests {
         let (rows, paint) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         let text = text_of(&rows);
         assert!(text.contains(sidebar::NOT_SAVED), "{text}");
-        assert!(text.contains(CONFIG_FILE), "{text}");
+        // The home is what could not be made, and it is what is named.
+        let home_name = config::home_at(&home).display().to_string();
+        let shown = cut_to(&home_name, 30);
+        assert!(text.contains(&shown), "{text}");
+        assert!(!text.contains(CONFIG_FILE), "{text}");
         // The failure is painted on the failure slot.
         assert_eq!(
-            colour_of(&rows, &paint, "config.toml"),
+            colour_of(&rows, &paint, "hugo-app-pick-failure"),
             theme().semantic.error.fg.expect("the error colour")
         );
         let _ = fs::remove_dir_all(&home);

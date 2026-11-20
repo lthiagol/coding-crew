@@ -87,7 +87,7 @@
 ││   │ n │                │             │                │                │              │        ││
 ││   │ d │                │             │                │                │              │        ││
 │╞═══╪═══╪════════════════╪═════════════╪════════════════╪════════════════╪══════════════╪════════╡│
-││  1  │  s  │  spec-complia  │  runner-01  │  changes-need  │  2026-11-10T1  │ Temporibus   │  FIN│
+││  0  │  s  │  spec-complia  │  runner-01  │  changes-need  │  2026-11-10T1  │ Temporibus   │  FIN│
 ││   │  e  │  nce           │             │  ed            │  6:00Z         │ autem        │  -01  │
 ││   │  l  │                │             │                │                │ quibusdam et │       │
 ││   │  f  │                │             │                │                │ aut officiis │       │

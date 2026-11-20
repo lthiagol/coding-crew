@@ -142,7 +142,7 @@ A role may not write another role's section.
 | finding | `FIND-01` | task |
 | comment | `CMT-01` | task |
 | note | `NOTE-01` | task |
-| review round | `n`, 1.. — the count is of **external** rounds | task |
+| review round | `n`, 0.. — `0` is the self pre-screen, and the count the budget carries is of **external** rounds, numbered `1..` | task |
 
 Ids are allocated by **scanning what exists**, never from a count of files: the
 highest plain `TSK` number in the folder plus one, zero-padded to two digits.

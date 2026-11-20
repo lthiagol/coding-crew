@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use coding_crew_core::store::{ACTIVITY_FILE, activity_path};
-use coding_crew_core::{Activity, Item, ItemKind, Status, Task};
+use coding_crew_core::{Activity, ActivityError, Item, ItemKind, Status, Task};
 
 // The human lane's vocabulary is the model's, beside the statuses it names.
 pub use coding_crew_core::Reason;
@@ -125,15 +125,9 @@ impl Work {
         // not a broken one. A journal that is there but does not parse is a
         // file that could not be read, like a task that does not parse.
         let path = activity_path(root);
-        match fs::read_to_string(&path) {
-            Ok(contents) => match serde_json::from_str::<Activity>(&contents) {
-                Ok(activity) => work.activity = Some(activity),
-                Err(error) => work.errors.push(ReadError {
-                    file: ACTIVITY_FILE.to_string(),
-                    error: error.to_string(),
-                }),
-            },
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        match Activity::read(&path) {
+            Ok(activity) => work.activity = Some(activity),
+            Err(ActivityError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => work.errors.push(ReadError {
                 file: ACTIVITY_FILE.to_string(),
                 error: error.to_string(),
@@ -147,6 +141,14 @@ impl Work {
 
     pub fn is_empty(&self) -> bool {
         self.tasks.is_empty() && self.items.is_empty()
+    }
+
+    /// Whether the journal was there and could not be read.
+    ///
+    /// A journal that is absent is not a broken one, and the two states do
+    /// not say the same thing.
+    pub fn activity_unreadable(&self) -> bool {
+        self.errors.iter().any(|error| error.file == ACTIVITY_FILE)
     }
 
     /// One task by id.

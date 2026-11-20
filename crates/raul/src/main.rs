@@ -88,6 +88,8 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     let mut plain = false;
     let mut width = DEFAULT_WIDTH;
     let mut height = DEFAULT_HEIGHT;
+    let mut width_given = false;
+    let mut height_given = false;
     let mut tab: Option<Tab> = None;
     let mut detail: Option<String> = None;
     while let Some(arg) = args.next() {
@@ -112,18 +114,22 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
                     bail!("--width needs a number\n{USAGE}");
                 };
                 width = dimension("--width", &value)?;
+                width_given = true;
             }
             other if other.starts_with("--width=") => {
                 width = dimension("--width", &other["--width=".len()..])?;
+                width_given = true;
             }
             "--height" => {
                 let Some(value) = args.next() else {
                     bail!("--height needs a number\n{USAGE}");
                 };
                 height = dimension("--height", &value)?;
+                height_given = true;
             }
             other if other.starts_with("--height=") => {
                 height = dimension("--height", &other["--height=".len()..])?;
+                height_given = true;
             }
             "--tab" => {
                 let Some(name) = args.next() else {
@@ -151,6 +157,11 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     // render that is not plain, or a plain text that is not a render.
     if render != plain {
         bail!("--render and --plain go together\n{USAGE}");
+    }
+    // A dimension is the plain render's: the interactive window takes the
+    // terminal's own size, so the flag would be accepted and do nothing.
+    if !render && (width_given || height_given) {
+        bail!("--width and --height work with --render --plain\n{USAGE}");
     }
     // The detail pane is reachable deterministically through the plain
     // render: the flag has nothing to change in the interactive window.
@@ -497,6 +508,21 @@ mod tests {
                 .expect_err("a dimension over the cap is refused");
                 assert!(error.to_string().contains(flag), "{error}");
                 assert!(error.to_string().contains("1000"), "{error}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_dimension_needs_the_render_mode() {
+        for flag in ["--width", "--height"] {
+            for args in [
+                vec![flag.to_string(), "60".to_string()],
+                vec![format!("{flag}=60")],
+            ] {
+                let error =
+                    parse_args(args.into_iter()).expect_err("a dimension is a render-mode flag");
+                assert!(error.to_string().contains(flag), "{error}");
+                assert!(error.to_string().contains("--render"), "{error}");
             }
         }
     }

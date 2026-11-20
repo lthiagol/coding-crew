@@ -36,13 +36,13 @@ pub struct Catalog {
 
 impl Catalog {
     /// The catalogue a tool printed: one model per line, in the order it
-    /// printed them. Blank lines are dropped, and a model listed twice is
-    /// one model.
+    /// printed them. Blank lines are dropped, a model listed twice is one
+    /// model, and a line that is not a model id is not a pick.
     pub fn from_lines(text: &str) -> Self {
         let mut models: Vec<String> = Vec::new();
         for line in text.lines() {
             let model = line.trim();
-            if !model.is_empty() && !models.iter().any(|known| known == model) {
+            if is_model_id(model) && !models.iter().any(|known| known == model) {
                 models.push(model.to_string());
             }
         }
@@ -130,6 +130,21 @@ impl Catalog {
     }
 }
 
+/// Whether a line is a model id: a provider, a slash, and a model.
+///
+/// The harness tool prints a list of models, but a banner or a header can
+/// sit among them. Only a model id is pickable: no whitespace, both sides of
+/// the slash present, and nothing else acting as a separator.
+fn is_model_id(line: &str) -> bool {
+    if line.is_empty() || line.chars().any(char::is_whitespace) {
+        return false;
+    }
+    let Some((provider, model)) = line.split_once('/') else {
+        return false;
+    };
+    !provider.is_empty() && !model.is_empty() && !model.contains('/')
+}
+
 /// A model's name without its variant: `provider/model#high` is the model
 /// `provider/model`.
 fn base_of(model: &str) -> &str {
@@ -207,6 +222,18 @@ mod tests {
         assert!(with_variant.knows("opencode-go/glm-5.3"));
         assert!(with_variant.knows("opencode-go/glm-5.3#high"));
         assert_eq!(with_variant.index_of("opencode-go/glm-5.3#high"), Some(0));
+    }
+
+    #[test]
+    fn a_line_that_is_not_a_model_id_is_not_a_pick() {
+        // The tool's banner and separators are not models: a pick must be a
+        // model id, with a provider and a model name.
+        let catalog = Catalog::from_lines(
+            "Available models:\n---\nopencode-go/glm-5.3\nTotal: 1 model\nnot/a/model/here\n",
+        );
+        assert_eq!(catalog.models(), ["opencode-go/glm-5.3"]);
+        assert!(!catalog.knows("Available models:"));
+        assert!(!catalog.knows("not/a/model/here"));
     }
 
     #[test]

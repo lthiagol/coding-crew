@@ -291,10 +291,15 @@ fn the_footer_names_the_keys_that_work_and_no_key_that_does_nothing() {
     // nothing: the footer names quit, reload and help.
     let text = screen(100, 40);
     let footer = text.lines().last().expect("a footer").trim();
-    assert_eq!(footer, "q  quit r  reload ?  help", "{footer}");
-    for dead in ["open", "move", "tab", "esc", "choose", "pick"] {
+    assert_eq!(footer, "q  quit r  reload ↑↓ j/k  move ?  help", "{footer}");
+    for dead in ["open", "tab", "esc", "choose", "pick"] {
         assert!(!footer.contains(dead), "{footer}: {dead}");
     }
+    // The sidebar is shown, so the move keys work; a window that drops it
+    // does not name them.
+    let narrow = screen(60, 40);
+    let narrow_footer = narrow.lines().last().expect("a footer").trim();
+    assert!(!narrow_footer.contains("move"), "{narrow_footer}");
     // The same keys are in the help.
     assert!(text.contains("reload"), "{text}");
 }

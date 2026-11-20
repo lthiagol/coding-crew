@@ -83,38 +83,63 @@ pub fn lines(
             agents: false,
         };
     }
-    let mut prefix = Vec::new();
-    if let Some(file) = &state.legacy {
-        prefix.push(line(&legacy_notice(file), theme.text.dim, width));
-    }
+    // Each prefix row carries the short name a marker uses for it when the
+    // row does not fit. The error comes before the old file's notice: what
+    // is wrong outranks what is merely ignored.
+    let mut prefix: Vec<(String, Line<'static>)> = Vec::new();
     match &state.state {
-        ConfigState::Absent => {
-            prefix.push(line(EMPTY, theme.text.dim, width));
-            prefix.truncate(height);
-            Drawn {
-                lines: prefix,
-                agents: false,
-            }
-        }
+        ConfigState::Absent => prefix.push((EMPTY.to_string(), line(EMPTY, theme.text.dim, width))),
         ConfigState::Config(config) => {
-            fits(prefix, groups(config, theme, cursor), theme, width, height)
+            let mut drawn = prefix;
+            if let Some(file) = &state.legacy {
+                drawn.push((
+                    legacy_notice(file),
+                    line(&legacy_notice(file), theme.text.dim, width),
+                ));
+            }
+            return fits(drawn, groups(config, theme, cursor), theme, width, height);
         }
         ConfigState::Unreadable(error) => {
-            prefix.push(line(UNREADABLE, theme.text.normal, width));
-            prefix.push(line(
-                &format!("{}: {}", error.file, error.error),
-                theme.semantic.error,
-                width,
+            prefix.push((
+                UNREADABLE.to_string(),
+                line(UNREADABLE, theme.text.normal, width),
             ));
-            prefix.push(line(USING_DEFAULTS, theme.text.dim, width));
-            fits(
-                prefix,
-                groups(&Config::default(), theme, usize::MAX),
-                theme,
-                width,
-                height,
-            )
+            prefix.push((
+                format!("{} error", error.file),
+                line(
+                    &format!("{}: {}", error.file, error.error),
+                    theme.semantic.error,
+                    width,
+                ),
+            ));
+            prefix.push((
+                USING_DEFAULTS.to_string(),
+                line(USING_DEFAULTS, theme.text.dim, width),
+            ));
         }
+    }
+    if let Some(file) = &state.legacy {
+        prefix.push((
+            legacy_notice(file),
+            line(&legacy_notice(file), theme.text.dim, width),
+        ));
+    }
+    match &state.state {
+        ConfigState::Unreadable(_) => fits(
+            prefix,
+            groups(&Config::default(), theme, usize::MAX),
+            theme,
+            width,
+            height,
+        ),
+        _ => Drawn {
+            lines: prefix
+                .into_iter()
+                .map(|(_, line)| line)
+                .take(height)
+                .collect(),
+            agents: false,
+        },
     }
 }
 
@@ -249,7 +274,7 @@ fn order_rows(config: &Config, theme: &Theme) -> Vec<Row> {
 /// defaults follow — is drawn first: what is wrong is never hidden by what
 /// would be used.
 fn fits(
-    prefix: Vec<Line<'static>>,
+    prefix: Vec<(String, Line<'static>)>,
     groups: Vec<Group>,
     theme: &Theme,
     width: usize,
@@ -257,17 +282,38 @@ fn fits(
 ) -> Drawn {
     let total: usize = groups.iter().map(|group| group.rows.len() + 1).sum();
     if prefix.len() + total <= height {
-        let mut lines = prefix;
+        let mut lines: Vec<Line<'static>> = prefix.into_iter().map(|(_, line)| line).collect();
         lines.extend(drawn(&groups, width, theme));
         return Drawn {
             lines,
             agents: !groups.is_empty(),
         };
     }
-    // One row is the announcement's: the groups that fit beside it are drawn
-    // whole, and the rest are named with what they held.
+    // One row is the announcement's: what fits beside it is drawn whole, and
+    // the rest is named with what it held. A prefix longer than the pane is
+    // shown as far as it goes; only a one-row pane gives it all up for the
+    // marker, because the state has to say what it cannot show.
     let room = height.saturating_sub(1);
-    let mut used = prefix.len();
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    let mut kept = 0;
+    if prefix.len() <= room {
+        lines.extend(prefix.iter().map(|(_, line)| line.clone()));
+        kept = prefix.len();
+    } else if prefix.len() > height {
+        if height <= 1 {
+            // One row: the marker is the row, and it names the state.
+        } else {
+            lines.extend(prefix.iter().take(height).map(|(_, line)| line.clone()));
+            return Drawn {
+                lines,
+                agents: false,
+            };
+        }
+    } else {
+        lines.extend(prefix.iter().take(room).map(|(_, line)| line.clone()));
+        kept = room;
+    }
+    let mut used = lines.len();
     let mut shown = 0;
     for group in &groups {
         let held = group.rows.len() + 1;
@@ -277,13 +323,17 @@ fn fits(
         used += held;
         shown += 1;
     }
-    let mut lines: Vec<Line<'static>> = prefix.into_iter().take(height).collect();
     lines.extend(drawn(&groups[..shown], width, theme));
-    if shown < groups.len() && lines.len() < height {
-        let hidden: Vec<String> = groups[shown..]
+    let mut hidden: Vec<String> = prefix[kept..]
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+    hidden.extend(
+        groups[shown..]
             .iter()
-            .map(|group| format!("{} ({} hidden)", group.title, group.rows.len()))
-            .collect();
+            .map(|group| format!("{} ({} hidden)", group.title, group.rows.len())),
+    );
+    if !hidden.is_empty() && lines.len() < height {
         lines.push(line(
             &format!("not shown: {}", hidden.join(", ")),
             theme.text.dim,
@@ -333,10 +383,14 @@ mod tests {
     }
 
     fn unreadable() -> ConfigRead {
+        // The error is the reader's own: a row-level wording the pipeline
+        // never produces is not a test of the screen.
+        let error = Config::from_toml("round_limit = \n")
+            .expect_err("a broken configuration")
+            .to_string();
         ConfigRead::of(ConfigState::Unreadable(crate::app::ReadError {
             file: CONFIG_FILE.to_string(),
-            error: "failed to parse the configuration at line 1, column 15: expected a value"
-                .to_string(),
+            error,
         }))
     }
 
@@ -545,7 +599,7 @@ mod tests {
         let rows = text(&drawn.lines);
         assert_eq!(rows[0], UNREADABLE);
         assert!(rows[1].contains("config.toml"), "{rows:#?}");
-        assert!(rows[1].contains("failed to parse"), "{rows:#?}");
+        assert!(rows[1].contains("syntax error"), "{rows:#?}");
         assert_eq!(rows[2], USING_DEFAULTS);
         assert!(!rows.iter().any(|row| row == EMPTY), "{rows:#?}");
         // The defaults are drawn, but they are not the human's to change.
@@ -561,7 +615,7 @@ mod tests {
         let text = rows.join("\n");
         for fact in [
             UNREADABLE,
-            "failed to parse",
+            "syntax error",
             USING_DEFAULTS,
             AGENTS_TITLE,
             "builder · runner",
@@ -580,8 +634,37 @@ mod tests {
         // the defaults' line is the one that gives way.
         let rows = rendered(&unreadable(), 30, 2);
         assert_eq!(rows[0], UNREADABLE);
-        assert!(rows[1].contains("failed to parse"), "{rows:#?}");
+        assert!(rows[1].contains("syntax error"), "{rows:#?}");
         assert!(!rows.iter().any(|row| row == USING_DEFAULTS), "{rows:#?}");
+    }
+
+    #[test]
+    fn a_one_row_pane_says_what_the_unreadable_state_cannot_show() {
+        // The state keeps its rows or says they are hidden: a one-row pane
+        // neither clips them whole nor leaves a bare state.
+        let rows = rendered(&unreadable(), 60, 1);
+        assert_eq!(rows.len(), 1, "{rows:#?}");
+        assert!(rows[0].starts_with("not shown:"), "{rows:#?}");
+        assert!(rows[0].contains(UNREADABLE), "{rows:#?}");
+        // Two rows keep the state and the error whole, which outrank the
+        // defaults and the groups below them.
+        let rows = rendered(&unreadable(), 60, 2);
+        assert_eq!(rows[0], UNREADABLE);
+        assert!(rows[1].contains("syntax error"), "{rows:#?}");
+    }
+
+    #[test]
+    fn a_three_row_pane_does_not_promise_the_defaults_it_cannot_show() {
+        // The prefix fills the pane whole and no group fits: the defaults'
+        // line gives way to the marker that names it and hides nothing.
+        let rows = rendered(&unreadable(), 60, 3);
+        assert_eq!(rows[0], UNREADABLE);
+        assert!(!rows.iter().any(|row| row == USING_DEFAULTS), "{rows:#?}");
+        assert!(
+            rows.iter().any(|row| row.starts_with("not shown:")),
+            "{rows:#?}"
+        );
+        assert!(rows.join("\n").contains(USING_DEFAULTS), "{rows:#?}");
     }
 
     #[test]
@@ -609,17 +692,57 @@ mod tests {
         let state = ConfigRead {
             state: ConfigState::Unreadable(crate::app::ReadError {
                 file: CONFIG_FILE.to_string(),
-                error: "failed to parse the configuration".to_string(),
+                error: "syntax error at line 1, column 15: expected a value".to_string(),
             }),
             legacy: Some("config.json".to_string()),
         };
         let rows = rendered(&state, 30, 40);
-        assert!(rows[0].contains("config.json"), "{rows:#?}");
-        assert_eq!(rows[1], UNREADABLE);
+        // The error comes first; the old file's notice is kept after it.
+        assert_eq!(rows[0], UNREADABLE);
+        assert!(rows[1].contains(CONFIG_FILE), "{rows:#?}");
+        assert!(rows[1].contains("syntax error"), "{rows:#?}");
+        assert!(
+            rows.iter().any(|row| row.contains("config.json")),
+            "{rows:#?}"
+        );
         assert!(
             rows.join("\n").contains("build-and-fix rounds"),
             "{rows:#?}"
         );
+    }
+
+    #[test]
+    fn the_error_outranks_the_legacy_notice_when_both_are_there() {
+        // With an old config.json and a broken config.toml at once, the
+        // error is the first line, not the first to be cut.
+        let state = ConfigRead {
+            state: ConfigState::Unreadable(crate::app::ReadError {
+                file: CONFIG_FILE.to_string(),
+                error: "syntax error at line 1, column 15: expected a value".to_string(),
+            }),
+            legacy: Some("config.json".to_string()),
+        };
+        // At three rows the error is still the first line after the state.
+        let rows = rendered(&state, 60, 3);
+        assert_eq!(rows[0], UNREADABLE, "{rows:#?}");
+        assert!(rows[1].contains("syntax error"), "{rows:#?}");
+        // At four rows the notice is kept too, after the error.
+        for height in [4usize, 5] {
+            let rows = rendered(&state, 60, height);
+            assert_eq!(rows[0], UNREADABLE, "{height}: {rows:#?}");
+            let error = rows
+                .iter()
+                .position(|row| row.contains("syntax error") || row.contains("config.toml error"))
+                .unwrap_or_else(|| panic!("{height}: the error is gone: {rows:#?}"));
+            let legacy = rows
+                .iter()
+                .position(|row| row.contains("config.json"))
+                .unwrap_or_else(|| panic!("{height}: the notice is gone: {rows:#?}"));
+            assert!(
+                error < legacy,
+                "{height}: the notice outranks the error: {rows:#?}"
+            );
+        }
     }
 
     #[test]

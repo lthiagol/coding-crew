@@ -11,7 +11,7 @@
 │  opencode-go                 │││TSK29  approved                                                 ││
 │  glm-5.3#high                ││└────────────────────────────────────────────────────────────────┘│
 │harness                       ││┌round───────────────────────────────────────────────────────────┐│
-│opencode                      │││TSK13 · external · round 2                                      ││
+│opencode                      │││TSK13 · external · round 1                                      ││
 │  --standalone · role config  ││└────────────────────────────────────────────────────────────────┘│
 │review-round limit            ││┌budget──────────────────────────────────────────────────────────┐│
 │5 build-and-fix rounds        │││external rounds 18 of 45                                        ││
@@ -37,4 +37,4 @@
 │                              ││                                                                  │
 │                              ││● running since 2026-11-09T08:30Z                                 │
 └──────────────────────────────┘└──────────────────────────────────────────────────────────────────┘
- q  quit r  reload ?  help
+ q  quit r  reload ↑↓ j/k  move ?  help
