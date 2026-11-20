@@ -11,3 +11,7 @@ license.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+# The screen both TUIs open and the plain render they print: one
+# implementation of the terminal plumbing, shared with raul and hugo.
+crossterm.workspace = true
+ratatui.workspace = true

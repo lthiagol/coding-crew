@@ -20,15 +20,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 use crossterm::event::{self, Event, KeyEventKind};
-use crossterm::execute;
-use crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-};
 use ratatui::Terminal;
 use ratatui::backend::{CrosstermBackend, TestBackend};
-use ratatui::buffer::{Buffer, CellWidth};
 
 use app::{Action, App};
+use coding_crew_core::screen::{plain_text, restore, setup};
 use coding_crew_core::store::{DATA_DIR, WORK_DIR};
 use coding_crew_core::{Store, StoreError};
 use coding_crew_theme::{Preset, Theme};
@@ -311,49 +307,6 @@ fn render_plain(options: Options) -> Result<()> {
     let mut stdout = std::io::stdout();
     stdout.write_all(text.as_bytes())?;
     stdout.flush()?;
-    Ok(())
-}
-
-/// The buffer as plain text: one row per line, no paint, and no trailing
-/// spaces that carry no information.
-///
-/// A symbol that takes more than one column is emitted once, and the
-/// continuation cells ratatui reset behind it are skipped: the terminal gives
-/// the symbol its columns already.
-///
-/// Every row ends with a newline, so the output has a stable final newline.
-fn plain_text(buffer: &Buffer) -> String {
-    let area = *buffer.area();
-    let mut text = String::new();
-    for y in 0..area.height {
-        let mut row = String::new();
-        let mut skip = 0u16;
-        for x in 0..area.width {
-            let Some(cell) = buffer.cell((x, y)) else {
-                continue;
-            };
-            if skip == 0 {
-                row.push_str(cell.symbol());
-            }
-            skip = skip.max(cell.cell_width()).saturating_sub(1);
-        }
-        text.push_str(row.trim_end_matches(' '));
-        text.push('\n');
-    }
-    text
-}
-
-fn setup() -> Result<Terminal<CrosstermBackend<Stdout>>> {
-    enable_raw_mode()?;
-    let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    Ok(Terminal::new(CrosstermBackend::new(stdout))?)
-}
-
-fn restore(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
     Ok(())
 }
 

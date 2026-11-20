@@ -13,7 +13,7 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 
-use coding_crew_core::{Task, parse_rfc3339};
+use coding_crew_core::{Task, age_text, parse_rfc3339};
 
 use crate::data::{Reason, Work};
 use crate::tabs::Tab;
@@ -1037,20 +1037,6 @@ fn compact_rows(
     (rows, leading || said_it)
 }
 
-/// How long a wait reads as.
-fn age_text(seconds: i64) -> String {
-    let seconds = seconds.max(0);
-    let days = seconds / 86_400;
-    if days > 0 {
-        return format!("{days}d");
-    }
-    let hours = seconds / 3600;
-    if hours > 0 {
-        return format!("{hours}h");
-    }
-    format!("{}m", seconds / 60)
-}
-
 /// The word for a number of tasks.
 fn task_word(count: usize) -> &'static str {
     if count == 1 { "task" } else { "tasks" }
@@ -2012,7 +1998,8 @@ mod tests {
             id: "TSK01".to_string(),
             title: title.clone(),
             reason: Reason::Approve,
-            waited: 0,
+            // A two-day wait: the age column below is two columns wide.
+            waited: 2 * 86_400,
         };
         // At this width the title column is twelve columns wide.
         let line = row_line_plain(&row, 39, 2, &theme());

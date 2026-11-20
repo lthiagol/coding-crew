@@ -12,8 +12,8 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 
-use coding_crew_core::parse_rfc3339;
 use coding_crew_core::runtime::{AgentState, CrewMember, Runtime};
+use coding_crew_core::{age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, text_width};
 use coding_crew_theme::{Theme, block_title_style, phase_style};
 
@@ -628,24 +628,7 @@ fn held_length(since: Option<&str>, now: &str) -> String {
     let (Some(since), Some(now)) = (parse_rfc3339(since), parse_rfc3339(now)) else {
         return "unknown".to_string();
     };
-    age_text((now - since).max(0))
-}
-
-/// The length of a hold, in the units raul's ages use.
-fn age_text(seconds: i64) -> String {
-    let seconds = seconds.max(0);
-    if seconds < 60 {
-        return "under a minute".to_string();
-    }
-    let days = seconds / 86_400;
-    if days > 0 {
-        return format!("{days}d");
-    }
-    let hours = seconds / 3600;
-    if hours > 0 {
-        return format!("{hours}h");
-    }
-    format!("{}m", seconds / 60)
+    age_text(now - since)
 }
 
 /// The stage of a review, in words.

@@ -1,4 +1,5 @@
-//! UTC timestamps, RFC 3339 format, no external dependency.
+//! UTC timestamps, RFC 3339 format, and the words for a length of time, no
+//! external dependency.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -9,6 +10,28 @@ pub fn now_rfc3339() -> String {
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
     format_rfc3339(secs)
+}
+
+/// How long a duration reads as: `10d`, `5h`, `12m`, or `under a minute`.
+///
+/// One vocabulary for both TUIs: raul's waits and hugo's holds say the same
+/// words for the same length. The largest whole unit is the one named, and a
+/// length under a minute says so rather than counting zero minutes. A
+/// negative length reads as no time at all.
+pub fn age_text(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    if seconds < 60 {
+        return "under a minute".to_string();
+    }
+    let days = seconds / 86_400;
+    if days > 0 {
+        return format!("{days}d");
+    }
+    let hours = seconds / 3_600;
+    if hours > 0 {
+        return format!("{hours}h");
+    }
+    format!("{}m", seconds / 60)
 }
 
 /// Format a unix timestamp as `YYYY-MM-DDTHH:MM:SSZ`.
@@ -190,6 +213,30 @@ mod tests {
     #[test]
     fn formats_epoch() {
         assert_eq!(format_rfc3339(0), "1970-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn an_age_names_its_largest_whole_unit() {
+        for (seconds, words) in [
+            (0, "under a minute"),
+            (1, "under a minute"),
+            (59, "under a minute"),
+            (60, "1m"),
+            (3_599, "59m"),
+            (3_600, "1h"),
+            (86_399, "23h"),
+            (86_400, "1d"),
+            (10 * 86_400, "10d"),
+        ] {
+            assert_eq!(age_text(seconds), words, "{seconds} seconds");
+        }
+    }
+
+    #[test]
+    fn a_negative_age_is_no_time_at_all() {
+        for seconds in [-1, -3_600, -86_400] {
+            assert_eq!(age_text(seconds), "under a minute", "{seconds} seconds");
+        }
     }
 
     #[test]
