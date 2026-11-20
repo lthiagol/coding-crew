@@ -489,14 +489,26 @@ fn the_settings_tab_is_reachable_in_render_mode_at_every_canonical_width() {
         );
         // The tab bar names it, so the screen is the Settings tab.
         assert!(text.contains("Settings"), "width {width}: {text}");
-        // It lists nothing yet, and says what it will hold.
-        assert!(text.contains("nothing to set yet"), "width {width}: {text}");
-        for words in ["keybinds", "sort keys", "theme"] {
+        // It lists what is true: the themes, the keys and the sorts.
+        for group in ["theme · 5", "keys · 23", "sort · 5"] {
+            assert!(text.contains(group), "width {width}: {group} is missing");
+        }
+        for words in ["Catppuccin", "palette", "terminal colours", "quit", "open"] {
             assert!(text.contains(words), "width {width}: {words} is missing");
         }
+        assert!(
+            !text.contains("nothing to set yet"),
+            "width {width}: {text}"
+        );
         assert!(!text.contains("not built yet"), "width {width}: {text}");
-        // The footer names no key that does nothing on this tab.
+        // The footer names the scroll keys where they fit, and no open key:
+        // the tab reads.
         let footer = text.lines().last().expect("a footer row").trim_end();
+        if width == 100 {
+            for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
+                assert!(footer.contains(key), "width {width}: {footer}");
+            }
+        }
         assert!(!footer.contains("enter"), "width {width}: {footer}");
         assert!(!footer.contains("open"), "width {width}: {footer}");
         for (number, line) in text.lines().enumerate() {
@@ -582,16 +594,27 @@ fn every_tab_renders_alike_in_every_preset_at_every_canonical_width() {
     // contract a preset keeps on screen. Nord, Catppuccin and Dracula are
     // dark presets: they change the paint, and the same screen says the same
     // thing in every preset. Terminal is the one that names no colour; it
-    // says the same words too.
+    // says the same words too. The Settings tab is the exception by design:
+    // it marks the theme in use, so the mark is normalised and the rest of
+    // the words still have to agree.
+    let without_mark = |text: &str| text.replace('●', " ");
     for tab in TAB_NAMES {
         for width in [40u16, 60, 100] {
             let dark = render_tab_with("dark", tab, width);
             for preset in ["nord", "catppuccin", "dracula", "terminal"] {
                 let other = render_tab_with(preset, tab, width);
-                assert_eq!(
-                    other, dark,
-                    "{preset} changes the words of {tab} at width {width}"
-                );
+                if tab == "settings" {
+                    assert_eq!(
+                        without_mark(&other),
+                        without_mark(&dark),
+                        "{preset} changes the facts of {tab} at width {width}"
+                    );
+                } else {
+                    assert_eq!(
+                        other, dark,
+                        "{preset} changes the words of {tab} at width {width}"
+                    );
+                }
                 assert_eq!(
                     other.lines().count(),
                     40,

@@ -27,6 +27,7 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 | content pane | the active tab's rows; `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` |
 | detail pane | `enter` on a row opens the task as a full-screen overlay; `esc` returns to the tab and the selection it came from, and `enter` again reopens |
 | footer | contextual keys for the active tab — never a key that does nothing. When the content pane has no room for the hidden-rows announcement, the footer carries that count beside the keys, and the content pane says nothing about it — the same fact is never painted twice |
+| quit | `q` quits, and `esc` quits too — in the window. `esc` in the detail pane returns to the tab instead |
 
 The detail pane is not a tab: it is the same task seen close up, and it opens
 from any tab that has a row.
@@ -44,7 +45,7 @@ row. The cursor is never on a row the pane does not show.
 | Needs you | what waits on a human | tasks whose next action is the human's |
 | Path | what happens next, in order | claimable, in flight, blocked — with the reason |
 | Backlog | what is not a task yet | smaller tasks and draft tasks |
-| Settings | how the tool behaves | keybinds, sort keys, preferences |
+| Settings | how the tool behaves | the themes, the keys and the sorts |
 
 The automation is not a raul tab. Its questions — the order, the queue, the
 crew, whether it runs — belong to hugo; the design record is in
@@ -147,13 +148,23 @@ could be worked. The grouping is derived from the kind; it is never stored.
 
 ### Settings
 
-| row | shows |
-|---|---|
-| keybinds | the key for each action, rebindable |
-| sort | the sort key per tab |
-| theme | the colours |
+What the tool is doing, in one list — three groups, all derived, none stored,
+in this order.
 
-A placeholder: it lists nothing yet, and says what it will hold.
+| group | rows |
+|---|---|
+| theme | one row per preset in the theme crate's `Preset::ALL`, so a new preset appears here without raul knowing it; the theme in use is marked, and exactly one row is; each row says what the theme is — a palette, or the terminal's own colours |
+| keys | one row per binding in raul's key table — the window's keys (quit, help, the tab keys), the row keys (the movement keys, opening a task) and the detail pane's keys (the scroll keys, and the key that returns) — so the list and the input handling are one table, and a key handled but not listed, or listed but not handled, fails the gate; the keys the tool no longer has are not listed |
+| sort | one row per tab, naming in words what comes first and the order the tab keeps; the order and the words come from the tab's own sort, so a tab sorted another way says so; the Overview has no sort and says so, and the detail pane is not a tab and has no row |
+
+The rows are a list with a cursor: the tab scrolls when its rows are taller
+than the pane, and the cursor is never on a row the pane does not draw — the
+same rule the row tabs keep, and the same announcement: what the pane does not
+show is named by group and count, so a count never appears without the set
+it counts. It reads: nothing here is changed from the tab, so
+`enter` opens nothing — the footer names the scroll keys and no open key, and
+the help names no open key either. A rebind and a persisted sort are a
+configuration file, and that is hugo's home.
 
 ## The detail pane
 
@@ -236,7 +247,8 @@ runs it. The Overview is pinned byte for byte at 40, 60 and 100 columns in
   [docs/hugo/design-record.md](../hugo/design-record.md)
 - the journal — *Activity* is a block in the Overview, not a tab; the event
   kinds are provisional until the writer lands
-- persisted sort keys and keybinds — the Settings tab is a placeholder too
+- persisted sort keys and keybinds — the Settings tab shows what is true today,
+  and changing it waits for the configuration file
 - the review's interaction: **raul reads**. A finding is shown, never acted on — acting on one
   needs a writer, a gate and talita's verbs, which are out of scope for now
 

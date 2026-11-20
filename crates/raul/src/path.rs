@@ -15,6 +15,7 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_crew_core::{Status, Task};
 
 use crate::data::{Work, has_overlay, live_claim};
+use crate::tabs::Tab;
 use crate::view::View;
 use coding_crew_theme::text::{cut_to, first_grapheme, head_to, text_width};
 use coding_crew_theme::{Theme, block_title_style, phase_style, selected_line};
@@ -187,7 +188,9 @@ pub fn tree(work: &Work, now: &str) -> Tree {
         .into_iter()
         .map(|task| entry(task, work))
         .collect();
-    let branches = Branch::ALL
+    let branches = Tab::Path
+        .sort()
+        .branches()
         .iter()
         .map(|branch| branch_view(work, *branch, now))
         .filter(|view| view.count > 0)

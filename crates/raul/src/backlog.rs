@@ -13,6 +13,7 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_crew_core::{Item, ItemKind, ItemStatus, Status, Task};
 
 use crate::data::Work;
+use crate::tabs::Tab;
 use crate::view::View;
 use coding_crew_theme::text::{cut_to, pad, text_width};
 use coding_crew_theme::{Theme, block_title_style, phase_style, selected_line};
@@ -118,7 +119,12 @@ pub fn groups(work: &Work) -> [Group; 3] {
         },
     ];
     for group in &mut groups {
-        group.rows.sort_by(|one, other| one.id.cmp(&other.id));
+        // The id ascending: the order is the tab's sort, the same value the
+        // Settings tab names.
+        let sort = Tab::Backlog.sort();
+        group
+            .rows
+            .sort_by(|one, other| sort.compare_ids(&one.id, &other.id));
     }
     groups
 }

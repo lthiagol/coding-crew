@@ -63,6 +63,21 @@ impl Tab {
     pub fn from_name(name: &str) -> Option<Tab> {
         Tab::ALL.into_iter().find(|tab| tab.name() == name)
     }
+
+    /// Whether enter opens a row on this tab.
+    ///
+    /// The Settings tab is a list too, but it reads: enter opens nothing.
+    pub fn opens(&self) -> bool {
+        match self {
+            Tab::Overview | Tab::Settings => false,
+            Tab::NeedsYou | Tab::Path | Tab::Backlog => true,
+        }
+    }
+
+    /// Whether the tab is a list of rows with a cursor.
+    pub fn lists(&self) -> bool {
+        !matches!(self, Tab::Overview)
+    }
 }
 
 #[cfg(test)]
@@ -82,6 +97,20 @@ mod tests {
             assert_eq!(Tab::from_index(index), *tab);
         }
         assert!(Tab::from_name("autopilot").is_none(), "a sixth tab remains");
+    }
+
+    #[test]
+    fn only_the_tabs_with_tasks_open_a_row() {
+        // The Overview is a summary and the Settings tab reads: enter opens
+        // a record on the three tabs whose rows are tasks, and nowhere else.
+        assert_eq!(
+            Tab::ALL.map(|tab| tab.opens()),
+            [false, true, true, true, false]
+        );
+        assert_eq!(
+            Tab::ALL.map(|tab| tab.lists()),
+            [false, true, true, true, true]
+        );
     }
 
     /// The window sketch's tab bar, with the border and padding removed.

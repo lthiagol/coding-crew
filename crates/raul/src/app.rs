@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{KeyEvent, KeyEventKind};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
@@ -12,6 +12,7 @@ use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
 use crate::backlog;
 use crate::data::Work;
 use crate::detail::{self, Detail};
+use crate::keys::{self, Act, Scope};
 use crate::needs;
 use crate::overview;
 use crate::path;
@@ -61,6 +62,10 @@ impl App {
 
     /// Handle a key. Returns what the window does next.
     ///
+    /// Every key is looked up in the key table, and the table is what the
+    /// Settings tab lists: a key that is handled but not listed, or listed
+    /// but not handled, cannot pass the gate.
+    ///
     /// `now` is the frame's instant: the one the screen on display was drawn
     /// with. The rows a key moves through are the rows that were painted, so
     /// a clock read between the draw and the key cannot reorder the list.
@@ -71,36 +76,25 @@ impl App {
         if let Some(detail) = self.detail.as_mut() {
             // The pane is modal: the keys its footer names are the only
             // ones that do something, and every other key is left alone.
-            return match key.code {
-                KeyCode::Esc => {
+            return match keys::binding(Scope::Detail, &key).map(|binding| binding.act) {
+                Some(Act::Quit) => Action::Quit,
+                Some(Act::Back) => {
                     self.close_detail();
                     Action::Redraw
                 }
-                KeyCode::Char('q') => Action::Quit,
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Action::Quit,
-                // The scroll keys: the content pane's bindings, named in
-                // the pane's footer.
-                KeyCode::Up | KeyCode::Char('k') => {
-                    detail.scroll_rows(-1);
+                Some(Act::Move(rows)) => {
+                    detail.scroll_rows(rows);
                     Action::Redraw
                 }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    detail.scroll_rows(1);
+                Some(Act::Page(pages)) => {
+                    detail.scroll_pages(pages);
                     Action::Redraw
                 }
-                KeyCode::PageUp => {
-                    detail.scroll_pages(-1);
-                    Action::Redraw
-                }
-                KeyCode::PageDown => {
-                    detail.scroll_pages(1);
-                    Action::Redraw
-                }
-                KeyCode::Char('g') => {
+                Some(Act::Top) => {
                     detail.scroll_to_top();
                     Action::Redraw
                 }
-                KeyCode::Char('G') => {
+                Some(Act::Bottom) => {
                     detail.scroll_to_bottom();
                     Action::Redraw
                 }
@@ -108,50 +102,59 @@ impl App {
             };
         }
         if self.help {
+            // The help is a dismissal: any key closes it. The key that
+            // returns from the detail pane closes it too — the footer says
+            // so — and the keys that quit still leave raul.
             self.help = false;
-            return match key.code {
-                KeyCode::Char('q') => Action::Quit,
+            let overlay = keys::leaves_overlay(&key);
+            return match keys::binding(Scope::Window, &key).map(|binding| binding.act) {
+                Some(Act::Quit) if !overlay => Action::Quit,
                 _ => Action::Redraw,
             };
         }
-        match key.code {
-            KeyCode::Char('q') => Action::Quit,
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Action::Quit,
-            KeyCode::Esc => Action::Quit,
-            KeyCode::Char('?') => {
+        // The row keys are for the tabs that are lists; the window keys work
+        // everywhere. The Settings tab is a list too, though enter opens
+        // nothing there.
+        let act = keys::binding(Scope::Window, &key)
+            .or_else(|| {
+                self.tab
+                    .lists()
+                    .then(|| keys::binding(Scope::Rows, &key))
+                    .flatten()
+            })
+            .map(|binding| binding.act);
+        match act {
+            Some(Act::Quit) => Action::Quit,
+            Some(Act::Help) => {
                 self.help = true;
                 Action::Redraw
             }
-            KeyCode::Enter => {
+            Some(Act::NextTab) => self.go_to(self.tab.next()),
+            Some(Act::PreviousTab) => self.go_to(self.tab.previous()),
+            Some(Act::JumpTab) => match keys::digit(&key) {
+                Some(digit) if (1..=Tab::ALL.len()).contains(&digit) => {
+                    self.go_to(Tab::from_index(digit - 1))
+                }
+                _ => Action::Redraw,
+            },
+            Some(Act::Move(rows)) => self.move_selection(work, rows, now),
+            Some(Act::Page(pages)) => {
+                let page = self.view.page().max(1) as isize;
+                self.move_selection(work, pages * page, now)
+            }
+            Some(Act::Top) => self.move_to(work, 0, now),
+            Some(Act::Bottom) => self.move_to(work, usize::MAX, now),
+            Some(Act::Open) => {
                 // Enter opens the row that is selected, or the tab's first
-                // row: the pane opens from every tab that has rows, and
-                // nowhere else.
+                // row: the pane opens from every tab whose rows are tasks,
+                // and nowhere else.
                 if let Some(id) = self.open_target(work, now) {
                     self.selection = Some(id.clone());
                     self.detail = Some(Detail::opened(id, self.tab, self.selection.clone()));
                 }
                 Action::Redraw
             }
-            KeyCode::Down | KeyCode::Char('j') => self.move_selection(work, 1, now),
-            KeyCode::Up | KeyCode::Char('k') => self.move_selection(work, -1, now),
-            KeyCode::PageDown => {
-                let page = self.view.page().max(1) as isize;
-                self.move_selection(work, page, now)
-            }
-            KeyCode::PageUp => {
-                let page = self.view.page().max(1) as isize;
-                self.move_selection(work, -page, now)
-            }
-            KeyCode::Char('g') => self.move_to(work, 0, now),
-            KeyCode::Char('G') => self.move_to(work, usize::MAX, now),
-            KeyCode::Char(digit @ '1'..='5') => {
-                self.go_to(Tab::from_index(digit as usize - '1' as usize))
-            }
-            KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => self.go_to(self.tab.next()),
-            KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h') => {
-                self.go_to(self.tab.previous())
-            }
-            _ => Action::Redraw,
+            Some(Act::Back) | None => Action::Redraw,
         }
     }
 
@@ -165,7 +168,13 @@ impl App {
     }
 
     /// The record enter opens: the selected row, or the tab's first row.
+    ///
+    /// Only the tabs whose rows are tasks open one; the Settings tab lists
+    /// facts and reads.
     fn open_target(&self, work: &Work, now: &str) -> Option<String> {
+        if !self.tab.opens() {
+            return None;
+        }
         self.cursor(work, now)
     }
 
@@ -265,8 +274,7 @@ impl App {
                 backlog::render_view(frame, rows[2], work, &self.theme, selected, &mut self.view)
             }
             Tab::Settings => {
-                settings::render(frame, rows[2], &self.theme);
-                None
+                settings::render_view(frame, rows[2], &self.theme, selected, &mut self.view)
             }
         };
         if let Some(detail) = self.detail.as_mut() {
@@ -377,10 +385,11 @@ impl App {
     ///
     /// A terminal too narrow for every key keeps the keys that matter most,
     /// and no key is ever cut in half. Enter is named only where it opens:
-    /// a tab without rows never offers it. When the content pane had no
-    /// room to say what it hides, `hidden` is that count: the footer carries
-    /// it beside the keys, and the content pane says nothing about it — the
-    /// same fact is never painted twice.
+    /// a tab without rows never offers it, and the Settings tab reads even
+    /// though it lists rows. When the content pane had no room to say what
+    /// it hides, `hidden` is that count: the footer carries it beside the
+    /// keys, and the content pane says nothing about it — the same fact is
+    /// never painted twice.
     fn footer(&self, width: u16, work: &Work, now: &str, hidden: Option<usize>) -> Line<'static> {
         let key = self.theme.chrome.key;
         let label = self.theme.chrome.footer;
@@ -413,7 +422,9 @@ impl App {
         ));
         let mut next = 3;
         let has_rows = rows_of(work, self.tab, now).is_some_and(|ids| !ids.is_empty());
-        if has_rows {
+        // Enter is named only where it opens: the Settings tab is a list
+        // whose rows are facts, and the tab reads.
+        if has_rows && self.tab.opens() {
             parts.push((
                 next,
                 vec![
@@ -424,6 +435,8 @@ impl App {
                 true,
             ));
             next += 1;
+        }
+        if has_rows {
             // The movement keys work on every tab with rows: the single
             // rows, the ends and a page. `footer_line` first-fits the
             // optional parts in index order — g/G, then ↑↓ j/k, then
@@ -530,16 +543,17 @@ pub(crate) fn footer_line(
     Line::from(spans)
 }
 
-/// The rows a tab holds, when it holds rows the detail pane can open.
+/// The rows a tab holds, when it holds rows the cursor moves through.
 ///
-/// The Overview is a summary, not a list: it has no rows to open. The
-/// Settings tab lists nothing yet.
+/// The Overview is a summary, not a list: it has no rows. The Settings tab
+/// lists what is true, so it has rows too, though enter opens nothing there.
 fn rows_of(work: &Work, tab: Tab, now: &str) -> Option<Vec<String>> {
     match tab {
         Tab::NeedsYou => Some(needs::row_ids(work, now)),
         Tab::Path => Some(path::row_ids(work, now)),
         Tab::Backlog => Some(backlog::row_ids(work)),
-        Tab::Overview | Tab::Settings => None,
+        Tab::Settings => Some(settings::row_ids()),
+        Tab::Overview => None,
     }
 }
 
@@ -661,6 +675,7 @@ mod tests {
     use ratatui::backend::TestBackend;
     // The colour type is named here to read the paint back: no colour is
     // written outside the theme.
+    use crossterm::event::{KeyCode, KeyModifiers};
     use ratatui::style::{Color, Modifier};
 
     use super::*;
@@ -914,39 +929,44 @@ mod tests {
     }
 
     #[test]
-    fn the_settings_tab_says_what_it_will_hold() {
+    fn the_settings_tab_lists_the_three_groups() {
         let rows = render(
             &mut window(&Theme::preset(Preset::Dark), Tab::Settings, false),
             100,
-            20,
+            40,
         )
         .0;
         let text = rows.join("\n");
-        // A named empty state, not a blank screen.
-        assert!(text.contains("nothing to set yet"), "{text}");
-        // What the spec says the tab will hold.
-        assert!(text.contains("keybinds"), "{text}");
-        assert!(text.contains("sort keys"), "{text}");
-        assert!(text.contains("theme"), "{text}");
-        // The Settings placeholder is its own, not the generic one.
+        for group in ["theme · 5", "keys · 23", "sort · 5"] {
+            assert!(text.contains(group), "{group} is missing: {text}");
+        }
+        // The groups say what is true, derived from their own sources.
+        assert!(text.contains("Catppuccin"), "{text}");
+        assert!(text.contains("terminal colours"), "{text}");
+        assert!(text.contains("(window, detail)"), "{text}");
+        assert!(text.contains("longest wait first"), "{text}");
+        assert!(text.contains("claimable, then branches"), "{text}");
+        // The placeholder is gone.
+        assert!(!text.contains("nothing to set yet"), "{text}");
         assert!(!text.contains("not built yet"), "{text}");
     }
 
     #[test]
-    fn the_settings_tab_has_no_rows_to_open() {
+    fn the_settings_tab_has_rows_but_enter_opens_nothing() {
         let work = mock_work();
-        assert!(
-            rows_of(&work, Tab::Settings, now()).is_none(),
-            "Settings holds rows"
-        );
+        let ids = rows_of(&work, Tab::Settings, now()).expect("Settings is a list");
+        assert!(!ids.is_empty(), "Settings has no rows");
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.on_key(key(KeyCode::Enter), &work, now());
         assert!(app.detail.is_none(), "enter opened a record on Settings");
         assert!(app.selection.is_none(), "Settings selected a row");
+        // The rows still move: the tab scrolls like the other lists.
+        app.on_key(key(KeyCode::Down), &work, now());
+        assert_eq!(app.selection.as_deref(), Some(ids[1].as_str()));
     }
 
     #[test]
-    fn the_settings_footer_names_only_keys_that_work() {
+    fn the_settings_footer_names_the_scroll_keys_and_no_open_key() {
         let rows = render(
             &mut window(&Theme::preset(Preset::Dark), Tab::Settings, false),
             100,
@@ -954,33 +974,75 @@ mod tests {
         )
         .0;
         let footer = rows.last().expect("a footer row").trim_end().to_string();
-        for works in ["quit", "1-5", "switch tab", "help"] {
+        for works in ["quit", "1-5", "help", "move", "page", "top/bottom"] {
             assert!(footer.contains(works), "{footer}: {works} is missing");
         }
-        // Nothing on this tab is opened or scrolled: the footer says so by
-        // leaving those keys out.
-        for nothing in ["enter", "open", " j ", " k ", "pgup", "pgdn"] {
-            assert!(
-                !footer.contains(nothing),
-                "{footer}: {nothing} does nothing here"
-            );
+        for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
+            assert!(footer.contains(key), "{footer}: {key} is missing");
         }
+        // This tab reads: the footer names no open key.
+        assert!(!footer.contains("enter"), "{footer}");
+        assert!(!footer.contains("open"), "{footer}");
+        // The tab pair gives way first in a crowded footer; a wider one
+        // keeps it.
+        let wide = render(
+            &mut window(&Theme::preset(Preset::Dark), Tab::Settings, false),
+            120,
+            20,
+        )
+        .0;
+        let wide = wide.last().expect("a footer row").trim_end().to_string();
+        assert!(wide.contains("switch tab"), "{wide}");
+        assert!(!wide.contains("enter") && !wide.contains("open"), "{wide}");
+        // The help names the scroll keys too, and no open key.
+        let rows = render(
+            &mut window(&Theme::preset(Preset::Dark), Tab::Settings, true),
+            100,
+            20,
+        )
+        .0;
+        let help = help_text(&rows, 100, 20);
+        for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
+            assert!(help.contains(key), "{help}: {key} is missing");
+        }
+        assert!(!help.contains("enter"), "{help}");
+        assert!(!help.contains("open"), "{help}");
     }
 
     #[test]
-    fn the_settings_placeholder_is_painted_dim() {
+    fn the_settings_theme_in_use_is_marked_once() {
         let theme = Theme::preset(Preset::Dark);
-        let (rows, paint) = render(&mut window(&theme, Tab::Settings, false), 100, 20);
-        let dim = theme.text.dim.fg.expect("the dim colour");
-        for words in ["nothing to set yet", "will hold keybinds, sort keys, theme"] {
-            let row = rows
-                .iter()
-                .position(|row| row.contains(words))
-                .unwrap_or_else(|| panic!("{words} is not on screen"));
-            let column = rows[row].find(words).expect("the words");
-            assert_eq!(paint[row][column].fg, dim, "{words} is not painted dim");
-        }
-        // The box is the theme's, as on the other tabs.
+        let mut app = window(&theme, Tab::Settings, false);
+        // The cursor starts on the first row; move it off the theme group so
+        // the mark's own paint is on display. The pane is tall enough for
+        // every row: the scroll would otherwise hide the theme at the top.
+        app.selection = Some("sort:settings".to_string());
+        let (rows, paint) = render(&mut app, 100, 41);
+        let marked: Vec<usize> = rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| row.contains('●'))
+            .map(|(index, _)| index)
+            .collect();
+        assert_eq!(marked.len(), 1, "{}", rows.join("\n"));
+        let row = &rows[marked[0]];
+        assert!(row.contains("Dark"), "{row}");
+        let column = row[..row.find('●').expect("the mark")].chars().count();
+        assert_eq!(
+            paint[marked[0]][column].fg,
+            theme.text.strong.fg.expect("the strong colour"),
+            "the mark is not painted strong"
+        );
+        // The kind is dim, and the box is the theme's, as on the other tabs.
+        let kind_row = rows
+            .iter()
+            .position(|row| row.contains("palette"))
+            .expect("a palette row");
+        let kind = rows[kind_row].find("palette").expect("the kind");
+        assert_eq!(
+            paint[kind_row][kind].fg,
+            theme.text.dim.fg.expect("the dim colour")
+        );
         let border = theme.chrome.border.fg.expect("the border colour");
         assert_eq!(
             paint[2][0].fg, border,
@@ -1005,6 +1067,246 @@ mod tests {
         );
     }
 
+    /// A press of the key a binding's first chord names.
+    fn press_for(binding: &keys::Binding) -> KeyEvent {
+        match binding.chords[0] {
+            keys::Chord::Key(code, control) => {
+                let mut event = KeyEvent::from(code);
+                if control {
+                    event.modifiers = KeyModifiers::CONTROL;
+                }
+                event
+            }
+            keys::Chord::Digits => KeyEvent::from(KeyCode::Char('5')),
+        }
+    }
+
+    #[test]
+    fn every_binding_in_the_table_does_its_act() {
+        // The keys group lists the table; the handling reads the table. A
+        // row that does nothing, or a key that does something the table
+        // does not say, fails here.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        for binding in keys::BINDINGS {
+            for scope in binding.scopes {
+                let mut app = window(&theme, Tab::Path, false);
+                let ids = rows_of(&work, Tab::Path, now()).expect("a row tab");
+                if *scope == Scope::Detail {
+                    let mut detail = Detail::opened("TSK13".to_string(), Tab::Path, None);
+                    detail.scroll = 5;
+                    app.detail = Some(detail);
+                } else {
+                    match binding.act {
+                        Act::Move(-1) => app.selection = Some(ids[1].clone()),
+                        Act::Move(1) => app.selection = Some(ids[0].clone()),
+                        Act::Page(pages) => {
+                            render(&mut app, 100, 10);
+                            let page = app.view.page().min(ids.len() - 1);
+                            let at = if pages < 0 { page } else { 0 };
+                            app.selection = Some(ids[at].clone());
+                        }
+                        Act::Top => app.selection = Some(ids[2].clone()),
+                        Act::Bottom => app.selection = Some(ids[0].clone()),
+                        _ => {}
+                    }
+                }
+                let action = app.on_key(press_for(&binding), &work, now());
+                match binding.act {
+                    Act::Quit => assert_eq!(action, Action::Quit, "{}", binding.key),
+                    Act::Help => {
+                        assert!(app.help, "{} did not open the help", binding.key);
+                    }
+                    Act::NextTab => assert_eq!(app.tab, Tab::Backlog, "{}", binding.key),
+                    Act::PreviousTab => assert_eq!(app.tab, Tab::NeedsYou, "{}", binding.key),
+                    Act::JumpTab => assert_eq!(app.tab, Tab::Settings, "{}", binding.key),
+                    Act::Open => {
+                        assert!(app.detail.is_some(), "{} did not open", binding.key);
+                    }
+                    Act::Back => {
+                        assert!(app.detail.is_none(), "{} did not close", binding.key);
+                    }
+                    Act::Move(step) => {
+                        if *scope == Scope::Detail {
+                            let scroll = 5i64 + step as i64;
+                            assert_eq!(
+                                app.detail.as_ref().expect("the pane").scroll,
+                                scroll as u16,
+                                "{}",
+                                binding.key
+                            );
+                        } else {
+                            let expected = if step < 0 { &ids[0] } else { &ids[1] };
+                            assert_eq!(
+                                app.selection.as_deref(),
+                                Some(expected.as_str()),
+                                "{}",
+                                binding.key
+                            );
+                        }
+                    }
+                    Act::Page(pages) => {
+                        if *scope == Scope::Detail {
+                            let scroll = 5i64 + pages as i64;
+                            assert_eq!(
+                                app.detail.as_ref().expect("the pane").scroll,
+                                scroll as u16,
+                                "{}",
+                                binding.key
+                            );
+                        } else {
+                            let page = app.view.page();
+                            let expected = if pages < 0 { 0 } else { page };
+                            assert_eq!(
+                                app.selection.as_deref(),
+                                Some(ids[expected].as_str()),
+                                "{}",
+                                binding.key
+                            );
+                        }
+                    }
+                    Act::Top => {
+                        if *scope == Scope::Detail {
+                            assert_eq!(app.detail.as_ref().expect("the pane").scroll, 0);
+                        } else {
+                            assert_eq!(app.selection.as_deref(), Some(ids[0].as_str()));
+                        }
+                    }
+                    Act::Bottom => {
+                        if *scope == Scope::Detail {
+                            assert_eq!(app.detail.as_ref().expect("the pane").scroll, u16::MAX);
+                        } else {
+                            assert_eq!(app.selection.as_deref(), ids.last().map(String::as_str));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_window_handles_no_key_the_table_does_not_list() {
+        // Input handling goes through the table: the window's own source
+        // names no key code, so a key cannot act without a row that says so.
+        let source = include_str!("app.rs");
+        let production = source.split("#[cfg(test)]").next().expect("the tests");
+        assert!(
+            !production.contains("KeyCode::"),
+            "app.rs names a key code outside the table"
+        );
+        assert!(
+            !production.contains("KeyModifiers::"),
+            "app.rs names a modifier outside the table"
+        );
+    }
+
+    #[test]
+    fn a_key_the_table_does_not_list_does_nothing() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        for code in [KeyCode::Char('6'), KeyCode::Char('x'), KeyCode::Char('c')] {
+            let mut app = window(&theme, Tab::Path, false);
+            let before = (app.tab, app.selection.clone(), app.detail.clone(), app.help);
+            let action = app.on_key(key(code), &work, now());
+            assert_eq!(action, Action::Redraw, "{code:?}");
+            assert_eq!(
+                (app.tab, app.selection.clone(), app.detail.clone(), app.help),
+                before,
+                "{code:?} moved the window"
+            );
+        }
+    }
+
+    #[test]
+    fn esc_quits_in_the_window_and_returns_from_the_detail_pane() {
+        // The orchestrator's ruling: esc quits in the window, as it did on
+        // HEAD, and returns to the tab from the detail pane. A refactor that
+        // drops the quit path fails here.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Path, false);
+        assert_eq!(
+            app.on_key(key(KeyCode::Esc), &work, now()),
+            Action::Quit,
+            "esc no longer quits in the window"
+        );
+        let mut app = window(&theme, Tab::Path, false);
+        app.detail = Some(Detail::opened("TSK13".to_string(), Tab::Path, None));
+        assert_eq!(
+            app.on_key(key(KeyCode::Esc), &work, now()),
+            Action::Redraw,
+            "esc quit from the detail pane"
+        );
+        assert!(app.detail.is_none(), "esc did not return to the tab");
+    }
+
+    #[test]
+    fn esc_closes_the_help_without_leaving_raul() {
+        // The help footer names esc as the close key: it closes the overlay
+        // and keeps raul open. q still leaves.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Path, true);
+        assert_eq!(app.on_key(key(KeyCode::Esc), &work, now()), Action::Redraw);
+        assert!(!app.help, "esc did not close the help");
+        let mut app = window(&theme, Tab::Path, true);
+        assert_eq!(
+            app.on_key(key(KeyCode::Char('q')), &work, now()),
+            Action::Quit
+        );
+        assert!(!app.help, "q left the help open");
+    }
+
+    #[test]
+    fn the_settings_cursor_scrolls_and_stays_drawn() {
+        // The Settings tab keeps the row tabs' rule: the cursor is never on
+        // a row the pane does not draw.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let selection = paint_of(theme.text.selected);
+        let ids = rows_of(&work, Tab::Settings, now()).expect("a list tab");
+        let rows_of_settings = settings::groups();
+        let mut app = window(&theme, Tab::Settings, false);
+        for height in [12u16, 8, 6] {
+            render(&mut app, 100, height);
+            for _ in 0..ids.len() + 2 {
+                app.on_key(key(KeyCode::Down), &work, now());
+                let (rows, paint) = render(&mut app, 100, height);
+                let cursor = app.selection.clone().expect("a cursor");
+                let index = ids
+                    .iter()
+                    .position(|id| *id == cursor)
+                    .expect("the cursor's row");
+                assert!(
+                    index >= app.view.first() && index < app.view.first() + app.view.page(),
+                    "{cursor} is at {index}, the window is {}..{} at {height}",
+                    app.view.first(),
+                    app.view.first() + app.view.page()
+                );
+                let label = rows_of_settings
+                    .iter()
+                    .flat_map(|group| group.rows.iter())
+                    .find(|row| row.id == cursor)
+                    .map(|row| row.label.clone())
+                    .expect("the row's label");
+                // The cursor's line is on the screen, painted with the
+                // selection from the first content column to the pane's edge.
+                let (_, row) = rows
+                    .iter()
+                    .enumerate()
+                    .skip(2)
+                    .take(rows.len().saturating_sub(3))
+                    .find(|(y, _)| paint[*y][1] == selection)
+                    .unwrap_or_else(|| panic!("{cursor} is not painted: {rows:?}"));
+                let text = row.trim_matches('│').trim();
+                assert!(
+                    text.starts_with(&label) || text.starts_with(&format!("● {label}")),
+                    "{cursor}: the selected line is {text:?}"
+                );
+            }
+        }
+    }
+
     /// Every screen the window can show.
     fn screens() -> Vec<(Tab, bool)> {
         let mut screens: Vec<(Tab, bool)> = Tab::ALL.iter().map(|tab| (*tab, false)).collect();
@@ -1016,6 +1318,11 @@ mod tests {
     #[test]
     fn the_presets_say_the_same_thing() {
         for (tab, help) in screens() {
+            // Settings names the theme in use: its words move with the
+            // preset by design, and its own test pins the mark.
+            if tab == Tab::Settings {
+                continue;
+            }
             for (width, height) in [(100, 20), (60, 16), (40, 12)] {
                 let mut rendered = Vec::new();
                 for preset in Preset::ALL {
@@ -1107,14 +1414,23 @@ mod tests {
             .collect()
     }
 
+    /// Every tab that is a list with rows: the row tabs and Settings.
+    fn list_tabs() -> Vec<Tab> {
+        let work = mock_work();
+        Tab::ALL
+            .into_iter()
+            .filter(|tab| rows_of(&work, *tab, now()).is_some_and(|ids| !ids.is_empty()))
+            .collect()
+    }
+
     #[test]
-    fn the_three_row_tabs_draw_through_the_shared_window() {
+    fn the_lists_draw_through_the_shared_window() {
         // The window's fields and `settle` are private, so a tab cannot keep
         // its own window. A tab could still stop drawing through
         // `View::draw` and keep local state; `page` is set only by `draw`, so
         // a fresh window that has a page after a render proves the tab went
         // through the shared helper.
-        for tab in [Tab::NeedsYou, Tab::Path, Tab::Backlog] {
+        for tab in list_tabs() {
             let mut app = window(&Theme::preset(Preset::Dark), tab, false);
             assert_eq!(
                 app.view.page(),
@@ -1134,8 +1450,8 @@ mod tests {
         // At a short pane the tabs have rows below the last visible one.
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        for tab in row_tabs() {
-            let ids = rows_of(&work, tab, now()).expect("a row tab");
+        for tab in list_tabs() {
+            let ids = rows_of(&work, tab, now()).expect("a list tab");
             assert!(ids.len() > 4, "{tab:?}: not enough rows to scroll");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 10);
@@ -1400,8 +1716,8 @@ mod tests {
     fn a_page_key_moves_by_the_rows_the_pane_shows() {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        for tab in row_tabs() {
-            let ids = rows_of(&work, tab, now()).expect("a row tab");
+        for tab in list_tabs() {
+            let ids = rows_of(&work, tab, now()).expect("a list tab");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 14);
             let page = app.view.page();
@@ -1460,7 +1776,7 @@ mod tests {
     #[test]
     fn the_footer_and_the_help_name_the_movement_keys_that_work() {
         let theme = Theme::preset(Preset::Dark);
-        for tab in row_tabs() {
+        for tab in list_tabs() {
             let mut app = window(&theme, tab, false);
             let rows = render(&mut app, 100, 20).0;
             let footer = rows.last().expect("a footer row").trim_end().to_string();
@@ -1480,8 +1796,9 @@ mod tests {
                 assert!(help.contains(key), "{tab:?}: help omits {key}: {help}");
             }
         }
-        // A tab without rows names none of them: no key that does nothing.
-        for tab in [Tab::Overview, Tab::Settings] {
+        // The Overview is a summary, not a list: no movement key does
+        // anything there, and neither the footer nor the help names one.
+        for tab in [Tab::Overview] {
             let rows = render(&mut window(&theme, tab, false), 100, 20).0;
             let footer = rows.last().expect("a footer row").trim_end().to_string();
             for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
@@ -1511,6 +1828,7 @@ mod tests {
             (Tab::Backlog, 38u16, 6u16),
             (Tab::NeedsYou, 31, 6),
             (Tab::Path, 80, 6),
+            (Tab::Settings, 38, 6),
         ] {
             let mut app = window(&theme, tab, false);
             let rows = render(&mut app, width, height).0;
@@ -1529,7 +1847,7 @@ mod tests {
             );
         }
         // Where the content pane does announce, the footer says nothing.
-        for tab in [Tab::Backlog, Tab::NeedsYou, Tab::Path] {
+        for tab in [Tab::Backlog, Tab::NeedsYou, Tab::Path, Tab::Settings] {
             let mut app = window(&theme, tab, false);
             let rows = render(&mut app, 100, 12).0;
             let footer = rows.last().expect("a footer row").trim_end().to_string();

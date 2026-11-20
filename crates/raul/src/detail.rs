@@ -2,9 +2,9 @@
 //!
 //! Enter on a row opens the record the row holds as a full-screen overlay;
 //! esc returns to the tab and the selection it came from, and enter again
-//! reopens. The pane opens from every tab that has rows — Path, Needs you,
-//! Backlog — and nowhere else: the Overview is a summary, not a list, and
-//! Settings is a placeholder.
+//! reopens. The pane opens from every tab whose rows are tasks — Path, Needs
+//! you, Backlog — and nowhere else: the Overview is a summary, not a list,
+//! and Settings lists what is true and reads.
 //!
 //! The body is the record projected to markdown
 //! ([ADR 0009](../../../docs/decisions/0009-markdown-projection.md)) and

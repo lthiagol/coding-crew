@@ -148,6 +148,8 @@ pub struct Semantic {
 /// The colours raul and hugo paint with, one per slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
+    /// The preset the colours came from: the theme in use.
+    pub preset: Preset,
     pub chrome: Chrome,
     pub text: Text,
     pub semantic: Semantic,
@@ -158,6 +160,7 @@ impl Theme {
     pub fn preset(preset: Preset) -> Self {
         let style = |slot: Slot| style_of(preset, slot);
         Theme {
+            preset,
             chrome: Chrome {
                 title: style(Slot::ChromeTitle),
                 tab_active: style(Slot::ChromeTabActive),
@@ -371,6 +374,25 @@ pub fn selected_line(line: Line<'static>, width: usize, theme: &Theme) -> Line<'
     Line::from(spans)
 }
 
+/// What a preset's colours are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetKind {
+    /// A palette the tool ships with.
+    Palette,
+    /// The colours of the terminal itself.
+    Terminal,
+}
+
+impl PresetKind {
+    /// The words a screen uses for the kind.
+    pub fn label(&self) -> &'static str {
+        match self {
+            PresetKind::Palette => "palette",
+            PresetKind::Terminal => "terminal colours",
+        }
+    }
+}
+
 /// The palettes raul and hugo ship with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Preset {
@@ -404,6 +426,25 @@ impl Preset {
             Preset::Catppuccin => "catppuccin",
             Preset::Dracula => "dracula",
             Preset::Terminal => "terminal",
+        }
+    }
+
+    /// The name of the preset, as a screen writes it.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Preset::Dark => "Dark",
+            Preset::Nord => "Nord",
+            Preset::Catppuccin => "Catppuccin",
+            Preset::Dracula => "Dracula",
+            Preset::Terminal => "Terminal",
+        }
+    }
+
+    /// What the preset's colours are: a palette, or the terminal's own.
+    pub fn kind(&self) -> PresetKind {
+        match self {
+            Preset::Terminal => PresetKind::Terminal,
+            _ => PresetKind::Palette,
         }
     }
 
@@ -3089,6 +3130,26 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn every_preset_names_itself_and_its_kind() {
+        let labels: Vec<&str> = Preset::ALL.iter().map(|preset| preset.label()).collect();
+        assert_eq!(
+            labels,
+            ["Dark", "Nord", "Catppuccin", "Dracula", "Terminal"]
+        );
+        for preset in Preset::ALL {
+            assert_eq!(Theme::preset(preset).preset, preset, "{}", preset.name());
+            let kind = match preset {
+                Preset::Terminal => PresetKind::Terminal,
+                _ => PresetKind::Palette,
+            };
+            assert_eq!(preset.kind(), kind, "{}", preset.name());
+            assert!(!kind.label().is_empty(), "{}", preset.name());
+        }
+        // The two kinds say different things.
+        assert_ne!(PresetKind::Palette.label(), PresetKind::Terminal.label());
     }
 
     #[test]

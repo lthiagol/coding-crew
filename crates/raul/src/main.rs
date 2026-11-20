@@ -6,10 +6,12 @@ mod app;
 mod backlog;
 mod data;
 mod detail;
+mod keys;
 mod needs;
 mod overview;
 mod path;
 mod settings;
+mod sort;
 mod tabs;
 mod view;
 

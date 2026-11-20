@@ -16,6 +16,7 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_crew_core::{Task, parse_rfc3339};
 
 use crate::data::{Reason, Work};
+use crate::tabs::Tab;
 use crate::view::View;
 use coding_crew_theme::text::{cut_to, pad};
 use coding_crew_theme::{Theme, block_title_style, reason_style, selected_line};
@@ -153,10 +154,12 @@ pub fn groups(work: &Work, now: &str) -> Vec<Group> {
     }
     for group in &mut groups {
         // The longest wait comes first: the task that has waited longest is
-        // the one the human should see first.
-        group
-            .rows
-            .sort_by(|one, other| other.waited.cmp(&one.waited).then(one.id.cmp(&other.id)));
+        // the one the human should see first. The order is the tab's sort,
+        // the same value the Settings tab names.
+        let sort = Tab::NeedsYou.sort();
+        group.rows.sort_by(|one, other| {
+            sort.compare_waits((one.waited, &one.id), (other.waited, &other.id))
+        });
     }
     groups
 }
