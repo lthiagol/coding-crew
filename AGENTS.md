@@ -125,7 +125,12 @@ make raul
   talita code until explicitly told.
 - Work order: raul's screens and data flow first, then hugo's — the
   directives, then dropping the Autopilot tab from raul, then the shared
-  theme crate, then hugo itself.
+  theme crate, then hugo itself. **That order is done**: both TUIs are
+  built. What is left, in order: the orchestrator's job — hugo opens the
+  herdr tab and starts the agent it will run, the first step towards hugo
+  driving the loop rather than only showing it; the writers, which wait for
+  the flow — nothing writes the journal or the runtime record yet; and the
+  recorded follow-ups in `TODO.txt`.
 - talita is written only when explicitly instructed — never automatically
   because raul looks finished or mature enough.
 - `crates/core` stays editable; it is shared with raul and hugo.
