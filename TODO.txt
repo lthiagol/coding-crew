@@ -683,6 +683,33 @@ WHERE WE ARE
   description pin checks the phrase, not the attribution, and knows four
   connectives.
   Next unit: the announcements (plan 35).
+  Unit closed: the announcements (plan 35). Two build and review rounds.
+  One promise, three tabs: a hidden row is never a bare count. The Path
+  tab names the rows it scrolled past as well as the rows it cut, and a
+  partly shown group is never called wholly hidden; a blocked row names
+  every dependency it waits on, the fork parent included, and still says
+  which one it is forked under; a narrow Backlog pane names the groups it
+  hides, a dropped group header is not announced as zero hidden, and
+  zero-width content is dropped with a word; the Needs you reason survives
+  every width the tab renders at - a name that does not fit gives the row
+  to the marker, never to a bare count. The overlay case and the
+  claim-held-elsewhere case are separate fixtures now, and the claim
+  fixture leans on a lease with a real expiry instead of an empty one; the
+  Path and Needs you counts did not move. The gate is green: 624 Rust tests
+  and 212 script assertions.
+  The first round found a hole the unit was opened to close: at content
+  widths of 3 or less the Needs you announcement was a bare count - a
+  regression on HEAD, which at least kept the word hidden - and the
+  one-row Backlog pane hid nine rows with no word at all, because a real
+  pane always has a cursor and the cursor's row is never left out. That
+  one was a product decision inside the round, so it went to the human: the
+  footer carries the hidden count beside the keys when the content pane has
+  no room, the cursor's row stays drawn, and the same fact is never painted
+  twice. The ruling is in docs/tui/screens.md.
+  One low stands recorded: the footer drops the hidden count at the widths
+  where it would fit beside the keys - 17 and 18 columns on the Needs you
+  tab - because the count part carries a fixed three-column gap.
+  Next unit: the mocked journal (plan 36).
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
@@ -789,15 +816,7 @@ HAPPENED
 OPEN
   raul, the TUI for the work, is not finished. What is open, in the order
   of the plan:
-    - plan 35, the announcements: the Path tab names the rows it scrolled
-      past as well as the rows it cut; a blocked row names every dependency
-      it waits on, not only the ones after the fork parent; a group header
-      dropped for room is never announced as zero hidden; a narrow Backlog
-      pane names the groups it hides; a narrow Needs you announcement keeps
-      the reason name; a one-row pane's announcement is never cut without a
-      word; zero-width content is dropped with a word. The overlay case and
-      the claim-held-elsewhere case are isolated fixtures, so no task is held
-      by two things.
+    - plan 35, the announcements - closed.
     - plan 36, the mocked journal: the Overview's activity block against a
       mocked coding-crew/activity.json, written only through
       mock-data/generate.py. Nothing writes the journal yet; the kinds are
@@ -816,9 +835,10 @@ OPEN
   copy scan covers three of the five helpers, so a private copy of head_to
   or text_width passes it; and the description pin checks the phrase, not
   the attribution, and knows four connectives.
-  The Path tab left low follow-ups, none blocking: the claim-held-elsewhere
-  fixture leans on an empty lease meaning never expires, which nothing in
-  the model says.
+  The Path tab left one low follow-up, none blocking: the footer drops the
+  hidden count at the widths where it would fit beside the keys - 17 and 18
+  columns on the Needs you tab - because the count part carries a fixed
+  three-column gap.
   The journal's writer is grooming item G2: activity.json exists in the
   model, nothing writes it, and the kinds are provisional.
   The autopilot: the orchestrator role has no job yet.
