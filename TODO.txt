@@ -834,6 +834,33 @@ WHERE WE ARE
   added to the model doc, so it has no provenance of its own.
   Next: hugo's shell, its runtime record and its crew, and its
   configuration are built. The plan holds no open row for raul or hugo.
+  The human made four decisions after that: the two copies - the plain-render
+  plumbing and the age units - become one implementation in crates/core; the
+  configuration becomes TOML, because it is a file a human edits and JSON
+  has nowhere to put a comment; hugo reads its configuration at startup and
+  a key reloads it; and the orchestrator's model is picked in hugo's TUI,
+  because the orchestrator is the agent hugo will start. Then a batched
+  follow-ups unit closes the recorded lows.
+  Unit closed: the shared helpers (plan 40). One clean build and review
+  round. The plain-render plumbing - plain_text, setup and restore - and the
+  age units now live once in crates/core, and raul and hugo both read them;
+  the copies are gone and a guard fails if a second copy appears in either
+  src tree, a planted copy included. The renders stay byte-identical: the
+  builder diffed twenty-seven raul screens at 40, 60 and 100 columns, the
+  details and the short panes, hugo at the same widths, and the whole
+  81-width sweep against a build of HEAD - every one identical. One
+  vocabulary serves both tools, so the under-a-minute case says "under a
+  minute" in raul too, where it said "0m"; no fixture and no snapshot
+  reaches that state, and the orchestrator ruled that the clearer wording
+  wins. The gate is green: 802 Rust tests and 212 script assertions.
+  Three lows stand recorded: a comment and an assertion in needs.rs still
+  say the age is days, hours or minutes, and a future sub-minute fixture
+  would fail on correct behaviour; the shared-helper guard matches the
+  definition text, so a copy that renames the helper or inlines the body
+  evades it - the same limitation the cut_to, pad and View::draw pins have;
+  and the plan rows for the three units the human asked for sit beside this
+  one.
+  Next unit: hugo's configuration is TOML (plan 41).
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
@@ -886,6 +913,13 @@ HAPPENED
   the round files live under a project-prefixed path - /tmp/opencode/cl-<unit>
   - and a review brief says so in its first line, so a reviewer that guesses
   a path finds nothing to guess wrong about.
+  /tmp filled up mid-session and the gate failed on it: the tmpfs holds
+  2 GB, every gate run keeps a swept pty output directory, and two stale
+  probe directories from an earlier session held 1.7 GB of build targets.
+  The gate reported twenty failures that were all "no space left on
+  device", and none of them was a defect. The rule: the sweep's kept output
+  and the probe directories are pruned as the session goes, and a gate
+  failure that says "no space" is the disk, not the code.
   The known defect came back: both reviewers prompts arrived unsubmitted,
   sitting in the input box while herdr reported the panes idle, and the
   wake commands ran to their bound. The recovery worked - a bare Enter
