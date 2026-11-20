@@ -275,6 +275,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "coding-crew-hugo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "coding-crew-core",
+ "coding-crew-theme",
+ "crossterm",
+ "ratatui",
+]
+
+[[package]]
 name = "coding-crew-raul"
 version = "0.1.0"
 dependencies = [

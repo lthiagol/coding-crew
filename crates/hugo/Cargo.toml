@@ -1,0 +1,20 @@
+[package]
+name = "coding-crew-hugo"
+description = "Human-guided Unified Governance & Orchestration — the TUI for the flow"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "hugo"
+path = "src/main.rs"
+
+[dependencies]
+# The flow's record and the crew are built on the shared model.
+coding-crew-core.workspace = true
+coding-crew-theme.workspace = true
+anyhow.workspace = true
+crossterm.workspace = true
+ratatui.workspace = true
