@@ -1110,12 +1110,27 @@ OPEN
 NEXT
   The order is in docs/plan.md, and that is the only list of it. The plan
   holds the small units with their done-when lines, the grooming, and the
-  open questions.
-  raul is the work now, in three units: plan 35 the announcements, plan 36
-  the mocked journal, plan 37 Settings has content. Then hugo: the human
-  picks one of the eight readings in docs/hugo/tui-proposals/index.html, and
-  that pick becomes plan row 31 - the hugo shell. To look at them again in a
-  fresh session: python3 -m http.server 8848 --directory
-  docs/hugo/tui-proposals, then open http://localhost:8848/index.html.
+  open questions. It has no open row: raul and hugo are built, and every
+  unit the human asked for is closed.
+  So the next move is a decision, not a unit. What a fresh session can
+  pick up, in the order of what unblocks the most:
+    - the orchestrator's job. hugo picks the model for the agent it will
+      start; the herdr tab it opens and the agent it starts are the next
+      unit, and they are the first step towards hugo driving the loop
+      rather than only showing it. The crew's rules are already in place:
+      three agents means one per role, two means the orchestrator reviews,
+      one means the human reviews.
+    - the batched follow-ups: the recorded lows in the OPEN section, one
+      batch, the way plan 43 closed twenty of them.
+    - the writers. Nothing writes activity.json or runtime.json, so the
+      journal's kinds are provisional and the crew hugo shows is the mock's.
+      The writer is the flow's.
+    - talita's verbs, if the human asks for them explicitly. AGENTS.md
+      keeps talita off-limits until then.
+  The hugo sketches are still on disk under docs/hugo/tui-proposals/ for
+  the record, and the pick - the crew leads - is in
+  docs/hugo/design-record.md. To look at them again in a fresh session:
+  python3 -m http.server 8848 --directory docs/hugo/tui-proposals, then
+  open http://localhost:8848/index.html.
   The review's rulings are durable in docs/hugo/design-record.md, not in
   /tmp/opencode/review-hugo-props/, which does not survive.
