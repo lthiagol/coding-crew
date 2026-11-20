@@ -14,7 +14,7 @@
     "by": "runner-09",
     "session": "session-runner-09",
     "at": "2026-11-14T09:00Z",
-    "lease_expires_at": ""
+    "lease_expires_at": "2099-12-31T00:00:00Z"
   },
   "planned_by": "session-creator-03",
   "meta": {
@@ -112,7 +112,6 @@
     }
   ],
   "depends_on": [
-    "TSK06",
-    "TSK04"
+    "TSK23"
   ]
 }

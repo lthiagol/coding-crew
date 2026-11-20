@@ -665,16 +665,26 @@ fn the_fixtures_are_blocked() {
 #[test]
 fn a_claim_is_held_by_another_session() {
     // The case of a task that cannot be claimed because another session
-    // holds the claim: the lease is empty, so the claim never expires.
-    let held = tasks()
-        .into_iter()
+    // holds the claim: the lease has an expiry, and the claim is still live
+    // at the clock the fixtures are read with.
+    const NOW: &str = "2026-11-19T08:00:00Z";
+    let tasks = tasks();
+    let held: Vec<&Task> = tasks
+        .iter()
         .filter(|task| {
-            task.claim
-                .as_ref()
-                .is_some_and(|claim| claim.lease_expires_at.is_empty())
+            task.claim.as_ref().is_some_and(|claim| {
+                !claim.lease_expires_at.is_empty() && !claim.lease_expired(NOW)
+            })
         })
-        .count();
-    assert_eq!(held, 1, "no fixture for a claim held elsewhere");
+        .collect();
+    assert_eq!(held.len(), 1, "no fixture for a claim held elsewhere");
+    assert_eq!(held[0].id, "TSK09");
+    let claim = held[0].claim.as_ref().expect("the claim");
+    assert!(
+        parse_rfc3339(&claim.lease_expires_at).expect("an expiry")
+            > parse_rfc3339(NOW).expect("now"),
+        "the lease expires before the fixtures' clock"
+    );
 }
 
 #[test]

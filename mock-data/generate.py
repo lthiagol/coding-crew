@@ -438,7 +438,15 @@ def build():
                     note_id="NOTE-02",
                 ),
             ],
-            depends_on=[ids["groomed"][i], ids["groomed"][(i + 1) % 3]],
+            # The overlay and the claim fixtures wait only on done work: each
+            # is held by exactly one thing, so the tests can tell the two
+            # reasons apart. The dependency fixture waits on two groomed
+            # tasks, both still unfinished.
+            depends_on=(
+                [ids["groomed"][0], ids["groomed"][1]]
+                if i == 0
+                else [DONE_IDS[i - 1]]
+            ),
         )
         if i == 1:
             # An overlay holds the task: this is the case of a task blocked
@@ -452,13 +460,14 @@ def build():
             }
         if i == 2:
             # A claim another session holds: the case of a task blocked by
-            # a live claim. The lease is empty, so it never expires and the
-            # claim is still held whenever the fixtures are read.
+            # a live claim. The lease has an expiry, far enough out that the
+            # case stays held whenever the fixtures are read; it does not
+            # lean on an empty lease, which the model reads as never ending.
             item["claim"] = {
                 "by": "runner-09",
                 "session": "session-runner-09",
                 "at": ts(14, 9),
-                "lease_expires_at": "",
+                "lease_expires_at": "2099-12-31T00:00:00Z",
             }
         tasks.append(item)
 

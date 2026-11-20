@@ -26,7 +26,7 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 | tab bar | the five tabs; `1`–`5`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` |
 | content pane | the active tab's rows; `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` |
 | detail pane | `enter` on a row opens the task as a full-screen overlay; `esc` returns to the tab and the selection it came from, and `enter` again reopens |
-| footer | contextual keys for the active tab — never a key that does nothing |
+| footer | contextual keys for the active tab — never a key that does nothing. When the content pane has no room for the hidden-rows announcement, the footer carries that count beside the keys, and the content pane says nothing about it — the same fact is never painted twice |
 
 The detail pane is not a tab: it is the same task seen close up, and it opens
 from any tab that has a row.
@@ -109,7 +109,7 @@ blocks it.
 |---|---|
 | spine | the claimable tasks: `approved`, every dependency `done`, no overlay, no live claim — in dependency order. The first is marked `●`: it is what happens next |
 | AWAITING APPROVAL | `groomed` — waiting on the human to approve |
-| BLOCKED | `approved` but not claimable. Forked under **the first of its dependencies that is not done**, and the row names the rest |
+| BLOCKED | `approved` but not claimable. Forked under **the first of its dependencies that is not done**, and the row names every dependency it waits on, that one included |
 | RUNNING | `executing` and `remediating` |
 | REVIEW | `code-review` |
 | ESCALATED | `needs-human` — the review budget ran out |

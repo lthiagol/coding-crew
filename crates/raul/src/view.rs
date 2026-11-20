@@ -4,11 +4,12 @@
 //! window follows the cursor: a key that moves the cursor past the last
 //! visible row moves the window with it. The cursor's row wins over the
 //! announcement: when the pane is too short to draw the row and say what is
-//! hidden, the tab draws the row and leaves the count out. The cursor is only
-//! on a row the pane does not draw when the pane is too short for that row:
-//! the row itself is taller than the pane, or the pane is one content row
-//! and no window can draw a row at all — then only the cut announcement
-//! shows.
+//! hidden, the tab draws the row and leaves the count to the footer, which
+//! carries it beside the keys. The same fact is never painted twice. The
+//! cursor is only on a row the pane does not draw when the pane is too short
+//! for that row: the row itself is taller than the pane, or the pane is one
+//! content row and no window can draw a row at all — then only the cut
+//! announcement shows.
 
 /// The window over a tab's rows.
 ///

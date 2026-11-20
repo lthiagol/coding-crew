@@ -74,7 +74,7 @@ pub fn render_view(
     selected: Option<&str>,
     view: &mut View,
     now: &str,
-) {
+) -> Option<usize> {
     let block = Block::bordered()
         .title("needs you")
         .title_style(block_title_style(theme))
@@ -92,25 +92,29 @@ pub fn render_view(
             .block(block),
             area,
         );
-        return;
+        return None;
     }
     if work.is_empty() {
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled("no tasks yet", theme.text.dim))).block(block),
             area,
         );
-        return;
+        return None;
     }
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
     let ids = row_ids(work, now);
-    let rows = view.draw(&ids, selected, |first| {
-        window(work, width, height, theme, selected, first, now)
+    let (rows, announced) = view.draw(&ids, selected, |first| {
+        let (lines, announced, shown, whole) =
+            window(work, width, height, theme, selected, first, now);
+        ((lines, announced), shown, whole)
     });
     frame.render_widget(
         Paragraph::new(rows).wrap(Wrap { trim: false }).block(block),
         area,
     );
+    let hidden = ids.len().saturating_sub(view.page());
+    (hidden > 0 && !announced).then_some(hidden)
 }
 
 /// The ids of the tab's rows, in the order they are shown.
@@ -194,7 +198,9 @@ fn lines(
 /// every reason and the count of its tasks that are not in view.
 ///
 /// A pane too short for the announcement and the cursor's row draws the row
-/// alone: the selection is never on nothing.
+/// alone: the selection is never on nothing. The returned flag says whether
+/// the pane painted the announcement itself; when it did not, the window's
+/// caller carries the hidden count to the footer.
 fn window(
     work: &Work,
     width: usize,
@@ -203,7 +209,7 @@ fn window(
     selected: Option<&str>,
     first: usize,
     now: &str,
-) -> (Vec<Line<'static>>, Vec<usize>, bool) {
+) -> (Vec<Line<'static>>, bool, Vec<usize>, bool) {
     let groups = groups(work, now);
     let ages = age_width(&groups);
     let all: Vec<String> = groups
@@ -212,7 +218,7 @@ fn window(
         .collect();
     let mut out: Vec<Line<'static>> = Vec::new();
     if height == 0 {
-        return (out, Vec::new(), false);
+        return (out, false, Vec::new(), false);
     }
     out.push(headline(work, width, theme));
     let rest = height - 1;
@@ -222,9 +228,9 @@ fn window(
         if let Some(id) = selected
             && let Some((index, line)) = cursor_row(&groups, width, ages, theme, id)
         {
-            return (vec![line], vec![index], false);
+            return (vec![line], false, vec![index], false);
         }
-        return (out, Vec::new(), false);
+        return (out, false, Vec::new(), false);
     }
     let wanted: usize = groups.iter().map(|group| 1 + group.rows.len()).sum();
     if first == 0 && wanted <= rest {
@@ -232,7 +238,7 @@ fn window(
         for group in &groups {
             push_group(&mut out, group, width, ages, theme, selected);
         }
-        return (out, (0..all.len()).collect(), true);
+        return (out, false, (0..all.len()).collect(), true);
     }
     // Something does not fit. The announcement is whole or it is cut: the
     // longest announcement that fits whole wins, and the rows give way to
@@ -252,8 +258,17 @@ fn window(
                 .any(|index| all.get(*index).is_some_and(|other| other == id))
         });
         if cut {
-            if selected.is_some() && has_cursor && with_cursor.is_none() {
-                with_cursor = Some((rows.clone(), said.clone(), shown.clone()));
+            if selected.is_some() && has_cursor {
+                // The announcement comes first: a cut layout that says more
+                // (and draws fewer rows) is the better cut. A pane that
+                // leaves no room to say anything is the last resort.
+                let score = (said.len(), usize::MAX - rows.len());
+                let better = with_cursor
+                    .as_ref()
+                    .is_none_or(|(rows, said, _)| score > (said.len(), usize::MAX - rows.len()));
+                if better {
+                    with_cursor = Some((rows.clone(), said.clone(), shown.clone()));
+                }
             }
             shortest = Some((rows, said, shown));
             continue;
@@ -262,24 +277,89 @@ fn window(
             // Fewer rows cannot bring the cursor back into view.
             continue;
         }
+        let announced = !said.is_empty();
         out.extend(rows);
         out.extend(said);
-        return (out, shown, true);
+        return (out, announced, shown, true);
     }
-    let (rows, said, shown) = with_cursor.or(shortest).expect("a budget of zero");
+    if let Some((rows, said, shown)) = with_cursor.or(shortest) {
+        if said.is_empty()
+            && height >= 2
+            && let Some(id) = selected
+            && let Some((index, line)) = cursor_row(&groups, width, ages, theme, id)
+        {
+            // The rows took every line and said nothing about what they hid.
+            // The cursor's row is drawn, the headline gives way first, and the
+            // rest of the pane names every reason and what it hides.
+            let mut rows = Vec::new();
+            if height >= 3 {
+                rows.push(headline(work, width, theme));
+            }
+            rows.push(line);
+            let room = height - rows.len();
+            if room > 0 {
+                let omitted = omitted_with_only(&groups, index);
+                let (word, _) = announcement(&omitted, width, room, theme);
+                if !word.is_empty() {
+                    rows.extend(word);
+                    return (rows, true, vec![index], false);
+                }
+            }
+        }
+        if let Some(id) = selected
+            && !shown
+                .iter()
+                .any(|index| all.get(*index).is_some_and(|other| other == id))
+            && let Some((index, line)) = cursor_row(&groups, width, ages, theme, id)
+        {
+            // The pane is too short for the cursor's row and the layout: the
+            // row is drawn, the headline gives way, and what is left says what
+            // the pane hides. Only a pane of one line shows the row alone.
+            let mut rows = Vec::new();
+            if height >= 3 {
+                rows.push(headline(work, width, theme));
+            }
+            rows.push(line);
+            let room = height - rows.len();
+            let mut announced = false;
+            if room > 0 {
+                let omitted = omitted_with_only(&groups, index);
+                let (word, _) = announcement(&omitted, width, room, theme);
+                if !word.is_empty() {
+                    announced = true;
+                    rows.extend(word);
+                }
+            }
+            return (rows, announced, vec![index], false);
+        }
+        let announced = !said.is_empty();
+        out.extend(rows);
+        out.extend(said);
+        return (out, announced, shown, false);
+    }
+    // No layout was chosen: the pane is too short to say anything. The
+    // cursor's row is still drawn, alone.
     if let Some(id) = selected
-        && !shown
-            .iter()
-            .any(|index| all.get(*index).is_some_and(|other| other == id))
         && let Some((index, line)) = cursor_row(&groups, width, ages, theme, id)
     {
-        // The pane is too short for the cursor's row and the announcement:
-        // the row is shown alone, so the selection is never on nothing.
-        return (vec![line], vec![index], false);
+        return (vec![line], false, vec![index], false);
     }
-    out.extend(rows);
-    out.extend(said);
-    (out, shown, false)
+    (out, false, Vec::new(), false)
+}
+
+/// What each reason hides when only the row at `cursor` is shown.
+fn omitted_with_only(groups: &[Group], cursor: usize) -> [usize; 3] {
+    let mut omitted = [0usize; 3];
+    let mut at = 0usize;
+    for group in groups {
+        let index = index_of(group.reason);
+        omitted[index] = group.rows.len();
+        if (at..at + group.rows.len()).contains(&cursor) {
+            omitted[index] = group.rows.len().saturating_sub(1);
+        }
+        at += group.rows.len();
+    }
+    omitted
 }
 
 /// The line of the cursor's row, and its place among the tab's rows.
@@ -586,31 +666,38 @@ impl Said {
     }
 }
 
+/// A group's entry: the reason and its count. The reason keeps a row of its
+/// own when the count cannot sit beside it, so the reason is never replaced
+/// by a count or by the word `hidden`.
+#[derive(Debug, Clone)]
+struct Entry {
+    rows: Vec<Said>,
+}
+
 /// The lines that say what is not shown, in at most `room` rows.
 ///
 /// The count here is the count of what is *left out*, not of what the group
 /// holds — the header owns that — so the entry has a shape of its own: the
 /// reason, then the count in brackets with the word `hidden`. It never takes
 /// the header's `reason · total` shape, and the two meanings cannot be read
-/// for each other. On a narrow row the reason gives way, then the count; the
-/// word `hidden` is the last thing to go.
+/// for each other.
+///
+/// The reason is never cut away: when the count does not fit beside it, the
+/// reason takes a row of its own and the count and the word follow. When even
+/// the packed entries do not fit in `room`, the compact shape names every
+/// reason and its count over the rows there are; when that does not fit
+/// either, the entries give way whole, from the last one, and the last row is
+/// marked with `…`. The flag says the announcement is cut.
 ///
 /// A reason is painted with its own slot and a count with `text.strong`, as
 /// the theme requires; neither is dim.
-///
-/// An entry is whole on its row: a count is never cut from its reason. When
-/// even the first entry does not fit in `room`, the entries give way whole,
-/// from the last one, and the last row is marked with `…`. A row that
-/// already fills the width keeps its spans: there is no room for the marker,
-/// and repainting it would throw away the reason's slot and the count's
-/// strength. The flag says the announcement is cut.
 fn announcement(
     omitted: &[usize; 3],
     width: usize,
     room: usize,
     theme: &Theme,
 ) -> (Vec<Line<'static>>, bool) {
-    let entries: Vec<Said> = Reason::ALL
+    let entries: Vec<Entry> = Reason::ALL
         .iter()
         .enumerate()
         .map(|(index, reason)| entry(*reason, omitted[index], width))
@@ -619,18 +706,29 @@ fn announcement(
     if rows.len() <= room {
         return (paint(rows, theme), false);
     }
+    if room > 0
+        && let Some((mut compact, complete)) = compact(omitted, width, room)
+    {
+        if complete {
+            return (paint(compact, theme), false);
+        }
+        // The word or the lead-in did not fit: the row is not whole. The
+        // marker says so when there is room for it beside the last entry;
+        // every reason is named, so no entry is dropped for the marker.
+        if let Some(last) = compact.last_mut()
+            && last.width() < width
+        {
+            last.spans.push(("…".to_string(), Paint::Dim));
+        }
+        return (paint(compact, theme), true);
+    }
     if room == 0 {
         return (Vec::new(), true);
     }
     for keep in (0..entries.len()).rev() {
         let mut rows = pack(&entries[..keep], width);
-        let Some(last) = rows.last_mut() else {
+        if !mark_last(&mut rows, width) {
             break;
-        };
-        if last.width() < width {
-            last.spans.push(("…".to_string(), Paint::Dim));
-        } else if last.width() > width {
-            *last = cut_row(last, width);
         }
         if rows.len() <= room {
             return (paint(rows, theme), true);
@@ -645,65 +743,73 @@ fn announcement(
     }
 }
 
-/// The row, cut to `width` columns span by span.
+/// Mark the last row that has room for the marker, dropping whole rows to
+/// make room.
 ///
-/// Each kept piece keeps its paint: a reason stays in its slot and a count
-/// stays `text.strong`. Only the `…` that says the row was cut is dim.
-fn cut_row(said: &Said, width: usize) -> Said {
-    let budget = width.saturating_sub(1);
-    let mut spans: Vec<(String, Paint)> = Vec::new();
-    let mut used = 0usize;
-    for (text, paint) in &said.spans {
-        if used >= budget {
-            break;
+/// A row is never cut: a reason and its count stay together, and so do the
+/// rows of the compact shape. The flag says a row was marked.
+fn mark_last(rows: &mut Vec<Said>, width: usize) -> bool {
+    while let Some(last) = rows.last_mut() {
+        if last.width() < width {
+            last.spans.push(("…".to_string(), Paint::Dim));
+            return true;
         }
-        let room = budget - used;
-        let piece: String = text.chars().take(room).collect();
-        used += piece.chars().count();
-        spans.push((piece, *paint));
-        if text.chars().count() > room {
-            break;
-        }
+        rows.pop();
     }
-    if width > 0 {
-        spans.push(("…".to_string(), Paint::Dim));
-    }
-    Said { spans }
+    false
 }
 
 /// The entries, packed into rows of at most `width` columns.
 ///
 /// The words that say what the rows are about lead the first row, when they
-/// fit there. An entry is never broken over two rows, so a count is never
-/// cut from its reason.
-fn pack(entries: &[Said], width: usize) -> Vec<Said> {
+/// fit there. An entry's own rows stay together: a count is never cut from
+/// its reason, and a reason is never parted from the count below it. Only
+/// single-row entries share a row with the entry after them.
+fn pack(entries: &[Entry], width: usize) -> Vec<Said> {
     let prefix = Said::new("not shown: ", Paint::Dim);
     let mut rows: Vec<Said> = Vec::new();
-    let mut current = Said { spans: Vec::new() };
+    let mut current: Option<Said> = None;
     for entry in entries {
-        if entry.width() == 0 {
+        if entry.rows.is_empty() {
             continue;
         }
-        if current.width() == 0 {
-            let lead = rows.is_empty() && prefix.width() + entry.width() <= width;
-            if lead {
-                current.spans.extend(prefix.spans.clone());
+        if entry.rows.len() == 1 {
+            let line = &entry.rows[0];
+            if let Some(cur) = current.as_mut()
+                && cur.width() + 2 + line.width() <= width
+            {
+                cur.spans.push((", ".to_string(), Paint::Dim));
+                cur.spans.extend(line.spans.clone());
+                continue;
             }
-            current.spans.extend(entry.spans.clone());
+            if let Some(cur) = current.take() {
+                rows.push(cur);
+            }
+            let mut cur = Said { spans: Vec::new() };
+            if rows.is_empty() && prefix.width() + line.width() <= width {
+                cur.spans.extend(prefix.spans.clone());
+            }
+            cur.spans.extend(line.spans.clone());
+            current = Some(cur);
             continue;
         }
-        if current.width() + 2 + entry.width() <= width {
-            current.spans.push((", ".to_string(), Paint::Dim));
-            current.spans.extend(entry.spans.clone());
-        } else {
-            rows.push(Said {
-                spans: std::mem::take(&mut current.spans),
-            });
-            current.spans.extend(entry.spans.clone());
+        // A multi-row entry: its rows are consecutive, and nothing shares
+        // them.
+        if let Some(cur) = current.take() {
+            rows.push(cur);
+        }
+        for (index, line) in entry.rows.iter().enumerate() {
+            let mut line = line.clone();
+            if index == 0 && rows.is_empty() && prefix.width() + line.width() <= width {
+                let mut spans = prefix.spans.clone();
+                spans.append(&mut line.spans);
+                line.spans = spans;
+            }
+            rows.push(line);
         }
     }
-    if current.width() > 0 {
-        rows.push(current);
+    if let Some(cur) = current {
+        rows.push(cur);
     }
     rows
 }
@@ -733,30 +839,199 @@ fn paint(rows: Vec<Said>, theme: &Theme) -> Vec<Line<'static>> {
 ///
 /// The count is the number of tasks left out of view. The shape says so —
 /// the reason, then the count in brackets with the word `hidden` — so it
-/// cannot be read as the header's `reason · total`. The word is the one
-/// thing that survives every width: the reason gives way first, then the
-/// count, and only a row too narrow for `hidden` itself loses it.
-fn entry(reason: Reason, count: usize, width: usize) -> Said {
+/// cannot be read as the header's `reason · total`. The reason is never
+/// replaced: when it cannot sit beside its count, it takes a row of its own
+/// and the count follows.
+fn entry(reason: Reason, count: usize, width: usize) -> Entry {
     let name = reason.label();
-    let count = count.to_string();
-    let full = format!("{name} ({count} hidden)");
+    let counted = count.to_string();
+    let full = format!("{name} ({counted} hidden)");
+    if full.chars().count() <= width {
+        return Entry {
+            rows: vec![Said {
+                spans: vec![
+                    (name.to_string(), Paint::Reason(reason)),
+                    (" (".to_string(), Paint::Dim),
+                    (counted, Paint::Strong),
+                    (" hidden)".to_string(), Paint::Dim),
+                ],
+            }],
+        };
+    }
+    let bare = format!("{name} {counted} hidden");
+    if bare.chars().count() <= width {
+        return Entry {
+            rows: vec![Said {
+                spans: vec![
+                    (name.to_string(), Paint::Reason(reason)),
+                    (" ".to_string(), Paint::Dim),
+                    (counted, Paint::Strong),
+                    (" hidden".to_string(), Paint::Dim),
+                ],
+            }],
+        };
+    }
+    if width == 0 {
+        return Entry { rows: Vec::new() };
+    }
+    // The reason keeps a row; the count and the word stay together below.
+    let name_row = Said::new(cut_to(name, width), Paint::Reason(reason));
+    let counted_row = Said {
+        spans: vec![
+            (counted, Paint::Strong),
+            (" hidden".to_string(), Paint::Dim),
+        ],
+    };
+    let count_row = if counted_row.width() <= width {
+        counted_row
+    } else {
+        Said::new(cut_to("hidden", width), Paint::Dim)
+    };
+    Entry {
+        rows: vec![name_row, count_row],
+    }
+}
+
+/// The compact shape: every reason and its count, packed over at most `room`
+/// rows.
+///
+/// The shape is `reason count, reason count … hidden`: the reasons and their
+/// counts are named even when a row is too narrow for `reason (count
+/// hidden)`. The word `hidden` or the lead-in says what the counts are; the
+/// flag reports whether one of them is present. What fits is preferred in
+/// that order.
+fn compact(omitted: &[usize; 3], width: usize, room: usize) -> Option<(Vec<Said>, bool)> {
+    let tokens: Vec<Said> = Reason::ALL
+        .iter()
+        .enumerate()
+        .map(|(index, reason)| token(*reason, omitted[index], width))
+        .collect();
+    let mut fallback: Option<(Vec<Said>, bool)> = None;
+    for prefix in [true, false] {
+        for separator in [", ", ","] {
+            for suffix in [Suffix::Last, Suffix::Own, Suffix::None] {
+                let (rows, complete) = compact_rows(&tokens, width, prefix, separator, suffix);
+                if rows.len() > room {
+                    continue;
+                }
+                if complete {
+                    return Some((rows, true));
+                }
+                if fallback.is_none() {
+                    fallback = Some((rows, false));
+                }
+            }
+        }
+    }
+    fallback
+}
+
+/// Where the word `hidden` sits in a compact block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Suffix {
+    /// At the end of the last row, when it fits there.
+    Last,
+    /// On a row of its own.
+    Own,
+    /// Not at all: the reasons and counts are the whole announcement.
+    None,
+}
+
+/// A group's token in the compact shape: its reason and its count.
+///
+/// The reason is cut only when the row cannot hold it whole; the count stays
+/// whole while there is room for it. When there is no room for both, the
+/// reason takes the row, cut to the marker — the reason is what the row is,
+/// and a count is never shown without it.
+fn token(reason: Reason, count: usize, width: usize) -> Said {
+    let name = reason.label();
+    let counted = count.to_string();
+    let full = format!("{name} {counted}");
     if full.chars().count() <= width {
         return Said {
             spans: vec![
                 (name.to_string(), Paint::Reason(reason)),
-                (" (".to_string(), Paint::Dim),
-                (count, Paint::Strong),
-                (" hidden)".to_string(), Paint::Dim),
+                (" ".to_string(), Paint::Dim),
+                (counted, Paint::Strong),
             ],
         };
     }
-    let counted = format!("{count} hidden");
-    if counted.chars().count() <= width {
+    let tail = format!(" {counted}");
+    if tail.chars().count() < width {
+        let room = width - tail.chars().count();
         return Said {
-            spans: vec![(count, Paint::Strong), (" hidden".to_string(), Paint::Dim)],
+            spans: vec![
+                (cut_to(name, room), Paint::Reason(reason)),
+                (" ".to_string(), Paint::Dim),
+                (counted, Paint::Strong),
+            ],
         };
     }
-    Said::new(cut_to("hidden", width), Paint::Dim)
+    Said::new(cut_to(name, width), Paint::Reason(reason))
+}
+
+/// The compact tokens in rows, with the lead-in and the word placed.
+///
+/// The flag reports whether the rows say the counts are hidden: the lead-in
+/// or the word `hidden` is present.
+fn compact_rows(
+    tokens: &[Said],
+    width: usize,
+    prefix: bool,
+    separator: &str,
+    suffix: Suffix,
+) -> (Vec<Said>, bool) {
+    let lead = Said::new("not shown: ", Paint::Dim);
+    let leading = prefix && lead.width() <= width;
+    let mut rows: Vec<Said> = Vec::new();
+    let mut current = Said { spans: Vec::new() };
+    if leading {
+        current.spans.extend(lead.spans.clone());
+    }
+    let mut has_token = false;
+    for token in tokens {
+        let gap = if has_token {
+            separator.chars().count()
+        } else {
+            0
+        };
+        if current.width() + gap + token.width() <= width {
+            if has_token {
+                current.spans.push((separator.to_string(), Paint::Dim));
+            }
+            current.spans.extend(token.spans.clone());
+            has_token = true;
+        } else {
+            if current.width() > 0 {
+                rows.push(std::mem::replace(&mut current, Said { spans: Vec::new() }));
+            }
+            current.spans.extend(token.spans.clone());
+            has_token = true;
+        }
+    }
+    if current.width() > 0 {
+        rows.push(current);
+    }
+    let word = Said::new(" hidden", Paint::Dim);
+    let mut said_it = false;
+    match suffix {
+        Suffix::Last => {
+            if let Some(last) = rows.last_mut()
+                && last.width() + word.width() <= width
+            {
+                last.spans.extend(word.spans);
+                said_it = true;
+            }
+        }
+        Suffix::Own => {
+            if word.width() <= width {
+                rows.push(Said::new("hidden", Paint::Dim));
+                said_it = true;
+            }
+        }
+        Suffix::None => {}
+    }
+    (rows, leading || said_it)
 }
 
 /// How long a wait reads as.
@@ -821,7 +1096,9 @@ mod tests {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         let mut view = View::default();
         terminal
-            .draw(|frame| render_view(frame, frame.area(), work, &theme(), None, &mut view, now()))
+            .draw(|frame| {
+                render_view(frame, frame.area(), work, &theme(), None, &mut view, now());
+            })
             .expect("drawing the needs you tab");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -839,7 +1116,9 @@ mod tests {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         let mut view = View::default();
         terminal
-            .draw(|frame| render_view(frame, frame.area(), work, &theme(), None, &mut view, now()))
+            .draw(|frame| {
+                render_view(frame, frame.area(), work, &theme(), None, &mut view, now());
+            })
             .expect("drawing the needs you tab");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -1374,49 +1653,43 @@ mod tests {
         }
     }
 
-    /// The colour of `needle` on the announcement row of `reason`.
-    fn announcement_colour(
-        cells: &[Vec<(char, Color)>],
-        reason: &str,
-        needle: &str,
-    ) -> Option<Color> {
-        let row = cells.iter().find(|row| {
-            let text: String = row.iter().map(|(symbol, _)| *symbol).collect();
-            text.contains("hidden") && text.contains(reason)
-        })?;
-        let text: String = row.iter().map(|(symbol, _)| *symbol).collect();
-        let chars: Vec<char> = text.chars().collect();
-        let needle: Vec<char> = needle.chars().collect();
-        let start = chars
-            .windows(needle.len())
-            .position(|window| window == needle.as_slice())?;
-        row.get(start).map(|(_, colour)| *colour)
-    }
-
     #[test]
-    fn a_cut_announcement_keeps_the_reason_slot_and_the_strong_count() {
-        // The reported sizes: the kept row is exactly as wide as the
-        // content, so the cut has nothing to shorten. Its spans must
-        // survive the cut. Read the buffer, not the model: the model was
-        // right when the cut repainted the whole row dim.
+    fn a_narrow_announcement_keeps_the_reason_slot_and_the_strong_count() {
+        // A narrow announcement keeps each piece's paint: the reason stays in
+        // its slot and the count stays `text.strong`. Read the buffer, not the
+        // model: the model was right when a cut repainted the whole row dim.
         let theme = theme();
         let human = theme.semantic.human.fg.expect("the human colour");
         let strong = theme.text.strong.fg.expect("the strong colour");
-        for (width, height, reason, count) in [
-            (31u16, 4u16, "approve", "2"),
-            (20, 4, "approve", "2"),
-            (19, 5, "review", "3"),
-        ] {
+        for (width, height) in [(13u16, 12u16), (16, 12), (18, 12), (19, 7), (24, 7)] {
             let cells = draw_cells(&mock_work(), width, height);
+            let row = cells
+                .iter()
+                .find(|row| {
+                    let text: String = row.iter().map(|(symbol, _)| *symbol).collect();
+                    // The announcement's shape, not the header's: a reason
+                    // beside a count and no `·`.
+                    text.contains("approve")
+                        && !text.contains('·')
+                        && text.chars().any(|symbol| symbol.is_ascii_digit())
+                })
+                .unwrap_or_else(|| panic!("{width}x{height}: no approve announcement"));
+            let text: String = row.iter().map(|(symbol, _)| *symbol).collect();
+            let at = text.find("approve").expect("the reason");
+            let start = text[..at].chars().count();
             assert_eq!(
-                announcement_colour(&cells, reason, reason),
-                Some(human),
-                "{width}x{height}: {reason} lost its slot"
+                row[start].1, human,
+                "{width}x{height}: approve lost its slot: {text:?}"
             );
+            let digit = text
+                .char_indices()
+                .rev()
+                .find(|(_, symbol)| symbol.is_ascii_digit())
+                .map(|(byte, _)| text[..byte].chars().count())
+                .expect("a count");
             assert_eq!(
-                announcement_colour(&cells, reason, count),
-                Some(strong),
-                "{width}x{height}: the {reason} count is not strong"
+                row[digit].1, strong,
+                "{width}x{height}: the approve count is not strong: {text:?}"
             );
         }
     }
@@ -1593,7 +1866,7 @@ mod tests {
                             None,
                             &mut view,
                             now(),
-                        )
+                        );
                     })
                     .expect("drawing");
                 rendered.push((preset.name(), buffer_text(terminal.backend().buffer())));
@@ -1609,41 +1882,101 @@ mod tests {
     }
 
     #[test]
-    fn a_narrow_entry_keeps_the_word_hidden() {
-        // The reason and the count may give way; the word that says the
-        // count is a count of what is hidden may not.
+    fn a_narrow_entry_keeps_the_reason_and_the_word_hidden() {
+        // The count may give way; the reason that names the group may not,
+        // and the word that says the count is a count of what is hidden
+        // stays with it.
         for width in 6..=40 {
             for count in [0usize, 2, 3] {
-                let text = entry(Reason::Approve, count, width).text();
-                assert!(text.chars().count() <= width, "{width}: {text}");
+                let entry = entry(Reason::Approve, count, width);
+                for row in &entry.rows {
+                    assert!(row.width() <= width, "{width}: {:?}", row.text());
+                }
+                let text = entry
+                    .rows
+                    .iter()
+                    .map(Said::text)
+                    .collect::<Vec<String>>()
+                    .join(" ");
                 assert!(text.contains("hidden"), "{width}: {count}: {text}");
                 assert!(!text.contains(" · "), "{width}: {text}");
+                // The reason is never replaced by the count: it heads the
+                // entry, whole while it fits and cut only when it cannot.
+                let head = entry.rows[0].text();
+                assert!(
+                    head.starts_with("approve")
+                        || "approve".starts_with(head.trim_end_matches('…')),
+                    "{width}: {head:?} is not the reason"
+                );
             }
         }
     }
 
     #[test]
-    fn a_narrow_announcement_still_says_the_number_is_hidden() {
-        // At terminal widths 13..=18 the content is 11..=16 columns: too
-        // narrow for `approve (0 hidden)`, and the old shape fell back to
-        // `approve (0)`, which reads like a header total. Every reason's
-        // entry still says the count is hidden.
+    fn a_reason_is_never_replaced_by_a_bare_count() {
+        // At the narrowest content widths the compact shape cuts a reason to
+        // the marker. A row that shows a count without its reason is a bare
+        // count: the announcement never says one.
+        for width in 1..=11 {
+            for room in [1usize, 2, 3, 6, 9] {
+                let (rows, _) = announcement(&[2, 3, 3], width, room, &theme());
+                for row in &rows {
+                    let text = row
+                        .spans
+                        .iter()
+                        .map(|span| span.content.as_ref())
+                        .collect::<String>();
+                    assert!(
+                        !text.trim().chars().all(|symbol| symbol.is_ascii_digit()),
+                        "{width}/{room}: a bare count: {text:?}"
+                    );
+                }
+                if width == 1 {
+                    let text = said_text(&rows);
+                    assert!(
+                        text.contains('…'),
+                        "{width}/{room}: the marker is missing: {text}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_narrow_announcement_names_every_reason() {
+        // At content widths 11..=16 the full `reason (count hidden)` does not
+        // fit. The announcement keeps every reason, whole, with its count:
+        // the reason is what the row is and is never cut away.
+        for width in 11..=16 {
+            for room in [3usize, 6, 9] {
+                let (rows, _) = announcement(&[2, 3, 3], width, room, &theme());
+                let text = said_text(&rows);
+                for reason in ["approve", "review", "escalated"] {
+                    assert!(
+                        text.contains(reason),
+                        "{width}/{room}: {reason} is missing: {text}"
+                    );
+                }
+                for count in ["2", "3"] {
+                    assert!(text.contains(count), "{width}/{room}: {count}: {text}");
+                }
+            }
+        }
+        // And on the rendered tab: every reason is named in the trailing
+        // announcement block, not only in the headers above it.
         let work = human_lane();
         for width in 13..=18u16 {
             let text = text_of(&draw(&work, width, 12));
-            let hidden: Vec<&str> = text
-                .lines()
-                .filter(|line| line.contains("hidden"))
-                .collect();
-            assert_eq!(
-                text.matches("hidden").count(),
-                3,
-                "{width}: every reason is announced: {text}"
-            );
-            for line in hidden {
+            let lines: Vec<&str> = text.lines().collect();
+            let start = lines
+                .iter()
+                .position(|line| line.contains("not shown:") || line.contains("hidden"))
+                .unwrap_or_else(|| panic!("{width}: no announcement: {text}"));
+            let announcement = lines[start..].join("\n");
+            for reason in ["approve", "review", "escalated"] {
                 assert!(
-                    !line.contains(" · "),
-                    "{width}: a hidden count reads like a header: {line}"
+                    announcement.contains(reason),
+                    "{width}: the announcement drops {reason}: {text}"
                 );
             }
         }

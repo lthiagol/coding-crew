@@ -238,8 +238,11 @@ impl App {
         // and the key agree, including before the first move.
         let selected = self.cursor(work, now);
         let selected = selected.as_deref();
-        match self.tab {
-            Tab::Overview => overview::render(frame, rows[2], work, &self.theme, now),
+        let hidden = match self.tab {
+            Tab::Overview => {
+                overview::render(frame, rows[2], work, &self.theme, now);
+                None
+            }
             Tab::NeedsYou => needs::render_view(
                 frame,
                 rows[2],
@@ -261,8 +264,11 @@ impl App {
             Tab::Backlog => {
                 backlog::render_view(frame, rows[2], work, &self.theme, selected, &mut self.view)
             }
-            Tab::Settings => settings::render(frame, rows[2], &self.theme),
-        }
+            Tab::Settings => {
+                settings::render(frame, rows[2], &self.theme);
+                None
+            }
+        };
         if let Some(detail) = self.detail.as_mut() {
             // The pane covers the whole window: its own footer is the one
             // on display, and the help overlay waits behind it. The pane
@@ -271,7 +277,7 @@ impl App {
             detail::render(frame, area, work, detail, &self.theme);
             return;
         }
-        frame.render_widget(self.footer(rows[3].width, work, now), rows[3]);
+        frame.render_widget(self.footer(rows[3].width, work, now, hidden), rows[3]);
 
         if self.help {
             let has_rows = rows_of(work, self.tab, now).is_some_and(|ids| !ids.is_empty());
@@ -371,28 +377,40 @@ impl App {
     ///
     /// A terminal too narrow for every key keeps the keys that matter most,
     /// and no key is ever cut in half. Enter is named only where it opens:
-    /// a tab without rows never offers it.
-    fn footer(&self, width: u16, work: &Work, now: &str) -> Line<'static> {
+    /// a tab without rows never offers it. When the content pane had no
+    /// room to say what it hides, `hidden` is that count: the footer carries
+    /// it beside the keys, and the content pane says nothing about it — the
+    /// same fact is never painted twice.
+    fn footer(&self, width: u16, work: &Work, now: &str, hidden: Option<usize>) -> Line<'static> {
         let key = self.theme.chrome.key;
         let label = self.theme.chrome.footer;
         let space = || Span::raw("   ");
         // (where it sits in the line, its spans, whether it matters most)
-        let mut parts: Vec<(usize, Vec<Span<'static>>, bool)> = vec![
-            (
-                0,
-                vec![Span::styled(" q ", key), Span::styled(" quit", label)],
-                true,
-            ),
-            (
+        let mut parts: Vec<(usize, Vec<Span<'static>>, bool)> = vec![(
+            0,
+            vec![Span::styled(" q ", key), Span::styled(" quit", label)],
+            true,
+        )];
+        if let Some(hidden) = hidden {
+            parts.push((
                 1,
                 vec![
                     space(),
-                    Span::styled(" 1-5 ", key),
-                    Span::styled(" tab", label),
+                    Span::styled(hidden.to_string(), self.theme.text.strong),
+                    Span::styled(" hidden", label),
                 ],
                 true,
-            ),
-        ];
+            ));
+        }
+        parts.push((
+            1,
+            vec![
+                space(),
+                Span::styled(" 1-5 ", key),
+                Span::styled(" tab", label),
+            ],
+            true,
+        ));
         let mut next = 3;
         let has_rows = rows_of(work, self.tab, now).is_some_and(|ids| !ids.is_empty());
         if has_rows {
@@ -1483,6 +1501,51 @@ mod tests {
     }
 
     #[test]
+    fn the_footer_carries_the_hidden_count_when_the_pane_cannot_announce() {
+        // A one-line content pane draws the cursor's row alone. The content
+        // pane says nothing about what it hides; the footer carries the count
+        // beside the keys, so the same fact is never painted twice.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        for (tab, width, height) in [
+            (Tab::Backlog, 38u16, 6u16),
+            (Tab::NeedsYou, 31, 6),
+            (Tab::Path, 80, 6),
+        ] {
+            let mut app = window(&theme, tab, false);
+            let rows = render(&mut app, width, height).0;
+            let footer = rows.last().expect("a footer row").trim_end().to_string();
+            let ids = rows_of(&work, tab, now()).expect("a row tab");
+            let hidden = ids.len() - app.view.page();
+            assert!(hidden > 0, "{tab:?}: nothing is hidden");
+            assert!(
+                footer.contains(&format!("{hidden} hidden")),
+                "{tab:?}: the footer does not carry {hidden} hidden: {footer}"
+            );
+            let content = rows[2..rows.len() - 1].join("\n");
+            assert!(
+                !content.contains("hidden") && !content.contains("not shown"),
+                "{tab:?}: the content pane announces too: {content}"
+            );
+        }
+        // Where the content pane does announce, the footer says nothing.
+        for tab in [Tab::Backlog, Tab::NeedsYou, Tab::Path] {
+            let mut app = window(&theme, tab, false);
+            let rows = render(&mut app, 100, 12).0;
+            let footer = rows.last().expect("a footer row").trim_end().to_string();
+            let content = rows[2..rows.len() - 1].join("\n");
+            assert!(
+                content.contains("hidden") || content.contains("not shown"),
+                "{tab:?}: the content pane says nothing: {content}"
+            );
+            assert!(
+                !footer.contains("hidden"),
+                "{tab:?}: the footer paints it twice: {footer}"
+            );
+        }
+    }
+
+    #[test]
     fn the_row_tab_footer_degrades_in_the_built_order() {
         // `footer_line` first-fits the optional parts in index order — g/G,
         // then ↑↓ j/k, then pgup/pgdn, then the tab pair — so the pair is the
@@ -1492,7 +1555,7 @@ mod tests {
         let work = mock_work();
         let app = window(&Theme::preset(Preset::Dark), Tab::Path, false);
         let text = |width: u16| {
-            app.footer(width, &work, now())
+            app.footer(width, &work, now(), None)
                 .spans
                 .iter()
                 .map(|span| span.content.as_ref())

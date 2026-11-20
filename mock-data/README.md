@@ -48,18 +48,20 @@ is what holds it. Four shapes are covered:
 - **fan-in** — most tasks wait on two others; the last `done` task waits on
   three
 - **chains** — the `done` tasks form a chain among themselves
-- **waiting on a blocked task** — `TSK07` and `TSK08` wait on `TSK05`, which
-  carries a `blocked` overlay, so they cannot start until it is unblocked
+- **waiting on a blocked task** — `TSK07` waits on `TSK05`, which
+  carries a `blocked` overlay, so it cannot start until it is unblocked
 
 ## The reasons a task is not claimable
 
-An `approved` task can be held by three things, and one fixture covers each:
+An `approved` task can be held by three things, and one fixture covers each.
+The overlay case and the claim case wait only on done work, so each is held by
+one reason alone:
 
 | reason | fixture | what holds it |
 |---|---|---|
-| a dependency that is not done | `TSK07` | it waits on `TSK04` and `TSK05` |
-| an overlay | `TSK08` | it carries a `blocked` overlay |
-| a claim held elsewhere | `TSK09` | another session holds the claim; its lease is empty, so it never expires |
+| a dependency that is not done | `TSK07` | it waits on `TSK04` and `TSK05`, neither done |
+| an overlay | `TSK08` | it carries a `blocked` overlay; its only dependency is done |
+| a claim held elsewhere | `TSK09` | another session holds the claim; its only dependency is done and its lease expires on `2099-12-31T00:00:00Z`, so it is held whenever the fixtures are read |
 
 ## Use in tests
 

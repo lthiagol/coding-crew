@@ -352,7 +352,7 @@ pub fn render_view(
     selected: Option<&str>,
     view: &mut View,
     now: &str,
-) {
+) -> Option<usize> {
     let block = Block::bordered()
         .title("path tree")
         .title_style(block_title_style(theme))
@@ -370,14 +370,14 @@ pub fn render_view(
             .block(block),
             area,
         );
-        return;
+        return None;
     }
     if work.is_empty() {
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled("no tasks yet", theme.text.dim))).block(block),
             area,
         );
-        return;
+        return None;
     }
     let tree = tree(work, now);
     if tree.is_empty() {
@@ -386,18 +386,21 @@ pub fn render_view(
                 .block(block),
             area,
         );
-        return;
+        return None;
     }
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
     let ids = tree.row_ids();
-    let rows = view.draw(&ids, selected, |first| {
-        window(&tree, width, height, theme, selected, first)
+    let (rows, announced) = view.draw(&ids, selected, |first| {
+        let (lines, announced, shown, whole) = window(&tree, width, height, theme, selected, first);
+        ((lines, announced), shown, whole)
     });
     frame.render_widget(
         Paragraph::new(rows).wrap(Wrap { trim: false }).block(block),
         area,
     );
+    let hidden = ids.len().saturating_sub(view.page());
+    (hidden > 0 && !announced).then_some(hidden)
 }
 
 /// A piece of the tree.
@@ -461,6 +464,8 @@ struct Candidate {
     has_cursor: bool,
     /// The announcement is whole.
     whole: bool,
+    /// The layout painted the announcement.
+    announced: bool,
     /// The rows of the tree, before the announcement.
     tree_rows: usize,
     lines: Vec<Line<'static>>,
@@ -491,7 +496,10 @@ fn lines(
 /// does not fit, the trunk is named in the announcement.
 ///
 /// A pane too short for the announcement and the cursor's row draws the row
-/// alone: the selection is never on nothing.
+/// alone: the selection is never on nothing. The returned flag says whether
+/// the pane painted the announcement itself; when it did not, the window's
+/// caller carries the hidden count to the footer. An announcement is cut
+/// only between whole entries, never inside a group's name and count.
 fn window(
     tree: &Tree,
     width: usize,
@@ -499,7 +507,7 @@ fn window(
     theme: &Theme,
     selected: Option<&str>,
     first: usize,
-) -> (Vec<Line<'static>>, Vec<usize>, bool) {
+) -> (Vec<Line<'static>>, bool, Vec<usize>, bool) {
     let pieces = pieces(tree, width, theme, selected);
     let all = tree.row_ids();
     // The tree that is shown is the one that still leaves room to say what
@@ -520,7 +528,7 @@ fn window(
             if dropped.is_empty() {
                 // The whole tree fits: there is nothing to say.
                 if has_cursor {
-                    return (shown, rows, true);
+                    return (shown, false, rows, true);
                 }
                 continue;
             }
@@ -536,23 +544,16 @@ fn window(
             let tree_rows = out.len();
             let mut summary_rows = summary.into_iter().take(room).collect::<Vec<_>>();
             if !whole {
-                // The announcement is cut: it says so.
-                if let Some(last) = summary_rows.last_mut() {
-                    let text: String = last
-                        .spans
-                        .iter()
-                        .map(|span| span.content.as_ref())
-                        .collect();
-                    last.spans = vec![Span::styled(
-                        cut_to(&format!("{text}…"), width),
-                        theme.text.dim,
-                    )];
-                }
+                // The announcement is cut between whole entries: the kept
+                // entries stay whole, and the last row says more is hidden.
+                mark_last(&mut summary_rows, width, theme);
             }
+            let announced = !summary_rows.is_empty();
             out.append(&mut summary_rows);
             let candidate = Candidate {
                 has_cursor,
                 whole,
+                announced,
                 tree_rows,
                 lines: out,
                 rows,
@@ -576,13 +577,19 @@ fn window(
         && let Some(chunk) = cursor_chunk(&pieces, cursor)
         && chunk.lines.len() - chunk.lead <= height
     {
-        return (chunk.lines[chunk.lead..].to_vec(), vec![cursor], false);
+        return (
+            chunk.lines[chunk.lead..].to_vec(),
+            false,
+            vec![cursor],
+            false,
+        );
     }
     best.map_or_else(
-        || (Vec::new(), Vec::new(), false),
+        || (Vec::new(), false, Vec::new(), false),
         |best| {
             (
                 best.lines,
+                best.announced,
                 best.rows,
                 selected.is_none() || (best.has_cursor && best.whole),
             )
@@ -814,7 +821,8 @@ fn take(
 ///
 /// The summary sits in the tree's column, like everything else. A count is
 /// never parted from the group it counts: an entry is never broken over two
-/// rows.
+/// rows, and an entry that cannot fit the width is not cut — the entries
+/// give way whole and the last row is marked with `…`.
 fn summary(dropped: &[Dropped], width: usize, theme: &Theme) -> Vec<Line<'static>> {
     if dropped.is_empty() {
         return Vec::new();
@@ -824,11 +832,17 @@ fn summary(dropped: &[Dropped], width: usize, theme: &Theme) -> Vec<Line<'static
     let mut lines: Vec<String> = Vec::new();
     let mut current = String::new();
     let mut first = true;
+    let mut cut = false;
     for branch in dropped {
-        let entry = summary_entry(branch, width);
+        let entry = format!("{} · {}", branch.name, branch.count);
+        let entry_width = text_width(&entry);
+        if entry_width > width {
+            // Not even the group and its count fit whole: it is not cut.
+            cut = true;
+            break;
+        }
         let separator = if first { "" } else { ", " };
-        if !current.is_empty()
-            && current.chars().count() + separator.chars().count() + entry.chars().count() > width
+        if !current.is_empty() && text_width(&current) + text_width(separator) + entry_width > width
         {
             // The entry does not fit on this row: it starts the next one.
             lines.push(std::mem::take(&mut current));
@@ -840,7 +854,7 @@ fn summary(dropped: &[Dropped], width: usize, theme: &Theme) -> Vec<Line<'static
             // The words that say what the row is about, when there is room
             // for them.
             let prefix = "not shown: ";
-            if prefix.chars().count() + entry.chars().count() <= width {
+            if text_width(prefix) + entry_width <= width {
                 current.push_str(prefix);
             }
         }
@@ -848,24 +862,48 @@ fn summary(dropped: &[Dropped], width: usize, theme: &Theme) -> Vec<Line<'static
         current.push_str(&entry);
         first = false;
     }
-    lines.push(current);
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    if cut {
+        mark_string_last(&mut lines, width);
+    }
     lines
         .into_iter()
         .map(|line| Line::from(Span::styled(format!(" {line}"), theme.text.dim)))
         .collect()
 }
 
-/// The name of a group and the count of the tasks in it.
-///
-/// The count stays whole: the name gives way when the row is too narrow.
-fn summary_entry(branch: &Dropped, width: usize) -> String {
-    let count = branch.count.to_string();
-    let fixed = branch.name.chars().count() + 3 + count.chars().count();
-    if fixed <= width {
-        return format!("{} · {count}", branch.name);
+/// Mark the last summary line that has room for the marker, dropping whole
+/// lines to make room.
+fn mark_string_last(lines: &mut Vec<String>, width: usize) {
+    while let Some(last) = lines.last_mut() {
+        if text_width(last) < width {
+            last.push('…');
+            return;
+        }
+        lines.pop();
     }
-    let room = width.saturating_sub(3 + count.chars().count());
-    cut_to(&format!("{} · {count}", cut_to(branch.name, room)), width)
+    lines.push("…".to_string());
+}
+
+/// Mark the last line of an announcement, dropping whole lines to make room.
+fn mark_last(lines: &mut [Line<'static>], width: usize, theme: &Theme) {
+    let mut keep = lines.len();
+    while keep > 0 {
+        let last = &lines[keep - 1];
+        if last.width() < width {
+            lines[keep - 1]
+                .spans
+                .push(Span::styled("…", theme.text.dim));
+            return;
+        }
+        keep -= 1;
+    }
+    // Every line fills the width: the marker is the whole announcement.
+    if let Some(first) = lines.first_mut() {
+        *first = Line::from(Span::styled("…", theme.text.dim));
+    }
 }
 
 /// The pieces of the tree: the head, then the branches.
@@ -1258,7 +1296,9 @@ mod tests {
     fn draw_at(work: &Work, width: u16, height: u16, now: &str, view: &mut View) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| render_view(frame, frame.area(), work, &theme(), None, view, now))
+            .draw(|frame| {
+                render_view(frame, frame.area(), work, &theme(), None, view, now);
+            })
             .expect("drawing the path");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -1380,6 +1420,90 @@ mod tests {
         assert!(text.contains("claim held elsewhere"), "{text}");
     }
 
+    /// The row range of each group of the tree, in the drawn order: the
+    /// spine, then the branches.
+    fn ranges(tree: &Tree) -> Vec<(&'static str, usize, usize)> {
+        let mut out = vec![(SPINE, 0, tree.spine.len())];
+        let mut at = tree.spine.len();
+        for view in &tree.branches {
+            out.push((view.branch.label(), at, at + view.count));
+            at += view.count;
+        }
+        out
+    }
+
+    #[test]
+    fn a_scrolled_window_names_the_rows_above_and_below() {
+        // A group whose rows are partly shown is never announced as wholly
+        // hidden, and every hidden row of every group is named: the count
+        // and the rows agree.
+        let tree = tree(&mock_work(), now());
+        let total = tree.row_ids().len();
+        for width in [40usize, 58, 100] {
+            for first in 0..total {
+                for height in [4usize, 6, 10, 16] {
+                    let (rows, _, shown, _) = window(&tree, width, height, &theme(), None, first);
+                    let text: Vec<String> = rows.iter().map(text_of_line).collect();
+                    let text = text.join("\n");
+                    let Some((_, summary)) = text.split_once("not shown:") else {
+                        continue;
+                    };
+                    for (at, (name, start, end)) in ranges(&tree).into_iter().enumerate() {
+                        let shown_here = shown
+                            .iter()
+                            .filter(|row| (start..end).contains(row))
+                            .count();
+                        let hidden = end - start - shown_here;
+                        if hidden == 0 {
+                            continue;
+                        }
+                        let claimed = summary.contains(&format!("{name} · {hidden}"));
+                        // The inline form belongs to its own group: an
+                        // announcement inside another branch is not this
+                        // group's word about its hidden rows.
+                        let inline = at > 0 && {
+                            let branch = at - 1;
+                            let prefix = if branch == tree.branches.len() - 1 {
+                                "     "
+                            } else {
+                                " │   "
+                            };
+                            let form = format!("{prefix}+{hidden} more tasks");
+                            text.lines().any(|line| line == form)
+                        };
+                        assert!(
+                            claimed || inline,
+                            "{width}/{first}/{height}: {name} hides {hidden} and says neither\n{text}"
+                        );
+                        if shown_here > 0 {
+                            assert!(
+                                !summary.contains(&format!("{name} · {}", end - start)),
+                                "{width}/{first}/{height}: a partly shown {name} is announced as wholly hidden\n{text}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_scrolled_announcement_counts_the_rows_above_the_window() {
+        // The window starts in the middle of RUNNING: the rows above it are
+        // named with the count of what is hidden, and the count is the
+        // rows not drawn, not the group's total.
+        let tree = tree(&mock_work(), now());
+        let (rows, _, shown, _) = window(&tree, 58, 6, &theme(), None, 10);
+        let text = rows
+            .iter()
+            .map(text_of_line)
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(text.contains("RUNNING · 6"), "the header: {text}");
+        assert!(text.contains("RUNNING · 4"), "the hidden count: {text}");
+        assert_eq!(shown.len(), 2, "{shown:?}");
+    }
+
     #[test]
     fn the_spine_is_the_claimable_task() {
         let tree = tree(&mock_work(), now());
@@ -1395,27 +1519,102 @@ mod tests {
             .iter()
             .find(|view| view.branch == Branch::Blocked)
             .expect("the blocked branch");
-        // The blocked branch is forked under the first of a task's
-        // dependencies that is not done.
+        // Only a task held by a dependency has a fork parent. The overlay
+        // and the claim fixtures wait only on done work, so their group has no
+        // blocker.
         let blockers: Vec<Option<&str>> = blocked
             .groups
             .iter()
             .map(|group| group.blocker.as_deref())
             .collect();
-        assert_eq!(blockers, vec![Some("TSK04"), Some("TSK05"), Some("TSK06")]);
-        // The row names what it waits on.
-        let first = &blocked.groups[0].rows[0];
-        assert_eq!(first.id, "TSK07");
-        assert_eq!(
-            first.waits_on,
-            vec!["TSK04".to_string(), "TSK05".to_string()]
+        assert_eq!(blockers, vec![None, Some("TSK04")]);
+        // The blocked branch forks a task under the first of its
+        // dependencies that is not done, and the row names every dependency
+        // it waits on — the fork parent included.
+        let group = blocked
+            .groups
+            .iter()
+            .find(|group| group.blocker.as_deref() == Some("TSK04"))
+            .expect("the group forked under TSK04");
+        let row = &group.rows[0];
+        assert_eq!(row.id, "TSK07");
+        assert_eq!(row.waits_on, vec!["TSK04".to_string(), "TSK05".to_string()]);
+        assert!(
+            row.waits_on.iter().any(|other| other == "TSK04"),
+            "the fork parent is not named: {:?}",
+            row.waits_on
         );
+    }
+
+    #[test]
+    fn the_summary_is_cut_only_between_whole_entries() {
+        // An entry that cannot fit whole is not cut: the summary drops whole
+        // entries and marks the last kept row with `…`.
+        let theme = theme();
+        let dropped = vec![
+            Dropped {
+                name: "EXECUTION",
+                count: 1,
+            },
+            Dropped {
+                name: "AWAITING APPROVAL",
+                count: 2,
+            },
+        ];
+        let text = summary(&dropped, 20, &theme)
+            .iter()
+            .map(text_of_line)
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(text.contains("EXECUTION · 1…"), "{text}");
+        assert!(!text.contains("AWAITING APPROVAL"), "{text}");
+        assert!(!text.contains("AWAIT…"), "{text}");
+        // Not even the first entry fits: the marker is the whole summary.
+        let text = summary(&dropped[1..], 10, &theme)
+            .iter()
+            .map(text_of_line)
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert_eq!(text.trim(), "…", "{text}");
+    }
+
+    #[test]
+    fn a_blocked_row_names_every_dependency_including_the_fork_parent() {
+        // The fork parent is also a dependency: the row names it with the
+        // rest, so the note is the whole set the task waits on.
+        let entry = Entry {
+            id: "TSK07".to_string(),
+            title: "a blocked task".to_string(),
+            status: Status::Approved,
+            waits_on: vec!["TSK04".to_string(), "TSK05".to_string()],
+            hold: None,
+        };
+        let lines = row(" ● ", &entry, 100, &theme(), false);
+        let text = lines
+            .iter()
+            .map(text_of_line)
+            .collect::<Vec<String>>()
+            .join(" ");
+        assert!(text.contains("waits on TSK04, TSK05"), "{text}");
+        // Narrower than the note: it wraps, and no part of it is lost.
+        let lines = row(" ● ", &entry, 20, &theme(), false);
+        let text = lines
+            .iter()
+            .map(text_of_line)
+            .collect::<Vec<String>>()
+            .join(" ");
+        let words = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(words.contains("waits on TSK04, TSK05"), "{words}");
+        assert!(text.contains("TSK04"), "{text}");
+        assert!(text.contains("TSK05"), "{text}");
     }
 
     #[test]
     fn the_fixtures_cover_every_blocking_reason() {
         // A dependency that is not done, an overlay, and a claim held
-        // elsewhere: the three reasons a task is not claimable.
+        // elsewhere: the three reasons a task is not claimable. The overlay
+        // and the claim fixtures wait only on done work, so each is held by
+        // one reason alone.
         let tree = tree(&mock_work(), now());
         let blocked = tree
             .branches
@@ -1428,7 +1627,28 @@ mod tests {
             .flat_map(|group| group.rows.iter())
             .map(|row| row.hold)
             .collect();
-        assert_eq!(holds, vec![None, Some(Hold::Overlay), Some(Hold::Claim)]);
+        assert_eq!(holds, vec![Some(Hold::Overlay), Some(Hold::Claim), None]);
+        for row in blocked
+            .groups
+            .iter()
+            .flat_map(|group| group.rows.iter())
+            .filter(|row| row.hold.is_some())
+        {
+            assert!(
+                row.waits_on.is_empty(),
+                "{} is held by two things: {:?}",
+                row.id,
+                row.waits_on
+            );
+        }
+        let dependency = blocked
+            .groups
+            .iter()
+            .flat_map(|group| group.rows.iter())
+            .find(|row| row.hold.is_none())
+            .expect("the dependency-blocked row");
+        assert_eq!(dependency.id, "TSK07");
+        assert_eq!(dependency.waits_on.len(), 2, "it waits on two tasks");
     }
 
     #[test]
@@ -1455,13 +1675,13 @@ mod tests {
         assert!(text.contains("RUNNING · 6"), "{text}");
         assert!(text.contains("REVIEW · 3"), "{text}");
         assert!(text.contains("ESCALATED · 3"), "{text}");
-        // The blocked tasks are forked under the dependency they wait on.
+        // The blocked tasks are forked under the dependency they wait on,
+        // and a task held by an overlay or a claim has no fork parent.
         assert!(text.contains("blocked-by TSK04"), "{text}");
-        assert!(text.contains("blocked-by TSK05"), "{text}");
-        // A row names what it waits on, and what holds it.
-        assert!(text.contains("waits on TSK04, TSK05"), "{text}");
         assert!(text.contains("overlay"), "{text}");
         assert!(text.contains("claim held elsewhere"), "{text}");
+        // A row names what it waits on, the fork parent included.
+        assert!(text.contains("waits on TSK04, TSK05"), "{text}");
     }
 
     #[test]
@@ -1490,11 +1710,21 @@ mod tests {
         // The blocked group is forked under the dependency it waits on.
         assert!(
             rows.iter()
-                .any(|row| row.starts_with(" │   ├─ blocked-by TSK04")),
+                .any(|row| row.starts_with(" │   └─ blocked-by TSK04")),
             "{rows:?}"
         );
         assert!(
-            rows.iter().any(|row| row.starts_with(" │   │   └─ TSK07")),
+            rows.iter().any(|row| row.starts_with(" │       └─ TSK07")),
+            "{rows:?}"
+        );
+        // A task held by an overlay or a claim has no fork parent: its row
+        // hangs under the branch itself.
+        assert!(
+            rows.iter().any(|row| row.starts_with(" │   │   ├─ TSK08")),
+            "{rows:?}"
+        );
+        assert!(
+            rows.iter().any(|row| row.starts_with(" │   │   └─ TSK09")),
             "{rows:?}"
         );
     }
@@ -1809,7 +2039,9 @@ mod tests {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         let mut view = View::default();
         terminal
-            .draw(|frame| render_view(frame, frame.area(), work, &theme(), None, &mut view, now()))
+            .draw(|frame| {
+                render_view(frame, frame.area(), work, &theme(), None, &mut view, now());
+            })
             .expect("drawing the path");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();

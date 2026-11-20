@@ -323,7 +323,8 @@ mod tests {
         }
     }
 
-    /// The tests' clock: every fixture claim has expired by it.
+    /// The tests' clock: every fixture claim except the held-elsewhere one
+    /// has expired by it, and that one is still live.
     const NOW: &str = "2026-11-19T08:00:00Z";
 
     fn approved(id: &str, depends_on: &[&str]) -> Task {
