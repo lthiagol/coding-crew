@@ -17,6 +17,9 @@ use coding_crew_core::runtime::{AgentState, CrewMember, Runtime};
 use coding_crew_theme::text::{cut_to, text_width};
 use coding_crew_theme::{Theme, block_title_style, phase_style};
 
+use crate::config::ConfigRead;
+use crate::sidebar;
+
 /// The columns the sidebar takes when it is shown, its border included.
 pub const SIDEBAR_WIDTH: u16 = 32;
 /// The narrowest the main pane is drawn beside the sidebar.
@@ -36,8 +39,6 @@ const NAME: &str = " hugo ";
 pub const SIDEBAR_TITLE: &str = "configuration";
 /// The main pane's block title.
 pub const FLOW_TITLE: &str = "flow";
-/// The sidebar's named empty state.
-pub const SIDEBAR_EMPTY: &str = "no configuration yet";
 /// The main pane's named empty state.
 pub const FLOW_EMPTY: &str = "nothing is running";
 /// The main pane's state when the record is there but cannot be read.
@@ -54,7 +55,7 @@ pub enum RuntimeRead {
     Unreadable(ReadError),
 }
 
-/// A record that could not be read: the file and the error, as raul names a
+/// A file that could not be read: the file and the error, as raul names a
 /// file it cannot read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadError {
@@ -109,14 +110,14 @@ impl App {
     }
 
     /// Draw the window.
-    pub fn draw(&self, frame: &mut Frame, runtime: &RuntimeRead, now: &str) {
+    pub fn draw(&self, frame: &mut Frame, runtime: &RuntimeRead, config: &ConfigRead, now: &str) {
         let screen = screen(frame.area());
         frame.render_widget(self.title_line(screen.title.width), screen.title);
         if let Some(area) = screen.announcement {
             frame.render_widget(self.hidden_line(area.width), area);
         }
         if let Some(area) = screen.sidebar {
-            self.empty_pane(frame, area, SIDEBAR_TITLE, SIDEBAR_EMPTY);
+            self.config_pane(frame, area, config);
         }
         match runtime {
             RuntimeRead::Record(runtime) => self.flow(frame, screen.flow, runtime, now),
@@ -124,6 +125,29 @@ impl App {
             RuntimeRead::Unreadable(error) => self.unreadable_pane(frame, screen.flow, error),
         }
         frame.render_widget(self.footer_line(screen.footer.width), screen.footer);
+    }
+
+    /// The configuration: the sidebar's content, read-only.
+    ///
+    /// A pane too short for a box gives the box up and keeps the words, as the
+    /// main pane does.
+    fn config_pane(&self, frame: &mut Frame, area: Rect, config: &ConfigRead) {
+        if area.height == 0 || area.width == 0 {
+            return;
+        }
+        let (inner, width, height) = if area.height >= 3 && area.width >= 4 {
+            let block = Block::bordered()
+                .title(SIDEBAR_TITLE)
+                .title_style(block_title_style(&self.theme))
+                .border_style(self.theme.chrome.border);
+            let inner = block.inner(area);
+            frame.render_widget(block, area);
+            (inner, inner.width, inner.height)
+        } else {
+            (area, area.width, area.height)
+        };
+        let lines = sidebar::lines(config, &self.theme, usize::from(width), usize::from(height));
+        frame.render_widget(Paragraph::new(lines), inner);
     }
 
     /// The title line: the name of the tool.
@@ -709,6 +733,7 @@ mod tests {
 
     use super::*;
     use coding_crew_core::RoundKind;
+    use coding_crew_core::config::Config;
     use coding_crew_core::runtime::{
         Budget, Composition, CrewMember, QueueItem, RuntimeRound, Stamp,
     };
@@ -801,10 +826,25 @@ mod tests {
         height: u16,
         runtime: &RuntimeRead,
     ) -> (Vec<String>, Vec<Vec<Paint>>) {
+        render_all(width, height, runtime, &sidebar_config())
+    }
+
+    /// The configuration the window draws: the project's own flow.
+    fn sidebar_config() -> ConfigRead {
+        ConfigRead::Config(Config::default())
+    }
+
+    /// Draw the window with a configuration of its own.
+    fn render_all(
+        width: u16,
+        height: u16,
+        runtime: &RuntimeRead,
+        config: &ConfigRead,
+    ) -> (Vec<String>, Vec<Vec<Paint>>) {
         let app = App::new(theme());
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| app.draw(frame, runtime, RENDER_NOW))
+            .draw(|frame| app.draw(frame, runtime, config, RENDER_NOW))
             .expect("drawing the window");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -937,7 +977,9 @@ mod tests {
 
     #[test]
     fn the_empty_states_are_named_on_the_dim_slot() {
-        let (rows, paint) = render(100, 40);
+        // No home to hold a configuration, and no runtime record: both states
+        // are named, and both are painted on the dim slot.
+        let (rows, paint) = render_all(100, 40, &RuntimeRead::Absent, &ConfigRead::Absent);
         let text = rows.join("\n");
         assert!(text.contains("no configuration yet"), "{text}");
         assert!(text.contains("nothing is running"), "{text}");
@@ -1364,6 +1406,82 @@ mod tests {
     }
 
     #[test]
+    fn the_sidebar_carries_the_configuration_and_no_key_changes_it() {
+        let (rows, _) = render(100, 40);
+        let text = rows.join("\n");
+        for fact in [
+            "agents",
+            "builder · runner",
+            "opencode-go",
+            "deepseek-v4.1-flash#high",
+            "harness",
+            "opencode",
+            "--standalone · role config",
+            "review-round limit",
+            "5 build-and-fix rounds",
+            "order",
+            "1 groom · creator",
+            "groomed → approved",
+            "6 re-review · reviewer",
+        ] {
+            assert!(text.contains(fact), "{fact} is not on the sidebar: {text}");
+        }
+        // The groups are read in the documented order.
+        let at = |needle: &str| row_of(&rows, needle);
+        assert!(at("agents") < at("harness"), "{text}");
+        assert!(at("harness") < at("review-round limit"), "{text}");
+        assert!(at("review-round limit") < at("order"), "{text}");
+
+        // Nothing on the sidebar is changed from the screen: no key but quit
+        // does anything, and a redraw draws the same configuration.
+        let app = App::new(theme());
+        for code in [
+            KeyCode::Char('j'),
+            KeyCode::Char('k'),
+            KeyCode::Char('+'),
+            KeyCode::Char('-'),
+            KeyCode::Char('h'),
+            KeyCode::Char('l'),
+            KeyCode::Enter,
+            KeyCode::Esc,
+            KeyCode::Up,
+            KeyCode::Down,
+            KeyCode::PageUp,
+            KeyCode::PageDown,
+        ] {
+            assert_eq!(
+                app.on_key(KeyEvent::new(code, KeyModifiers::NONE)),
+                Action::Redraw,
+                "{code:?} acts on the configuration"
+            );
+        }
+        let again = render(100, 40).0;
+        assert_eq!(rows, again, "a redraw changed the configuration");
+    }
+
+    #[test]
+    fn a_configuration_that_cannot_be_read_is_named_on_the_sidebar() {
+        let error = ReadError {
+            file: "config.json".to_string(),
+            error: "failed to parse the configuration: expected value at line 1".to_string(),
+        };
+        let (rows, paint) = render_all(
+            100,
+            20,
+            &RuntimeRead::Absent,
+            &ConfigRead::Unreadable(error),
+        );
+        let text = rows.join("\n");
+        assert!(text.contains("configuration is unreadable"), "{text}");
+        assert!(text.contains("config.json"), "{text}");
+        assert!(!text.contains("no configuration yet"), "{text}");
+        assert_eq!(
+            colour_of(&rows, &paint, "failed to parse"),
+            theme().semantic.error.fg.expect("the error colour")
+        );
+    }
+
+    #[test]
     fn the_window_fits_its_width_at_every_size() {
         // A shell that draws past its width is a cut screen: every row is
         // measured by what it holds, at the sizes the sweep and the pins use.
@@ -1416,13 +1534,20 @@ mod tests {
             format!("{MAIN_MIN_WIDTH} columns"),
             SIDEBAR_TITLE.to_string(),
             FLOW_TITLE.to_string(),
-            SIDEBAR_EMPTY.to_string(),
+            sidebar::EMPTY.to_string(),
             FLOW_EMPTY.to_string(),
             "sidebar not shown: configuration".to_string(),
             "~/.config/coding-crew/".to_string(),
+            "config.json".to_string(),
+            "read-only".to_string(),
             "--render --plain".to_string(),
             "100 by 40".to_string(),
             NAME.trim().to_string(),
+            sidebar::AGENTS_TITLE.to_string(),
+            sidebar::HARNESS_TITLE.to_string(),
+            sidebar::LIMIT_TITLE.to_string(),
+            sidebar::ORDER_TITLE.to_string(),
+            sidebar::UNREADABLE.to_string(),
             CREW_TITLE.to_string(),
             QUEUE_TITLE.to_string(),
             ROUND_TITLE.to_string(),

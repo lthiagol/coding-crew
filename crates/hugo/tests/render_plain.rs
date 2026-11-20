@@ -156,7 +156,12 @@ fn the_sidebar_is_shown_wide_and_announced_where_it_is_dropped() {
     let wide = screen(100, 40);
     assert!(wide.contains("configuration"), "{wide}");
     assert!(wide.contains("flow"), "{wide}");
-    assert!(wide.contains("no configuration yet"), "{wide}");
+    for group in ["agents", "harness", "review-round limit", "order"] {
+        assert!(
+            wide.contains(group),
+            "{group} is not on the sidebar: {wide}"
+        );
+    }
     assert!(
         !wide.contains("sidebar not shown"),
         "a shown sidebar is announced as gone: {wide}"
@@ -174,7 +179,7 @@ fn the_sidebar_is_shown_wide_and_announced_where_it_is_dropped() {
             "{width}: the line does not name what is not shown: {narrow}"
         );
         assert!(
-            !narrow.contains("no configuration yet"),
+            !narrow.contains("harness"),
             "{width}: the sidebar is still drawn: {narrow}"
         );
     }
@@ -219,28 +224,19 @@ fn a_project_without_a_record_shows_the_named_empty_state() {
     // The repository root is not a project: there is no coding-crew folder,
     // so there is nothing to read and the pane says so.
     let home = home();
-    let output = run_in(
-        &repo_root(),
-        &home,
-        &["--render", "--plain", "--width", "100", "--height", "12"],
-    );
-    assert!(output.status.success(), "hugo failed: {output:?}");
-    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    let text = screen_in(&repo_root(), &home);
     assert!(text.contains("nothing is running"), "{text}");
-    assert!(text.contains("no configuration yet"), "{text}");
+    // The configuration is the tool's, not the project's: a project without a
+    // record still shows the configuration the tool wrote.
+    assert!(text.contains("build-and-fix rounds"), "{text}");
 
     // The same through a project whose coding-crew folder holds no record.
     let dir = std::env::temp_dir().join(format!("hugo-no-record-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(dir.join("coding-crew/work")).expect("a project");
-    let output = run_in(
-        &dir,
-        &home,
-        &["--render", "--plain", "--width", "100", "--height", "12"],
-    );
-    assert!(output.status.success(), "hugo failed: {output:?}");
-    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    let text = screen_in(&dir, &home);
     assert!(text.contains("nothing is running"), "{text}");
+    assert!(text.contains("build-and-fix rounds"), "{text}");
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -396,14 +392,114 @@ fn with_a_temporary_home_running_hugo_leaves_the_configuration_folder_there() {
 #[test]
 fn the_shell_runs_without_a_home_folder() {
     // A machine with no home has nowhere for hugo to write, and that is not
-    // a reason to fail: the flow still shows.
+    // a reason to fail: the flow still shows, and the sidebar says there is
+    // no configuration.
     let output = Command::new(env!("CARGO_BIN_EXE_hugo"))
         .current_dir(repo_root())
         .env_remove("HOME")
-        .args(["--render", "--plain", "--width", "60", "--height", "12"])
+        .args(["--render", "--plain", "--width", "100", "--height", "20"])
         .output()
         .expect("running hugo");
     assert!(output.status.success(), "hugo failed: {output:?}");
     let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
     assert!(text.contains("nothing is running"), "{text}");
+    assert!(text.contains("no configuration yet"), "{text}");
+}
+
+#[test]
+fn an_absent_configuration_is_written_with_the_defaults() {
+    // The tool writes the defaults into the home it creates, and the sidebar
+    // shows them. The model strings are the project's own flow.
+    let home = fresh_home("defaults");
+    let config = home.join(".config").join("coding-crew").join("config.json");
+    assert!(!config.exists(), "the test home is not fresh");
+    let text = screen_in(&mock_project(), &home);
+    for fact in [
+        "builder · runner",
+        "opencode-go",
+        "deepseek-v4.1-flash#high",
+        "glm-5.3#high",
+        "5 build-and-fix rounds",
+        "1 groom · creator",
+    ] {
+        assert!(text.contains(fact), "{fact} is not on screen: {text}");
+    }
+    assert!(config.is_file(), "hugo did not write {}", config.display());
+    let written = coding_crew_core::Config::read(&config).expect("the configuration parses");
+    assert_eq!(written, coding_crew_core::Config::default());
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_configuration_that_is_there_is_read_and_never_overwritten() {
+    // A human's configuration is the one the pane shows, and the tool writes
+    // nothing over it — not even when it differs from the defaults.
+    let home = fresh_home("kept");
+    let config = home.join(".config").join("coding-crew").join("config.json");
+    fs::create_dir_all(config.parent().expect("the home")).expect("the configuration home");
+    let mine = coding_crew_core::Config {
+        round_limit: 2,
+        harness: coding_crew_core::Harness {
+            tool: "another-harness".to_string(),
+            ..coding_crew_core::Config::default().harness
+        },
+        ..coding_crew_core::Config::default()
+    };
+    mine.write(&config).expect("a configuration");
+    let before = fs::read_to_string(&config).expect("the configuration");
+
+    let text = screen_in(&mock_project(), &home);
+    assert!(text.contains("2 build-and-fix rounds"), "{text}");
+    assert!(text.contains("another-harness"), "{text}");
+    assert!(!text.contains("5 build-and-fix rounds"), "{text}");
+    assert_eq!(
+        fs::read_to_string(&config).expect("the configuration"),
+        before,
+        "hugo overwrote a configuration that was there"
+    );
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_configuration_that_cannot_be_read_is_named_and_left_alone() {
+    // Absent and unreadable are different states: a file that does not parse
+    // is named with its error, and the tool does not replace it.
+    let home = fresh_home("broken");
+    let config = home.join(".config").join("coding-crew").join("config.json");
+    fs::create_dir_all(config.parent().expect("the home")).expect("the configuration home");
+    fs::write(&config, "{ not a configuration").expect("a broken configuration");
+
+    let text = screen_in(&mock_project(), &home);
+    assert!(text.contains("configuration is unreadable"), "{text}");
+    assert!(text.contains("config.json"), "{text}");
+    assert!(!text.contains("no configuration yet"), "{text}");
+    assert!(
+        !text.contains("build-and-fix rounds"),
+        "a broken configuration was drawn as the defaults: {text}"
+    );
+    assert_eq!(
+        fs::read_to_string(&config).expect("the configuration"),
+        "{ not a configuration",
+        "hugo overwrote a configuration it could not read"
+    );
+    let _ = fs::remove_dir_all(&home);
+}
+
+/// A scratch home of this test's own: the configuration is written into it.
+fn fresh_home(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("hugo-{name}-home-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).expect("a scratch home");
+    dir
+}
+
+/// The 100-by-40 screen, in a project and a home of the caller's choosing.
+fn screen_in(dir: &Path, home: &Path) -> String {
+    let output = run_in(
+        dir,
+        home,
+        &["--render", "--plain", "--width", "100", "--height", "40"],
+    );
+    assert!(output.status.success(), "hugo failed: {output:?}");
+    String::from_utf8(output.stdout).expect("the plain render is UTF-8")
 }

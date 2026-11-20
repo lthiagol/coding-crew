@@ -6,6 +6,7 @@
 pub mod activity;
 pub mod actor;
 pub mod clock;
+pub mod config;
 pub mod item;
 pub mod lifecycle;
 pub mod markdown;
@@ -16,6 +17,7 @@ pub mod task;
 pub use activity::{Activity, ActivityError, ActivityEvent, EventKind};
 pub use actor::{Actor, ActorKind, Role};
 pub use clock::{now_rfc3339, parse_rfc3339};
+pub use config::{Agent, CONFIG_FILE, Config, ConfigError, Gate, Harness, OrderStep};
 pub use item::{Item, ItemError, ItemKind, ItemStatus};
 pub use lifecycle::{Event, Overlay, Overlays, Reason, Status, TransitionContext, TransitionError};
 pub use markdown::{escape_literal, task_to_markdown};

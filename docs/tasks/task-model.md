@@ -601,6 +601,52 @@ one per role. A held task belongs to the crew, not the queue.
 The record is optional like the journal: a project without one has no runtime,
 not a broken one.
 
+### 11.3 The configuration (provisional)
+
+```
+~/.config/coding-crew/
+  config.json           # the flow's configuration
+```
+
+The configuration sits on the tool's side, under `~/.config/coding-crew/`,
+because it is policy rather than work. It is **provisional**: the flow has not
+written one yet, and the format may change when it does. Its types live in
+`crates/core/src/config.rs`, so the writer and the reader share them.
+
+The file is one object. When it is absent, hugo writes the defaults into the
+home it creates on demand.
+
+| field | rule |
+|---|---|
+| `agents` | one entry per agent of the automation |
+| `harness` | the `tool` the agents run in, and the way it is `driven` |
+| `round_limit` | the build-and-fix cycles a task gets: five |
+| `order` | the flow's steps, in the order they run |
+
+An agent entry:
+
+| field | rule |
+|---|---|
+| `name` | the name its role config gives it — `builder`, `reviewer` |
+| `role` | `runner`, `reviewer` or `orchestrator` |
+| `model` | the model it runs, provider and variant — `opencode-go/deepseek-v4.1-flash#high` |
+
+An order step:
+
+| field | rule |
+|---|---|
+| `step` | the step's name — `groom`, `build` |
+| `role` | the role that does it |
+| `gates` | the transitions it passes: each a `from` and a `to` status |
+
+The defaults are the project's own flow: the builder on
+`opencode-go/deepseek-v4.1-flash#high` and the reviewer on
+`opencode-go/glm-5.3#high`, with the orchestrator beside them on the reviewer's
+model; the `opencode` harness, `--standalone` with each agent's role config;
+five build-and-fix cycles; and the order [roles.md](../roles/roles.md#the-order)
+records. A test reads that table and the two role configs, so the defaults and
+the flow cannot drift.
+
 ## 12. Derived, never stored
 
 | view | derived from |
@@ -663,17 +709,17 @@ work is in `TODO.txt`.
 | **Not raul's screens** | the tabs, the columns and the key bindings are not defined yet |
 | **Not the smaller-task model** | that is [smaller-tasks.md](smaller-tasks.md) |
 | **Not the role model** | that is [roles/roles.md](../roles/roles.md) |
-| **Not the project config** | not defined yet |
+| **Not a settled project config** | the configuration is provisional — § 11.3 |
 | **Not autopilot** | the orchestrator role exists; what it drives does not |
 
 ## 15. Known gaps
 
 **Not defined yet:**
 
-- project config
 - talita's operation surface
 - autopilot
 - the runtime record's writer — the record is provisional (§ 11.2)
+- the configuration's writer — the configuration is provisional (§ 11.3)
 
 **Specified here, now in `crates/core`:**
 

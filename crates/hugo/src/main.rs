@@ -5,6 +5,7 @@
 
 mod app;
 mod config;
+mod sidebar;
 
 use std::io::{Stdout, Write};
 use std::path::PathBuf;
@@ -24,6 +25,7 @@ use coding_crew_core::runtime::{Runtime, RuntimeError};
 use coding_crew_core::store::RUNTIME_FILE;
 use coding_crew_core::{Store, StoreError};
 use coding_crew_theme::{Preset, Theme};
+use config::ConfigRead;
 
 const USAGE: &str = "usage: hugo [--theme dark|nord|catppuccin|dracula|terminal] [--render --plain [--width N] [--height N]]";
 /// The columns of a plain render when --width is not given.
@@ -37,17 +39,18 @@ const MAX_DIMENSION: u16 = 1000;
 
 fn main() -> Result<()> {
     let options = parse_args(std::env::args().skip(1))?;
-    // hugo creates its home rather than failing when it is absent. The home
-    // is the tool's, so it is made before the window is drawn, in render
-    // mode too.
-    config::ensure_home()?;
+    // The configuration is the tool's, so it is read — and its defaults
+    // written when it is absent — before the window is drawn, in render mode
+    // too. A configuration that cannot be read is a state of the screen, not
+    // a reason to fail.
+    let config = config::load_home();
 
     if options.render {
-        return render_plain(options);
+        return render_plain(options, &config);
     }
 
     let mut terminal = setup()?;
-    let result = run(&mut terminal, options);
+    let result = run(&mut terminal, options, &config);
     restore(&mut terminal)?;
     result
 }
@@ -143,7 +146,11 @@ fn preset_of(name: &str) -> Result<Preset> {
 }
 
 /// The window loop. The runtime is read again on every redraw.
-fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> Result<()> {
+fn run(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    options: Options,
+    config: &ConfigRead,
+) -> Result<()> {
     let app = App::new(options.theme);
     let located = locate_runtime();
     loop {
@@ -152,7 +159,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
         // key that answers the draw see the instant the screen was measured
         // at. No other module under `src/` reads a clock.
         let now = coding_crew_core::now_rfc3339();
-        terminal.draw(|frame| app.draw(frame, &runtime, &now))?;
+        terminal.draw(|frame| app.draw(frame, &runtime, config, &now))?;
         if let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
             && app.on_key(key) == Action::Quit
@@ -171,12 +178,12 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
 ///
 /// A render draws at a fixed instant, not the wall clock: a pinned screen
 /// must be the same bytes on every run.
-fn render_plain(options: Options) -> Result<()> {
+fn render_plain(options: Options, config: &ConfigRead) -> Result<()> {
     let app = App::new(options.theme);
     let located = locate_runtime();
     let runtime = read_runtime(&located);
     let mut terminal = Terminal::new(TestBackend::new(options.width, options.height))?;
-    terminal.draw(|frame| app.draw(frame, &runtime, RENDER_NOW))?;
+    terminal.draw(|frame| app.draw(frame, &runtime, config, RENDER_NOW))?;
     let text = plain_text(terminal.backend().buffer());
     let mut stdout = std::io::stdout();
     stdout.write_all(text.as_bytes())?;
