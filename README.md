@@ -14,9 +14,9 @@ A task management tool for agents. Three interfaces:
 
 ## Status
 
-Early. The scope right now is raul. The task model and the roles are
-designed in [docs/](docs/); talita's full command surface comes later, when it
-is asked for.
+Early, and the two TUIs are built: **raul** shows the work and **hugo**
+shows the flow. The task model and the roles are designed in [docs/](docs/);
+talita's full command surface comes later, when it is asked for.
 
 | doc | what |
 |---|---|
@@ -29,8 +29,11 @@ is asked for.
 ```
 crates/
   core/    # shared model   (coding-crew-core)
+  engine/  # markdown engine (coding-crew-engine)
+  theme/   # the slots and the presets (coding-crew-theme)
   talita/  # CLI tool       (coding-crew-talita, binary talita)
-  raul/    # TUI            (coding-crew-raul, binary raul)
+  raul/    # TUI for the work (coding-crew-raul, binary raul)
+  hugo/    # TUI for the flow (coding-crew-hugo, binary hugo)
 ```
 
 Tasks live in a managed project's own `coding-crew/` folder:

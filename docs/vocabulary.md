@@ -38,7 +38,7 @@ derived from its latest evidence.
 | The TUI for the flow | **hugo** | human-facing; governs the automation. **H**uman-guided **U**nified **G**overnance & **O**rchestration |
 | The CLI binary | `talita` | package `coding-crew-talita`, crate `crates/talita` |
 | The TUI binary for the work | `raul` | package `coding-crew-raul`, crate `crates/raul` |
-| The TUI binary for the flow | `hugo` | package `coding-crew-hugo`, crate `crates/hugo` (when built) |
+| The TUI binary for the flow | `hugo` | package `coding-crew-hugo`, crate `crates/hugo` |
 | The work folder | `coding-crew/work/` | inside each managed project, next to its code. No central store |
 | A task | **task**, id `TSK01` | the unit of work. Children `TSK03.1` |
 | A smaller task | **smaller task**, id `ITM01` | an idea, a bug or a small feature that is not a task yet |
@@ -49,6 +49,8 @@ derived from its latest evidence.
 | A comment | comment, id `CMT-01` | |
 | A note | note, id `NOTE-01` | |
 | The journal | `coding-crew/activity.json` | one **event** per line of history, beside `work/`; the event kinds are provisional |
+| The runtime record | `coding-crew/runtime.json` | the crew and what is running, beside the journal; provisional until the flow writes it |
+| The configuration | `~/.config/coding-crew/config.toml` | hugo's own home: the agents, the models, the harness, the review-round limit and the order. A file a human edits, so it carries comments |
 
 The three interfaces share one project name and take their own. `talita` names
 what the agent reaches for; `raul` names the work the human reads; `hugo` names
