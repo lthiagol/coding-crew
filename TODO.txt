@@ -882,6 +882,30 @@ WHERE WE ARE
   the error and the error is the first line cut; and a config.json that is
   a directory is not named.
   Next unit: hugo's sidebar acts (plan 42).
+  Unit closed: hugo's sidebar acts (plan 42). Two build and review rounds.
+  r reloads the configuration and the sidebar shows the new one at once; a
+  configuration that does not parse after a reload is handled exactly as at
+  startup - named, left alone, the defaults beside it - and a reload with
+  no file writes the defaults. The orchestrator's model is picked in the
+  sidebar, from the catalogue the harness tool prints - never written out
+  by hand - and the pick is saved to config.toml, so it survives a restart;
+  the builder's and the reviewer's models stay read-only, because the flow
+  starts those and not hugo. The pick is written through the tmp-then-rename
+  path and the edited text is parsed before any write, so a pick cannot
+  leave a broken configuration. The gate is green: 854 Rust tests and 212
+  script assertions.
+  The first round found one blocking defect of the kind this project keeps
+  finding: the catalogue was read with no bound, inside the key handler, so
+  a harness tool that hung froze the window in raw mode with no way out but
+  killing hugo from outside. The read is now bounded at five seconds, runs
+  off the window's thread, and the choice opens at once with a reading line;
+  a tool that hangs, is missing or fails is named in the choice and the
+  window stays live. Four lows stay open on purpose, for the batched unit:
+  the footers under-name the keys that work; every line the tool prints
+  becomes a pickable model; a hand-edited configuration with TOML single
+  quotes breaks the pick; and the help lists enter choose unqualified on
+  rows where it does nothing.
+  Next unit: the batched follow-ups (plan 43).
 
 DONE
   Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
@@ -1084,6 +1108,11 @@ OPEN
   only by their message text; with an old config.json and a broken
   config.toml at once, the legacy notice outranks the error and the error
   is the first line cut; and a config.json that is a directory is not named.
+  The sidebar round left four more, which the batched unit takes: the
+  footers under-name the keys that work; every line the catalogue tool
+  prints becomes a pickable model; a hand-edited configuration with TOML
+  single quotes breaks the pick; and the help lists enter choose
+  unqualified on rows where it does nothing.
   talita's own verbs. Out of scope, and it stays out of scope until it is
   asked for explicitly. Do not start it because the other tabs are done.
 
