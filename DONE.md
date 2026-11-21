@@ -42,7 +42,9 @@ measures the human wait and says what it left out. The Path tab draws the
 tree of the live work. The Backlog tab keeps ideas, smaller tasks and
 drafts in one derived list. The detail pane opens full screen from the row
 tabs and renders the real projected document through the vendored engine,
-painted by the theme bridge, with scroll keys.
+painted by the theme bridge, with scroll keys. The projected document reads
+as a history: each review round a heading with its own fields, and the
+findings it raised under it.
 
 **hugo.** One sidebar for the configuration, one main pane for what is
 running, no tabs. The main pane leads with the crew — one row per agent
@@ -52,8 +54,15 @@ the queue, the round, the budget and the findings. The configuration is
 and the orchestrator's model is picked from the harness catalogue in the
 sidebar.
 
-**The mock data** (`mock-data/generate.py`). The fixtures are written only
-through the generator, which reproduces the committed tree byte for byte.
+**The mock data** (`mock-data/generate.py`). Thirty tasks and five items, in
+the shapes the interface has to read: tasks with zero, one, two, three, five
+and six review rounds, open and resolved findings with resolutions and
+comments, open and resolved questions, a parent with its subtasks, and five
+done tasks carrying their history. The text is this project's own work. A test
+walks every field of the model's seventeen structs, so a field nobody fills
+fails the gate, and the folder's own README is pinned to the fixtures. The
+fixtures are written only through the generator, which reproduces the
+committed tree byte for byte.
 
 **The flow.** The build loop is the global skill `orchestration-flow`, and
 the two-axis review is the global skill `code-review`. The upstream skills —

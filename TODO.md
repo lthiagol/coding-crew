@@ -56,10 +56,10 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Five units, in the order they run. The order is in `docs/plan.md` — rows 46 to
+Six units, in the order they run. The order is in `docs/plan.md` — rows 46 to
 51 — and this is the list of them.
 
-### 46 · The row says the review state
+### 46 · The row says the review state — **in flight**
 
 **Needs you** and **Path** show an id, a reason, a title and an age. A human
 deciding whether to review a task with five open findings, two of them high,
@@ -94,8 +94,10 @@ recorded in `docs/tui/palettes.md` and its figures are recomputed by test.
 
 ### 49 · The projection earns the colours
 
-The projection emits only `##` headings, bold, GFM tables, `- ` lists and
-`<br>`. Nothing in the engine's vocabulary is reached, so a new palette would
+The projection emits `##` and `###` headings, bold, GFM tables, `- ` lists and
+`<br>` — and, since the review nests, `###`/`####` headings with bullets for
+the rounds and the findings. Nothing in the engine's vocabulary is reached:
+no blockquote, no task list, no rule, no link, no alert. A new palette would
 stay dead colour.
 
 **Done when:** the projection emits the constructs the palette paints — a
@@ -134,7 +136,11 @@ injection property holds.
   should not fight it. Eighteen is the number the human chose.
 - **A row's second line** (2026-11-21): the review state on Needs you and Path,
   the item's own body on Backlog. Those are the facts a human decides on, and
-  all of them are already in the model.
+  all of them are already in the model. **The mechanism is settled per tab:**
+  the review state is a compact **suffix** on the row, not a second line — a
+  second line would move the Path tree's row arithmetic, and a Path row that
+  grows a line changes what the tab counts. The Backlog's body is still open
+  (unit 47).
 - **The state file is a Markdown pair** (2026-11-21): `TODO.md` for the live
   state, `DONE.md` for the archive. The archive no longer lives in the live
   file.
@@ -171,9 +177,10 @@ None blocking. Carried from the closed units.
 - **The Backlog:** a one- or two-row pane below 39 columns gives a total hidden
   count without naming the groups; the compact announcement can resemble the
   group header's shape; very narrow panes cut or drop group names and counts.
-- **The shared-helper copy scan** covers three of the five helpers, so a private
-  copy of `head_to` or `text_width` passes it — the same limitation the
-  `cut_to`, `pad` and `View::draw` pins have.
+- **The shared-helper copy scan** — `crates/raul/src/data.rs:648` — covers
+  **three of the theme crate's five** text helpers: `head_to` and `text_width`
+  would pass it. It also scans **only `crates/raul`**, so a private copy in
+  hugo would pass it. The same limitation the `View::draw` pin has.
 - **The description pin** checks the phrase, not the attribution, and knows four
   connectives.
 - **The footer** drops the hidden count at the widths where it would fit beside
@@ -181,13 +188,18 @@ None blocking. Carried from the closed units.
 - **The Settings announcement** names wholly-in-view groups where the Backlog
   names only the hidden ones, and a test comment names a help footer that does
   not exist.
-- **The journal:** the mock's approved stamps are minutes before the claim and
-  no fixture holds them; a comment beside the activity panel inverts the order
-  the panels give up their rows; the kinds are provisional.
+- **The journal:** every fixture's approved stamp is thirty minutes before its
+  claim, and no fixture holds an approved task that has waited long; a comment
+  beside the activity panel inverts the order the panels give up their rows;
+  the kinds are provisional.
 - **hugo:** with an old `config.json` and a broken `config.toml`, the notice
-  and the defaults line can be cut silently at a two- or three-row sidebar; the
-  activity cut marker drops the count of unreadable events; two row-level tests
-  still hand-write an error wording the pipeline never produces.
+  and the defaults line can be cut silently at a two- or three-row sidebar;
+  two row-level tests still hand-write an error wording the pipeline never
+  produces.
+- **The Overview's activity block** names the files it cannot read but not how
+  many (`crates/raul/src/overview.rs:600`, *"unreadable not shown: …"*) — the
+  announcement rule says what is hidden is named **and counted**. This was
+  filed under hugo and belongs to raul.
 - **The plain render:** the duplicate-id loader test can be made less
   filesystem-sensitive with more pairs; some test fixtures leave temp folders;
   the flags are documented only in `--help`.
