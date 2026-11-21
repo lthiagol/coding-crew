@@ -58,7 +58,7 @@ pub fn task_to_markdown(task: &Task, tasks: &[Task]) -> String {
 }
 
 fn header(out: &mut String, task: &Task) {
-    out.push_str("## Header\n\n");
+    out.push_str("# Header\n\n");
     out.push_str("| field | value |\n|---|---|\n");
     row(out, "id", &code(&task.id));
     row(out, "title", &escape_literal(&task.title));
@@ -80,7 +80,7 @@ fn header(out: &mut String, task: &Task) {
 }
 
 fn intent(out: &mut String, task: &Task) {
-    out.push_str("\n## Intent\n\n");
+    out.push_str("\n# Intent\n\n");
     out.push_str("**Outcome**\n\n");
     prose_block(out, &task.intent.outcome);
     out.push_str("\n**Problem**\n\n");
@@ -88,14 +88,14 @@ fn intent(out: &mut String, task: &Task) {
 }
 
 fn scope(out: &mut String, task: &Task) {
-    out.push_str("\n## Scope\n\n");
+    out.push_str("\n# Scope\n\n");
     scope_list(out, "In scope", &task.scope.in_scope);
     out.push('\n');
     scope_list(out, "Out of scope", &task.scope.out_of_scope);
 }
 
 fn criteria(out: &mut String, task: &Task) {
-    out.push_str("\n## Acceptance criteria\n\n");
+    out.push_str("\n# Acceptance criteria\n\n");
     if task.acceptance_criteria.is_empty() {
         out.push_str(EMPTY);
         out.push('\n');
@@ -107,15 +107,12 @@ fn criteria(out: &mut String, task: &Task) {
     );
     out.push_str("|---|---|---|---|---|---|---|\n");
     for criterion in &task.acceptance_criteria {
+        // The evidence is quoted below the table: what a command printed is
+        // a quotation, and a table cell cannot hold a block.
         let evidence = if criterion.evidence.is_empty() {
             EMPTY.to_string()
         } else {
-            criterion
-                .evidence
-                .iter()
-                .map(evidence_text)
-                .collect::<Vec<_>>()
-                .join("<br>")
+            "_quoted below_".to_string()
         };
         let deferral = criterion
             .deferral
@@ -141,17 +138,28 @@ fn criteria(out: &mut String, task: &Task) {
     }
 
     for criterion in &task.acceptance_criteria {
-        if !is_multiline(&criterion.verification) {
-            continue;
+        if is_multiline(&criterion.verification) {
+            out.push('\n');
+            out.push_str(&format!("**Verification for {}**\n\n", code(&criterion.id)));
+            out.push_str("---\n\n");
+            fenced_block(out, &criterion.verification);
         }
-        out.push('\n');
-        out.push_str(&format!("**Verification for {}**\n\n", code(&criterion.id)));
-        fenced_block(out, &criterion.verification);
+
+        if !criterion.evidence.is_empty() {
+            out.push('\n');
+            out.push_str(&format!("**Evidence for {}**\n\n", code(&criterion.id)));
+            for (index, evidence) in criterion.evidence.iter().enumerate() {
+                if index > 0 {
+                    out.push('\n');
+                }
+                blockquote(out, &evidence_text(evidence));
+            }
+        }
     }
 }
 
 fn steps(out: &mut String, task: &Task) {
-    out.push_str("\n## Steps\n\n");
+    out.push_str("\n# Steps\n\n");
     if task.steps.is_empty() {
         out.push_str(EMPTY);
         out.push('\n');
@@ -162,7 +170,7 @@ fn steps(out: &mut String, task: &Task) {
         if index > 0 {
             out.push('\n');
         }
-        out.push_str(&format!("### {}\n\n", code(&step.id)));
+        out.push_str(&format!("## {}\n\n", code(&step.id)));
         fixed_bullet(out, "order", &code(&step.order.to_string()));
         prose_bullet(out, "action", &step.action);
         prose_bullet(out, "done when", &step.done_when);
@@ -175,7 +183,7 @@ fn steps(out: &mut String, task: &Task) {
 }
 
 fn review(out: &mut String, task: &Task) {
-    out.push_str("\n## Review\n\n");
+    out.push_str("\n# Review\n\n");
     let verdict = task
         .review
         .verdict
@@ -222,13 +230,13 @@ fn review(out: &mut String, task: &Task) {
             if index > 0 {
                 out.push('\n');
             }
-            finding_block(out, finding, 3);
+            finding_block(out, finding, 2);
         }
     }
 }
 
 fn questions(out: &mut String, task: &Task) {
-    out.push_str("\n## Questions\n\n");
+    out.push_str("\n# Questions\n\n");
     let open: Vec<&Question> = task
         .questions
         .iter()
@@ -268,7 +276,7 @@ fn questions(out: &mut String, task: &Task) {
 }
 
 fn notes(out: &mut String, task: &Task) {
-    out.push_str("\n## Notes\n\n");
+    out.push_str("\n# Notes\n\n");
     if task.notes.is_empty() {
         out.push_str(EMPTY);
         out.push('\n');
@@ -279,7 +287,7 @@ fn notes(out: &mut String, task: &Task) {
         if index > 0 {
             out.push('\n');
         }
-        out.push_str(&format!("### {}\n\n", code(&note.id)));
+        out.push_str(&format!("## {}\n\n", code(&note.id)));
         fixed_bullet(out, "author", &code(&note.author));
         fixed_bullet(out, "at", &code(&note.at));
         out.push('\n');
@@ -288,7 +296,7 @@ fn notes(out: &mut String, task: &Task) {
 }
 
 fn dependencies<'a>(out: &mut String, task: &Task, canonical: &HashMap<&'a str, Canonical<'a>>) {
-    out.push_str("\n## Dependencies\n\n");
+    out.push_str("\n# Dependencies\n\n");
     out.push_str("**Waits on**\n\n");
     if task.depends_on.is_empty() {
         out.push_str(EMPTY);
@@ -321,7 +329,7 @@ fn dependencies<'a>(out: &mut String, task: &Task, canonical: &HashMap<&'a str, 
 }
 
 fn children<'a>(out: &mut String, task: &Task, canonical: &HashMap<&'a str, Canonical<'a>>) {
-    out.push_str("\n## Children\n\n");
+    out.push_str("\n# Children\n\n");
     let mut ids: Vec<&str> = task.children.iter().map(|id| id.as_str()).collect();
     for record in canonical.values() {
         let other = record.task;
@@ -356,7 +364,18 @@ fn children<'a>(out: &mut String, task: &Task, canonical: &HashMap<&'a str, Cano
                     .filter(|step| step.status == StepStatus::Done)
                     .count();
                 let title = escape_literal(&child.title);
-                let mut line = format!("- {} — {}", code(&child.id), code(child.status.as_str()));
+                // A subtask is a thing to be done or done: its box says
+                // which, the way a task list's box does.
+                let checkbox = if child.status == crate::Status::Done {
+                    "[x]"
+                } else {
+                    "[ ]"
+                };
+                let mut line = format!(
+                    "- {checkbox} {} — {}",
+                    code(&child.id),
+                    code(child.status.as_str())
+                );
                 if !title.is_empty() {
                     line.push_str(&format!(" — {title}"));
                 }
@@ -367,6 +386,8 @@ fn children<'a>(out: &mut String, task: &Task, canonical: &HashMap<&'a str, Cano
                 ));
                 out.push_str(&line);
             }
+            // The record is not there, so there is no state a box could
+            // carry: an unknown child is a bullet, and the line says so.
             None => out.push_str(&format!("- {} — {}\n", code(id), code("unknown"))),
         }
     }
@@ -416,6 +437,16 @@ fn prose_block(out: &mut String, value: &str) {
     out.push('\n');
 }
 
+/// Quote a value: every line carries the marker, so a value that holds a
+/// newline cannot leave the quotation.
+fn blockquote(out: &mut String, value: &str) {
+    for line in value.lines() {
+        out.push_str("> ");
+        out.push_str(line);
+        out.push('\n');
+    }
+}
+
 /// One round, then the findings it raised.
 ///
 /// `shown` carries the findings the earlier rounds already painted: a finding
@@ -423,7 +454,7 @@ fn prose_block(out: &mut String, value: &str) {
 /// again says nothing.
 fn round_block(out: &mut String, round: &Round, findings: &[Finding], shown: &mut HashSet<String>) {
     out.push_str(&format!(
-        "### Round {} — {}\n\n",
+        "## Round {} — {}\n\n",
         code(&round.n.to_string()),
         code(round_kind_str(round.kind)),
     ));
@@ -459,7 +490,7 @@ fn round_block(out: &mut String, round: &Round, findings: &[Finding], shown: &mu
     }
     for finding in raised {
         out.push('\n');
-        finding_block(out, finding, 4);
+        finding_block(out, finding, 3);
     }
 }
 
@@ -498,7 +529,7 @@ fn finding_block(out: &mut String, finding: &Finding, level: usize) {
 }
 
 fn question_block(out: &mut String, question: &Question) {
-    out.push_str(&format!("### {}\n\n", code(&question.id)));
+    out.push_str(&format!("## {}\n\n", code(&question.id)));
     prose_bullet(out, "question", &question.question);
     fixed_bullet(out, "raised by", &code(&question.raised_by));
     fixed_bullet(out, "raised at", &code(&question.raised_at));
@@ -510,20 +541,18 @@ fn question_block(out: &mut String, question: &Question) {
 }
 
 fn dependency_line(id: &str, task: Option<&Task>) -> String {
+    // A dependency is a reference to another record, so its id is a link.
+    let reference = link(id);
     match task {
         Some(task) => {
             let title = escape_literal(&task.title);
             if title.is_empty() {
-                format!("- {} — {}\n", code(id), code(task.status.as_str()))
+                format!("- {reference} — {}\n", code(task.status.as_str()))
             } else {
-                format!(
-                    "- {} — {} — {title}\n",
-                    code(id),
-                    code(task.status.as_str())
-                )
+                format!("- {reference} — {} — {title}\n", code(task.status.as_str()))
             }
         }
-        None => format!("- {} — {}\n", code(id), code("unknown")),
+        None => format!("- {reference} — {}\n", code("unknown")),
     }
 }
 
@@ -570,7 +599,11 @@ fn evidence_text(evidence: &crate::task::Evidence) -> String {
     });
     if !evidence.summary.trim().is_empty() {
         text.push_str(" — ");
-        text.push_str(evidence.summary.trim());
+        // The summary is a fixed field of the record: what the command
+        // printed. It is quoted, so it is a literal, not prose. Escape it
+        // line by line, so a line that would open a block stays inside the
+        // quotation, and keep the line breaks.
+        text.push_str(&escape_lines(&evidence.summary));
     }
     if !evidence.by.is_empty() {
         text.push_str(" — by ");
@@ -666,6 +699,27 @@ fn codes(values: &[String]) -> String {
         .join(", ")
 }
 
+/// A reference to another record, as a markdown link.
+///
+/// The label is the id in its code span; the destination is the id,
+/// percent-encoded, so a value full of markdown cannot close the link or
+/// open one of its own.
+fn link(id: &str) -> String {
+    format!("[{}]({})", code(id), link_destination(id))
+}
+
+fn link_destination(id: &str) -> String {
+    let mut out = String::with_capacity(id.len());
+    for byte in id.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            out.push(char::from(byte));
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
 /// Render a value as an inline code span.
 ///
 /// The fence is longer than any run of backticks in the value, so a value
@@ -730,7 +784,24 @@ fn longest_backtick_run(value: &str) -> usize {
 /// interpreted. The detail pane's header labels its record by the same
 /// rule, so a title cannot open markdown wherever it is shown.
 pub fn escape_literal(value: &str) -> String {
-    let text = oneline(value).trim().to_string();
+    escape_markdown(&oneline(value))
+}
+
+/// Escape every line of a multiline fixed value, keeping the line breaks.
+///
+/// The same rule `escape_literal` holds, applied per line: a value that is
+/// quoted line by line cannot open a block on any of them, and the escape is
+/// invisible in the render.
+fn escape_lines(value: &str) -> String {
+    value
+        .trim()
+        .lines()
+        .map(escape_markdown)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn escape_markdown(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for ch in text.chars() {
         if matches!(

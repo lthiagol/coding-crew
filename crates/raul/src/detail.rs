@@ -564,19 +564,19 @@ mod tests {
 
     #[test]
     fn the_first_heading_is_painted_from_its_slot() {
-        // The document opens on `## Header`: a second-level heading takes
-        // `text.strong` and the engine's own bold.
+        // The document opens on `# Header`: a section heading takes the
+        // document palette's `heading.section` and the engine's own bold.
         let work = mock_work();
         let (rows, paints) = draw(&work, &pane("TSK13"), 100, 40);
-        let strong = theme().text.strong.fg.expect("the strong colour");
+        let section = theme().document().heading_section;
         let row_at = rows
             .iter()
             .position(|row| row.contains("Header"))
             .expect("the first heading is on screen");
         let column = rows[row_at].find("Header").expect("the heading's column");
         assert_eq!(
-            paints[row_at][column].fg, strong,
-            "the heading is not on text.strong"
+            paints[row_at][column].fg, section,
+            "the heading is not on heading.section"
         );
         assert!(
             paints[row_at][column].modifier.contains(Modifier::BOLD),
@@ -984,6 +984,167 @@ mod tests {
             !rendered.contains('\\'),
             "the escape reached the render: {rendered}"
         );
+    }
+
+    #[test]
+    fn a_quoted_evidence_line_cannot_open_a_block() {
+        // The summary is a fixed field of the record: what the command
+        // printed. The projection escapes it, so a line that would open a
+        // heading, a list or a nested quote is rendered as text inside the
+        // quotation, marker on every line, with no heading and no rule.
+        let mut task = coding_crew_core::Task::new("TSK01", "Evidence probe");
+        task.acceptance_criteria = vec![coding_crew_core::AcceptanceCriterion {
+            id: "ACCEPT-01".to_string(),
+            verification: "cargo test".to_string(),
+            evidence: vec![coding_crew_core::Evidence {
+                command: "cargo test".to_string(),
+                exit_code: Some(1),
+                summary: "ok\n# injected heading\n- injected bullet\n> injected quote".to_string(),
+                at: "2026-11-14T09:00:00Z".to_string(),
+                by: "runner-1".to_string(),
+                session: None,
+            }],
+            ..coding_crew_core::AcceptanceCriterion::default()
+        }];
+        let work = Work {
+            root: PathBuf::from("/nowhere/coding-crew/work"),
+            tasks: vec![task],
+            ..Work::default()
+        };
+
+        let rendered = document(&work, &pane("TSK01"), 120, &theme());
+
+        let injected: Vec<&str> = rendered
+            .lines()
+            .filter(|line| line.contains("injected"))
+            .collect();
+        assert_eq!(injected.len(), 3, "{rendered}");
+        for line in &injected {
+            assert!(
+                line.starts_with('▏'),
+                "a quoted line left the quotation: {line:?}\n{rendered}"
+            );
+        }
+
+        let lines: Vec<&str> = rendered.lines().collect();
+        let heading = lines
+            .iter()
+            .position(|line| line.contains("injected heading"))
+            .expect("the escaped heading is not shown");
+        assert_ne!(lines[heading].trim(), "injected heading", "{rendered}");
+        assert!(
+            !lines[heading + 1]
+                .trim_start_matches('▏')
+                .trim()
+                .chars()
+                .all(|ch| ch == '═'),
+            "the quotation opened a rule:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn the_engine_consumes_a_dependency_link_and_a_child_box() {
+        // The projection writes a link and a task-list box; the engine is
+        // the other half of that seam. A dependency renders as one link —
+        // one marker, its label, no literal brackets — and a child renders
+        // as one box on one logical row.
+        let mut task = coding_crew_core::Task::new("TSK01", "Parent");
+        task.depends_on = vec!["TSK02".to_string()];
+        task.children = vec!["TSK01.1".to_string()];
+
+        let mut dependency = coding_crew_core::Task::new("TSK02", "Dependency");
+        dependency.status = coding_crew_core::Status::Done;
+
+        let mut child = coding_crew_core::Task::new("TSK01.1", "Child");
+        child.parent = Some("TSK01".to_string());
+        child.status = coding_crew_core::Status::Groomed;
+
+        let work = Work {
+            root: PathBuf::from("/nowhere/coding-crew/work"),
+            tasks: vec![task, dependency, child],
+            ..Work::default()
+        };
+
+        let lines = document_lines(&work, &pane("TSK01"), 120, &theme());
+
+        // The engine's own parse: the link is one span with its destination,
+        // and no second link is invented.
+        let markdown = coding_crew_core::task_to_markdown(
+            work.task("TSK01").expect("the parent record"),
+            &work.tasks,
+        );
+        let (syntax, paired) = syntect();
+        let parsed = parse_markdown_with_width(
+            &markdown,
+            syntax,
+            paired,
+            120,
+            &theme().markdown_theme(),
+            false,
+            false,
+        );
+        assert_eq!(parsed.link_urls, vec!["TSK02".to_string()]);
+        assert_eq!(
+            parsed.link_spans.len(),
+            1,
+            "the dependency is not one link span: {} spans",
+            parsed.link_spans.len()
+        );
+
+        let link_line = lines
+            .iter()
+            .find(|line| line_text(line).contains("TSK02"))
+            .expect("the dependency line is not rendered");
+        let link_text = line_text(link_line);
+        assert!(link_text.contains("# TSK02"), "{link_text}");
+        assert!(
+            !link_text.contains('[') && !link_text.contains("]("),
+            "{link_text}"
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line_text(line).contains("TSK02"))
+                .count(),
+            1,
+            "the dependency is not one row:\n{link_text}"
+        );
+        let link_icon = theme().markdown_theme().link_icon;
+        assert_eq!(
+            link_line
+                .spans
+                .iter()
+                .filter(|span| span.style.fg == Some(link_icon))
+                .count(),
+            1,
+            "the dependency is not one link span: {link_text}"
+        );
+
+        let child_line = lines
+            .iter()
+            .find(|line| line_text(line).contains("TSK01.1"))
+            .expect("the child line is not rendered");
+        let child_text = line_text(child_line);
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line_text(line).contains("TSK01.1"))
+                .count(),
+            1,
+            "the child is not one logical row:\n{child_text}"
+        );
+        assert_eq!(
+            child_text
+                .matches(coding_crew_engine::markdown::TASK_UNCHECKED)
+                .count(),
+            1,
+            "the child does not render one open box: {child_text}"
+        );
+        assert!(
+            !child_text.contains(coding_crew_engine::markdown::TASK_CHECKED),
+            "the open child renders a done box: {child_text}"
+        );
+        assert!(!child_text.contains("[ ]"), "{child_text}");
     }
 
     /// The text of one rendered line, its spans joined.

@@ -1,6 +1,6 @@
 ┌ TSK13 · The detail pane paints the marked note ──────────────────────────────────────────────────┐
 │Header                                                                                            │
-│──────                                                                                            │
+│══════                                                                                            │
 │┌──────────┬─────────────────────────────────────────────────────────────────────────────────────┐│
 ││ field    │ value                                                                               ││
 │╞══════════╪═════════════════════════════════════════════════════════════════════════════════════╡│
@@ -25,7 +25,7 @@
 │└──────────┴─────────────────────────────────────────────────────────────────────────────────────┘│
 │                                                                                                  │
 │Intent                                                                                            │
-│──────                                                                                            │
+│══════                                                                                            │
 │Outcome                                                                                           │
 │                                                                                                  │
 │A  marked  span in free text is painted on the selection’s colours.                               │
@@ -36,7 +36,7 @@
 │equals signs around it.                                                                           │
 │                                                                                                  │
 │Scope                                                                                             │
-│─────                                                                                             │
+│═════                                                                                             │
 │In scope                                                                                          │
 │• the projection’s mark                                                                           │
 │• the detail pane’s paint                                                                         │
@@ -46,44 +46,38 @@
 │• the Review section                                                                              │
 │                                                                                                  │
 │Acceptance criteria                                                                               │
-│───────────────────                                                                               │
+│═══════════════════                                                                               │
 │┌─────────────┬──────────────┬──────────────┬──────────┬──────────────┬──────────┬──────────────┐ │
 ││ id          │ description  │ verification │ status   │ evidence     │ deferral │ failure      │ │
 ││             │              │              │          │              │          │ reason       │ │
 │╞═════════════╪══════════════╪══════════════╪══════════╪══════════════╪══════════╪══════════════╡ │
-││  ACCEPT-01  │ A marked     │  cargo test  │  passed  │  cargo test  │ none     │ none         │ │
-││             │ span is      │   -p coding  │          │   -p coding  │          │              │ │
-││             │ painted on   │  -crew-core  │          │  -crew-core  │          │              │ │
-││             │ text.selecte │   | grep de  │          │   | grep de  │          │              │ │
-││             │ d.           │  tail        │          │  tail  —     │          │              │ │
-││             │              │              │          │ exit  0  —   │          │              │ │
-││             │              │              │          │ 12 passed; 0 │          │              │ │
-││             │              │              │          │ failed — by  │          │              │ │
-││             │              │              │          │  runner-01   │          │              │ │
-││             │              │              │          │ in           │          │              │ │
-││             │              │              │          │  session-ru  │          │              │ │
-││             │              │              │          │  nner-01  at │          │              │ │
-││             │              │              │          │  2026-11-10  │          │              │ │
-││             │              │              │          │  T14:00Z     │          │              │ │
+││  ACCEPT-01  │ A marked     │  cargo test  │  passed  │ quoted below │ none     │ none         │ │
+││             │ span is      │   -p coding  │          │              │          │              │ │
+││             │ painted on   │  -crew-core  │          │              │          │              │ │
+││             │ text.selecte │   | grep de  │          │              │          │              │ │
+││             │ d.           │  tail        │          │              │          │              │ │
 │├─────────────┼──────────────┼──────────────┼──────────┼──────────────┼──────────┼──────────────┤ │
-││  ACCEPT-02  │ A fenced     │  cargo test  │  passed  │  cargo test  │ none     │ none         │ │
-││             │ rust block   │   -p coding  │          │   -p coding  │          │              │ │
-││             │ keeps        │  -crew-raul  │          │  -crew-raul  │          │              │ │
-││             │ syntect’s    │   detail     │          │   detail  —  │          │              │ │
-││             │ code tokens. │              │          │ exit  0  —   │          │              │ │
-││             │              │              │          │ 12 passed; 0 │          │              │ │
-││             │              │              │          │ failed — by  │          │              │ │
-││             │              │              │          │  runner-01   │          │              │ │
-││             │              │              │          │ in           │          │              │ │
-││             │              │              │          │  session-ru  │          │              │ │
-││             │              │              │          │  nner-01  at │          │              │ │
-││             │              │              │          │  2026-11-10  │          │              │ │
-││             │              │              │          │  T14:05Z     │          │              │ │
+││  ACCEPT-02  │ A fenced     │  cargo test  │  passed  │ quoted below │ none     │ none         │ │
+││             │ rust block   │   -p coding  │          │              │          │              │ │
+││             │ keeps        │  -crew-raul  │          │              │          │              │ │
+││             │ syntect’s    │   detail     │          │              │          │              │ │
+││             │ code tokens. │              │          │              │          │              │ │
 │└─────────────┴──────────────┴──────────────┴──────────┴──────────────┴──────────┴──────────────┘ │
 │                                                                                                  │
+│Evidence for  ACCEPT-01                                                                           │
+│                                                                                                  │
+│▏  cargo test -p coding-crew-core | grep detail  — exit  0  — 12 passed; 0 failed — by  runner-01 │
+│▏ in  session-runner-01  at  2026-11-10T14:00Z                                                    │
+│                                                                                                  │
+│Evidence for  ACCEPT-02                                                                           │
+│                                                                                                  │
+│▏  cargo test -p coding-crew-raul detail  — exit  0  — 12 passed; 0 failed — by  runner-01  in    │
+│▏ session-runner-01  at  2026-11-10T14:05Z                                                        │
+│                                                                                                  │
 │Steps                                                                                             │
-│─────                                                                                             │
+│═════                                                                                             │
 │ STP-01                                                                                           │
+│────────                                                                                          │
 │• order:  1                                                                                       │
 │• action: Carry the mark through the bridge to the selection’s slots.                             │
 │• done when: the marked words take the selection’s colours                                        │
@@ -94,6 +88,7 @@
 │• deviation: none                                                                                 │
 │                                                                                                  │
 │ STP-02                                                                                           │
+│────────                                                                                          │
 │• order:  2                                                                                       │
 │• action: Keep the code block’s own paint under the mark.                                         │
 │• done when: the fenced block still reads as code                                                 │
@@ -104,13 +99,14 @@
 │• deviation: none                                                                                 │
 │                                                                                                  │
 │Review                                                                                            │
-│──────                                                                                            │
+│══════                                                                                            │
 │• verdict: none                                                                                   │
 │• budget:  0/5  external rounds                                                                   │
 │                                                                                                  │
 │Rounds                                                                                            │
 │                                                                                                  │
 │Round  0  —  self                                                                                 │
+│──────────────────                                                                                │
 │• focus:  spec-compliance                                                                         │
 │• reviewer:  runner-01                                                                            │
 │• verdict:  changes-needed                                                                        │
@@ -143,7 +139,7 @@
 │  Took the slots from the pane rather than inventing a third colour.                              │
 │                                                                                                  │
 │Questions                                                                                         │
-│─────────                                                                                         │
+│═════════                                                                                         │
 │Open                                                                                              │
 │                                                                                                  │
 │none                                                                                              │
@@ -153,8 +149,9 @@
 │none                                                                                              │
 │                                                                                                  │
 │Notes                                                                                             │
-│─────                                                                                             │
+│═════                                                                                             │
 │ NOTE-01                                                                                          │
+│─────────                                                                                         │
 │• author:  runner-01                                                                              │
 │• at:  2026-11-11T09:00Z                                                                          │
 │                                                                                                  │
@@ -166,18 +163,21 @@
 │└────────────────────────────────────────────┘                                                    │
 │                                                                                                  │
 │Dependencies                                                                                      │
-│────────────                                                                                      │
+│════════════                                                                                      │
 │Waits on                                                                                          │
-│•  TSK22  —  done  — The terminal column table is generated from its rules                        │
-│•  TSK23  —  done  — The Needs you age says under a minute                                        │
+│• # TSK22  —  done  — The terminal column table is generated from its rules                       │
+│• # TSK23  —  done  — The Needs you age says under a minute                                       │
 │                                                                                                  │
 │Waits on this                                                                                     │
 │                                                                                                  │
 │none                                                                                              │
 │                                                                                                  │
 │Children                                                                                          │
-│────────                                                                                          │
+│════════                                                                                          │
 │none                                                                                              │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

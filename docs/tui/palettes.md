@@ -745,6 +745,25 @@ colour preset, so the search stays un-offered: the document's own palette
 made the hit readable and did not make the match readable. The ruling in
 [theme.md](theme.md) stands, with its figures recomputed.
 
+### The declared roles
+
+Some of the eighteen roles are lit by nothing the record carries today. The
+palette covers the **engine's vocabulary**, not only what the projection
+writes: the engine can paint an alert, a nested list or a search hit the
+moment the document holds one, and the palette has to say what those look
+like when they happen.
+
+So these roles are **declared, not lit**:
+
+| role | lit by |
+|---|---|
+| the five alerts | a task's **overlays** — `blocked`, `deferred`, `cancelled` — once the projection writes them as alerts |
+| `list_depth_2`, `list_depth_3` | a nested list; the model has no nested steps today |
+| `search` | the search, which is **not offered** in any preset — its own section says why |
+
+A declared role is not dead colour: dead colour would be a role the document
+*can* show and does not. These are roles the document cannot show yet.
+
 ### The terminal preset
 
 The terminal preset paints none of the eighteen roles: every one resolves to

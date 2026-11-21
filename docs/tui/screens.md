@@ -209,13 +209,17 @@ The document carries the task's sections, in reading order:
 | dependencies | what it waits on, what waits on it |
 | children | child tasks and their progress |
 
-The projection is the shape, not the wording: headings per section, a table for
-the criteria, lists for the steps, and each review round a heading with its
-own fields and the findings it raised under it; the verification commands as
-code. The task's own free text — the intent, the
-criterion descriptions, the notes — is markdown in its own right and is
-rendered as such; the title is a label and is escaped like the other fields
-that must not be interpreted.
+The projection is the shape, not the wording: each of the ten sections is a
+level-one heading, an item under one a level-two, and a finding under its round
+a level-three; a table for the criteria; lists for the steps; each review round
+a heading with its own fields and the findings it raised under it; the
+verification commands as code, with a rule before a fenced one. The evidence is
+quoted in a blockquote, the children are a task list — `[x]` for a done subtask,
+`[ ]` for one that is not — and a dependency is a link to its record. The
+task's own free text — the intent, the criterion descriptions, the notes — is
+markdown in its own right and is rendered as such; the title is a label, never
+a heading and never a link, and is escaped like the other fields that must not
+be interpreted.
 
 Nothing in the detail pane is editable in v1. raul reads.
 

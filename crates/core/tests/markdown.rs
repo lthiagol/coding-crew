@@ -9,16 +9,16 @@ use coding_crew_core::task::{
 use coding_crew_core::{CriterionStatus, Status, task_to_markdown};
 
 const HEADINGS: [&str; 10] = [
-    "## Header",
-    "## Intent",
-    "## Scope",
-    "## Acceptance criteria",
-    "## Steps",
-    "## Review",
-    "## Questions",
-    "## Notes",
-    "## Dependencies",
-    "## Children",
+    "# Header",
+    "# Intent",
+    "# Scope",
+    "# Acceptance criteria",
+    "# Steps",
+    "# Review",
+    "# Questions",
+    "# Notes",
+    "# Dependencies",
+    "# Children",
 ];
 
 fn minimal(id: &str) -> Task {
@@ -335,12 +335,53 @@ fn context() -> Vec<Task> {
     vec![dependency, waiting, child, unrelated]
 }
 
+/// A controlled record whose free text is plain, so the only level-one
+/// headings the projection can write are its own ten.
+fn controlled() -> Task {
+    let mut task = minimal("TSK01");
+    task.acceptance_criteria = vec![AcceptanceCriterion {
+        id: "ACCEPT-01".to_string(),
+        description: "A criterion in plain text.".to_string(),
+        verification: "cargo test".to_string(),
+        ..AcceptanceCriterion::default()
+    }];
+    task.steps = vec![step("STP-01", 1, StepStatus::Pending)];
+    task.review = Review {
+        max_rounds: 5,
+        rounds: vec![round(1, RoundKind::External, &["FIND-01"])],
+        findings: vec![finding("FIND-01", Severity::High)],
+        ..Review::default()
+    };
+    task.questions = vec![Question {
+        id: "QST-01".to_string(),
+        question: "A question in plain text.".to_string(),
+        ..Question::default()
+    }];
+    task.notes = vec![Note {
+        id: "NOTE-01".to_string(),
+        body: "A note in plain text.".to_string(),
+        ..Note::default()
+    }];
+    task
+}
+
 fn section<'a>(document: &'a str, heading: &str) -> &'a str {
     let start = document
         .find(heading)
         .unwrap_or_else(|| panic!("the document has no {heading}"));
     let after = start + heading.len();
-    match document[after..].find("\n## ").map(|offset| after + offset) {
+    // A section ends at the next structural section heading. Free text is
+    // markdown in its own right and may hold a heading of its own, so a
+    // level-one line is not enough to end one.
+    let end = HEADINGS
+        .iter()
+        .filter_map(|other| {
+            document[after..]
+                .find(&format!("\n{other}"))
+                .map(|offset| after + offset)
+        })
+        .min();
+    match end {
         Some(end) => &document[start..end],
         None => &document[start..],
     }
@@ -349,7 +390,7 @@ fn section<'a>(document: &'a str, heading: &str) -> &'a str {
 fn headings(document: &str) -> Vec<&str> {
     document
         .lines()
-        .filter(|line| line.starts_with("## "))
+        .filter(|line| line.starts_with("# "))
         .collect()
 }
 
@@ -432,6 +473,30 @@ fn without_code_spans(document: &str) -> String {
     out
 }
 
+/// The document with every markdown link destination removed.
+///
+/// A destination is not displayed — the engine paints the link's text and
+/// keeps the destination as its address — and it is escaped when written,
+/// so it cannot break the document. The fixed-field scan reads the text a
+/// reader sees, so the address is not part of it.
+fn without_link_destinations(document: &str) -> String {
+    let mut out = String::with_capacity(document.len());
+    let mut rest = document;
+    while let Some(start) = rest.find("](") {
+        out.push_str(&rest[..start + 1]);
+        let after = &rest[start + 2..];
+        match after.find(')') {
+            Some(end) => rest = &after[end + 1..],
+            None => {
+                out.push_str(&rest[start + 1..]);
+                return out;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 #[test]
 fn the_projection_is_pure() {
     let task = fixture();
@@ -449,13 +514,35 @@ fn the_projection_is_pure() {
 
 #[test]
 fn the_sections_are_the_ten_in_order_and_no_others() {
-    let document = task_to_markdown(&fixture(), &context());
-    let found: Vec<&str> = document
-        .lines()
-        .filter(|line| line.starts_with("## "))
+    // The controlled input carries an item under every section that can hold
+    // one, so the deeper headings are emitted and still stay out of the top
+    // level. Its free text is plain: the only level-one headings in the
+    // document are the projection's own.
+    let document = task_to_markdown(&controlled(), &[]);
+
+    assert_eq!(headings(&document), HEADINGS);
+}
+
+#[test]
+fn a_heading_in_free_text_does_not_change_the_ten_sections() {
+    let mut task = controlled();
+    task.notes.push(Note {
+        id: "NOTE-02".to_string(),
+        body: "# What we learned\n\nThe lane table was enough.".to_string(),
+        ..Note::default()
+    });
+
+    let document = task_to_markdown(&task, &[]);
+    let sections: Vec<&str> = headings(&document)
+        .into_iter()
+        .filter(|line| HEADINGS.contains(line))
         .collect();
 
-    assert_eq!(found, HEADINGS);
+    assert_eq!(sections, HEADINGS);
+    assert!(
+        document.lines().any(|line| line == "# What we learned"),
+        "the free text heading is missing:\n{document}"
+    );
 }
 
 #[test]
@@ -480,7 +567,7 @@ fn every_section_is_present_and_marks_its_empty_state() {
     assert_eq!(
         document
             .lines()
-            .filter(|line| line.starts_with("## "))
+            .filter(|line| line.starts_with("# "))
             .count(),
         HEADINGS.len()
     );
@@ -497,10 +584,10 @@ fn dependencies_name_what_waits_on_the_task_from_the_context() {
     unrelated.depends_on = vec!["TSK11".to_string()];
 
     let document = task_to_markdown(&task, &[first, second, unrelated]);
-    let body = section(&document, "## Dependencies");
+    let body = section(&document, "# Dependencies");
 
-    assert!(body.contains("`TSK01` — `draft`"), "{body}");
-    assert!(body.contains("`TSK02` — `draft`"), "{body}");
+    assert!(body.contains("[`TSK01`](TSK01) — `draft`"), "{body}");
+    assert!(body.contains("[`TSK02`](TSK02) — `draft`"), "{body}");
     assert!(!body.contains("TSK03"), "{body}");
     assert!(!body.contains("TSK11"), "{body}");
 }
@@ -535,12 +622,127 @@ fn children_show_their_status_and_progress_from_the_context() {
     ];
 
     let document = task_to_markdown(&task, &[child]);
-    let body = section(&document, "## Children");
+    let body = section(&document, "# Children");
 
     assert!(body.contains("`TSK10.1`"), "{body}");
     assert!(body.contains("`groomed`"), "{body}");
     assert!(body.contains("criteria `2/2` passed"), "{body}");
     assert!(body.contains("steps `1/2` done"), "{body}");
+}
+
+#[test]
+fn children_are_a_task_list_with_done_and_open_boxes() {
+    let task = minimal("TSK10");
+    let mut done = minimal("TSK10.1");
+    done.parent = Some("TSK10".to_string());
+    done.status = Status::Done;
+    let mut open = minimal("TSK10.2");
+    open.parent = Some("TSK10".to_string());
+    open.status = Status::Groomed;
+
+    let document = task_to_markdown(&task, &[done, open]);
+    let body = section(&document, "# Children");
+
+    assert!(body.contains("- [x] `TSK10.1` — `done`"), "{body}");
+    assert!(body.contains("- [ ] `TSK10.2` — `groomed`"), "{body}");
+}
+
+#[test]
+fn dependencies_are_links_to_their_records() {
+    let mut task = minimal("TSK10");
+    task.depends_on = vec!["TSK09".to_string()];
+    let mut waiting = minimal("TSK11");
+    waiting.depends_on = vec!["TSK10".to_string()];
+
+    let document = task_to_markdown(&task, &[waiting]);
+    let body = section(&document, "# Dependencies");
+
+    assert!(body.contains("- [`TSK09`](TSK09) — `unknown`"), "{body}");
+    assert!(body.contains("- [`TSK11`](TSK11) — `draft`"), "{body}");
+}
+
+#[test]
+fn evidence_is_quoted_in_a_blockquote() {
+    let mut task = minimal("TSK01");
+    task.acceptance_criteria = vec![AcceptanceCriterion {
+        id: "ACCEPT-01".to_string(),
+        verification: "cargo test".to_string(),
+        evidence: vec![evidence(
+            "cargo test",
+            Some(0),
+            "12 passed; 0 failed",
+            "2026-11-14T09:00:00Z",
+        )],
+        ..AcceptanceCriterion::default()
+    }];
+
+    let document = task_to_markdown(&task, &[]);
+    let body = section(&document, "# Acceptance criteria");
+
+    assert!(
+        body.contains("| `ACCEPT-01` | _none_ | `cargo test` | `passed` | _quoted below_ |"),
+        "{body}"
+    );
+    assert!(body.contains("**Evidence for `ACCEPT-01`**"), "{body}");
+    assert!(
+        body.contains(
+            "> `cargo test` — exit `0` — 12 passed; 0 failed — by `runner-1` in `s-runner` at `2026-11-14T09:00:00Z`"
+        ),
+        "{body}"
+    );
+}
+
+#[test]
+fn a_newline_in_evidence_output_cannot_leave_the_quotation() {
+    let mut task = minimal("TSK01");
+    task.acceptance_criteria = vec![AcceptanceCriterion {
+        id: "ACCEPT-01".to_string(),
+        verification: "cargo test".to_string(),
+        evidence: vec![evidence(
+            "cargo test",
+            Some(1),
+            "1 failed\n# injected-heading\n- injected item",
+            "2026-11-14T09:00:00Z",
+        )],
+        ..AcceptanceCriterion::default()
+    }];
+
+    let document = task_to_markdown(&task, &[]);
+    let body = section(&document, "# Acceptance criteria");
+
+    for line in body.lines().filter(|line| line.contains("injected")) {
+        assert!(line.starts_with("> "), "the output left the quote:\n{body}");
+    }
+    assert!(
+        !document
+            .lines()
+            .any(|line| line == "# injected-heading" || line == "- injected item"),
+        "{document}"
+    );
+    assert!(
+        body.contains("> \\# injected\\-heading") && body.contains("> \\- injected item"),
+        "the summary is not escaped inside the quotation:\n{body}"
+    );
+}
+
+#[test]
+fn a_fenced_verification_is_separated_by_a_rule() {
+    let mut task = minimal("TSK01");
+    task.acceptance_criteria = vec![AcceptanceCriterion {
+        id: "ACCEPT-01".to_string(),
+        verification: "cargo test\ncargo clippy".to_string(),
+        ..AcceptanceCriterion::default()
+    }];
+
+    let document = task_to_markdown(&task, &[]);
+    let body = section(&document, "# Acceptance criteria");
+
+    assert!(
+        body.contains(
+            "**Verification for `ACCEPT-01`**\n\n---\n\n```\ncargo test\ncargo clippy\n```"
+        ),
+        "{body}"
+    );
 }
 
 #[test]
@@ -568,7 +770,7 @@ fn a_criterion_shows_its_effective_status_not_its_stored_one() {
     ];
 
     let document = task_to_markdown(&task, &[]);
-    let body = section(&document, "## Acceptance criteria");
+    let body = section(&document, "# Acceptance criteria");
 
     assert!(
         body.contains("| `ACCEPT-01` | free text | `cargo test` | `passed` |"),
@@ -598,7 +800,7 @@ fn fixed_values_cannot_create_markdown_structure() {
     }];
 
     let document = task_to_markdown(&task, &[]);
-    let body = section(&document, "## Header");
+    let body = section(&document, "# Header");
 
     assert!(body.contains("\\# Heading \\[link\\]"), "{body}");
     assert!(!document.lines().any(|line| line.starts_with("# Heading")));
@@ -609,13 +811,13 @@ fn fixed_values_cannot_create_markdown_structure() {
     assert!(body.contains("`a\\|b`"), "{body}");
     assert!(body.contains("`` `tick` ``"), "{body}");
 
-    let criteria = section(&document, "## Acceptance criteria");
+    let criteria = section(&document, "# Acceptance criteria");
     assert!(
         criteria.contains("``echo `pwn` && # not a heading``"),
         "{criteria}"
     );
 
-    let steps = section(&document, "## Steps");
+    let steps = section(&document, "# Steps");
     assert!(steps.contains("``src/`x`.rs``"), "{steps}");
 }
 
@@ -642,18 +844,16 @@ fn free_text_keeps_its_markdown_meaning() {
 
     let document = task_to_markdown(&task, &[]);
 
-    assert!(section(&document, "## Intent").contains("**Done** when\n\n- one\n- two"));
-    let scope = section(&document, "## Scope");
+    assert!(section(&document, "# Intent").contains("**Done** when\n\n- one\n- two"));
+    let scope = section(&document, "# Scope");
     assert!(scope.contains("A *list*:"), "{scope}");
     assert!(scope.contains("1. first"), "{scope}");
     assert!(scope.contains("2. second"), "{scope}");
-    assert!(
-        section(&document, "## Acceptance criteria").contains("not **flat**<br>still markdown")
-    );
-    assert!(section(&document, "## Steps").contains("```sh"));
-    assert!(section(&document, "## Steps").contains("  cargo test"));
-    assert!(section(&document, "## Notes").contains("# What we learned"));
-    assert!(section(&document, "## Notes").contains("The **lane** table was enough."));
+    assert!(section(&document, "# Acceptance criteria").contains("not **flat**<br>still markdown"));
+    assert!(section(&document, "# Steps").contains("```sh"));
+    assert!(section(&document, "# Steps").contains("  cargo test"));
+    assert!(section(&document, "# Notes").contains("# What we learned"));
+    assert!(section(&document, "# Notes").contains("The **lane** table was enough."));
 }
 
 #[test]
@@ -666,7 +866,7 @@ fn verification_commands_are_code_never_prose() {
     }];
 
     let document = task_to_markdown(&task, &[]);
-    let body = section(&document, "## Acceptance criteria");
+    let body = section(&document, "# Acceptance criteria");
 
     assert!(body.contains("`cargo test --workspace`"), "{body}");
     assert!(!body.contains("| cargo test --workspace |"), "{body}");
@@ -700,9 +900,9 @@ fn the_header_names_the_kind_and_the_review_shows_the_budget() {
 
     let document = task_to_markdown(&task, &[]);
 
-    let header = section(&document, "## Header");
+    let header = section(&document, "# Header");
     assert!(header.contains("| kind | `bug` |"), "{header}");
-    let review = section(&document, "## Review");
+    let review = section(&document, "# Review");
     assert!(
         review.contains("- **budget:** `2/5` external rounds"),
         "{review}"
@@ -746,16 +946,16 @@ fn the_review_nests_a_finding_under_the_round_that_raised_it() {
     };
 
     let document = task_to_markdown(&task, &[]);
-    let review = section(&document, "## Review");
+    let review = section(&document, "# Review");
 
     let first = review
-        .find("### Round `0` — `self`")
+        .find("## Round `0` — `self`")
         .unwrap_or_else(|| panic!("no first round heading:\n{review}"));
     let second = review
-        .find("### Round `1` — `external`")
+        .find("## Round `1` — `external`")
         .unwrap_or_else(|| panic!("no second round heading:\n{review}"));
     let nested = review
-        .find("#### `FIND-01`")
+        .find("### `FIND-01`")
         .unwrap_or_else(|| panic!("the finding is not under its round:\n{review}"));
     assert!(first < second && second < nested, "{review}");
 
@@ -791,16 +991,16 @@ fn a_round_with_no_findings_says_so() {
     };
 
     let document = task_to_markdown(&task, &[]);
-    let review = section(&document, "## Review");
+    let review = section(&document, "# Review");
 
     let round = review
-        .find("### Round `0` — `self`")
+        .find("## Round `0` — `self`")
         .unwrap_or_else(|| panic!("no round heading:\n{review}"));
     assert!(
         review[round..].contains("- **findings:** _none_"),
         "a clean round does not say so:\n{review}"
     );
-    assert!(!review.contains("#### `"), "{review}");
+    assert!(!review.contains("### `"), "{review}");
     assert!(!review.contains("\n\n\n"), "the round is padded:\n{review}");
 }
 
@@ -820,16 +1020,16 @@ fn a_finding_that_belongs_to_no_round_is_shown_after_the_rounds() {
     };
 
     let document = task_to_markdown(&task, &[]);
-    let review = section(&document, "## Review");
+    let review = section(&document, "# Review");
 
     let nested = review
-        .find("#### `FIND-01`")
+        .find("### `FIND-01`")
         .unwrap_or_else(|| panic!("FIND-01 is not nested:\n{review}"));
     let label = review
         .find("**Findings not in a round**")
         .unwrap_or_else(|| panic!("the orphan findings have no block:\n{review}"));
     let orphan = review
-        .find("### `FIND-02`")
+        .find("## `FIND-02`")
         .unwrap_or_else(|| panic!("FIND-02 is dropped:\n{review}"));
     assert!(nested < label && label < orphan, "{review}");
     assert!(
@@ -848,11 +1048,11 @@ fn a_finding_is_shown_when_the_record_holds_no_rounds() {
     };
 
     let document = task_to_markdown(&task, &[]);
-    let review = section(&document, "## Review");
+    let review = section(&document, "# Review");
 
     assert!(review.contains("**Rounds**\n\n_none_"), "{review}");
     assert!(review.contains("**Findings not in a round**"), "{review}");
-    assert!(review.contains("### `FIND-01`"), "{review}");
+    assert!(review.contains("## `FIND-01`"), "{review}");
 }
 
 #[test]
@@ -865,14 +1065,14 @@ fn a_round_naming_a_finding_that_does_not_exist_says_so() {
     };
 
     let document = task_to_markdown(&task, &[]);
-    let review = section(&document, "## Review");
+    let review = section(&document, "# Review");
 
     assert!(
         review.contains("- **missing finding:** `FIND-99`"),
         "the missing reference is dropped:\n{review}"
     );
-    assert!(review.contains("### Round `1` — `external`"), "{review}");
-    assert!(!review.contains("#### `"), "{review}");
+    assert!(review.contains("## Round `1` — `external`"), "{review}");
+    assert!(!review.contains("### `"), "{review}");
 }
 
 #[test]
@@ -889,19 +1089,19 @@ fn a_finding_claimed_by_two_rounds_is_shown_under_the_first_one() {
     };
 
     let document = task_to_markdown(&task, &[]);
-    let review = section(&document, "## Review");
+    let review = section(&document, "# Review");
 
     let first = review
-        .find("### Round `1` — `external`")
+        .find("## Round `1` — `external`")
         .unwrap_or_else(|| panic!("no first round:\n{review}"));
     let nested = review
-        .find("#### `FIND-01`")
+        .find("### `FIND-01`")
         .unwrap_or_else(|| panic!("the finding is not shown:\n{review}"));
     let second = review
-        .find("### Round `2` — `external`")
+        .find("## Round `2` — `external`")
         .unwrap_or_else(|| panic!("no second round:\n{review}"));
     assert!(first < nested && nested < second, "{review}");
-    assert_eq!(review.matches("#### `FIND-01`").count(), 1, "{review}");
+    assert_eq!(review.matches("### `FIND-01`").count(), 1, "{review}");
     assert!(
         !review[second..].contains("FIND-01"),
         "the second round claims the finding again:\n{review}"
@@ -914,9 +1114,13 @@ fn a_listed_child_absent_from_the_context_is_unknown() {
     task.children = vec!["TSK10.2".to_string(), "TSK10.2".to_string()];
 
     let document = task_to_markdown(&task, &[]);
-    let body = section(&document, "## Children");
+    let body = section(&document, "# Children");
 
     assert!(body.contains("- `TSK10.2` — `unknown`"), "{body}");
+    assert!(
+        !body.contains("[ ]"),
+        "an unknown child asserts a box:\n{body}"
+    );
     assert_eq!(body.matches("`TSK10.2`").count(), 1, "{body}");
 }
 
@@ -942,12 +1146,12 @@ fn derived_lists_are_sorted_by_id_and_ignore_the_context_order() {
     let second = task_to_markdown(&task, &backward);
     assert_eq!(first, second);
 
-    let dependencies = section(&first, "## Dependencies");
+    let dependencies = section(&first, "# Dependencies");
     assert!(
         dependencies.find("`TSK20`") < dependencies.find("`TSK30`"),
         "{dependencies}"
     );
-    let children = section(&first, "## Children");
+    let children = section(&first, "# Children");
     assert!(
         children.find("`TSK10.2`") < children.find("`TSK10.9`"),
         "{children}"
@@ -990,7 +1194,7 @@ fn duplicate_ids_in_the_context_resolve_the_same_record_in_any_order() {
     assert_eq!(first, second);
 
     // The child's status, title and progress come from the same record.
-    let children = section(&first, "## Children");
+    let children = section(&first, "# Children");
     let line = children
         .lines()
         .find(|line| line.starts_with("- "))
@@ -1027,7 +1231,7 @@ fn a_non_canonical_duplicate_cannot_add_a_reverse_dependency() {
         vec![duplicate_record, canonical_record],
     ] {
         let document = task_to_markdown(&task, &context);
-        let dependencies = section(&document, "## Dependencies");
+        let dependencies = section(&document, "# Dependencies");
         assert!(
             !dependencies.contains("`TSK20`"),
             "a non-canonical duplicate added a reverse dependency:\n{dependencies}"
@@ -1052,10 +1256,10 @@ fn duplicate_ids_render_once() {
         &[dependency, waiting.clone(), child.clone(), waiting, child],
     );
 
-    let dependencies = section(&document, "## Dependencies");
+    let dependencies = section(&document, "# Dependencies");
     assert_eq!(dependencies.matches("`TSK01`").count(), 1, "{dependencies}");
     assert_eq!(dependencies.matches("`TSK02`").count(), 1, "{dependencies}");
-    let children = section(&document, "## Children");
+    let children = section(&document, "# Children");
     assert_eq!(children.matches("`TSK10.1`").count(), 1, "{children}");
 }
 
@@ -1086,9 +1290,9 @@ fn a_newline_in_a_fixed_field_cannot_break_the_line_structure() {
     assert_eq!(headings(&document), HEADINGS);
     let subheadings: Vec<&str> = document
         .lines()
-        .filter(|line| line.starts_with("### "))
+        .filter(|line| line.starts_with("## "))
         .collect();
-    assert_eq!(subheadings, ["### `NOTE-01`"]);
+    assert_eq!(subheadings, ["## `NOTE-01`"]);
     assert!(
         document.contains(
             "- **at:** `2026-11-14T08:00:00Z ## injected-time-heading - injected-time-item`"
@@ -1096,7 +1300,7 @@ fn a_newline_in_a_fixed_field_cannot_break_the_line_structure() {
         "{document}"
     );
     assert!(!document.lines().any(|line| line.starts_with("- injected")));
-    for line in table_rows(&document, "## Acceptance criteria") {
+    for line in table_rows(&document, "# Acceptance criteria") {
         assert_eq!(columns(line), 7, "{line}");
     }
 }
@@ -1111,7 +1315,7 @@ fn a_backslash_run_resets_at_a_pipe() {
         document.contains("| tags | `a\\|\\|b` |"),
         "the backslash run did not reset at the first pipe:\n{document}"
     );
-    for line in table_rows(&document, "## Header") {
+    for line in table_rows(&document, "# Header") {
         assert_eq!(columns(line), 2, "{line}");
     }
 }
@@ -1170,11 +1374,11 @@ fn backslashes_before_pipes_never_split_a_table_row() {
         assert_eq!(headings(&document), HEADINGS, "{value}");
 
         assert!(
-            table_rows(&document, "## Review").is_empty(),
+            table_rows(&document, "# Review").is_empty(),
             "the review is still a table:\n{document}"
         );
         for (heading, expected_columns, expected_rows) in
-            [("## Header", 2, 10), ("## Acceptance criteria", 7, 3)]
+            [("# Header", 2, 10), ("# Acceptance criteria", 7, 3)]
         {
             let rows = table_rows(&document, heading);
             assert_eq!(
@@ -1299,12 +1503,12 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
     assert!(!document.lines().any(|line| line.starts_with("```")));
 
     // The title is a label: escaped, not interpreted.
-    let header = section(&document, "## Header");
+    let header = section(&document, "# Header");
     assert!(header.contains("\\# Title attack \\[link\\]"), "{header}");
     assert!(!document.contains("](https://title.example)"), "{document}");
 
     // Everything fixed is inside a code span and cannot act on the document.
-    let outside = without_code_spans(&document);
+    let outside = without_link_destinations(&without_code_spans(&document));
     for token in [
         "FIXED-ATTACK",
         "injected-heading",
@@ -1321,7 +1525,10 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
         );
     }
     for line in outside.lines() {
-        assert!(!line.starts_with("# "), "{line}");
+        assert!(
+            !line.starts_with("# ") || HEADINGS.contains(&line),
+            "a level-one heading outside the ten sections:\n{line}"
+        );
         assert!(!line.starts_with("```"), "{line}");
     }
 
@@ -1342,8 +1549,37 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
         assert!(document.contains(prose), "{prose} was escaped:\n{document}");
     }
 
+    // The evidence summary is a fixed field: a literal, escaped, not prose.
+    assert!(
+        document.contains("\\*\\*bold\\*\\* evidence"),
+        "the evidence summary is not escaped:\n{document}"
+    );
+
+    // The new constructs hold under the attack: every dependency stays a
+    // link, and every child keeps its line — an unknown child asserts no
+    // box, because it carries no state to assert.
+    let children = section(&document, "# Children");
+    for line in children.lines().filter(|line| line.starts_with("- ")) {
+        assert!(line.starts_with("- `"), "{children}");
+        assert!(!line.starts_with("- ["), "{children}");
+    }
+    let dependencies = section(&document, "# Dependencies");
+    for line in dependencies.lines().filter(|line| line.starts_with("- ")) {
+        assert!(line.starts_with("- [`"), "{dependencies}");
+        // The destination is escaped: no whitespace, and no character that
+        // could close it early.
+        let (_, after) = line.rsplit_once("](").expect("a link destination");
+        let (destination, _) = after.split_once(')').expect("a closed destination");
+        assert!(
+            !destination
+                .chars()
+                .any(|ch| ch.is_whitespace() || matches!(ch, '(' | '<' | '>')),
+            "the destination is not escaped: {line}"
+        );
+    }
+
     // The fixed-value attacks cannot open a cell or a row.
-    for (heading, expected) in [("## Header", 2), ("## Acceptance criteria", 7)] {
+    for (heading, expected) in [("# Header", 2), ("# Acceptance criteria", 7)] {
         let rows = table_rows(&document, heading);
         assert!(!rows.is_empty(), "{heading} has no table");
         for line in rows {
@@ -1354,10 +1590,10 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
     // The review is a history, not a table. Its shape is a round heading,
     // the round's fields, and the finding under it one level deeper. The
     // attacked values stay in their code spans, so the shape holds.
-    let review = section(&document, "## Review");
-    assert!(table_rows(&document, "## Review").is_empty(), "{review}");
+    let review = section(&document, "# Review");
+    assert!(table_rows(&document, "# Review").is_empty(), "{review}");
     assert!(
-        review.contains("### Round `1` — `external`"),
+        review.contains("## Round `1` — `external`"),
         "the round heading was broken:\n{review}"
     );
     for label in ["focus", "reviewer", "verdict", "at", "notes"] {
@@ -1369,13 +1605,13 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
     assert!(
         review
             .lines()
-            .any(|line| line.starts_with("#### `") && line.contains("FIXED-ATTACK")),
+            .any(|line| line.starts_with("### `") && line.contains("FIXED-ATTACK")),
         "the finding is not nested under the round:\n{review}"
     );
     assert_eq!(
         review
             .lines()
-            .filter(|line| line.starts_with("### "))
+            .filter(|line| line.starts_with("## "))
             .count(),
         1,
         "{review}"
@@ -1398,7 +1634,7 @@ fn every_task_status_renders_as_one_code_span() {
         task.status = status;
 
         let document = task_to_markdown(&task, &[]);
-        let header = section(&document, "## Header");
+        let header = section(&document, "# Header");
         let line = header
             .lines()
             .find(|line| line.starts_with("| status |"))
@@ -1431,9 +1667,9 @@ fn a_multiline_verification_is_a_fenced_block_beside_the_table() {
     ];
 
     let document = task_to_markdown(&task, &[]);
-    let body = section(&document, "## Acceptance criteria");
+    let body = section(&document, "# Acceptance criteria");
 
-    for line in table_rows(&document, "## Acceptance criteria") {
+    for line in table_rows(&document, "# Acceptance criteria") {
         assert_eq!(columns(line), 7, "{line}");
     }
     assert!(

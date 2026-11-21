@@ -1,4 +1,4 @@
-## Header
+# Header
 
 | field | value |
 |---|---|
@@ -12,7 +12,7 @@
 | effort | `L` |
 | tags | `tui`, `lane-filter` |
 
-## Intent
+# Intent
 
 **Outcome**
 
@@ -23,7 +23,7 @@ raul can show one lane at a time, and the counts match the screen.
 The Overview shows every lane at once, so a long list hides the
 lane the human is working in.
 
-## Scope
+# Scope
 
 **In scope**
 
@@ -35,17 +35,25 @@ lane the human is working in.
 - A saved default lane.
 - Filtering the Backlog tab.
 
-## Acceptance criteria
+# Acceptance criteria
 
 | id | description | verification | status | evidence | deferral | failure reason |
 |---|---|---|---|---|---|---|
-| `ACCEPT-01` | The selector hides a task that matches no selected lane. | `cargo test -p coding-crew-raul lane_filter` | `passed` | `cargo test -p coding-crew-raul lane_filter` — exit `0` — 12 passed; 0 failed — by `runner-1` in `s-runner` at `2026-11-16T16:10:00Z` | _none_ | _none_ |
+| `ACCEPT-01` | The selector hides a task that matches no selected lane. | `cargo test -p coding-crew-raul lane_filter` | `passed` | _quoted below_ | _none_ | _none_ |
 | `ACCEPT-02` | The saved default lane is not in this task. | `cargo test -p coding-crew-raul saved_lane` | `deferred` | _none_ | The settings store does not exist yet. — follow up: `TSK09` | _none_ |
-| `ACCEPT-03` | The empty lane announces that it is empty. | `cargo test -p coding-crew-raul empty_lane` | `failed` | `cargo test -p coding-crew-raul empty_lane` — exit `1` — 1 failed — by `runner-1` in `s-runner` at `2026-11-16T16:20:00Z` | _none_ | The lane count is drawn before the filter runs. |
+| `ACCEPT-03` | The empty lane announces that it is empty. | `cargo test -p coding-crew-raul empty_lane` | `failed` | _quoted below_ | _none_ | The lane count is drawn before the filter runs. |
 
-## Steps
+**Evidence for `ACCEPT-01`**
 
-### `STP-01`
+> `cargo test -p coding-crew-raul lane_filter` — exit `0` — 12 passed; 0 failed — by `runner-1` in `s-runner` at `2026-11-16T16:10:00Z`
+
+**Evidence for `ACCEPT-03`**
+
+> `cargo test -p coding-crew-raul empty_lane` — exit `1` — 1 failed — by `runner-1` in `s-runner` at `2026-11-16T16:20:00Z`
+
+# Steps
+
+## `STP-01`
 
 - **order:** `1`
 - **action:** Read the Overview's lane mapping.
@@ -56,7 +64,7 @@ lane the human is working in.
 - **depends on:** _none_
 - **deviation:** _none_
 
-### `STP-02`
+## `STP-02`
 
 - **order:** `2`
 - **action:** Draw the selector above the list.
@@ -67,14 +75,14 @@ lane the human is working in.
 - **depends on:** `STP-01`
 - **deviation:** Used the existing slot table instead of a new one.
 
-## Review
+# Review
 
 - **verdict:** `changes-needed`
 - **budget:** `1/5` external rounds
 
 **Rounds**
 
-### Round `1` — `self`
+## Round `1` — `self`
 
 - **focus:** `spec-compliance`
 - **reviewer:** `runner-1`
@@ -83,7 +91,7 @@ lane the human is working in.
 - **notes:** Read the diff against the criteria.
 - **findings:** _none_
 
-### Round `2` — `external`
+## Round `2` — `external`
 
 - **focus:** `edge-cases`
 - **reviewer:** `reviewer-1`
@@ -91,7 +99,7 @@ lane the human is working in.
 - **at:** `2026-11-16T17:00:00Z`
 - **notes:** The empty lane is counted before the filter.
 
-#### `FIND-01`
+### `FIND-01`
 
 - **severity:** `high`
 - **status:** `open`
@@ -107,7 +115,7 @@ lane the human is working in.
 
 **Findings not in a round**
 
-### `FIND-02`
+## `FIND-02`
 
 - **severity:** `low`
 - **status:** `fixed`
@@ -120,11 +128,11 @@ lane the human is working in.
 
 _none_
 
-## Questions
+# Questions
 
 **Open**
 
-### `QST-01`
+## `QST-01`
 
 - **question:** Does the selector remember its lane between runs?
 - **raised by:** `creator-1`
@@ -132,7 +140,7 @@ _none_
 
 **Resolved**
 
-### `QST-02`
+## `QST-02`
 
 - **question:** Is the selector a tab or a row?
 - **raised by:** `creator-1`
@@ -141,25 +149,25 @@ _none_
 - **resolved by:** `human-1`
 - **resolved at:** `2026-11-14T10:00:00Z`
 
-## Notes
+# Notes
 
-### `NOTE-01`
+## `NOTE-01`
 
 - **author:** `runner-1`
 - **at:** `2026-11-16T12:30:00Z`
 
 The lane mapping was already a table; reuse it instead of adding one.
 
-## Dependencies
+# Dependencies
 
 **Waits on**
 
-- `TSK01` — `done` — The lane table
+- [`TSK01`](TSK01) — `done` — The lane table
 
 **Waits on this**
 
-- `TSK02` — `groomed` — Sort the filtered list
+- [`TSK02`](TSK02) — `groomed` — Sort the filtered list
 
-## Children
+# Children
 
-- `TSK07.1` — `groomed` — Refine the selector's label — criteria `2/2` passed, steps `1/2` done
+- [ ] `TSK07.1` — `groomed` — Refine the selector's label — criteria `2/2` passed, steps `1/2` done
