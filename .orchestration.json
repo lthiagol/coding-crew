@@ -1,1 +1,1 @@
-{"prefix": "cl", "role_configs": {"builder": "flow/builder.json", "reviewer": "flow/reviewer.json"}}
+{"prefix": "cl"}
