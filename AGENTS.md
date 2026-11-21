@@ -37,11 +37,20 @@ superpowers.
 - `crates/engine` — vendored leaf markdown engine for raul's detail document.
 - `crates/talita` — talita; package `coding-crew-talita`, binary `talita`.
   Off-limits until instructed.
-- `flow/` — the orchestration role configs: `builder.json` and `reviewer.json`.
-  They name the agent each pane runs and the model it runs on.
+- `flow/` — the project's role configs: `builder.json` and `reviewer.json`.
+  They name the agent each role runs and the model it runs on. hugo's
+  configuration defaults read them, and a test pins the two together. The
+  flow skill does not read them: it generates a role config per session,
+  outside the repository. When coding-crew manages this project, they move
+  to `coding-crew/flow/` — see `docs/decisions/0011-flow-files.md`.
 - `crates/raul` — raul; package `coding-crew-raul`, binary `raul`.
 - `crates/hugo` — hugo; package `coding-crew-hugo`, binary `hugo`.
 - `crates/theme` — the slots, presets and palettes both TUIs paint with.
+- `mock-data/` — the fixtures, written only through `mock-data/generate.py`.
+  If a finding needs data the mock data does not have, you may add or edit
+  it: change the generator, regenerate with `python3 mock-data/generate.py`,
+  and keep the tree reproducible — the generator must write the same bytes
+  the committed fixtures hold.
 - `coding-crew/` — data folder of a managed project (not created here).
 
 ```sh
@@ -49,14 +58,18 @@ make check
 make raul
 ```
 
+The gate is `make check`; `make ci` is an alias for it.
+
 ## Orchestration flow
 
 - The build loop is the global skill `orchestration-flow`
   (`~/.config/opencode/skills/orchestration-flow/SKILL.md`), and its tools
-  sit beside it. It reads this project's `TODO.txt`, `docs/plan.md`, and
-  `flow/`.
-- `.orchestration.json` holds the flow's project prefix, `cl`, and the paths
-  of the role configs.
+  sit beside it. It reads this project's `TODO.txt` and `docs/plan.md`.
+- `.orchestration.json` holds the flow's project prefix, `cl`. It stays at the
+  repository root: the global skill reads it there.
+- The project's flow files live with the project; `~/.config/coding-crew/`
+  holds hugo's configuration alone. `docs/decisions/0011-flow-files.md` has
+  the reasoning.
 
 ## Hugo
 

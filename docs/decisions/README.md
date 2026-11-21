@@ -65,3 +65,4 @@ points at it rather than repeating it. The vocabulary of record is
 | [0008](0008-session-boundaries.md) | Session boundaries are structural | ✅ accepted |
 | [0009](0009-markdown-projection.md) | JSON for agents, markdown for humans — the record and the display | ✅ accepted |
 | [0010](0010-project-boundary.md) | A project boundary stops store discovery | ✅ accepted |
+| [0011](0011-flow-files.md) | The flow's files live with the project | ✅ accepted |

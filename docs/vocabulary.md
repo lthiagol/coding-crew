@@ -51,6 +51,8 @@ derived from its latest evidence.
 | The journal | `coding-crew/activity.json` | one **event** per line of history, beside `work/`; the event kinds are provisional |
 | The runtime record | `coding-crew/runtime.json` | the crew and what is running, beside the journal; provisional until the flow writes it |
 | The configuration | `~/.config/coding-crew/config.toml` | hugo's own home: the agents, the models, the harness, the review-round limit and the order. A file a human edits, so it carries comments |
+| The role configs | `flow/builder.json` · `flow/reviewer.json` | the project's own flow: the agent each role runs, its description and its model. `coding-crew/flow/` once the project is managed — see [ADR 0011](decisions/0011-flow-files.md) |
+| The project prefix | `.orchestration.json` | at the repository root: the slug the global skill names every tab and agent with |
 
 The three interfaces share one project name and take their own. `talita` names
 what the agent reaches for; `raul` names the work the human reads; `hugo` names

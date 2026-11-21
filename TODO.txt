@@ -2,7 +2,7 @@ coding-crew - orchestration state
 
 updated 2026-11-19 by the orchestrator
 branch main, remote https://github.com/lthiagol/coding-lanes.git
-gate is make ci: cargo fmt --all -- --check, cargo clippy --all-targets -- -D warnings,
+gate is make check (make ci is an alias): cargo fmt --all -- --check, cargo clippy --all-targets -- -D warnings,
 cargo test --workspace, bash scripts/test-pty-sweep.sh, the flow suites in the
 global skill (skipped when the skill is not installed)
 
@@ -29,8 +29,9 @@ HOW TO RESUME
   The build loop itself is the global skill orchestration-flow, at
   ~/.config/opencode/skills/orchestration-flow/SKILL.md - the three agents,
   the shared Orchestration workspace, the pane recipe, the rounds, the
-  budget. The project's prefix and its role config paths are in
-  .orchestration.json.
+  budget. The project's prefix is in .orchestration.json; the role configs
+  live in flow/, and the flow skill does not read them - it generates one per
+  session, outside the repository.
 
   The findings of the review rounds are not durable - /tmp does not survive.
   Copy what matters into this file, or into the design record, before the
@@ -1102,6 +1103,14 @@ OPEN
       picks the model for the agent it will start; opening the herdr tab
       and starting it is its own unit, and it is the first step towards
       hugo driving the loop rather than only showing it.
+  Where the flow's files live is settled, decided 2026-11-21 and recorded in
+  docs/decisions/0011-flow-files.md: the project's role configs move to
+  coding-crew/flow/ when the project is managed, .orchestration.json stays at
+  the repository root because the global skill reads it there, the findings
+  live inside the task rather than in /tmp, and the task folder replaces this
+  file as the orchestrator's memory. The move waits for the writers. The
+  third copy of the model pair, in mock-data/generate.py, is still unpinned
+  against the role configs.
   Deferred by the human: the light themes - our light preset and the light
   variants of the families (Catppuccin Latte, Dracula Alucard, Nord Light).
   talita's own verbs. Out of scope, and it stays out of scope until it is
