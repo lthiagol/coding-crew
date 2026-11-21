@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "id": "TSK19",
+  "title": "The document palette tells the heading levels apart",
+  "slug": "the-document-palette-tells-the-heading-levels-apart",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-02T11:00Z",
+  "updated": "2026-11-14T12:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "needs-human",
+  "status_since": "2026-11-14T10:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-03",
+    "session": "session-runner-03",
+    "at": "2026-11-14T01:00Z",
+    "lease_expires_at": "2026-11-14T11:00Z"
+  },
+  "planned_by": "session-creator-03",
+  "meta": {
+    "priority": "normal",
+    "effort": "S",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "The heading levels, the alerts, the links, the list depths and the code are told apart by colour.",
+    "problem": "One heading colour for every level makes a long document read as one flat block."
+  },
+  "scope": {
+    "in_scope": [
+      "the heading roles",
+      "the document palette"
+    ],
+    "out_of_scope": [
+      "the chrome slots",
+      "the syntax theme"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A first-level heading and a second-level heading take different roles.",
+      "verification": "cargo test -p coding-crew-theme palette",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-theme palette",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-14T03:00Z",
+          "by": "runner-03",
+          "session": "session-runner-03"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "An alert takes its own role.",
+      "verification": "cargo test -p coding-crew-theme palette",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-theme palette",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-14T03:10Z",
+          "by": "runner-03",
+          "session": "session-runner-03"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Give each level its role.",
+      "done_when": "the levels differ in colour",
+      "files": [
+        "crates/theme/src/theme.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Give the alerts a role of their own.",
+      "done_when": "an alert is not painted as body text",
+      "files": [
+        "crates/theme/src/theme.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-03",
+        "verdict": "ok",
+        "at": "2026-11-14T05:00Z",
+        "notes": "The pre-screen is clean; the work is ready for an external round.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "reviewer-01",
+        "verdict": "changes-needed",
+        "at": "2026-11-14T06:00Z",
+        "notes": "The round found the next defect and the budget moved one round closer to spent.",
+        "findings": [
+          "FIND-01"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "security",
+        "reviewer": "reviewer-02",
+        "verdict": "changes-needed",
+        "at": "2026-11-14T07:00Z",
+        "notes": "The round found the next defect and the budget moved one round closer to spent.",
+        "findings": [
+          "FIND-02"
+        ]
+      },
+      {
+        "n": 3,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "reviewer-03",
+        "verdict": "changes-needed",
+        "at": "2026-11-14T08:00Z",
+        "notes": "The round found the next defect and the budget moved one round closer to spent.",
+        "findings": [
+          "FIND-03"
+        ]
+      },
+      {
+        "n": 4,
+        "kind": "external",
+        "focus": "design",
+        "reviewer": "reviewer-04",
+        "verdict": "changes-needed",
+        "at": "2026-11-14T09:00Z",
+        "notes": "The round found the next defect and the budget moved one round closer to spent.",
+        "findings": [
+          "FIND-04"
+        ]
+      },
+      {
+        "n": 5,
+        "kind": "external",
+        "focus": "spec-compliance",
+        "reviewer": "reviewer-05",
+        "verdict": "changes-needed",
+        "at": "2026-11-14T10:00Z",
+        "notes": "The round found the next defect and the budget moved one round closer to spent.",
+        "findings": [
+          "FIND-05"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "medium",
+        "status": "fixed",
+        "description": "The row cuts after the age and the finding count disappears from the row.",
+        "created": "2026-11-14T06:00Z",
+        "resolved": "2026-11-14T06:30Z",
+        "resolution": "The heading now takes its own level's role.",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "runner-03",
+            "body": "The role follows the level rather than the document.",
+            "at": "2026-11-14T06:15Z"
+          }
+        ]
+      },
+      {
+        "id": "FIND-02",
+        "severity": "high",
+        "status": "dismissed",
+        "description": "The document paints a level-two heading as the first level, so the hierarchy is flat.",
+        "created": "2026-11-14T07:00Z",
+        "resolved": "2026-11-14T07:30Z",
+        "resolution": "The alert role is already distinct; the report named the body colour.",
+        "comments": [
+          {
+            "id": "CMT-02",
+            "author": "runner-03",
+            "body": "Checked against the palette table; the alert has its own role.",
+            "at": "2026-11-14T07:15Z"
+          }
+        ]
+      },
+      {
+        "id": "FIND-03",
+        "severity": "low",
+        "status": "fixed",
+        "description": "A finding no round names is dropped from the Review section instead of shown after the rounds.",
+        "created": "2026-11-14T08:00Z",
+        "resolved": "2026-11-14T08:30Z",
+        "resolution": "The heading now takes its own level's role.",
+        "comments": [
+          {
+            "id": "CMT-03",
+            "author": "runner-03",
+            "body": "The role follows the level rather than the document.",
+            "at": "2026-11-14T08:15Z"
+          }
+        ]
+      },
+      {
+        "id": "FIND-04",
+        "severity": "medium",
+        "status": "open",
+        "description": "The queue's count says one and a narrow pane draws none of the rows.",
+        "created": "2026-11-14T09:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      },
+      {
+        "id": "FIND-05",
+        "severity": "high",
+        "status": "open",
+        "description": "The cut leaves a combining mark behind and the row is one column wider than the pane.",
+        "created": "2026-11-14T10:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "reviewer-05",
+      "body": "The budget is spent and the loop stops here: a human decides the next move.",
+      "at": "2026-11-14T12:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK22",
+    "TSK24"
+  ]
+}

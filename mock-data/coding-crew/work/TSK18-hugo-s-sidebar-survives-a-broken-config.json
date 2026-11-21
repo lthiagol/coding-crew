@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "id": "TSK18",
+  "title": "hugo's sidebar survives a broken config",
+  "slug": "hugo-s-sidebar-survives-a-broken-config",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-07T10:00Z",
+  "updated": "2026-11-14T18:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "remediating",
+  "status_since": "2026-11-14T17:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-04",
+    "session": "session-runner-04",
+    "at": "2026-11-14T09:00Z",
+    "lease_expires_at": "2026-11-14T17:00Z"
+  },
+  "planned_by": "session-creator-04",
+  "meta": {
+    "priority": "high",
+    "effort": "L",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A configuration that does not parse is named, left alone, and the defaults are shown beside it.",
+    "problem": "A reload that meets a broken file can blank the sidebar or overwrite the file."
+  },
+  "scope": {
+    "in_scope": [
+      "the configuration read",
+      "the sidebar's error row"
+    ],
+    "out_of_scope": [
+      "the order's gates",
+      "the model catalogue"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "The broken file is named with its error and unchanged.",
+      "verification": "cargo test -p coding-crew-hugo config",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-hugo config",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-14T13:00Z",
+          "by": "runner-04",
+          "session": "session-runner-04"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The defaults are shown beside the error.",
+      "verification": "cargo test -p coding-crew-hugo config",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-hugo config",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-14T13:05Z",
+          "by": "runner-04",
+          "session": "session-runner-04"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Keep the read's error and the file's bytes.",
+      "done_when": "the file is byte-identical after a reload",
+      "files": [
+        "crates/hugo/src/app.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Draw the error above the defaults.",
+      "done_when": "the sidebar names both",
+      "files": [
+        "crates/hugo/src/app.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-04",
+        "verdict": "ok",
+        "at": "2026-11-14T15:00Z",
+        "notes": "The pre-screen found nothing to fix before the external round.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "reviewer-03",
+        "verdict": "changes-needed",
+        "at": "2026-11-14T17:00Z",
+        "notes": "The round is readable, but the second finding needs a decision.",
+        "findings": [
+          "FIND-01",
+          "FIND-02"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "medium",
+        "status": "open",
+        "description": "A finding no round names is dropped from the Review section instead of shown after the rounds.",
+        "created": "2026-11-14T17:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      },
+      {
+        "id": "FIND-02",
+        "severity": "high",
+        "status": "dismissed",
+        "description": "The configuration's error is drawn on the dim slot, so it reads as a hint rather than a failure.",
+        "created": "2026-11-14T17:00Z",
+        "resolved": "2026-11-14T18:00Z",
+        "resolution": "The file is already left byte-identical; the notice only needed a name.",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "runner-04",
+            "body": "The bytes are untouched; only the wording changed.",
+            "at": "2026-11-14T17:45Z"
+          }
+        ]
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": [
+    "TSK25"
+  ]
+}

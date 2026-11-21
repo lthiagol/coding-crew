@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "id": "TSK11",
+  "title": "The Path tree announces a dropped branch",
+  "slug": "the-path-tree-announces-a-dropped-branch",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-06T11:00Z",
+  "updated": "2026-11-10T13:30Z",
+  "kind": "feature",
+  "promoted_from": null,
+  "status": "executing",
+  "status_since": "2026-11-10T09:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-02",
+    "session": "session-runner-02",
+    "at": "2026-11-10T09:00Z",
+    "lease_expires_at": "2026-11-10T17:00Z"
+  },
+  "planned_by": "session-creator-02",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A branch the pane cannot fit is named with its count, never dropped silently.",
+    "problem": "A short pane drops a whole branch and the trunk looks like the whole tree."
+  },
+  "scope": {
+    "in_scope": [
+      "the Path announcement",
+      "the window the tree is drawn in"
+    ],
+    "out_of_scope": [
+      "the Needs you tab",
+      "the Overview"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A dropped branch is named with the rows it hid.",
+      "verification": "cargo test -p coding-crew-raul path",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul path",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-10T12:00Z",
+          "by": "runner-02",
+          "session": "session-runner-02"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A branch that fits is never announced as hidden.",
+      "verification": "cargo test -p coding-crew-raul path",
+      "status": "unproven",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Collect the branches the window leaves out.",
+      "done_when": "each dropped branch carries its count",
+      "files": [
+        "crates/raul/src/path.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Draw the summary before the trunk when the tree cannot fit.",
+      "done_when": "the announcement names what it hides",
+      "files": [
+        "crates/raul/src/path.rs"
+      ],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Should a dropped branch be announced above the trunk or at the foot?",
+      "status": "open",
+      "answer": "",
+      "raised_by": "runner-02",
+      "raised_at": "2026-11-10T13:30Z",
+      "resolved_by": "",
+      "resolved_at": ""
+    }
+  ],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-02",
+      "body": "The first criterion is proven. The second is waiting on the fixture the next unit writes.",
+      "at": "2026-11-10T13:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK23"
+  ]
+}

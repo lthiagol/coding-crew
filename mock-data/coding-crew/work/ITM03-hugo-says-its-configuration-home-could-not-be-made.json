@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "ITM03",
+  "title": "hugo says its configuration home could not be made",
+  "slug": "hugo-says-its-configuration-home-could-not-be-made",
+  "kind": "bug",
+  "status": "open",
+  "body": "A home that cannot be created blanks the sidebar instead of naming the path.",
+  "scope": [
+    "hugo's sidebar",
+    "the configuration home"
+  ],
+  "tags": [
+    "mock"
+  ],
+  "created": "2026-11-02T08:00Z",
+  "updated": "2026-11-06T15:00Z",
+  "promoted_to": null,
+  "dismissed_reason": ""
+}

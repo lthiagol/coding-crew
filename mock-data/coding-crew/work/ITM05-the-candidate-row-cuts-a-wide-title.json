@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "ITM05",
+  "title": "The candidate row cuts a wide title",
+  "slug": "the-candidate-row-cuts-a-wide-title",
+  "kind": "bug",
+  "status": "promoted",
+  "body": "The candidate row overflows when the title is wider than the row.",
+  "scope": [
+    "the candidate row"
+  ],
+  "tags": [
+    "mock"
+  ],
+  "created": "2026-11-02T08:00Z",
+  "updated": "2026-11-06T15:00Z",
+  "promoted_to": "TSK27",
+  "dismissed_reason": ""
+}

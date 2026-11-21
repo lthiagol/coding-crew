@@ -1,0 +1,229 @@
+{
+  "schema_version": 1,
+  "id": "TSK24",
+  "title": "The Path tab forks a blocked task under its blocker",
+  "slug": "the-path-tab-forks-a-blocked-task-under-its-blocker",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-07T16:00Z",
+  "updated": "2026-11-07T18:55Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "done",
+  "status_since": "2026-11-07T18:45Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-06",
+    "session": "session-runner-06",
+    "at": "2026-11-07T17:00Z",
+    "lease_expires_at": "2026-11-07T18:45Z"
+  },
+  "planned_by": "session-creator-06",
+  "meta": {
+    "priority": "low",
+    "effort": "L",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A blocked task hangs under the first dependency that is not done, and names every dependency it waits on.",
+    "problem": "A flat blocked list hides which task is holding the work."
+  },
+  "scope": {
+    "in_scope": [
+      "the Path's blocked branch",
+      "the fork parent"
+    ],
+    "out_of_scope": [
+      "the overlay and claim cases",
+      "the dependency graph"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A task with two open dependencies forks under the first.",
+      "verification": "cargo test -p coding-crew-raul path",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul path",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-07T17:30Z",
+          "by": "runner-06",
+          "session": "session-runner-06"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The row names both dependencies.",
+      "verification": "cargo test -p coding-crew-raul path",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul path",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-07T17:35Z",
+          "by": "runner-06",
+          "session": "session-runner-06"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Find the first dependency not done.",
+      "done_when": "the fork parent is the first open one",
+      "files": [
+        "crates/raul/src/path.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Group the blocked rows by their fork parent.",
+      "done_when": "each row hangs under its blocker",
+      "files": [
+        "crates/raul/src/path.rs"
+      ],
+      "status": "skipped",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": "The dependency fixture already covered this case; the step was not run."
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-06",
+        "verdict": "ok",
+        "at": "2026-11-07T17:45Z",
+        "notes": "The pre-screen is clean; the work leaves for the external round.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "reviewer-07",
+        "verdict": "changes-needed",
+        "at": "2026-11-07T18:00Z",
+        "notes": "The fork parent moved when a dependency was added.",
+        "findings": [
+          "FIND-01"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "security",
+        "reviewer": "reviewer-07",
+        "verdict": "changes-needed",
+        "at": "2026-11-07T18:15Z",
+        "notes": "The fork parent moved when a dependency was added.",
+        "findings": [
+          "FIND-02"
+        ]
+      },
+      {
+        "n": 3,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "reviewer-07",
+        "verdict": "changes-needed",
+        "at": "2026-11-07T18:30Z",
+        "notes": "The fork parent moved when a dependency was added.",
+        "findings": [
+          "FIND-03"
+        ]
+      },
+      {
+        "n": 4,
+        "kind": "external",
+        "focus": "design",
+        "reviewer": "reviewer-07",
+        "verdict": "ok",
+        "at": "2026-11-07T18:45Z",
+        "notes": "The fork is stable and the row names both dependencies.",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "medium",
+        "status": "fixed",
+        "description": "A finding no round names is dropped from the Review section instead of shown after the rounds.",
+        "created": "2026-11-07T18:00Z",
+        "resolved": "2026-11-07T18:05Z",
+        "resolution": "The fork parent is found from the first open dependency.",
+        "comments": []
+      },
+      {
+        "id": "FIND-02",
+        "severity": "high",
+        "status": "fixed",
+        "description": "The queue's count says one and a narrow pane draws none of the rows.",
+        "created": "2026-11-07T18:15Z",
+        "resolved": "2026-11-07T18:20Z",
+        "resolution": "The fork parent is found from the first open dependency.",
+        "comments": []
+      },
+      {
+        "id": "FIND-03",
+        "severity": "low",
+        "status": "fixed",
+        "description": "The cut leaves a combining mark behind and the row is one column wider than the pane.",
+        "created": "2026-11-07T18:30Z",
+        "resolved": "2026-11-07T18:35Z",
+        "resolution": "The fork parent is found from the first open dependency.",
+        "comments": []
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-06",
+      "body": "The work is done and the evidence is attached; the review is closed.",
+      "at": "2026-11-07T17:35Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "reviewer-07",
+      "body": "Reviewed clean: the criteria are proven and no finding is open.",
+      "at": "2026-11-07T18:55Z"
+    }
+  ],
+  "depends_on": [
+    "TSK22",
+    "TSK23"
+  ]
+}

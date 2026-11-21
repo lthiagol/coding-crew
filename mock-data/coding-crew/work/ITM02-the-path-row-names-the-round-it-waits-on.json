@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "ITM02",
+  "title": "The Path row names the round it waits on",
+  "slug": "the-path-row-names-the-round-it-waits-on",
+  "kind": "feature",
+  "status": "open",
+  "body": "A task in review waits on a round number the Path row does not show.",
+  "scope": [
+    "the Path rows",
+    "the review state"
+  ],
+  "tags": [
+    "mock"
+  ],
+  "created": "2026-11-02T08:00Z",
+  "updated": "2026-11-06T15:00Z",
+  "promoted_to": null,
+  "dismissed_reason": ""
+}

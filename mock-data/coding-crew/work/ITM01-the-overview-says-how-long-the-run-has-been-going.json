@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "ITM01",
+  "title": "The Overview says how long the run has been going",
+  "slug": "the-overview-says-how-long-the-run-has-been-going",
+  "kind": "idea",
+  "status": "open",
+  "body": "The activity block says what happened; it does not say when the run began.",
+  "scope": [
+    "the Overview's activity block"
+  ],
+  "tags": [
+    "mock"
+  ],
+  "created": "2026-11-02T08:00Z",
+  "updated": "2026-11-06T15:00Z",
+  "promoted_to": null,
+  "dismissed_reason": ""
+}

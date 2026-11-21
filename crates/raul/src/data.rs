@@ -370,7 +370,7 @@ mod tests {
     fn reads_the_mock_folder() {
         let work = mock_work();
         assert!(work.missing.is_none());
-        assert_eq!(work.tasks.len(), 29);
+        assert_eq!(work.tasks.len(), 30);
         assert_eq!(work.items.len(), 5);
         assert!(work.errors.is_empty());
     }
@@ -452,7 +452,7 @@ mod tests {
     fn counts_the_tasks_by_status() {
         let work = mock_work();
         let counts = work.status_counts();
-        assert_eq!(count_of(&counts, Status::Draft), 5);
+        assert_eq!(count_of(&counts, Status::Draft), 6);
         assert_eq!(count_of(&counts, Status::Groomed), 3);
         assert_eq!(count_of(&counts, Status::Approved), 4);
         assert_eq!(count_of(&counts, Status::Executing), 3);

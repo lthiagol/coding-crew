@@ -191,19 +191,31 @@ fn the_crew_leads_the_main_pane_the_shell_has_content() {
     // discovered from the current directory like the store is.
     let text = screen(100, 40);
     assert!(text.contains("the automation's queue"), "{text}");
-    for fact in [
-        "crew",
-        "orchestrator",
-        "runner",
-        "reviewer",
-        "TSK10",
-        "TSK13",
-        "one per role · the reviewer reviews",
-        "external rounds 18 of 45",
-        "21 open findings",
-        "running since",
-    ] {
-        assert!(text.contains(fact), "{fact} is not on screen: {text}");
+    let runtime = coding_crew_core::Runtime::read(&mock_project().join("coding-crew/runtime.json"))
+        .expect("the runtime record");
+    let mut facts = vec![
+        "crew".to_string(),
+        "orchestrator".to_string(),
+        "runner".to_string(),
+        "reviewer".to_string(),
+        "one per role · the reviewer reviews".to_string(),
+        format!(
+            "external rounds {} of {}",
+            runtime.budget.spent, runtime.budget.total
+        ),
+        format!("{} open findings", runtime.findings),
+        "running since".to_string(),
+    ];
+    for member in &runtime.crew {
+        if let Some(id) = &member.holds {
+            facts.push(id.clone());
+        }
+    }
+    for fact in facts {
+        assert!(
+            text.contains(fact.as_str()),
+            "{fact} is not on screen: {text}"
+        );
     }
     assert!(!text.contains("nothing is running"), "{text}");
     // The crew is the first block under the flow's title.

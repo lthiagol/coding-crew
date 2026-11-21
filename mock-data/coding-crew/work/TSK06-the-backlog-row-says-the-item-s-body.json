@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "id": "TSK06",
+  "title": "The Backlog row says the item's body",
+  "slug": "the-backlog-row-says-the-item-s-body",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-07T14:00Z",
+  "updated": "2026-11-10T13:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "groomed",
+  "status_since": "2026-11-10T11:00Z",
+  "overlays": {},
+  "claim": null,
+  "planned_by": "session-creator-03",
+  "meta": {
+    "priority": "high",
+    "effort": "L",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A Backlog row carries the item's own body, cut on a grapheme boundary.",
+    "problem": "The generator writes an item's body and the Backlog tab never draws it, so an idea reads as its title alone."
+  },
+  "scope": {
+    "in_scope": [
+      "the Backlog row",
+      "the cut marker"
+    ],
+    "out_of_scope": [
+      "the smaller-task model",
+      "the detail pane"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A row with a body shows its first words after the title.",
+      "verification": "cargo test -p coding-crew-raul backlog",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A body cut by the pane ends in the marker, never in half a grapheme.",
+      "verification": "cargo test -p coding-crew-raul backlog",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "How much of the body does the row carry?",
+      "status": "resolved",
+      "answer": "The first words that fit; the cut marker names the rest.",
+      "raised_by": "human",
+      "raised_at": "2026-11-10T12:00Z",
+      "resolved_by": "session-creator-03",
+      "resolved_at": "2026-11-10T13:00Z"
+    }
+  ],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "session-creator-03",
+      "body": "Groomed by session-creator-03: intent, scope and criteria written.",
+      "at": "2026-11-10T11:00Z"
+    }
+  ],
+  "depends_on": []
+}

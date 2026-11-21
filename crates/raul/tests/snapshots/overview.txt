@@ -1,8 +1,8 @@
  coding-crew                                                              mock-data/coding-crew/work
  Overview   Needs you   Path   Backlog   Settings
 ┌counts──────────────────────────────────────────┐┌needs you───────────────────────────────────────┐
-│29 tasks by status                              ││8 tasks wait on a human                         │
-│draft       5 groomed     3                     ││approve     2                                   │
+│30 tasks by status                              ││8 tasks wait on a human                         │
+│draft       6 groomed     3                     ││approve     2                                   │
 │approved    4 executing   3                     ││review      3                                   │
 │code-review 3 remediating 3                     ││escalated   3                                   │
 │needs-human 3 done        5                     │└────────────────────────────────────────────────┘
@@ -11,15 +11,15 @@
 │smaller tasks by kind                           ││approved, free, dependencies done               │
 │idea        1                                   │└────────────────────────────────────────────────┘
 │feature     2                                   │┌activity────────────────────────────────────────┐
-│bug         2                                   ││+129 earlier events                             │
+│bug         2                                   ││+153 earlier events                             │
 └────────────────────────────────────────────────┘│2026-11-16T09:30Z remediated TSK21 answered the…│
                                                   │2026-11-16T10:00Z finding_raised TSK21 raised F…│
                                                   │2026-11-16T10:00Z escalated TSK21 the review bu…│
                                                   │2026-11-16T12:00Z approved TSK29 left the human…│
-                                                  │2026-11-16T12:00Z commented TSK21 Et harum quid…│
+                                                  │2026-11-16T12:00Z commented TSK21 The budget is…│
                                                   └────────────────────────────────────────────────┘
                                                   ┌next────────────────────────────────────────────┐
-                                                  │TSK29 Lorem ipsum dolor sit amet                │
+                                                  │TSK29 The fixtures keep their gates             │
                                                   │the first task of the path                      │
                                                   └────────────────────────────────────────────────┘
 

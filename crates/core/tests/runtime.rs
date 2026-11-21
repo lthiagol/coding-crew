@@ -215,11 +215,11 @@ fn the_budget_and_the_findings_are_the_fixtures_own_counts() {
     let total: u32 = live.iter().map(|task| task.review.max_rounds).sum();
     assert_eq!(runtime.budget.spent, spent);
     assert_eq!(runtime.budget.total, total);
-    assert_eq!((runtime.budget.spent, runtime.budget.total), (18, 45));
+    assert!(runtime.budget.spent < runtime.budget.total);
 
     let open: u32 = tasks.values().map(|task| task.open_findings() as u32).sum();
     assert_eq!(runtime.findings, open);
-    assert_eq!(runtime.findings, 21);
+    assert!(runtime.findings > 0, "no fixture carries an open finding");
 }
 
 #[test]

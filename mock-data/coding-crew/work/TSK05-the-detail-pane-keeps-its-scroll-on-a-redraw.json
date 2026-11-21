@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "id": "TSK05",
+  "title": "The detail pane keeps its scroll on a redraw",
+  "slug": "the-detail-pane-keeps-its-scroll-on-a-redraw",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-06T13:00Z",
+  "updated": "2026-11-08T14:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "groomed",
+  "status_since": "2026-11-08T10:00Z",
+  "overlays": {
+    "blocked": {
+      "reason": "The engine's viewport ownership is still a design question.",
+      "by": "human",
+      "at": "2026-11-08T14:00Z"
+    }
+  },
+  "claim": null,
+  "planned_by": "session-creator-02",
+  "meta": {
+    "priority": "urgent",
+    "effort": "M",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "The detail pane keeps the line it was on when the document is rebuilt.",
+    "problem": "The engine's viewport resets when the document is rebuilt, so a redraw jumps to the top of a long task."
+  },
+  "scope": {
+    "in_scope": [
+      "the detail pane's viewport",
+      "the rebuild that follows a resize"
+    ],
+    "out_of_scope": [
+      "the row tabs' scrolling",
+      "the engine's own viewport code"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A resize keeps the first visible line, clamped to the new height.",
+      "verification": "cargo test -p coding-crew-raul detail",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A document shorter than the pane settles at the top.",
+      "verification": "cargo test -p coding-crew-raul detail",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "session-creator-02",
+      "body": "Groomed by session-creator-02: intent, scope and criteria written.",
+      "at": "2026-11-08T10:00Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "session-creator-02",
+      "body": "The blocked reason names the design question the human has to settle first.",
+      "at": "2026-11-08T14:00Z"
+    }
+  ],
+  "depends_on": []
+}

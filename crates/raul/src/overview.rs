@@ -1278,9 +1278,18 @@ mod tests {
     fn the_overview_shows_the_numbers() {
         let work = mock_work();
         let text = draw(&work, 100, 40).join("\n");
-        assert!(text.contains("8 tasks wait on a human"), "{text}");
+        let counts = work.needs_you_counts();
+        let waiting = counts.0 + counts.1 + counts.2;
         assert!(
-            text.contains("1 task an agent could claim right now"),
+            text.contains(&format!("{waiting} tasks wait on a human")),
+            "{text}"
+        );
+        let claimable = work.claimable_at(NOW).len();
+        let word = if claimable == 1 { "task" } else { "tasks" };
+        assert!(
+            text.contains(&format!(
+                "{claimable} {word} an agent could claim right now"
+            )),
             "{text}"
         );
         assert!(text.contains("approve"), "{text}");
@@ -1291,11 +1300,15 @@ mod tests {
     fn the_overview_shows_the_counts_and_the_next_task() {
         let work = mock_work();
         let text = draw(&work, 100, 40).join("\n");
-        assert!(text.contains("29 tasks by status"), "{text}");
+        assert!(
+            text.contains(&format!("{} tasks by status", work.tasks.len())),
+            "{text}"
+        );
         assert!(text.contains("draft"), "{text}");
         assert!(text.contains("needs-human"), "{text}");
         assert!(text.contains("idea"), "{text}");
-        assert!(text.contains("TSK29"), "{text}");
+        let next = work.next_at(NOW).expect("a claimable task");
+        assert!(text.contains(&next.id), "{text}");
     }
 
     /// A work folder whose journal holds the events given, newest last as
@@ -1507,8 +1520,13 @@ mod tests {
         let work = mock_work();
         let text = draw(&work, 60, 16).join("\n");
         // What is shown is shown whole, and what is hidden is announced.
+        let counts = work.needs_you_counts();
+        let waiting = counts.0 + counts.1 + counts.2;
         assert!(text.contains("draft"), "{text}");
-        assert!(text.contains("8 tasks wait on a human"), "{text}");
+        assert!(
+            text.contains(&format!("{waiting} tasks wait on a human")),
+            "{text}"
+        );
         assert!(
             text.contains("more statuses") || text.contains("needs-human"),
             "{text}"
@@ -1519,8 +1537,16 @@ mod tests {
     fn a_narrow_terminal_shows_the_key_numbers() {
         let work = mock_work();
         let text = draw(&work, 40, 12).join("\n");
-        assert!(text.contains("8 tasks wait on a human"), "{text}");
-        assert!(text.contains("1 claimable"), "{text}");
+        let counts = work.needs_you_counts();
+        let waiting = counts.0 + counts.1 + counts.2;
+        assert!(
+            text.contains(&format!("{waiting} tasks wait on a human")),
+            "{text}"
+        );
+        assert!(
+            text.contains(&format!("{} claimable", work.claimable_at(NOW).len())),
+            "{text}"
+        );
     }
 
     #[test]
@@ -1592,7 +1618,10 @@ mod tests {
     fn a_narrow_summary_is_never_cut() {
         let work = mock_work();
         let text = draw(&work, 38, 12).join("\n");
-        assert!(text.contains("1 claimable"), "{text}");
+        assert!(
+            text.contains(&format!("{} claimable", work.claimable_at(NOW).len())),
+            "{text}"
+        );
         // The next task is either shown whole or not at all.
         assert!(!text.contains("next TS"), "{text}");
     }
@@ -1600,6 +1629,7 @@ mod tests {
     #[test]
     fn a_count_stays_with_its_reason() {
         let work = mock_work();
+        let escalated = work.needs_you_counts().2.to_string();
         for (width, height) in [(64, 12), (66, 12), (100, 12), (100, 8)] {
             let rows = draw(&work, width, height);
             let row = rows
@@ -1608,7 +1638,10 @@ mod tests {
                 .unwrap_or_else(|| panic!("no escalated row at {width}x{height}: {rows:?}"));
             // The count of the escalated tasks is on the row of its reason.
             let text = row.replace('│', " ");
-            assert!(text.trim().ends_with('3'), "{width}x{height}: {row}");
+            assert!(
+                text.trim().ends_with(escalated.as_str()),
+                "{width}x{height}: {row}"
+            );
         }
     }
 
@@ -1616,9 +1649,17 @@ mod tests {
     fn a_short_wide_terminal_shows_the_key_numbers() {
         let work = mock_work();
         let text = draw(&work, 100, 8).join("\n");
+        let counts = work.needs_you_counts();
+        let waiting = counts.0 + counts.1 + counts.2;
         // The blocks do not fit, so the numbers go on top of them.
-        assert!(text.contains("8 tasks wait on a human"), "{text}");
-        assert!(text.contains("1 claimable"), "{text}");
+        assert!(
+            text.contains(&format!("{waiting} tasks wait on a human")),
+            "{text}"
+        );
+        assert!(
+            text.contains(&format!("{} claimable", work.claimable_at(NOW).len())),
+            "{text}"
+        );
     }
 
     #[test]
@@ -1634,7 +1675,7 @@ mod tests {
     fn the_dense_counts_keep_a_count_with_its_status() {
         let work = mock_work();
         let counts = work.status_counts();
-        let dense = dense_counts(&counts, 29, 38, &theme()).expect("a dense form");
+        let dense = dense_counts(&counts, work.tasks.len(), 38, &theme()).expect("a dense form");
         for line in &dense {
             let text = text_of(std::slice::from_ref(line));
             assert!(text.chars().count() <= 38, "{text}");
@@ -1710,13 +1751,19 @@ mod tests {
     #[test]
     fn a_narrow_terminal_does_not_part_a_reason_from_its_count() {
         let work = mock_work();
+        let counts = work.needs_you_counts();
+        let expected = [
+            ("approve", counts.0),
+            ("review", counts.1),
+            ("escalated", counts.2),
+        ];
         for width in 1..=40 {
             let panel = needs_you_panel(&work, width, &theme());
             for line in &panel.lines {
                 let text = text_of(std::slice::from_ref(line));
-                for (reason, count) in [("approve", "2"), ("review", "3"), ("escalated", "3")] {
+                for (reason, count) in expected {
                     if text.contains(reason) {
-                        assert!(text.contains(count), "{width}: {text}");
+                        assert!(text.contains(&count.to_string()), "{width}: {text}");
                     }
                 }
             }
@@ -1899,7 +1946,16 @@ mod tests {
         assert!(!text.contains("code-review"), "{text}");
         // At fifteen columns they fit, and every count is with its status.
         let text = draw(&work, 15, 60).join("\n");
-        assert!(text.contains("code-review 3"), "{text}");
+        let code_review = work
+            .status_counts()
+            .into_iter()
+            .find(|(status, _)| *status == Status::CodeReview)
+            .map(|(_, count)| count)
+            .expect("a code-review count");
+        assert!(
+            text.contains(&format!("code-review {code_review}")),
+            "{text}"
+        );
         assert!(!text.contains("counts not shown"), "{text}");
     }
 

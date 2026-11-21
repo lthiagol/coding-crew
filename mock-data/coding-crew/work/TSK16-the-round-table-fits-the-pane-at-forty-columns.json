@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "id": "TSK16",
+  "title": "The round table fits the pane at forty columns",
+  "slug": "the-round-table-fits-the-pane-at-forty-columns",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-05T16:00Z",
+  "updated": "2026-11-13T18:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "remediating",
+  "status_since": "2026-11-13T17:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-02",
+    "session": "session-runner-02",
+    "at": "2026-11-13T09:00Z",
+    "lease_expires_at": "2026-11-13T17:00Z"
+  },
+  "planned_by": "session-creator-02",
+  "meta": {
+    "priority": "low",
+    "effort": "S",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "The review's rounds are readable at the pane's narrow design width.",
+    "problem": "The eight-column round table shrinks every cell at forty columns and abbreviations stand in for words."
+  },
+  "scope": {
+    "in_scope": [
+      "the rounds' shape",
+      "the forty-column rendering"
+    ],
+    "out_of_scope": [
+      "the review model",
+      "the detail pane's header"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "At forty columns every word of a round is whole.",
+      "verification": "cargo test -p coding-crew-core markdown",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-core markdown",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-13T13:00Z",
+          "by": "runner-02",
+          "session": "session-runner-02"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The round's kind is a word, not a two-letter abbreviation.",
+      "verification": "cargo test -p coding-crew-core markdown",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-core markdown",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-13T13:05Z",
+          "by": "runner-02",
+          "session": "session-runner-02"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Replace the table with blocks that wrap.",
+      "done_when": "a round fits a forty-column pane",
+      "files": [
+        "crates/core/src/markdown.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Keep each finding under the round that raised it.",
+      "done_when": "the nesting survives the narrow width",
+      "files": [
+        "crates/core/src/markdown.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-02",
+        "verdict": "ok",
+        "at": "2026-11-13T15:00Z",
+        "notes": "The pre-screen found nothing to fix before the external round.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "reviewer-01",
+        "verdict": "changes-needed",
+        "at": "2026-11-13T17:00Z",
+        "notes": "The round is readable, but the second finding needs a decision.",
+        "findings": [
+          "FIND-01",
+          "FIND-02"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "medium",
+        "status": "fixed",
+        "description": "The row cuts after the age and the finding count disappears from the row.",
+        "created": "2026-11-13T17:00Z",
+        "resolved": "2026-11-13T18:00Z",
+        "resolution": "The round now draws as blocks; the table is gone.",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "runner-02",
+            "body": "Fixed by moving the round out of the table.",
+            "at": "2026-11-13T17:30Z"
+          }
+        ]
+      },
+      {
+        "id": "FIND-02",
+        "severity": "high",
+        "status": "open",
+        "description": "The queue's count says one and a narrow pane draws none of the rows.",
+        "created": "2026-11-13T17:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": [
+    "TSK23"
+  ]
+}

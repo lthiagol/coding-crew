@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "id": "TSK08",
+  "title": "The document gets its own palette",
+  "slug": "the-document-gets-its-own-palette",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-03T16:00Z",
+  "updated": "2026-11-13T15:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "approved",
+  "status_since": "2026-11-06T17:00Z",
+  "overlays": {
+    "blocked": {
+      "reason": "The palette table waits for the human's pick of eighteen roles.",
+      "by": "creator-02",
+      "at": "2026-11-13T15:00Z"
+    }
+  },
+  "claim": null,
+  "planned_by": "session-creator-02",
+  "meta": {
+    "priority": "low",
+    "effort": "M",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "The document paints from eighteen roles of its own rather than the chrome's slots.",
+    "problem": "The bridge collapses forty-seven markdown fields onto ten chrome slots, and the projection reaches five of them, so alerts, links, list depths and code are dead colour."
+  },
+  "scope": {
+    "in_scope": [
+      "the document palette",
+      "the bridge that maps the engine's fields"
+    ],
+    "out_of_scope": [
+      "the chrome palette",
+      "the terminal preset"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "Every role in the document palette is painted by some construct.",
+      "verification": "cargo test -p coding-crew-theme palette",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The terminal preset stays colourless.",
+      "verification": "cargo test -p coding-crew-theme palette",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Write the eighteen roles and map each engine field onto one.",
+      "done_when": "the palette has eighteen named roles",
+      "files": [
+        "crates/theme/src/theme.rs"
+      ],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Paint the projection's constructs from the roles.",
+      "done_when": "no role in the document palette is dead",
+      "files": [
+        "crates/core/src/markdown.rs"
+      ],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "session-creator-02",
+      "body": "Groomed by session-creator-02: intent, scope and criteria written.",
+      "at": "2026-11-05T09:00Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "session-creator-02",
+      "body": "Approved by session-creator-02: criteria covered, steps planned.",
+      "at": "2026-11-06T17:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK22"
+  ]
+}

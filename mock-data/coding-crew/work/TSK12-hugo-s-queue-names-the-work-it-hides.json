@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "id": "TSK12",
+  "title": "hugo's queue names the work it hides",
+  "slug": "hugo-s-queue-names-the-work-it-hides",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-07T12:00Z",
+  "updated": "2026-11-11T13:00Z",
+  "kind": "bug",
+  "promoted_from": null,
+  "status": "executing",
+  "status_since": "2026-11-11T09:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-03",
+    "session": "session-runner-03",
+    "at": "2026-11-11T09:00Z",
+    "lease_expires_at": "2026-11-11T17:00Z"
+  },
+  "planned_by": "session-creator-03",
+  "meta": {
+    "priority": "low",
+    "effort": "L",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "The queue's hidden rows are named and counted.",
+    "problem": "A narrow main pane cuts the queue without naming what it leaves out."
+  },
+  "scope": {
+    "in_scope": [
+      "hugo's queue block",
+      "the hidden count"
+    ],
+    "out_of_scope": [
+      "the crew block",
+      "the configuration"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A cut queue says how many rows it hid.",
+      "verification": "cargo test -p coding-crew-hugo",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-hugo",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-11T12:00Z",
+          "by": "runner-03",
+          "session": "session-runner-03"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "An empty queue says it is empty rather than zero hidden.",
+      "verification": "cargo test -p coding-crew-hugo",
+      "status": "deferred",
+      "evidence": [],
+      "deferral": {
+        "reason": "The queue's count reads the same window the rows do; that belongs to the row tabs.",
+        "follow_up": "TSK01"
+      },
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Window the queue and remember the rows outside it.",
+      "done_when": "the window and the count agree",
+      "files": [
+        "crates/hugo/src/app.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Draw the count beside the queue's heading.",
+      "done_when": "the count is on the heading's row",
+      "files": [
+        "crates/hugo/src/app.rs"
+      ],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-03",
+      "body": "The first criterion is proven. The second is waiting on the fixture the next unit writes.",
+      "at": "2026-11-11T13:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK24"
+  ]
+}

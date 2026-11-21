@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "id": "TSK04",
+  "title": "The Needs you row says the review state",
+  "slug": "the-needs-you-row-says-the-review-state",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-05T12:00Z",
+  "updated": "2026-11-06T10:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "groomed",
+  "status_since": "2026-11-06T09:00Z",
+  "overlays": {},
+  "claim": null,
+  "planned_by": "session-creator-01",
+  "meta": {
+    "priority": "low",
+    "effort": "S",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A Needs you row carries the round spent of the budget and the open findings with their severities.",
+    "problem": "A human deciding whether to review a task with five open findings, two of them high, and the budget spent cannot see any of it."
+  },
+  "scope": {
+    "in_scope": [
+      "the Needs you row's second line",
+      "the review state derived from the rounds and the findings"
+    ],
+    "out_of_scope": [
+      "the detail pane's Review section",
+      "the Path row"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A row with open findings says how many are open and names the highest severity.",
+      "verification": "cargo test -p coding-crew-raul needs",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A row whose budget is spent says the round spent of the budget.",
+      "verification": "cargo test -p coding-crew-raul needs",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Does the review state fit beside the age at forty columns?",
+      "status": "open",
+      "answer": "",
+      "raised_by": "human",
+      "raised_at": "2026-11-06T10:00Z",
+      "resolved_by": "",
+      "resolved_at": ""
+    }
+  ],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "session-creator-01",
+      "body": "Groomed by session-creator-01: intent, scope and criteria written.",
+      "at": "2026-11-06T09:00Z"
+    }
+  ],
+  "depends_on": []
+}

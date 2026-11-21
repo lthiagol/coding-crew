@@ -922,9 +922,21 @@ mod tests {
         )
         .0;
         let text = rows.join("\n");
-        assert!(text.contains("IDEAS · 1"), "{text}");
-        assert!(text.contains("SMALL TASKS · 4"), "{text}");
-        assert!(text.contains("DRAFTS · 5"), "{text}");
+        let work = mock_work();
+        let ideas = work
+            .items
+            .iter()
+            .filter(|item| item.kind == coding_crew_core::ItemKind::Idea)
+            .count();
+        let small = work.items.len() - ideas;
+        let drafts = work
+            .tasks
+            .iter()
+            .filter(|task| task.status == coding_crew_core::Status::Draft)
+            .count();
+        assert!(text.contains(&format!("IDEAS · {ideas}")), "{text}");
+        assert!(text.contains(&format!("SMALL TASKS · {small}")), "{text}");
+        assert!(text.contains(&format!("DRAFTS · {drafts}")), "{text}");
         assert!(!text.contains("not built yet"), "{text}");
     }
 
@@ -1918,26 +1930,45 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         for tab in row_tabs() {
-            let expected = match tab {
-                Tab::NeedsYou => {
-                    "not shown: approve (2 hidden), review (3 hidden), escalated (0 hidden)"
-                }
-                Tab::Path => concat!(
-                    "not shown: EXECUTION · 1, AWAITING APPROVAL · 2, BLOCKED · 3, ",
-                    "RUNNING · 6, REVIEW · 2"
-                ),
-                Tab::Backlog => {
-                    "not shown: IDEAS (1 hidden), SMALL TASKS (4 hidden), DRAFTS (0 hidden)"
-                }
-                _ => unreachable!("a tab without rows"),
-            };
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 12);
             app.on_key(key(KeyCode::Char('G')), &work, now());
             let (rows, _) = render(&mut app, 100, 12);
             let text = rows.join("\n");
+            let expected = match tab {
+                Tab::NeedsYou => {
+                    "not shown: approve (2 hidden), review (3 hidden), escalated (0 hidden)"
+                        .to_string()
+                }
+                Tab::Path => concat!(
+                    "not shown: EXECUTION · 1, AWAITING APPROVAL · 2, BLOCKED · 3, ",
+                    "RUNNING · 6, REVIEW · 2"
+                )
+                .to_string(),
+                Tab::Backlog => {
+                    // The hidden count is what the group holds minus the rows
+                    // the scrolled window draws, both read from the fixtures
+                    // and the screen rather than kept by hand.
+                    let groups = backlog::groups(&work);
+                    let hidden = |group: &backlog::Group| {
+                        let shown = group
+                            .rows
+                            .iter()
+                            .filter(|row| text.lines().any(|line| line.contains(row.id.as_str())))
+                            .count();
+                        group.rows.len() - shown
+                    };
+                    format!(
+                        "not shown: IDEAS ({} hidden), SMALL TASKS ({} hidden), DRAFTS ({} hidden)",
+                        hidden(&groups[0]),
+                        hidden(&groups[1]),
+                        hidden(&groups[2])
+                    )
+                }
+                _ => unreachable!("a tab without rows"),
+            };
             assert!(
-                text.contains(expected),
+                text.contains(&expected),
                 "{tab:?}: the scrolled count is not {expected:?}: {text}"
             );
         }

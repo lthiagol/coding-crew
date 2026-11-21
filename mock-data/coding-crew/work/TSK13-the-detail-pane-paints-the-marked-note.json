@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "id": "TSK13",
+  "title": "The detail pane paints the marked note",
+  "slug": "the-detail-pane-paints-the-marked-note",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-02T13:00Z",
+  "updated": "2026-11-11T09:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "code-review",
+  "status_since": "2026-11-10T16:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-01",
+    "session": "session-runner-01",
+    "at": "2026-11-10T09:00Z",
+    "lease_expires_at": "2026-11-10T18:00Z"
+  },
+  "planned_by": "session-creator-01",
+  "meta": {
+    "priority": "urgent",
+    "effort": "S",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A ==marked== span in free text is painted on the selection's colours.",
+    "problem": "The engine renders the mark and the pane never gives it a colour, so the mark is a word with two equals signs around it."
+  },
+  "scope": {
+    "in_scope": [
+      "the projection's mark",
+      "the detail pane's paint"
+    ],
+    "out_of_scope": [
+      "the chrome palette",
+      "the Review section"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A marked span is painted on text.selected.",
+      "verification": "cargo test -p coding-crew-core | grep detail",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-core | grep detail",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-10T14:00Z",
+          "by": "runner-01",
+          "session": "session-runner-01"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A fenced rust block keeps syntect's code tokens.",
+      "verification": "cargo test -p coding-crew-raul detail",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul detail",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-10T14:05Z",
+          "by": "runner-01",
+          "session": "session-runner-01"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Carry the mark through the bridge to the selection's slots.",
+      "done_when": "the marked words take the selection's colours",
+      "files": [
+        "crates/raul/src/detail.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Keep the code block's own paint under the mark.",
+      "done_when": "the fenced block still reads as code",
+      "files": [
+        "crates/raul/src/detail.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-01",
+        "verdict": "changes-needed",
+        "at": "2026-11-10T16:00Z",
+        "notes": "The pre-screen found the row and the mark before the external round spent budget.",
+        "findings": [
+          "FIND-01",
+          "FIND-02"
+        ]
+      }
+    ],
+    "verdict": null,
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "medium",
+        "status": "open",
+        "description": "At forty columns the round's notes wrap into the next column and the reader loses the verdict.",
+        "created": "2026-11-10T16:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      },
+      {
+        "id": "FIND-02",
+        "severity": "low",
+        "status": "fixed",
+        "description": "The mark's background says nothing about the selection.",
+        "created": "2026-11-10T16:00Z",
+        "resolved": "2026-11-10T16:30Z",
+        "resolution": "The mark now reads the selection's two slots, foreground and background.",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "runner-01",
+            "body": "Took the slots from the pane rather than inventing a third colour.",
+            "at": "2026-11-10T16:10Z"
+          }
+        ]
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-01",
+      "body": "The first criterion is proven and the second follows the same command.\n\nThe ==key finding== is marked for the next round.\n\n```rust\nlet answer = 42;\n```",
+      "at": "2026-11-11T09:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK22",
+    "TSK23"
+  ]
+}

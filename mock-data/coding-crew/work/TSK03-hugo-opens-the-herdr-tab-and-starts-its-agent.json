@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "id": "TSK03",
+  "title": "hugo opens the herdr tab and starts its agent",
+  "slug": "hugo-opens-the-herdr-tab-and-starts-its-agent",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-04T11:00Z",
+  "updated": "2026-11-09T10:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "draft",
+  "status_since": "2026-11-04T11:00Z",
+  "overlays": {
+    "deferred": {
+      "reason": "Waits on the orchestrator's model pick in hugo.",
+      "by": "human",
+      "at": "2026-11-09T10:00Z"
+    }
+  },
+  "claim": null,
+  "planned_by": null,
+  "meta": {
+    "priority": "normal",
+    "effort": "L",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "",
+    "problem": ""
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": []
+  },
+  "acceptance_criteria": [],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

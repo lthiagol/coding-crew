@@ -1,0 +1,264 @@
+{
+  "schema_version": 1,
+  "id": "TSK21",
+  "title": "The code gutter numbers every line",
+  "slug": "the-code-gutter-numbers-every-line",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-04T13:00Z",
+  "updated": "2026-11-16T12:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "needs-human",
+  "status_since": "2026-11-16T10:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-05",
+    "session": "session-runner-05",
+    "at": "2026-11-16T01:00Z",
+    "lease_expires_at": "2026-11-16T11:00Z"
+  },
+  "planned_by": "session-creator-05",
+  "meta": {
+    "priority": "urgent",
+    "effort": "L",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A fenced block carries a numbered gutter down its left edge.",
+    "problem": "A long block cannot be referred to by line, so a finding has to quote it."
+  },
+  "scope": {
+    "in_scope": [
+      "the fenced code block",
+      "the gutter"
+    ],
+    "out_of_scope": [
+      "the syntax theme",
+      "inline code"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "Every line of a block has its number.",
+      "verification": "cargo test -p coding-crew-engine code",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-engine code",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-16T03:00Z",
+          "by": "runner-05",
+          "session": "session-runner-05"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A wrapped line does not take a second number.",
+      "verification": "cargo test -p coding-crew-engine code",
+      "status": "failed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-engine code",
+          "exit_code": 1,
+          "summary": "1 failed; 11 passed",
+          "at": "2026-11-16T03:30Z",
+          "by": "runner-05",
+          "session": "session-runner-05"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": "A wrapped line still takes a second number in the gutter."
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Draw the gutter beside the code.",
+      "done_when": "the numbers align with the lines",
+      "files": [
+        "crates/engine/src/markdown/code.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Keep the number on the line, not on its wraps.",
+      "done_when": "a wrapped line has one number",
+      "files": [
+        "crates/engine/src/markdown/code.rs"
+      ],
+      "status": "failed",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": "The wrap number is still drawn; the fix belongs to the gutter unit."
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-05",
+        "verdict": "ok",
+        "at": "2026-11-16T05:00Z",
+        "notes": "The pre-screen is clean; the work is ready for an external round.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "reviewer-01",
+        "verdict": "changes-needed",
+        "at": "2026-11-16T06:00Z",
+        "notes": "The round found the next defect and the budget moved one round closer to spent.",
+        "findings": [
+          "FIND-01"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "security",
+        "reviewer": "reviewer-02",
+        "verdict": "changes-needed",
+        "at": "2026-11-16T07:00Z",
+        "notes": "The round found the next defect and the budget moved one round closer to spent.",
+        "findings": [
+          "FIND-02"
+        ]
+      },
+      {
+        "n": 3,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "reviewer-03",
+        "verdict": "changes-needed",
+        "at": "2026-11-16T08:00Z",
+        "notes": "The round found the next defect and the budget moved one round closer to spent.",
+        "findings": [
+          "FIND-03"
+        ]
+      },
+      {
+        "n": 4,
+        "kind": "external",
+        "focus": "design",
+        "reviewer": "reviewer-04",
+        "verdict": "changes-needed",
+        "at": "2026-11-16T09:00Z",
+        "notes": "The round found the next defect and the budget moved one round closer to spent.",
+        "findings": [
+          "FIND-04"
+        ]
+      },
+      {
+        "n": 5,
+        "kind": "external",
+        "focus": "spec-compliance",
+        "reviewer": "reviewer-05",
+        "verdict": "changes-needed",
+        "at": "2026-11-16T10:00Z",
+        "notes": "The round found the next defect and the budget moved one round closer to spent.",
+        "findings": [
+          "FIND-05"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "medium",
+        "status": "open",
+        "description": "A finding no round names is dropped from the Review section instead of shown after the rounds.",
+        "created": "2026-11-16T06:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "reviewer-01",
+            "body": "The gutter is drawn but the wrap still takes a number.",
+            "at": "2026-11-16T06:20Z"
+          }
+        ]
+      },
+      {
+        "id": "FIND-02",
+        "severity": "high",
+        "status": "open",
+        "description": "The queue's count says one and a narrow pane draws none of the rows.",
+        "created": "2026-11-16T07:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      },
+      {
+        "id": "FIND-03",
+        "severity": "low",
+        "status": "open",
+        "description": "The cut leaves a combining mark behind and the row is one column wider than the pane.",
+        "created": "2026-11-16T08:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      },
+      {
+        "id": "FIND-04",
+        "severity": "medium",
+        "status": "open",
+        "description": "The configuration's error is drawn on the dim slot, so it reads as a hint rather than a failure.",
+        "created": "2026-11-16T09:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      },
+      {
+        "id": "FIND-05",
+        "severity": "high",
+        "status": "open",
+        "description": "The fenced block's gutter numbers the wrapped rows, so one line has three numbers.",
+        "created": "2026-11-16T10:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "reviewer-05",
+      "body": "The budget is spent and the loop stops here: a human decides the next move.",
+      "at": "2026-11-16T12:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK24",
+    "TSK26"
+  ]
+}

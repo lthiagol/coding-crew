@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "id": "TSK15",
+  "title": "The Backlog group header says its count",
+  "slug": "the-backlog-group-header-says-its-count",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-04T15:00Z",
+  "updated": "2026-11-13T09:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "code-review",
+  "status_since": "2026-11-12T16:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-03",
+    "session": "session-runner-03",
+    "at": "2026-11-12T09:00Z",
+    "lease_expires_at": "2026-11-12T18:00Z"
+  },
+  "planned_by": "session-creator-03",
+  "meta": {
+    "priority": "normal",
+    "effort": "L",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "Every group header names the rows under it.",
+    "problem": "A header that loses its count reads as a group of an unknown size."
+  },
+  "scope": {
+    "in_scope": [
+      "the Backlog group headers",
+      "the hidden announcement"
+    ],
+    "out_of_scope": [
+      "the Needs you counts",
+      "the Overview"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A header always names its count.",
+      "verification": "cargo test -p coding-crew-raul backlog",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul backlog",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-12T14:00Z",
+          "by": "runner-03",
+          "session": "session-runner-03"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A wholly hidden group is announced, not left as a bare header.",
+      "verification": "cargo test -p coding-crew-raul backlog",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul backlog",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-12T14:05Z",
+          "by": "runner-03",
+          "session": "session-runner-03"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Count the rows of each group and draw the count on its header.",
+      "done_when": "the header and the rows agree",
+      "files": [
+        "crates/raul/src/backlog.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Name a hidden group with its count in the announcement.",
+      "done_when": "no hidden group is a bare count",
+      "files": [
+        "crates/raul/src/backlog.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-03",
+        "verdict": "changes-needed",
+        "at": "2026-11-12T16:00Z",
+        "notes": "The pre-screen found the row and the mark before the external round spent budget.",
+        "findings": [
+          "FIND-01",
+          "FIND-02"
+        ]
+      }
+    ],
+    "verdict": null,
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "medium",
+        "status": "open",
+        "description": "The document paints a level-two heading as the first level, so the hierarchy is flat.",
+        "created": "2026-11-12T16:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      },
+      {
+        "id": "FIND-02",
+        "severity": "high",
+        "status": "open",
+        "description": "The fenced block's gutter numbers the wrapped rows, so one line has three numbers.",
+        "created": "2026-11-12T16:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-03",
+      "body": "The first criterion is proven and the second follows the same command.",
+      "at": "2026-11-13T09:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK24",
+    "TSK25"
+  ]
+}

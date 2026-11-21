@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "id": "TSK02",
+  "title": "The footer says how many rows it hides",
+  "slug": "the-footer-says-how-many-rows-it-hides",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-03T10:00Z",
+  "updated": "2026-11-07T11:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "draft",
+  "status_since": "2026-11-03T10:00Z",
+  "overlays": {
+    "cancelled": {
+      "reason": "Parked until the row tabs share one announcement.",
+      "by": "human",
+      "at": "2026-11-07T11:00Z"
+    }
+  },
+  "claim": null,
+  "planned_by": null,
+  "meta": {
+    "priority": "high",
+    "effort": "M",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "",
+    "problem": ""
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": []
+  },
+  "acceptance_criteria": [],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

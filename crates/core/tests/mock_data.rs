@@ -20,7 +20,7 @@ fn by_status(status: Status) -> Vec<Task> {
 #[test]
 fn every_fixture_loads() {
     let tasks = tasks();
-    assert_eq!(tasks.len(), 29);
+    assert_eq!(tasks.len(), 30);
 
     let ids: HashSet<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
     assert_eq!(ids.len(), tasks.len(), "task ids must be unique");
@@ -232,6 +232,44 @@ fn every_fixture_was_last_written_at_its_latest_event() {
     }
 }
 
+#[test]
+fn a_closure_note_comes_after_the_round_that_closed_it() {
+    // A note that says the review is closed is written when the review
+    // closes: it cannot precede the round that made it. The TSK23 fixture
+    // used to stamp its closure from the schedule's nominal external round,
+    // fifty minutes before the round that actually closed it.
+    for task in tasks() {
+        let closures: Vec<&coding_crew_core::Note> = task
+            .notes
+            .iter()
+            .filter(|note| note.body.starts_with("Reviewed clean"))
+            .collect();
+        if closures.is_empty() {
+            continue;
+        }
+        let closed = task
+            .review
+            .rounds
+            .iter()
+            .rev()
+            .find(|round| round.verdict == coding_crew_core::Verdict::Ok)
+            .unwrap_or_else(|| panic!("{} claims a closure with no ok round", task.id));
+        let closed_at = parse_rfc3339(&closed.at)
+            .unwrap_or_else(|| panic!("{} has an unreadable round", task.id));
+        for note in closures {
+            let at = parse_rfc3339(&note.at)
+                .unwrap_or_else(|| panic!("{} has an unreadable closure note", task.id));
+            assert!(
+                at > closed_at,
+                "{}: the closure note at {} precedes the round that closed it at {}",
+                task.id,
+                note.at,
+                closed.at
+            );
+        }
+    }
+}
+
 /// Every dated event in a fixture's history.
 fn event_stamps(task: &Task) -> Vec<String> {
     let mut stamps = vec![task.created.clone(), task.status_since.clone()];
@@ -356,8 +394,8 @@ fn phase_counts_match_the_fixtures() {
     assert_eq!(by_status(Status::Done).len(), 5);
     assert_eq!(
         by_status(Status::Draft).len(),
-        5,
-        "three drafts, one child, one promoted bug"
+        6,
+        "three plain drafts, one promoted bug, two children"
     );
 }
 
@@ -687,6 +725,106 @@ fn a_claim_is_held_by_another_session() {
     );
 }
 
+/// The shapes the screens are read against: zero, one and five review
+/// rounds, open and resolved findings, open and resolved questions, children,
+/// and done tasks that carry their history.
+#[test]
+fn the_fixtures_hold_every_shape_the_screens_read() {
+    let tasks = tasks();
+
+    // Review rounds: zero, one, and five. The budget counts external rounds,
+    // so five external rounds are fifty per cent of the ceiling; five rounds
+    // in all is a task that was reviewed, fixed and reviewed again.
+    assert!(
+        tasks.iter().any(|task| task.review.rounds.is_empty()),
+        "no fixture with zero review rounds"
+    );
+    assert!(
+        tasks.iter().any(|task| task.review.rounds.len() == 1),
+        "no fixture with one review round"
+    );
+    assert!(
+        tasks.iter().any(|task| task.review.rounds.len() == 5),
+        "no fixture with five review rounds"
+    );
+    assert!(
+        tasks.iter().any(|task| task.external_rounds() == 5),
+        "no fixture whose budget is spent"
+    );
+
+    // Findings: open, and resolved with a resolution and a comment.
+    assert!(
+        tasks.iter().any(|task| task.open_findings() > 0),
+        "no fixture with an open finding"
+    );
+    let resolved: Vec<&coding_crew_core::Finding> = tasks
+        .iter()
+        .flat_map(|task| &task.review.findings)
+        .filter(|finding| finding.status != coding_crew_core::FindingStatus::Open)
+        .collect();
+    assert!(
+        resolved.iter().any(|finding| !finding.resolved.is_empty()
+            && !finding.resolution.is_empty()
+            && !finding.comments.is_empty()),
+        "no resolved finding with a resolution and a comment"
+    );
+
+    // Questions: open and resolved.
+    assert!(
+        tasks
+            .iter()
+            .flat_map(|task| &task.questions)
+            .any(|question| question.status == coding_crew_core::QuestionStatus::Open),
+        "no open question"
+    );
+    assert!(
+        tasks
+            .iter()
+            .flat_map(|task| &task.questions)
+            .any(|question| question.status == coding_crew_core::QuestionStatus::Resolved),
+        "no resolved question"
+    );
+
+    // Children: a parent and its subtasks, both directions of the link.
+    let parent = tasks
+        .iter()
+        .find(|task| task.children.len() >= 2)
+        .expect("a parent with subtasks");
+    for child in &parent.children {
+        let child = tasks
+            .iter()
+            .find(|task| &task.id == child)
+            .unwrap_or_else(|| panic!("{child} names no task"));
+        assert_eq!(child.parent.as_deref(), Some(parent.id.as_str()));
+    }
+
+    // Done tasks carry their history: rounds, findings, resolutions and
+    // notes, so a finished task reads like a finished task.
+    for task in tasks.iter().filter(|task| task.status == Status::Done) {
+        assert!(
+            !task.review.rounds.is_empty(),
+            "{} is done with no round",
+            task.id
+        );
+        assert!(!task.notes.is_empty(), "{} is done with no note", task.id);
+        for finding in &task.review.findings {
+            assert!(
+                !finding.resolved.is_empty() && !finding.resolution.is_empty(),
+                "{} carries an unresolved finding {}",
+                task.id,
+                finding.id
+            );
+        }
+    }
+    assert!(
+        tasks
+            .iter()
+            .filter(|task| task.status == Status::Done)
+            .any(|task| !task.review.findings.is_empty()),
+        "no done task carries a finding and its resolution"
+    );
+}
+
 #[test]
 fn smaller_tasks_are_fixtures_too() {
     let store = mock_store();
@@ -712,4 +850,492 @@ fn smaller_tasks_are_fixtures_too() {
         .find(|i| i.status == coding_crew_core::ItemStatus::Dismissed);
     let dismissed = dismissed.expect("a dismissed item");
     assert!(!dismissed.dismissed_reason.is_empty());
+}
+
+/// Every field the model defines is populated by some fixture.
+///
+/// This is the pin the fixtures exist to keep: a field nobody fills is a
+/// branch of the reader the screens can never show, and a new fixture that
+/// leaves one behind fails here.
+#[test]
+fn every_field_the_model_defines_is_populated_by_a_fixture() {
+    use coding_crew_core::task::{Effort, Priority};
+    use coding_crew_core::{
+        CriterionStatus, FindingStatus, Focus, ItemKind, ItemStatus, QuestionStatus, RoundKind,
+        Severity, StepStatus, TaskKind, Verdict,
+    };
+
+    let tasks = tasks();
+    let items = mock_store().list_items().expect("listing the mock items");
+
+    macro_rules! populated {
+        ($field:expr, $found:expr) => {
+            assert!($found, "no fixture populates {}", $field);
+        };
+    }
+
+    // Task: identity.
+    populated!(
+        "schema_version",
+        tasks.iter().all(|t| t.schema_version == 1)
+    );
+    populated!("id", tasks.iter().all(|t| !t.id.is_empty()));
+    populated!("title", tasks.iter().all(|t| !t.title.is_empty()));
+    populated!("slug", tasks.iter().all(|t| !t.slug.is_empty()));
+    populated!("parent", tasks.iter().any(|t| t.parent.is_some()));
+    populated!("children", tasks.iter().any(|t| !t.children.is_empty()));
+    populated!("kind task", tasks.iter().any(|t| t.kind == TaskKind::Task));
+    populated!("kind bug", tasks.iter().any(|t| t.kind == TaskKind::Bug));
+    populated!(
+        "kind feature",
+        tasks.iter().any(|t| t.kind == TaskKind::Feature)
+    );
+    populated!(
+        "promoted_from",
+        tasks.iter().any(|t| t.promoted_from.is_some())
+    );
+    populated!("created", tasks.iter().all(|t| !t.created.is_empty()));
+    populated!("updated", tasks.iter().all(|t| !t.updated.is_empty()));
+
+    // Task: status.
+    populated!(
+        "status_since",
+        tasks.iter().all(|t| !t.status_since.is_empty())
+    );
+    for status in [
+        Status::Draft,
+        Status::Groomed,
+        Status::Approved,
+        Status::Executing,
+        Status::CodeReview,
+        Status::Remediating,
+        Status::NeedsHuman,
+        Status::Done,
+    ] {
+        populated!(
+            format!("status {status:?}"),
+            tasks.iter().any(|t| t.status == status)
+        );
+    }
+    for overlay in ["blocked", "deferred", "cancelled"] {
+        let found = tasks.iter().any(|task| {
+            let overlay = match overlay {
+                "blocked" => task.overlays.blocked.as_ref(),
+                "deferred" => task.overlays.deferred.as_ref(),
+                _ => task.overlays.cancelled.as_ref(),
+            };
+            overlay.is_some_and(|overlay| {
+                !overlay.reason.is_empty() && !overlay.by.is_empty() && !overlay.at.is_empty()
+            })
+        });
+        populated!(format!("overlay {overlay}"), found);
+    }
+    populated!(
+        "claim",
+        tasks.iter().any(|task| {
+            task.claim.as_ref().is_some_and(|claim| {
+                !claim.by.is_empty()
+                    && claim.session.as_ref().is_some_and(|s| !s.is_empty())
+                    && !claim.at.is_empty()
+                    && !claim.lease_expires_at.is_empty()
+            })
+        })
+    );
+    populated!(
+        "planned_by",
+        tasks
+            .iter()
+            .any(|t| t.planned_by.as_ref().is_some_and(|s| !s.is_empty()))
+    );
+
+    // Task: meta, intent and scope.
+    for priority in [
+        Priority::Urgent,
+        Priority::High,
+        Priority::Normal,
+        Priority::Low,
+    ] {
+        populated!(
+            format!("priority {priority:?}"),
+            tasks.iter().any(|t| t.meta.priority == priority)
+        );
+    }
+    for effort in [Effort::Small, Effort::Medium, Effort::Large] {
+        populated!(
+            format!("effort {effort:?}"),
+            tasks.iter().any(|t| t.meta.effort == effort)
+        );
+    }
+    populated!("meta.tags", tasks.iter().any(|t| !t.meta.tags.is_empty()));
+    populated!(
+        "intent.outcome",
+        tasks.iter().any(|t| !t.intent.outcome.is_empty())
+    );
+    populated!(
+        "intent.problem",
+        tasks.iter().any(|t| !t.intent.problem.is_empty())
+    );
+    populated!(
+        "scope.in_scope",
+        tasks.iter().any(|t| !t.scope.in_scope.is_empty())
+    );
+    populated!(
+        "scope.out_of_scope",
+        tasks.iter().any(|t| !t.scope.out_of_scope.is_empty())
+    );
+
+    // Acceptance criteria.
+    populated!(
+        "criterion",
+        tasks.iter().any(|t| !t.acceptance_criteria.is_empty())
+    );
+    populated!(
+        "criterion.id",
+        tasks
+            .iter()
+            .flat_map(|t| &t.acceptance_criteria)
+            .all(|c| !c.id.is_empty())
+    );
+    populated!(
+        "criterion.description",
+        tasks
+            .iter()
+            .flat_map(|t| &t.acceptance_criteria)
+            .all(|c| !c.description.is_empty())
+    );
+    populated!(
+        "criterion.verification",
+        tasks
+            .iter()
+            .flat_map(|t| &t.acceptance_criteria)
+            .any(|c| !c.verification.is_empty())
+    );
+    for status in [
+        CriterionStatus::Pending,
+        CriterionStatus::Passed,
+        CriterionStatus::Failed,
+        CriterionStatus::Unproven,
+        CriterionStatus::Deferred,
+    ] {
+        populated!(
+            format!("criterion status {status:?}"),
+            tasks
+                .iter()
+                .flat_map(|t| &t.acceptance_criteria)
+                .any(|c| c.status == status)
+        );
+    }
+    populated!(
+        "criterion.deferral",
+        tasks
+            .iter()
+            .flat_map(|t| &t.acceptance_criteria)
+            .filter_map(|c| c.deferral.as_ref())
+            .any(|d| !d.reason.is_empty() && !d.follow_up.is_empty())
+    );
+    populated!(
+        "criterion.failure_reason",
+        tasks
+            .iter()
+            .flat_map(|t| &t.acceptance_criteria)
+            .any(|c| !c.failure_reason.is_empty())
+    );
+
+    // Evidence.
+    let evidence: Vec<&coding_crew_core::Evidence> = tasks
+        .iter()
+        .flat_map(|t| &t.acceptance_criteria)
+        .flat_map(|c| &c.evidence)
+        .collect();
+    populated!("evidence", !evidence.is_empty());
+    populated!(
+        "evidence.command",
+        evidence.iter().all(|e| !e.command.is_empty())
+    );
+    populated!(
+        "evidence.exit_code 0",
+        evidence.iter().any(|e| e.exit_code == Some(0))
+    );
+    populated!(
+        "evidence.exit_code 1",
+        evidence.iter().any(|e| e.exit_code == Some(1))
+    );
+    populated!(
+        "evidence.summary",
+        evidence.iter().all(|e| !e.summary.is_empty())
+    );
+    populated!("evidence.at", evidence.iter().all(|e| !e.at.is_empty()));
+    populated!("evidence.by", evidence.iter().all(|e| !e.by.is_empty()));
+    populated!(
+        "evidence.session",
+        evidence
+            .iter()
+            .all(|e| e.session.as_ref().is_some_and(|s| !s.is_empty()))
+    );
+
+    // Steps.
+    let steps: Vec<&coding_crew_core::Step> = tasks.iter().flat_map(|t| &t.steps).collect();
+    populated!("step", !steps.is_empty());
+    populated!("step.id", steps.iter().all(|s| !s.id.is_empty()));
+    populated!("step.order", steps.iter().all(|s| s.order > 0));
+    populated!("step.action", steps.iter().all(|s| !s.action.is_empty()));
+    populated!(
+        "step.done_when",
+        steps.iter().all(|s| !s.done_when.is_empty())
+    );
+    populated!("step.files", steps.iter().any(|s| !s.files.is_empty()));
+    populated!("step.covers", steps.iter().any(|s| !s.covers.is_empty()));
+    populated!(
+        "step.depends_on",
+        steps.iter().any(|s| !s.depends_on.is_empty())
+    );
+    populated!(
+        "step.deviation",
+        steps.iter().any(|s| !s.deviation.is_empty())
+    );
+    for status in [
+        StepStatus::Pending,
+        StepStatus::InProgress,
+        StepStatus::Done,
+        StepStatus::Skipped,
+        StepStatus::Failed,
+    ] {
+        populated!(
+            format!("step status {status:?}"),
+            steps.iter().any(|s| s.status == status)
+        );
+    }
+
+    // Review.
+    populated!(
+        "review.max_rounds",
+        tasks.iter().all(|t| t.review.max_rounds > 0)
+    );
+    populated!(
+        "review.rounds",
+        tasks.iter().any(|t| !t.review.rounds.is_empty())
+    );
+    populated!(
+        "review verdict ok",
+        tasks.iter().any(|t| t.review.verdict == Some(Verdict::Ok))
+    );
+    populated!(
+        "review verdict changes-needed",
+        tasks
+            .iter()
+            .any(|t| t.review.verdict == Some(Verdict::ChangesNeeded))
+    );
+    populated!(
+        "review.findings",
+        tasks.iter().any(|t| !t.review.findings.is_empty())
+    );
+    let rounds: Vec<&coding_crew_core::Round> =
+        tasks.iter().flat_map(|t| &t.review.rounds).collect();
+    populated!("round.n", rounds.iter().any(|r| r.n == 0));
+    populated!("round.n external", rounds.iter().any(|r| r.n > 0));
+    populated!(
+        "round.kind self",
+        rounds.iter().any(|r| r.kind == RoundKind::SelfReview)
+    );
+    populated!(
+        "round.kind external",
+        rounds.iter().any(|r| r.kind == RoundKind::External)
+    );
+    for focus in [
+        Focus::SpecCompliance,
+        Focus::EdgeCases,
+        Focus::Security,
+        Focus::Empirical,
+        Focus::Design,
+    ] {
+        populated!(
+            format!("round focus {focus:?}"),
+            rounds.iter().any(|r| r.focus == focus)
+        );
+    }
+    populated!(
+        "round.reviewer",
+        rounds.iter().all(|r| !r.reviewer.is_empty())
+    );
+    populated!(
+        "round.verdict ok",
+        rounds.iter().any(|r| r.verdict == Verdict::Ok)
+    );
+    populated!(
+        "round.verdict changes-needed",
+        rounds.iter().any(|r| r.verdict == Verdict::ChangesNeeded)
+    );
+    populated!("round.at", rounds.iter().all(|r| !r.at.is_empty()));
+    populated!("round.notes", rounds.iter().all(|r| !r.notes.is_empty()));
+    populated!(
+        "round.findings",
+        rounds.iter().any(|r| !r.findings.is_empty())
+    );
+    populated!(
+        "round with no findings",
+        rounds.iter().any(|r| r.findings.is_empty())
+    );
+
+    // Findings and their comments.
+    let findings: Vec<&coding_crew_core::Finding> =
+        tasks.iter().flat_map(|t| &t.review.findings).collect();
+    populated!("finding", !findings.is_empty());
+    populated!("finding.id", findings.iter().all(|f| !f.id.is_empty()));
+    populated!(
+        "finding.severity",
+        findings.iter().all(|f| {
+            matches!(
+                f.severity,
+                Severity::Low | Severity::Medium | Severity::High
+            )
+        })
+    );
+    for severity in [Severity::Low, Severity::Medium, Severity::High] {
+        populated!(
+            format!("finding severity {severity:?}"),
+            findings.iter().any(|f| f.severity == severity)
+        );
+    }
+    for status in [
+        FindingStatus::Open,
+        FindingStatus::Fixed,
+        FindingStatus::Dismissed,
+    ] {
+        populated!(
+            format!("finding status {status:?}"),
+            findings.iter().any(|f| f.status == status)
+        );
+    }
+    populated!(
+        "finding.description",
+        findings.iter().all(|f| !f.description.is_empty())
+    );
+    populated!(
+        "finding.created",
+        findings.iter().all(|f| !f.created.is_empty())
+    );
+    populated!(
+        "finding.resolved",
+        findings
+            .iter()
+            .filter(|f| f.status != FindingStatus::Open)
+            .all(|f| !f.resolved.is_empty())
+    );
+    populated!(
+        "finding.resolution",
+        findings
+            .iter()
+            .filter(|f| f.status != FindingStatus::Open)
+            .all(|f| !f.resolution.is_empty())
+    );
+    populated!(
+        "finding.comments",
+        findings.iter().any(|f| !f.comments.is_empty())
+    );
+    let comments: Vec<&coding_crew_core::Comment> =
+        findings.iter().flat_map(|f| &f.comments).collect();
+    populated!("comment.id", comments.iter().all(|c| !c.id.is_empty()));
+    populated!(
+        "comment.author",
+        comments.iter().all(|c| !c.author.is_empty())
+    );
+    populated!("comment.body", comments.iter().all(|c| !c.body.is_empty()));
+    populated!("comment.at", comments.iter().all(|c| !c.at.is_empty()));
+
+    // Questions.
+    let questions: Vec<&coding_crew_core::Question> =
+        tasks.iter().flat_map(|t| &t.questions).collect();
+    populated!("question", !questions.is_empty());
+    populated!("question.id", questions.iter().all(|q| !q.id.is_empty()));
+    populated!(
+        "question.question",
+        questions.iter().all(|q| !q.question.is_empty())
+    );
+    populated!(
+        "question.raised_by",
+        questions.iter().all(|q| !q.raised_by.is_empty())
+    );
+    populated!(
+        "question.raised_at",
+        questions.iter().all(|q| !q.raised_at.is_empty())
+    );
+    populated!(
+        "question status open",
+        questions.iter().any(|q| q.status == QuestionStatus::Open)
+    );
+    populated!(
+        "question status resolved",
+        questions
+            .iter()
+            .any(|q| q.status == QuestionStatus::Resolved)
+    );
+    populated!(
+        "question.answer",
+        questions
+            .iter()
+            .filter(|q| q.status == QuestionStatus::Resolved)
+            .all(|q| !q.answer.is_empty())
+    );
+    populated!(
+        "question.resolved_by",
+        questions
+            .iter()
+            .filter(|q| q.status == QuestionStatus::Resolved)
+            .all(|q| !q.resolved_by.is_empty())
+    );
+    populated!(
+        "question.resolved_at",
+        questions
+            .iter()
+            .filter(|q| q.status == QuestionStatus::Resolved)
+            .all(|q| !q.resolved_at.is_empty())
+    );
+
+    // Notes.
+    let notes: Vec<&coding_crew_core::Note> = tasks.iter().flat_map(|t| &t.notes).collect();
+    populated!("note", !notes.is_empty());
+    populated!("note.id", notes.iter().all(|n| !n.id.is_empty()));
+    populated!("note.author", notes.iter().all(|n| !n.author.is_empty()));
+    populated!("note.body", notes.iter().all(|n| !n.body.is_empty()));
+    populated!("note.at", notes.iter().all(|n| !n.at.is_empty()));
+    populated!("depends_on", tasks.iter().any(|t| !t.depends_on.is_empty()));
+
+    // Smaller tasks.
+    populated!("item", !items.is_empty());
+    populated!(
+        "item.schema_version",
+        items.iter().all(|i| i.schema_version == 1)
+    );
+    populated!("item.id", items.iter().all(|i| !i.id.is_empty()));
+    populated!("item.title", items.iter().all(|i| !i.title.is_empty()));
+    populated!("item.slug", items.iter().all(|i| !i.slug.is_empty()));
+    for kind in [ItemKind::Idea, ItemKind::Feature, ItemKind::Bug] {
+        populated!(
+            format!("item kind {kind:?}"),
+            items.iter().any(|i| i.kind == kind)
+        );
+    }
+    for status in [
+        ItemStatus::Open,
+        ItemStatus::Dismissed,
+        ItemStatus::Promoted,
+    ] {
+        populated!(
+            format!("item status {status:?}"),
+            items.iter().any(|i| i.status == status)
+        );
+    }
+    populated!("item.body", items.iter().all(|i| !i.body.is_empty()));
+    populated!("item.scope", items.iter().all(|i| !i.scope.is_empty()));
+    populated!("item.tags", items.iter().all(|i| !i.tags.is_empty()));
+    populated!("item.created", items.iter().all(|i| !i.created.is_empty()));
+    populated!("item.updated", items.iter().all(|i| !i.updated.is_empty()));
+    populated!(
+        "item.promoted_to",
+        items.iter().any(|i| i.promoted_to.is_some())
+    );
+    populated!(
+        "item.dismissed_reason",
+        items.iter().any(|i| !i.dismissed_reason.is_empty())
+    );
 }

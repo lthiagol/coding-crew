@@ -1061,7 +1061,8 @@ mod tests {
     use ratatui::style::{Color, Style};
 
     use super::*;
-    use crate::data::Missing;
+    use crate::data::{Missing, has_overlay};
+    use coding_crew_core::Status;
     use coding_crew_theme::Preset;
 
     fn mock_work() -> Work {
@@ -1189,13 +1190,28 @@ mod tests {
 
     #[test]
     fn the_counts_of_the_fixtures_are_pinned() {
-        // The three counts the Overview shows, and the rows behind them.
+        // The three counts the Overview shows, and the rows behind them:
+        // both follow the fixture tree, blocked and deferred tasks excluded.
         let work = mock_work();
         let now = NOW;
-        assert_eq!(work.needs_you_counts(), (2, 3, 3));
-        assert_eq!(group_of(&work, Reason::Approve, now).rows.len(), 2);
-        assert_eq!(group_of(&work, Reason::Review, now).rows.len(), 3);
-        assert_eq!(group_of(&work, Reason::Escalated, now).rows.len(), 3);
+        let count = |status| {
+            work.tasks
+                .iter()
+                .filter(|task| task.status == status && !has_overlay(task))
+                .count()
+        };
+        let expected = (
+            count(Status::Groomed),
+            count(Status::CodeReview),
+            count(Status::NeedsHuman),
+        );
+        assert_eq!(work.needs_you_counts(), expected);
+        assert_eq!(group_of(&work, Reason::Approve, now).rows.len(), expected.0);
+        assert_eq!(group_of(&work, Reason::Review, now).rows.len(), expected.1);
+        assert_eq!(
+            group_of(&work, Reason::Escalated, now).rows.len(),
+            expected.2
+        );
     }
 
     #[test]
@@ -1309,23 +1325,36 @@ mod tests {
 
     #[test]
     fn the_tab_shows_the_counts_and_the_rows() {
-        let rows = draw(&mock_work(), 100, 40);
+        let work = mock_work();
+        let rows = draw(&work, 100, 40);
         let text = text_of(&rows);
+        let counts = work.needs_you_counts();
         // The headline, the way the Overview words it.
-        assert!(text.contains("8 tasks wait on a human"), "{text}");
+        let total = counts.0 + counts.1 + counts.2;
+        assert!(
+            text.contains(&format!("{total} tasks wait on a human")),
+            "{text}"
+        );
         // The three counts, each on the row of its reason.
-        for (reason, count) in [("approve", "2"), ("review", "3"), ("escalated", "3")] {
+        for (reason, count) in [
+            ("approve", counts.0),
+            ("review", counts.1),
+            ("escalated", counts.2),
+        ] {
             let row = rows
                 .iter()
-                .find(|row| row.contains(reason))
-                .unwrap_or_else(|| panic!("no row for {reason}: {text}"));
-            assert!(row.contains(count), "{reason}: {row}");
+                .find(|row| row.contains(reason) && row.contains('·'))
+                .unwrap_or_else(|| panic!("no header row for {reason}: {text}"));
+            assert!(
+                row.contains(&format!("· {count}")),
+                "{reason}: expected {count} on {row}"
+            );
         }
         // The rows themselves: the id, the reason and the title.
         assert!(text.contains("TSK04"), "{text}");
         assert!(text.contains("TSK13"), "{text}");
         assert!(text.contains("TSK19"), "{text}");
-        let title = work_title(&mock_work(), "TSK13");
+        let title = work_title(&work, "TSK13");
         assert!(text.contains(&title), "{text}");
     }
 
@@ -1759,12 +1788,17 @@ mod tests {
     #[test]
     fn the_count_of_a_reason_is_never_shown_without_the_reason() {
         let work = mock_work();
+        let counts = work.needs_you_counts();
         for (width, height) in [(40u16, 12), (60, 12), (100, 12), (100, 6)] {
             let text = text_of(&draw(&work, width, height));
-            for (reason, count) in [("approve", "2"), ("review", "3"), ("escalated", "3")] {
+            for (reason, count) in [
+                ("approve", counts.0),
+                ("review", counts.1),
+                ("escalated", counts.2),
+            ] {
                 let found = text
                     .lines()
-                    .any(|line| line.contains(reason) && line.contains(count));
+                    .any(|line| line.contains(reason) && line.contains(&count.to_string()));
                 assert!(found, "{width}x{height}: {reason} has no count: {text}");
             }
         }

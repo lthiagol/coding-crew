@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "id": "TSK07",
+  "title": "The review nests under its round",
+  "slug": "the-review-nests-under-its-round",
+  "parent": null,
+  "children": [
+    "TSK28",
+    "TSK30"
+  ],
+  "created": "2026-11-02T15:00Z",
+  "updated": "2026-11-05T16:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "approved",
+  "status_since": "2026-11-05T16:00Z",
+  "overlays": {},
+  "claim": null,
+  "planned_by": "session-creator-01",
+  "meta": {
+    "priority": "normal",
+    "effort": "S",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A round is drawn with the findings it raised under it, and a round with none says so.",
+    "problem": "The projection flattens the rounds into an eight-column table and repeats the findings as a flat list, so the link between a round and what it found is lost."
+  },
+  "scope": {
+    "in_scope": [
+      "the Review section of the projection",
+      "the findings a round names"
+    ],
+    "out_of_scope": [
+      "the review model",
+      "the round budget"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "Round 01 is drawn above the findings it raised.",
+      "verification": "cargo test -p coding-crew-core markdown",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A round with no findings says so on its own line.",
+      "verification": "cargo test -p coding-crew-core markdown",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-03",
+      "description": "A finding that belongs to no round is still shown.",
+      "verification": "cargo test -p coding-crew-core markdown",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Nest each finding under the round that names it.",
+      "done_when": "the finding ids appear under their round",
+      "files": [
+        "crates/core/src/markdown.rs"
+      ],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Draw the rounds as blocks at the pane's width, not a table.",
+      "done_when": "the Review section reads at forty columns",
+      "files": [
+        "crates/core/src/markdown.rs"
+      ],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    },
+    {
+      "id": "STP-03",
+      "order": 3,
+      "action": "Keep the findings no round names in their own block.",
+      "done_when": "an orphan finding is still on the page",
+      "files": [
+        "crates/core/src/markdown.rs"
+      ],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-03"
+      ],
+      "depends_on": [
+        "STP-02"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Does a round with no findings get an empty line or no line?",
+      "status": "resolved",
+      "answer": "An empty line, so the reader knows the round looked.",
+      "raised_by": "human",
+      "raised_at": "2026-11-04T10:00Z",
+      "resolved_by": "session-creator-01",
+      "resolved_at": "2026-11-05T15:00Z"
+    }
+  ],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "session-creator-01",
+      "body": "Groomed by session-creator-01: intent, scope and criteria written.",
+      "at": "2026-11-04T09:00Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "session-creator-01",
+      "body": "Approved by session-creator-01: criteria covered, steps planned.",
+      "at": "2026-11-05T16:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK04",
+    "TSK05"
+  ]
+}

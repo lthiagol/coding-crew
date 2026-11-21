@@ -1,4 +1,4 @@
-┌ TSK13 · Praesentium voluptatum deleniti atque corrupti ──────────────────────────────────────────┐
+┌ TSK13 · The detail pane paints the marked note ──────────────────────────────────────────────────┐
 │Header                                                                                            │
 │──────                                                                                            │
 │┌──────────┬─────────────────────────────────────────────────────────────────────────────────────┐│
@@ -6,7 +6,7 @@
 │╞══════════╪═════════════════════════════════════════════════════════════════════════════════════╡│
 ││ id       │  TSK13                                                                              ││
 │├──────────┼─────────────────────────────────────────────────────────────────────────────────────┤│
-││ title    │ Praesentium voluptatum deleniti atque corrupti                                      ││
+││ title    │ The detail pane paints the marked note                                              ││
 │├──────────┼─────────────────────────────────────────────────────────────────────────────────────┤│
 ││ status   │  code-review                                                                        ││
 │├──────────┼─────────────────────────────────────────────────────────────────────────────────────┤│
@@ -21,26 +21,29 @@
 │├──────────┼─────────────────────────────────────────────────────────────────────────────────────┤│
 ││ effort   │  S                                                                                  ││
 │├──────────┼─────────────────────────────────────────────────────────────────────────────────────┤│
-││ tags     │  mock                                                                               ││
+││ tags     │  mock ,  raul                                                                       ││
 │└──────────┴─────────────────────────────────────────────────────────────────────────────────────┘│
 │                                                                                                  │
 │Intent                                                                                            │
 │──────                                                                                            │
 │Outcome                                                                                           │
 │                                                                                                  │
-│Et harum quidem rerum facilis est et expedita distinctio nam libero tempore.                      │
+│A  marked  span in free text is painted on the selection’s colours.                               │
 │                                                                                                  │
 │Problem                                                                                           │
 │                                                                                                  │
-│Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet.        │
+│The engine renders the mark and the pane never gives it a colour, so the mark is a word with two  │
+│equals signs around it.                                                                           │
 │                                                                                                  │
 │Scope                                                                                             │
 │─────                                                                                             │
 │In scope                                                                                          │
-│• Itaque earum rerum hic tenetur a sapiente delectus ut aut reiciendis voluptatibus.              │
+│• the projection’s mark                                                                           │
+│• the detail pane’s paint                                                                         │
 │                                                                                                  │
 │Out of scope                                                                                      │
-│• Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.              │
+│• the chrome palette                                                                              │
+│• the Review section                                                                              │
 │                                                                                                  │
 │Acceptance criteria                                                                               │
 │───────────────────                                                                               │
@@ -48,30 +51,56 @@
 ││ id          │ description  │ verification │ status   │ evidence     │ deferral │ failure      │ │
 ││             │              │              │          │              │          │ reason       │ │
 │╞═════════════╪══════════════╪══════════════╪══════════╪══════════════╪══════════╪══════════════╡ │
-││  ACCEPT-01  │ Sed ut       │  cargo test  │  passed  │  cargo test  │ none     │ none         │ │
-││             │ perspiciatis │   -p coding  │          │   --workspa  │          │              │ │
-││             │ unde omnis   │  -crew-core  │          │  ce  — exit  │          │              │ │
-││             │ iste natus   │   | grep de  │          │  0  — 10     │          │              │ │
-││             │ error sit    │  tail        │          │ passed; 0    │          │              │ │
-││             │ voluptatem   │              │          │ failed — by  │          │              │ │
-││             │ accusantium  │              │          │  runner-01   │          │              │ │
-││             │ doloremque.  │              │          │ in           │          │              │ │
+││  ACCEPT-01  │ A marked     │  cargo test  │  passed  │  cargo test  │ none     │ none         │ │
+││             │ span is      │   -p coding  │          │   -p coding  │          │              │ │
+││             │ painted on   │  -crew-core  │          │  -crew-core  │          │              │ │
+││             │ text.selecte │   | grep de  │          │   | grep de  │          │              │ │
+││             │ d.           │  tail        │          │  tail  —     │          │              │ │
+││             │              │              │          │ exit  0  —   │          │              │ │
+││             │              │              │          │ 12 passed; 0 │          │              │ │
+││             │              │              │          │ failed — by  │          │              │ │
+││             │              │              │          │  runner-01   │          │              │ │
+││             │              │              │          │ in           │          │              │ │
 ││             │              │              │          │  session-ru  │          │              │ │
 ││             │              │              │          │  nner-01  at │          │              │ │
 ││             │              │              │          │  2026-11-10  │          │              │ │
 ││             │              │              │          │  T14:00Z     │          │              │ │
+│├─────────────┼──────────────┼──────────────┼──────────┼──────────────┼──────────┼──────────────┤ │
+││  ACCEPT-02  │ A fenced     │  cargo test  │  passed  │  cargo test  │ none     │ none         │ │
+││             │ rust block   │   -p coding  │          │   -p coding  │          │              │ │
+││             │ keeps        │  -crew-raul  │          │  -crew-raul  │          │              │ │
+││             │ syntect’s    │   detail     │          │   detail  —  │          │              │ │
+││             │ code tokens. │              │          │ exit  0  —   │          │              │ │
+││             │              │              │          │ 12 passed; 0 │          │              │ │
+││             │              │              │          │ failed — by  │          │              │ │
+││             │              │              │          │  runner-01   │          │              │ │
+││             │              │              │          │ in           │          │              │ │
+││             │              │              │          │  session-ru  │          │              │ │
+││             │              │              │          │  nner-01  at │          │              │ │
+││             │              │              │          │  2026-11-10  │          │              │ │
+││             │              │              │          │  T14:05Z     │          │              │ │
 │└─────────────┴──────────────┴──────────────┴──────────┴──────────────┴──────────┴──────────────┘ │
 │                                                                                                  │
 │Steps                                                                                             │
 │─────                                                                                             │
 │ STP-01                                                                                           │
 │• order:  1                                                                                       │
-│• action: Sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.          │
-│• done when: The lorem module is read and its behaviour is described in the notes.                │
-│• files:  crates/core/tests/task_model.rs                                                         │
+│• action: Carry the mark through the bridge to the selection’s slots.                             │
+│• done when: the marked words take the selection’s colours                                        │
+│• files:  crates/raul/src/detail.rs                                                               │
 │• status:  done                                                                                   │
 │• covers:  ACCEPT-01                                                                              │
 │• depends on: none                                                                                │
+│• deviation: none                                                                                 │
+│                                                                                                  │
+│ STP-02                                                                                           │
+│• order:  2                                                                                       │
+│• action: Keep the code block’s own paint under the mark.                                         │
+│• done when: the fenced block still reads as code                                                 │
+│• files:  crates/raul/src/detail.rs                                                               │
+│• status:  done                                                                                   │
+│• covers:  ACCEPT-02                                                                              │
+│• depends on:  STP-01                                                                             │
 │• deviation: none                                                                                 │
 │                                                                                                  │
 │Review                                                                                            │
@@ -81,21 +110,23 @@
 │                                                                                                  │
 │Rounds                                                                                            │
 │                                                                                                  │
-│┌───┬───┬────────────────┬─────────────┬────────────────┬────────────────┬──────────────┬────────┐│
-││ n │ k │ focus          │ reviewer    │ verdict        │ at             │ notes        │ findin ││
-││   │ i │                │             │                │                │              │ gs     ││
-││   │ n │                │             │                │                │              │        ││
-││   │ d │                │             │                │                │              │        ││
-│╞═══╪═══╪════════════════╪═════════════╪════════════════╪════════════════╪══════════════╪════════╡│
-││  0  │  s  │  spec-complia  │  runner-01  │  changes-need  │  2026-11-10T1  │ Temporibus   │  FIN│
-││   │  e  │  nce           │             │  ed            │  6:00Z         │ autem        │  -01  │
-││   │  l  │                │             │                │                │ quibusdam et │       │
-││   │  f  │                │             │                │                │ aut officiis │       │
-││   │   │                │             │                │                │ debitis aut  │        ││
-││   │   │                │             │                │                │ rerum        │        ││
-││   │   │                │             │                │                │ necessitatib │        ││
-││   │   │                │             │                │                │ us saepe.    │        ││
-│└───┴───┴────────────────┴─────────────┴────────────────┴────────────────┴──────────────┴────────┘│
+│┌───┬───┬────────────────┬─────────────┬────────────────┬────────────────┬────────────┬──────────┐│
+││ n │ k │ focus          │ reviewer    │ verdict        │ at             │ notes      │ findings ││
+││   │ i │                │             │                │                │            │          ││
+││   │ n │                │             │                │                │            │          ││
+││   │ d │                │             │                │                │            │          ││
+│╞═══╪═══╪════════════════╪═════════════╪════════════════╪════════════════╪════════════╪══════════╡│
+││  0  │  s  │  spec-complia  │  runner-01  │  changes-need  │  2026-11-10T1  │ The        │  FIND-│
+││   │  e  │  nce           │             │  ed            │  6:00Z         │ pre-screen │  1 ,    │
+││   │  l  │                │             │                │                │ found the  │  FIND-0 │
+││   │  f  │                │             │                │                │ row and    │  2      │
+││   │   │                │             │                │                │ the mark   │          ││
+││   │   │                │             │                │                │ before the │          ││
+││   │   │                │             │                │                │ external   │          ││
+││   │   │                │             │                │                │ round      │          ││
+││   │   │                │             │                │                │ spent      │          ││
+││   │   │                │             │                │                │ budget.    │          ││
+│└───┴───┴────────────────┴─────────────┴────────────────┴────────────────┴────────────┴──────────┘│
 │                                                                                                  │
 │Findings                                                                                          │
 │                                                                                                  │
@@ -104,12 +135,25 @@
 │• status:  open                                                                                   │
 │• created:  2026-11-10T16:00Z                                                                     │
 │• resolved: none                                                                                  │
-│• description: Incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam, quis nostrud.│
+│• description: At forty columns the round’s notes wrap into the next column and the reader loses  │
+│  the verdict.                                                                                    │
 │• resolution: none                                                                                │
 │                                                                                                  │
 │Comments                                                                                          │
 │                                                                                                  │
 │none                                                                                              │
+│                                                                                                  │
+│ FIND-02                                                                                          │
+│• severity:  low                                                                                  │
+│• status:  fixed                                                                                  │
+│• created:  2026-11-10T16:00Z                                                                     │
+│• resolved:  2026-11-10T16:30Z                                                                    │
+│• description: The mark’s background says nothing about the selection.                            │
+│• resolution: The mark now reads the selection’s two slots, foreground and background.            │
+│                                                                                                  │
+│Comments                                                                                          │
+│•  CMT-01  —  runner-01  at  2026-11-10T16:10Z                                                    │
+│  Took the slots from the pane rather than inventing a third colour.                              │
 │                                                                                                  │
 │Questions                                                                                         │
 │─────────                                                                                         │
@@ -127,8 +171,9 @@
 │• author:  runner-01                                                                              │
 │• at:  2026-11-11T09:00Z                                                                          │
 │                                                                                                  │
-│Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe. The  key       │
-│finding  is marked for the next round.                                                            │
+│The first criterion is proven and the second follows the same command.                            │
+│                                                                                                  │
+│The  key finding  is marked for the next round.                                                   │
 │┌─ rust ─────────────────────────────────────┐                                                    │
 ││ let answer = 42;                           │                                                    │
 │└────────────────────────────────────────────┘                                                    │
@@ -136,8 +181,8 @@
 │Dependencies                                                                                      │
 │────────────                                                                                      │
 │Waits on                                                                                          │
-│•  TSK22  —  done  — Et harum quidem rerum facilis est et expedita                                │
-│•  TSK23  —  done  — Nemo enim ipsam voluptatem quia voluptas sit                                 │
+│•  TSK22  —  done  — The terminal column table is generated from its rules                        │
+│•  TSK23  —  done  — The Needs you age says under a minute                                        │
 │                                                                                                  │
 │Waits on this                                                                                     │
 │                                                                                                  │
@@ -146,6 +191,21 @@
 │Children                                                                                          │
 │────────                                                                                          │
 │none                                                                                              │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

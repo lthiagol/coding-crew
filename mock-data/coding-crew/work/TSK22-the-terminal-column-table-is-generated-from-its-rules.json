@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "id": "TSK22",
+  "title": "The terminal column table is generated from its rules",
+  "slug": "the-terminal-column-table-is-generated-from-its-rules",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-05T14:00Z",
+  "updated": "2026-11-05T18:10Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "done",
+  "status_since": "2026-11-05T18:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-04",
+    "session": "session-runner-04",
+    "at": "2026-11-05T15:00Z",
+    "lease_expires_at": "2026-11-05T18:00Z"
+  },
+  "planned_by": "session-creator-04",
+  "meta": {
+    "priority": "high",
+    "effort": "S",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "The committed column table is what its rule lines generate.",
+    "problem": "A range edited by hand drifts from the rule it claims to unroll."
+  },
+  "scope": {
+    "in_scope": [
+      "scripts/terminal-columns.txt",
+      "scripts/generate-terminal-columns.py"
+    ],
+    "out_of_scope": [
+      "the sweep's measurements",
+      "the width tests"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "Regenerating the table leaves the committed file unchanged.",
+      "verification": "python3 scripts/generate-terminal-columns.py --check",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "python3 scripts/generate-terminal-columns.py --check",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-05T16:00Z",
+          "by": "runner-04",
+          "session": "session-runner-04"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A rule edited without regenerating fails the check.",
+      "verification": "cargo test -p coding-crew-raul render_plain",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul render_plain",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-05T16:05Z",
+          "by": "runner-04",
+          "session": "session-runner-04"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Parse the rule lines and derive the ranges from them.",
+      "done_when": "the table's ranges are the rules unrolled",
+      "files": [
+        "scripts/generate-terminal-columns.py"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Run the generator in the gate.",
+      "done_when": "a drifted table fails the gate",
+      "files": [
+        "scripts/test-pty-sweep.sh"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-04",
+        "verdict": "ok",
+        "at": "2026-11-05T17:00Z",
+        "notes": "The pre-screen is clean; the work leaves for the external round.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "spec-compliance",
+        "reviewer": "reviewer-05",
+        "verdict": "ok",
+        "at": "2026-11-05T18:00Z",
+        "notes": "The work is reviewed clean and the criteria are proven.",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Does the row carry the count before or after the label?",
+      "status": "resolved",
+      "answer": "After the label, so the count reads as the label's.",
+      "raised_by": "human",
+      "raised_at": "2026-11-04T10:00Z",
+      "resolved_by": "session-creator-04",
+      "resolved_at": "2026-11-05T14:00Z"
+    }
+  ],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-04",
+      "body": "The work is done and the evidence is attached; the review is closed.",
+      "at": "2026-11-05T16:05Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "reviewer-05",
+      "body": "Reviewed clean: the criteria are proven and no finding is open.",
+      "at": "2026-11-05T18:10Z"
+    }
+  ],
+  "depends_on": []
+}

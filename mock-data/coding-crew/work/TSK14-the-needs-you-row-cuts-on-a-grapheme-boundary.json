@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "id": "TSK14",
+  "title": "The Needs you row cuts on a grapheme boundary",
+  "slug": "the-needs-you-row-cuts-on-a-grapheme-boundary",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-03T14:00Z",
+  "updated": "2026-11-12T09:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "code-review",
+  "status_since": "2026-11-11T16:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-02",
+    "session": "session-runner-02",
+    "at": "2026-11-11T09:00Z",
+    "lease_expires_at": "2026-11-11T18:00Z"
+  },
+  "planned_by": "session-creator-02",
+  "meta": {
+    "priority": "high",
+    "effort": "M",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A row that does not fit is cut between whole graphemes.",
+    "problem": "A scalar cut leaves a dangling combining mark at the edge of a narrow row."
+  },
+  "scope": {
+    "in_scope": [
+      "the Needs you row",
+      "the cut helper"
+    ],
+    "out_of_scope": [
+      "the Path row",
+      "the footer"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A combining mark never starts a row.",
+      "verification": "cargo test -p coding-crew-raul needs",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul needs",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-11T14:00Z",
+          "by": "runner-02",
+          "session": "session-runner-02"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The cut marker is the last grapheme, not a half one.",
+      "verification": "cargo test -p coding-crew-raul needs",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul needs",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-11T14:05Z",
+          "by": "runner-02",
+          "session": "session-runner-02"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Cut the title through the shared helper.",
+      "done_when": "the row keeps whole graphemes",
+      "files": [
+        "crates/raul/src/needs.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Pin the cut against a title built from combining marks.",
+      "done_when": "a scalar cut fails the pin",
+      "files": [
+        "crates/raul/src/needs.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-02",
+        "verdict": "changes-needed",
+        "at": "2026-11-11T16:00Z",
+        "notes": "The pre-screen found the row and the mark before the external round spent budget.",
+        "findings": [
+          "FIND-01"
+        ]
+      }
+    ],
+    "verdict": null,
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "open",
+        "description": "The row cuts after the age and the finding count disappears from the row.",
+        "created": "2026-11-11T16:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "reviewer-02",
+            "body": "The row keeps the count when the cut moves it.",
+            "at": "2026-11-11T17:00Z"
+          }
+        ]
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-02",
+      "body": "The first criterion is proven and the second follows the same command.",
+      "at": "2026-11-12T09:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK23",
+    "TSK24"
+  ]
+}

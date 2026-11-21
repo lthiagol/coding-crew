@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "TSK28",
+  "title": "The review nests a round with no findings",
+  "slug": "the-review-nests-a-round-with-no-findings",
+  "parent": "TSK07",
+  "children": [],
+  "created": "2026-11-04T11:00Z",
+  "updated": "2026-11-04T11:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "draft",
+  "status_since": "2026-11-04T11:00Z",
+  "overlays": {},
+  "claim": null,
+  "planned_by": null,
+  "meta": {
+    "priority": "normal",
+    "effort": "L",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "",
+    "problem": ""
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": []
+  },
+  "acceptance_criteria": [],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

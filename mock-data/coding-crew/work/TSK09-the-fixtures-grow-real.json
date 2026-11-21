@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "id": "TSK09",
+  "title": "The fixtures grow real",
+  "slug": "the-fixtures-grow-real",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-04T09:00Z",
+  "updated": "2026-11-14T09:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "approved",
+  "status_since": "2026-11-07T18:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-09",
+    "session": "session-runner-09",
+    "at": "2026-11-14T09:00Z",
+    "lease_expires_at": "2099-12-31T00:00:00Z"
+  },
+  "planned_by": "session-creator-03",
+  "meta": {
+    "priority": "urgent",
+    "effort": "L",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "The mock holds real work in enough shapes that every screen can be judged against it.",
+    "problem": "The mock is lorem ipsum: one sentence per field, one criterion, one step, no questions and no children, so a task opened today is a stub."
+  },
+  "scope": {
+    "in_scope": [
+      "mock-data/generate.py",
+      "the fixtures it writes"
+    ],
+    "out_of_scope": [
+      "the model in crates/core",
+      "the projection",
+      "raul's screens"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "Every field the model defines is populated by some fixture.",
+      "verification": "cargo test -p coding-crew-core mock_data",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The generator reproduces the committed tree byte for byte.",
+      "verification": "python3 mock-data/generate.py && git diff --exit-code mock-data",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Write real briefs, criteria and steps for every phase.",
+      "done_when": "no fixture reads as lorem ipsum",
+      "files": [
+        "mock-data/generate.py"
+      ],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Add the review, finding and question shapes the screens need.",
+      "done_when": "every nested field has a fixture",
+      "files": [
+        "mock-data/generate.py"
+      ],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "session-creator-03",
+      "body": "Groomed by session-creator-03: intent, scope and criteria written.",
+      "at": "2026-11-06T09:00Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "session-creator-03",
+      "body": "Approved by session-creator-03: criteria covered, steps planned.",
+      "at": "2026-11-07T18:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK23"
+  ]
+}

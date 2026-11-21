@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "id": "TSK26",
+  "title": "The store skips a broken file and names it",
+  "slug": "the-store-skips-a-broken-file-and-names-it",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-03T10:00Z",
+  "updated": "2026-11-08T12:10Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "done",
+  "status_since": "2026-11-08T12:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-08",
+    "session": "session-runner-08",
+    "at": "2026-11-08T09:00Z",
+    "lease_expires_at": "2026-11-08T12:00Z"
+  },
+  "planned_by": "session-creator-08",
+  "meta": {
+    "priority": "high",
+    "effort": "M",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "One unreadable file is skipped, named, and never hides the rest of the folder.",
+    "problem": "A reader that stops on the first broken file hides a whole folder behind one bad byte."
+  },
+  "scope": {
+    "in_scope": [
+      "the store's listing",
+      "the unreadable marker"
+    ],
+    "out_of_scope": [
+      "the JSON shape",
+      "the duplicate-id rule"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A broken file does not hide the readable tasks.",
+      "verification": "cargo test -p coding-crew-core store",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-core store",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-08T10:00Z",
+          "by": "runner-08",
+          "session": "session-runner-08"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The broken file is named with its parse error.",
+      "verification": "cargo test -p coding-crew-core store",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-core store",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-08T10:05Z",
+          "by": "runner-08",
+          "session": "session-runner-08"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Read each file alone and keep the error beside the list.",
+      "done_when": "a broken file becomes an error row",
+      "files": [
+        "crates/core/src/store.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Draw the error row after the tasks.",
+      "done_when": "the folder is never hidden",
+      "files": [
+        "crates/raul/src/overview.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-08",
+        "verdict": "ok",
+        "at": "2026-11-08T11:00Z",
+        "notes": "The pre-screen is clean; the work leaves for the external round.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "reviewer-09",
+        "verdict": "ok",
+        "at": "2026-11-08T12:00Z",
+        "notes": "The folder is never hidden and the error is named.",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "low",
+        "status": "dismissed",
+        "description": "The broken file's name is cut at a narrow pane.",
+        "created": "2026-11-08T09:30Z",
+        "resolved": "2026-11-08T09:45Z",
+        "resolution": "The name is the row's own; the cut is the pane's, and the marker says so.",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "reviewer-09",
+            "body": "A cut name is still a name; the marker carries the rest.",
+            "at": "2026-11-08T09:40Z"
+          }
+        ]
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-08",
+      "body": "The work is done and the evidence is attached; the review is closed.",
+      "at": "2026-11-08T10:05Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "reviewer-09",
+      "body": "Reviewed clean: the criteria are proven and no finding is open.",
+      "at": "2026-11-08T12:10Z"
+    }
+  ],
+  "depends_on": [
+    "TSK23",
+    "TSK24",
+    "TSK25"
+  ]
+}

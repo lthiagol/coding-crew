@@ -109,6 +109,12 @@
       "by": "human"
     },
     {
+      "at": "2026-11-05T12:00Z",
+      "kind": "created",
+      "task": "TSK30",
+      "by": "human"
+    },
+    {
       "at": "2026-11-05T14:00Z",
       "kind": "created",
       "task": "TSK22",
@@ -142,6 +148,13 @@
       "note": "left the human lane"
     },
     {
+      "at": "2026-11-05T16:05Z",
+      "kind": "commented",
+      "task": "TSK22",
+      "by": "runner",
+      "note": "The work is done and the evidence is attached; the review is closed."
+    },
+    {
       "at": "2026-11-05T17:00Z",
       "kind": "review_requested",
       "task": "TSK22",
@@ -154,6 +167,13 @@
       "task": "TSK22",
       "by": "reviewer",
       "note": "reviewed clean"
+    },
+    {
+      "at": "2026-11-05T18:10Z",
+      "kind": "commented",
+      "task": "TSK22",
+      "by": "reviewer",
+      "note": "Reviewed clean: the criteria are proven and no finding is open."
     },
     {
       "at": "2026-11-06T09:00Z",
@@ -207,6 +227,13 @@
       "note": "left the human lane"
     },
     {
+      "at": "2026-11-06T17:05Z",
+      "kind": "commented",
+      "task": "TSK23",
+      "by": "runner",
+      "note": "The work is done and the evidence is attached; the review is closed."
+    },
+    {
       "at": "2026-11-06T18:00Z",
       "kind": "review_requested",
       "task": "TSK23",
@@ -215,23 +242,37 @@
     },
     {
       "at": "2026-11-06T19:00Z",
+      "kind": "finding_raised",
+      "task": "TSK23",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-06T19:30Z",
+      "kind": "remediated",
+      "task": "TSK23",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-06T20:00Z",
       "kind": "completed",
       "task": "TSK23",
       "by": "reviewer",
       "note": "reviewed clean"
     },
     {
+      "at": "2026-11-06T20:10Z",
+      "kind": "commented",
+      "task": "TSK23",
+      "by": "reviewer",
+      "note": "Reviewed clean: the criteria are proven and no finding is open."
+    },
+    {
       "at": "2026-11-07T10:00Z",
       "kind": "created",
       "task": "TSK18",
       "by": "human"
-    },
-    {
-      "at": "2026-11-07T10:00Z",
-      "kind": "commented",
-      "task": "TSK04",
-      "by": "human",
-      "note": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe."
     },
     {
       "at": "2026-11-07T12:00Z",
@@ -266,6 +307,20 @@
       "note": "claimed by runner-06"
     },
     {
+      "at": "2026-11-07T17:35Z",
+      "kind": "commented",
+      "task": "TSK24",
+      "by": "runner",
+      "note": "The work is done and the evidence is attached; the review is closed."
+    },
+    {
+      "at": "2026-11-07T17:45Z",
+      "kind": "review_requested",
+      "task": "TSK24",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
       "at": "2026-11-07T18:00Z",
       "kind": "approved",
       "task": "TSK09",
@@ -273,11 +328,60 @@
       "note": "left the human lane"
     },
     {
-      "at": "2026-11-07T19:00Z",
-      "kind": "review_requested",
+      "at": "2026-11-07T18:00Z",
+      "kind": "finding_raised",
+      "task": "TSK24",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-07T18:07Z",
+      "kind": "remediated",
       "task": "TSK24",
       "by": "runner",
-      "note": "sent to review"
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-07T18:15Z",
+      "kind": "finding_raised",
+      "task": "TSK24",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-07T18:22Z",
+      "kind": "remediated",
+      "task": "TSK24",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-07T18:30Z",
+      "kind": "finding_raised",
+      "task": "TSK24",
+      "by": "reviewer",
+      "note": "raised FIND-03"
+    },
+    {
+      "at": "2026-11-07T18:37Z",
+      "kind": "remediated",
+      "task": "TSK24",
+      "by": "runner",
+      "note": "answered the findings"
+    },
+    {
+      "at": "2026-11-07T18:45Z",
+      "kind": "completed",
+      "task": "TSK24",
+      "by": "reviewer",
+      "note": "reviewed clean"
+    },
+    {
+      "at": "2026-11-07T18:55Z",
+      "kind": "commented",
+      "task": "TSK24",
+      "by": "reviewer",
+      "note": "Reviewed clean: the criteria are proven and no finding is open."
     },
     {
       "at": "2026-11-07T20:00Z",
@@ -287,18 +391,18 @@
       "note": "left the human lane"
     },
     {
-      "at": "2026-11-07T20:00Z",
-      "kind": "completed",
-      "task": "TSK24",
-      "by": "reviewer",
-      "note": "reviewed clean"
-    },
-    {
       "at": "2026-11-07T20:30Z",
       "kind": "claimed",
       "task": "TSK25",
       "by": "runner",
       "note": "claimed by runner-07"
+    },
+    {
+      "at": "2026-11-07T20:45Z",
+      "kind": "commented",
+      "task": "TSK25",
+      "by": "runner",
+      "note": "The work is done and the evidence is attached; the review is closed."
     },
     {
       "at": "2026-11-07T20:50Z",
@@ -315,6 +419,13 @@
       "note": "reviewed clean"
     },
     {
+      "at": "2026-11-07T21:10Z",
+      "kind": "commented",
+      "task": "TSK25",
+      "by": "reviewer",
+      "note": "Reviewed clean: the criteria are proven and no finding is open."
+    },
+    {
       "at": "2026-11-08T08:30Z",
       "kind": "approved",
       "task": "TSK26",
@@ -329,6 +440,20 @@
       "note": "claimed by runner-08"
     },
     {
+      "at": "2026-11-08T09:30Z",
+      "kind": "finding_raised",
+      "task": "TSK26",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-08T10:05Z",
+      "kind": "commented",
+      "task": "TSK26",
+      "by": "runner",
+      "note": "The work is done and the evidence is attached; the review is closed."
+    },
+    {
       "at": "2026-11-08T11:00Z",
       "kind": "review_requested",
       "task": "TSK26",
@@ -341,6 +466,20 @@
       "task": "TSK26",
       "by": "reviewer",
       "note": "reviewed clean"
+    },
+    {
+      "at": "2026-11-08T12:10Z",
+      "kind": "commented",
+      "task": "TSK26",
+      "by": "reviewer",
+      "note": "Reviewed clean: the criteria are proven and no finding is open."
+    },
+    {
+      "at": "2026-11-08T14:00Z",
+      "kind": "commented",
+      "task": "TSK05",
+      "by": "human",
+      "note": "The blocked reason names the design question the human has to settle first."
     },
     {
       "at": "2026-11-09T08:30Z",
@@ -361,7 +500,7 @@
       "kind": "commented",
       "task": "TSK10",
       "by": "runner",
-      "note": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe."
+      "note": "The first criterion is proven. The second is waiting on the fixture the next unit writes."
     },
     {
       "at": "2026-11-10T08:30Z",
@@ -396,7 +535,7 @@
       "kind": "commented",
       "task": "TSK11",
       "by": "runner",
-      "note": "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip."
+      "note": "The first criterion is proven. The second is waiting on the fixture the next unit writes."
     },
     {
       "at": "2026-11-10T16:00Z",
@@ -411,6 +550,13 @@
       "task": "TSK13",
       "by": "reviewer",
       "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-10T16:00Z",
+      "kind": "finding_raised",
+      "task": "TSK13",
+      "by": "reviewer",
+      "note": "raised FIND-02"
     },
     {
       "at": "2026-11-11T08:30Z",
@@ -445,21 +591,14 @@
       "kind": "commented",
       "task": "TSK13",
       "by": "runner",
-      "note": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe. The ==key finding== is marked for the next round."
-    },
-    {
-      "at": "2026-11-11T12:00Z",
-      "kind": "commented",
-      "task": "TSK06",
-      "by": "human",
-      "note": "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum."
+      "note": "The first criterion is proven and the second follows the same command."
     },
     {
       "at": "2026-11-11T13:00Z",
       "kind": "commented",
       "task": "TSK12",
       "by": "runner",
-      "note": "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum."
+      "note": "The first criterion is proven. The second is waiting on the fixture the next unit writes."
     },
     {
       "at": "2026-11-11T16:00Z",
@@ -473,7 +612,7 @@
       "kind": "finding_raised",
       "task": "TSK14",
       "by": "reviewer",
-      "note": "raised FIND-02"
+      "note": "raised FIND-01"
     },
     {
       "at": "2026-11-12T08:30Z",
@@ -494,7 +633,7 @@
       "kind": "commented",
       "task": "TSK14",
       "by": "runner",
-      "note": "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip."
+      "note": "The first criterion is proven and the second follows the same command."
     },
     {
       "at": "2026-11-12T16:00Z",
@@ -508,7 +647,14 @@
       "kind": "finding_raised",
       "task": "TSK15",
       "by": "reviewer",
-      "note": "raised FIND-03"
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-12T16:00Z",
+      "kind": "finding_raised",
+      "task": "TSK15",
+      "by": "reviewer",
+      "note": "raised FIND-02"
     },
     {
       "at": "2026-11-13T08:30Z",
@@ -529,7 +675,7 @@
       "kind": "commented",
       "task": "TSK15",
       "by": "runner",
-      "note": "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum."
+      "note": "The first criterion is proven and the second follows the same command."
     },
     {
       "at": "2026-11-13T09:30Z",
@@ -563,6 +709,20 @@
       "at": "2026-11-13T17:00Z",
       "kind": "finding_raised",
       "task": "TSK16",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-13T17:00Z",
+      "kind": "finding_raised",
+      "task": "TSK16",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-13T18:00Z",
+      "kind": "finding_raised",
+      "task": "TSK17",
       "by": "reviewer",
       "note": "raised FIND-01"
     },
@@ -690,7 +850,7 @@
       "kind": "commented",
       "task": "TSK19",
       "by": "reviewer",
-      "note": "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe."
+      "note": "The budget is spent and the loop stops here: a human decides the next move."
     },
     {
       "at": "2026-11-14T15:00Z",
@@ -704,7 +864,14 @@
       "kind": "finding_raised",
       "task": "TSK18",
       "by": "reviewer",
-      "note": "raised FIND-03"
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-14T17:00Z",
+      "kind": "finding_raised",
+      "task": "TSK18",
+      "by": "reviewer",
+      "note": "raised FIND-02"
     },
     {
       "at": "2026-11-15T00:30Z",
@@ -802,7 +969,7 @@
       "kind": "commented",
       "task": "TSK20",
       "by": "reviewer",
-      "note": "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip."
+      "note": "The budget is spent and the loop stops here: a human decides the next move."
     },
     {
       "at": "2026-11-16T00:30Z",
@@ -907,7 +1074,7 @@
       "kind": "commented",
       "task": "TSK21",
       "by": "reviewer",
-      "note": "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum."
+      "note": "The budget is spent and the loop stops here: a human decides the next move."
     }
   ]
 }

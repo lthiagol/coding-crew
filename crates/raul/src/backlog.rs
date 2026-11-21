@@ -1383,14 +1383,14 @@ mod tests {
         );
         assert_eq!(groups[0].rows.len(), 1, "ideas");
         assert_eq!(groups[1].rows.len(), 4, "small tasks");
-        assert_eq!(groups[2].rows.len(), 5, "drafts");
+        assert_eq!(groups[2].rows.len(), 6, "drafts");
         assert_eq!(
             groups[0].rows,
             vec![row(
                 "ITM01",
                 "idea",
-                "Lorem ipsum dolor sit amet",
-                None,
+                "The Overview says how long the run has been going",
+                Some("the Overview's activity block"),
                 "open",
                 false,
             )]
@@ -1401,32 +1401,32 @@ mod tests {
                 row(
                     "ITM02",
                     "feature",
-                    "Tempor incididunt ut labore et dolore",
-                    Some("the lorem pane"),
+                    "The Path row names the round it waits on",
+                    Some("the Path rows, the review state"),
                     "open",
                     false,
                 ),
                 row(
                     "ITM03",
                     "bug",
-                    "Quis nostrud exercitation ullamco laboris",
-                    Some("the lorem list"),
+                    "hugo says its configuration home could not be made",
+                    Some("hugo's sidebar, the configuration home"),
                     "open",
                     false,
                 ),
                 row(
                     "ITM04",
                     "feature",
-                    "Sed do eiusmod tempor incididunt",
-                    None,
+                    "The light theme families",
+                    Some("Catppuccin Latte, Nord Light, Dracula Alucard"),
                     "dismissed",
                     true,
                 ),
                 row(
                     "ITM05",
                     "bug",
-                    "Duis aute irure dolor in reprehenderit",
-                    Some("the lorem button"),
+                    "The candidate row cuts a wide title",
+                    Some("the candidate row"),
                     "promoted",
                     true,
                 ),
@@ -1438,7 +1438,7 @@ mod tests {
                 row(
                     "TSK01",
                     "draft",
-                    "At vero eos et accusamus et iusto odio",
+                    "The Settings tab remembers the chosen theme",
                     None,
                     "draft",
                     true,
@@ -1446,7 +1446,7 @@ mod tests {
                 row(
                     "TSK02",
                     "draft",
-                    "Totam rem aperiam eaque ipsa quae ab illo",
+                    "The footer says how many rows it hides",
                     None,
                     "draft",
                     true,
@@ -1454,7 +1454,7 @@ mod tests {
                 row(
                     "TSK03",
                     "draft",
-                    "Ut enim ad minim veniam quis nostrud",
+                    "hugo opens the herdr tab and starts its agent",
                     None,
                     "draft",
                     true,
@@ -1462,15 +1462,23 @@ mod tests {
                 row(
                     "TSK27",
                     "draft",
-                    "Duis aute irure dolor in reprehenderit",
-                    Some("the lorem button"),
+                    "The candidate row cuts a wide title",
+                    Some("the candidate row"),
                     "draft",
                     true,
                 ),
                 row(
                     "TSK28",
                     "draft",
-                    "Temporibus autem quibusdam et aut officiis",
+                    "The review nests a round with no findings",
+                    None,
+                    "draft",
+                    true,
+                ),
+                row(
+                    "TSK30",
+                    "draft",
+                    "The review shows a finding that belongs to no round",
                     None,
                     "draft",
                     true,
@@ -1487,11 +1495,13 @@ mod tests {
         let groups = groups(&mock_work());
         for height in [1usize, 2] {
             let text = text_of(&lines(&groups, 38, height, &theme(), None));
-            for name in ["IDEAS", "SMALL TASKS", "DRAFTS"] {
+            for group in &groups {
+                let name = group.kind.label();
                 assert!(text.contains(name), "{height}: {name} is missing: {text}");
-            }
-            for count in ["1", "4", "5"] {
-                assert!(text.contains(count), "{height}: {count} is missing: {text}");
+                assert!(
+                    text.contains(&group.rows.len().to_string()),
+                    "{height}: the count of {name} is missing: {text}"
+                );
             }
         }
     }
@@ -1678,10 +1688,13 @@ mod tests {
 
     #[test]
     fn the_groups_have_the_shape_of_the_spec() {
-        let text = draw(&mock_work(), 100, 40).join("\n");
-        assert!(text.contains("IDEAS · 1"), "{text}");
-        assert!(text.contains("SMALL TASKS · 4"), "{text}");
-        assert!(text.contains("DRAFTS · 5"), "{text}");
+        let work = mock_work();
+        let groups = groups(&work);
+        let text = draw(&work, 100, 40).join("\n");
+        for group in &groups {
+            let heading = format!("{} · {}", group.kind.label(), group.rows.len());
+            assert!(text.contains(&heading), "{heading} is missing: {text}");
+        }
         let ideas = text.find("IDEAS").expect("the ideas heading");
         let small = text.find("SMALL TASKS").expect("the small tasks heading");
         let drafts = text.find("DRAFTS").expect("the drafts heading");
@@ -1696,13 +1709,13 @@ mod tests {
             .find(|line| line.contains("ITM04"))
             .unwrap_or_else(|| panic!("no ITM04 row: {text}"));
         assert!(row.contains("feature"), "{row}");
-        assert!(row.contains("Sed do eiusmod tempor incididunt"), "{row}");
+        assert!(row.contains("The light theme families"), "{row}");
         assert!(row.contains("dismissed"), "{row}");
         let row = text
             .lines()
             .find(|line| line.contains("TSK27"))
             .unwrap_or_else(|| panic!("no TSK27 row: {text}"));
-        assert!(row.contains("the lorem button"), "{row}");
+        assert!(row.contains("the candidate row"), "{row}");
         assert!(row.contains("draft"), "{row}");
     }
 
@@ -1803,26 +1816,29 @@ mod tests {
         // scope are cut: at this width the id, the title and the scope are
         // still whole.
         let groups = groups(&mock_work());
-        let text = text_of(&lines(&groups, 70, 40, &theme(), None));
+        let text = text_of(&lines(&groups, 80, 40, &theme(), None));
         let row = text
             .lines()
             .find(|line| line.contains("ITM02"))
             .unwrap_or_else(|| panic!("no ITM02 row: {text}"));
         assert!(
-            row.contains("Tempor incididunt ut labore et dolore"),
+            row.contains("The Path row names the round it waits on"),
             "{row}"
         );
-        assert!(row.contains("the lorem pane"), "{row}");
+        assert!(row.contains("the Path rows"), "{row}");
         assert!(!row.contains("feature"), "{row}");
         // Narrower still: the id gives way before the title and the scope,
         // which keep their room.
         let text = text_of(&lines(&groups, 58, 40, &theme(), None));
         assert!(!text.contains("ITM02"), "{text}");
-        assert!(text.contains("Tempor incidid"), "{text}");
-        assert!(text.contains("the lorem pane"), "{text}");
+        assert!(
+            text.contains("The Path row names the roun…"),
+            "the title is cut without its marker: {text}"
+        );
+        assert!(text.contains("the Path rows"), "{text}");
         let row = text
             .lines()
-            .find(|line| line.contains("Tempor incidid"))
+            .find(|line| line.contains("The Path row"))
             .expect("the smallest row");
         assert!(!row.contains("feature"), "{row}");
     }
@@ -1852,7 +1868,8 @@ mod tests {
         let theme = theme();
         let groups = groups(&mock_work());
         let lines = lines(&groups, 100, 40, &theme, None);
-        for (heading, count) in [("IDEAS", "1"), ("SMALL TASKS", "4"), ("DRAFTS", "5")] {
+        for (index, heading) in ["IDEAS", "SMALL TASKS", "DRAFTS"].into_iter().enumerate() {
+            let count = groups[index].rows.len().to_string();
             let header = lines
                 .iter()
                 .find(|line| {
@@ -1914,21 +1931,32 @@ mod tests {
         let open = &groups[0].rows[0];
         let settled = &groups[1].rows[2];
         // A row that is not the cursor's keeps its own paint.
-        let plain = row_line(open, 60, metrics, &theme, None);
+        let plain = row_line(open, 100, metrics, &theme, None);
         assert_eq!(plain.spans[0].style, theme.text.normal, "an open row's id");
-        let plain = row_line(settled, 60, metrics, &theme, None);
+        let plain = row_line(settled, 100, metrics, &theme, None);
         assert_eq!(plain.spans[0].style, theme.text.dim, "a settled row's id");
         // The cursor's row takes the selection's pair on every cell, and the
-        // bar runs to the edge of the pane.
-        let selected = row_line(open, 60, metrics, &theme, Some("ITM01"));
-        assert_eq!(selected.width(), 60, "the selection bar stops short");
-        for span in &selected.spans {
-            assert_eq!(span.style, selection, "{:?} is not the selection", span);
+        // bar runs to the edge of the pane. The rule is a narrow-pane rule as
+        // much as a wide one: at 60 the title and the scope are cut, and the
+        // bar still reaches the edge.
+        for width in [60, 100] {
+            let selected = row_line(open, width, metrics, &theme, Some("ITM01"));
+            assert_eq!(
+                selected.width(),
+                width,
+                "{width}: the selection bar stops short"
+            );
+            for span in &selected.spans {
+                assert_eq!(
+                    span.style, selection,
+                    "{width}: {span:?} is not the selection"
+                );
+            }
+            assert_eq!(selected.spans[0].style.fg, selection.fg);
+            assert_eq!(selected.spans[0].style.bg, selection.bg);
         }
-        assert_eq!(selected.spans[0].style.fg, selection.fg);
-        assert_eq!(selected.spans[0].style.bg, selection.bg);
         // Another row is not painted as the selection.
-        let other = row_line(settled, 60, metrics, &theme, Some("ITM01"));
+        let other = row_line(settled, 100, metrics, &theme, Some("ITM01"));
         assert_eq!(other.spans[0].style, theme.text.dim);
     }
 
@@ -2008,9 +2036,14 @@ mod tests {
     fn the_announcement_counts_the_hidden_rows_and_not_the_group_total() {
         // At 100x10 the DRAFTS header holds the whole group's count, and
         // the announcement says what is left out of view instead.
-        let text = draw(&mock_work(), 100, 10).join("\n");
-        assert!(text.contains("DRAFTS (5 hidden)"), "{text}");
-        assert!(!text.contains("DRAFTS · 5"), "{text}");
+        let work = mock_work();
+        let drafts = groups(&work)[2].rows.len();
+        let text = draw(&work, 100, 10).join("\n");
+        assert!(
+            text.contains(&format!("DRAFTS ({drafts} hidden)")),
+            "{text}"
+        );
+        assert!(!text.contains(&format!("DRAFTS · {drafts}")), "{text}");
     }
 
     #[test]
@@ -2058,12 +2091,14 @@ mod tests {
             Some(dim),
             "the test cannot tell normal from dim"
         );
-        let cells = draw_cells(&mock_work(), 100, 40);
+        let work = mock_work();
+        let drafts = groups(&work)[2].rows.len();
+        let cells = draw_cells(&work, 100, 40);
         let row = cells
             .iter()
             .find(|row| {
                 let text: String = row.iter().map(|(symbol, _)| *symbol).collect();
-                text.contains("DRAFTS") && text.contains("· 5")
+                text.contains("DRAFTS") && text.contains(&format!("· {drafts}"))
             })
             .unwrap_or_else(|| panic!("no DRAFTS header"));
         assert_eq!(
@@ -2071,15 +2106,16 @@ mod tests {
             Some(&dim),
             "the draft heading is not dim"
         );
-        let count = row
-            .iter()
-            .map(|(symbol, _)| *symbol)
-            .collect::<Vec<char>>()
-            .windows(3)
-            .position(|window| window == ['·', ' ', '5'].as_slice())
-            .map(|at| row[at + 2].1)
+        let count = row.iter().map(|(symbol, _)| *symbol).collect::<Vec<char>>();
+        let at = count
+            .windows(2)
+            .position(|window| window == ['·', ' '])
             .expect("the DRAFTS count");
-        assert_eq!(count, strong, "the draft count is not strong");
+        let colour = row
+            .get(at + 2)
+            .map(|(_, colour)| *colour)
+            .expect("the DRAFTS count");
+        assert_eq!(colour, strong, "the draft count is not strong");
     }
 
     /// The title fixture: one wide, one combining and one joined grapheme.

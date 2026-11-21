@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "ITM04",
+  "title": "The light theme families",
+  "slug": "the-light-theme-families",
+  "kind": "feature",
+  "status": "dismissed",
+  "body": "Catppuccin Latte, Nord Light and Dracula Alucard would finish the families.",
+  "scope": [
+    "Catppuccin Latte",
+    "Nord Light",
+    "Dracula Alucard"
+  ],
+  "tags": [
+    "mock"
+  ],
+  "created": "2026-11-02T08:00Z",
+  "updated": "2026-11-06T15:00Z",
+  "promoted_to": null,
+  "dismissed_reason": "Deferred by the human: the light themes wait until the dark presets are settled."
+}

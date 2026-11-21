@@ -37,6 +37,28 @@ fn repo_root() -> PathBuf {
         .expect("the repository root")
 }
 
+/// The committed fixture file for a task id.
+///
+/// The title drives the file name, so a test that needs one task finds it by
+/// the id prefix rather than by a slug the generator rewrites.
+fn fixture_path(id: &str) -> PathBuf {
+    let dir = repo_root().join(WORK);
+    let prefix = format!("{id}-");
+    let mut matches: Vec<PathBuf> = fs::read_dir(&dir)
+        .expect("the work folder")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with(&prefix) && name.ends_with(".json"))
+        })
+        .collect();
+    matches.sort();
+    assert_eq!(matches.len(), 1, "{id} names {} fixtures", matches.len());
+    matches.pop().expect("the fixture")
+}
+
 fn run(args: &[&str]) -> Output {
     run_in(&repo_root(), args)
 }
@@ -344,21 +366,21 @@ fn sweep_width(line: &str) -> usize {
 
 /// A work folder holding one approved task whose title is a wide grapheme.
 fn wide_task_work() -> PathBuf {
-    let source = repo_root()
-        .join(WORK)
-        .join("TSK29-lorem-ipsum-dolor-sit-amet.json");
-    let task = fs::read_to_string(&source)
-        .expect("the task the wide title is built from")
-        .replace("\"TSK29\"", "\"TSK01\"")
-        .replace("\"Lorem ipsum dolor sit amet\"", "\"界\"")
-        .replace(
-            "\"depends_on\": [\n    \"TSK22\"\n  ]",
-            "\"depends_on\": []",
-        );
+    let source = fixture_path("TSK29");
+    let text = fs::read_to_string(&source).expect("the task the wide title is built from");
+    let mut task: serde_json::Value = serde_json::from_str(&text).expect("the fixture parses");
+    task["id"] = serde_json::json!("TSK01");
+    task["title"] = serde_json::json!("界");
+    task["slug"] = serde_json::json!("wide");
+    task["depends_on"] = serde_json::json!([]);
     let dir = std::env::temp_dir().join(format!("raul-wide-grapheme-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("a work folder");
-    fs::write(dir.join("TSK01-wide.json"), task).expect("writing the wide task");
+    fs::write(
+        dir.join("TSK01-wide.json"),
+        serde_json::to_string_pretty(&task).expect("a task") + "\n",
+    )
+    .expect("writing the wide task");
     dir
 }
 
@@ -370,7 +392,7 @@ fn the_overview_render_matches_the_snapshot() {
 /// The height the detail snapshot renders at: tall enough for the whole TSK13
 /// document, so the snapshot carries every section — the fenced code block in
 /// its note included — and not a window onto the top of it.
-const DETAIL_SNAPSHOT_HEIGHT: &str = "160";
+const DETAIL_SNAPSHOT_HEIGHT: &str = "220";
 
 /// The detail pane of a real mock-data task, as the snapshot records it.
 fn detail_snapshot() -> Output {
@@ -982,9 +1004,7 @@ const DETAIL_TASK: &str = "TSK13";
 
 /// The title of the detail task.
 fn detail_title() -> String {
-    let source = repo_root().join(WORK).join(Path::new(
-        "TSK13-praesentium-voluptatum-deleniti-atque-corrupti.json",
-    ));
+    let source = fixture_path(DETAIL_TASK);
     let json = fs::read_to_string(&source).expect("the detail task fixture");
     let task: serde_json::Value = serde_json::from_str(&json).expect("the fixture parses");
     task["title"].as_str().expect("a title").to_string()
@@ -1062,21 +1082,21 @@ fn the_detail_is_bounded_by_the_dimensions() {
 /// graphemes: two scalars each, one column each.
 fn combining_title_work() -> PathBuf {
     let title = "e\u{0301}".repeat(30);
-    let source = repo_root()
-        .join(WORK)
-        .join("TSK29-lorem-ipsum-dolor-sit-amet.json");
-    let task = fs::read_to_string(&source)
-        .expect("the task the title is built from")
-        .replace("\"TSK29\"", "\"TSK01\"")
-        .replace("\"Lorem ipsum dolor sit amet\"", &format!("\"{title}\""))
-        .replace(
-            "\"depends_on\": [\n    \"TSK22\"\n  ]",
-            "\"depends_on\": []",
-        );
+    let source = fixture_path("TSK29");
+    let text = fs::read_to_string(&source).expect("the task the title is built from");
+    let mut task: serde_json::Value = serde_json::from_str(&text).expect("the fixture parses");
+    task["id"] = serde_json::json!("TSK01");
+    task["title"] = serde_json::json!(title);
+    task["slug"] = serde_json::json!("combining");
+    task["depends_on"] = serde_json::json!([]);
     let dir = std::env::temp_dir().join(format!("raul-combining-title-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("a work folder");
-    fs::write(dir.join("TSK01-combining.json"), task).expect("writing the task");
+    fs::write(
+        dir.join("TSK01-combining.json"),
+        serde_json::to_string_pretty(&task).expect("a task") + "\n",
+    )
+    .expect("writing the task");
     dir
 }
 

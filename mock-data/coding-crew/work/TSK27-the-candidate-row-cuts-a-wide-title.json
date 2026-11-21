@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "id": "TSK27",
+  "title": "The candidate row cuts a wide title",
+  "slug": "the-candidate-row-cuts-a-wide-title",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-06T13:00Z",
+  "updated": "2026-11-06T13:00Z",
+  "kind": "bug",
+  "promoted_from": "ITM05",
+  "status": "draft",
+  "status_since": "2026-11-06T13:00Z",
+  "overlays": {},
+  "claim": null,
+  "planned_by": null,
+  "meta": {
+    "priority": "urgent",
+    "effort": "M",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "The candidate row cuts a wide title without splitting a grapheme.",
+    "problem": "A wide title overflows the row and pushes the state off the edge."
+  },
+  "scope": {
+    "in_scope": [
+      "the candidate row"
+    ],
+    "out_of_scope": [
+      "the Backlog rows"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A wide title is cut at the row's width.",
+      "verification": "",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

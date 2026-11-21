@@ -28,113 +28,930 @@ ORCHESTRATOR_MODEL = "opencode-go/glm-5.3#high"
 RUNNER_MODEL = "opencode-go/deepseek-v4.1-flash#high"
 REVIEWER_MODEL = "opencode-go/glm-5.3#high"
 
-TITLES = [
-    "Lorem ipsum dolor sit amet",
-    "Consectetur adipiscing elit sed do eiusmod",
-    "Tempor incididunt ut labore et dolore",
-    "Magna aliqua ut enim ad minim veniam",
-    "Iusto odio dignissimos ducimus qui blanditiis",
-    "Praesentium voluptatum deleniti atque corrupti",
-    "Quaerat voluptatem consequatur sunt in culpa",
-    "Officiis debitis aut rerum necessitatibus",
-    "Sed ut perspiciatis unde omnis iste natus",
-    "Quis autem vel eum iure reprehenderit",
-    "Nam libero tempore cum soluta nobis est",
-    "Eligendi optio cumque nihil impedit quo minus",
-    "Et harum quidem rerum facilis est et expedita",
-    "Nemo enim ipsam voluptatem quia voluptas sit",
-    "At vero eos et accusamus et iusto odio",
-    "Totam rem aperiam eaque ipsa quae ab illo",
-    "Ut enim ad minim veniam quis nostrud",
-    "Duis aute irure dolor in reprehenderit",
-    "Nulla pariatur excepteur sint occaecat",
-    "Temporibus autem quibusdam et aut officiis",
-]
+# The briefs. The fixtures describe this project's own work, so a task
+# opened in raul reads like a task a human could review. Drafts carry a
+# title alone; every later phase carries the intent, scope, criteria and
+# steps its gates read.
+BRIEFS = {
+    "TSK01": {
+        "title": "The Settings tab remembers the chosen theme",
+    },
+    "TSK02": {
+        "title": "The footer says how many rows it hides",
+    },
+    "TSK03": {
+        "title": "hugo opens the herdr tab and starts its agent",
+    },
+    "TSK04": {
+        "title": "The Needs you row says the review state",
+        "outcome": "A Needs you row carries the round spent of the budget and the open findings with their severities.",
+        "problem": "A human deciding whether to review a task with five open findings, two of them high, and the budget spent cannot see any of it.",
+        "in_scope": [
+            "the Needs you row's second line",
+            "the review state derived from the rounds and the findings",
+        ],
+        "out_of_scope": [
+            "the detail pane's Review section",
+            "the Path row",
+        ],
+        "criteria": [
+            (
+                "A row with open findings says how many are open and names the highest severity.",
+                "cargo test -p coding-crew-raul needs",
+            ),
+            (
+                "A row whose budget is spent says the round spent of the budget.",
+                "cargo test -p coding-crew-raul needs",
+            ),
+        ],
+        "steps": [
+            (
+                "Derive the review state from the rounds and the findings.",
+                "the state is a pure function of the task",
+                ["crates/raul/src/needs.rs"],
+            ),
+            (
+                "Put the state on the second line and cut it on a grapheme.",
+                "a narrow row keeps whole graphemes",
+                ["crates/raul/src/needs.rs"],
+            ),
+        ],
+    },
+    "TSK05": {
+        "title": "The detail pane keeps its scroll on a redraw",
+        "outcome": "The detail pane keeps the line it was on when the document is rebuilt.",
+        "problem": "The engine's viewport resets when the document is rebuilt, so a redraw jumps to the top of a long task.",
+        "in_scope": [
+            "the detail pane's viewport",
+            "the rebuild that follows a resize",
+        ],
+        "out_of_scope": [
+            "the row tabs' scrolling",
+            "the engine's own viewport code",
+        ],
+        "criteria": [
+            (
+                "A resize keeps the first visible line, clamped to the new height.",
+                "cargo test -p coding-crew-raul detail",
+            ),
+            (
+                "A document shorter than the pane settles at the top.",
+                "cargo test -p coding-crew-raul detail",
+            ),
+        ],
+        "steps": [
+            (
+                "Save the viewport before the rebuild and restore it after.",
+                "the line survives the rebuild",
+                ["crates/raul/src/detail.rs"],
+            ),
+            (
+                "Clamp the restored line to the new document's length.",
+                "a shortened document has no blank viewport",
+                ["crates/raul/src/detail.rs"],
+            ),
+        ],
+    },
+    "TSK06": {
+        "title": "The Backlog row says the item's body",
+        "outcome": "A Backlog row carries the item's own body, cut on a grapheme boundary.",
+        "problem": "The generator writes an item's body and the Backlog tab never draws it, so an idea reads as its title alone.",
+        "in_scope": [
+            "the Backlog row",
+            "the cut marker",
+        ],
+        "out_of_scope": [
+            "the smaller-task model",
+            "the detail pane",
+        ],
+        "criteria": [
+            (
+                "A row with a body shows its first words after the title.",
+                "cargo test -p coding-crew-raul backlog",
+            ),
+            (
+                "A body cut by the pane ends in the marker, never in half a grapheme.",
+                "cargo test -p coding-crew-raul backlog",
+            ),
+        ],
+        "steps": [
+            (
+                "Read the body the item already carries and draw it after the title.",
+                "the row names the item's body",
+                ["crates/raul/src/backlog.rs"],
+            ),
+            (
+                "Cut the body through the shared grapheme helper.",
+                "no rendered row splits a grapheme",
+                ["crates/raul/src/backlog.rs"],
+            ),
+        ],
+    },
+    "TSK07": {
+        "title": "The review nests under its round",
+        "outcome": "A round is drawn with the findings it raised under it, and a round with none says so.",
+        "problem": "The projection flattens the rounds into an eight-column table and repeats the findings as a flat list, so the link between a round and what it found is lost.",
+        "in_scope": [
+            "the Review section of the projection",
+            "the findings a round names",
+        ],
+        "out_of_scope": [
+            "the review model",
+            "the round budget",
+        ],
+        "criteria": [
+            (
+                "Round 01 is drawn above the findings it raised.",
+                "cargo test -p coding-crew-core markdown",
+            ),
+            (
+                "A round with no findings says so on its own line.",
+                "cargo test -p coding-crew-core markdown",
+            ),
+            (
+                "A finding that belongs to no round is still shown.",
+                "cargo test -p coding-crew-core markdown",
+            ),
+        ],
+        "steps": [
+            (
+                "Nest each finding under the round that names it.",
+                "the finding ids appear under their round",
+                ["crates/core/src/markdown.rs"],
+            ),
+            (
+                "Draw the rounds as blocks at the pane's width, not a table.",
+                "the Review section reads at forty columns",
+                ["crates/core/src/markdown.rs"],
+            ),
+            (
+                "Keep the findings no round names in their own block.",
+                "an orphan finding is still on the page",
+                ["crates/core/src/markdown.rs"],
+            ),
+        ],
+    },
+    "TSK08": {
+        "title": "The document gets its own palette",
+        "outcome": "The document paints from eighteen roles of its own rather than the chrome's slots.",
+        "problem": "The bridge collapses forty-seven markdown fields onto ten chrome slots, and the projection reaches five of them, so alerts, links, list depths and code are dead colour.",
+        "in_scope": [
+            "the document palette",
+            "the bridge that maps the engine's fields",
+        ],
+        "out_of_scope": [
+            "the chrome palette",
+            "the terminal preset",
+        ],
+        "criteria": [
+            (
+                "Every role in the document palette is painted by some construct.",
+                "cargo test -p coding-crew-theme palette",
+            ),
+            (
+                "The terminal preset stays colourless.",
+                "cargo test -p coding-crew-theme palette",
+            ),
+        ],
+        "steps": [
+            (
+                "Write the eighteen roles and map each engine field onto one.",
+                "the palette has eighteen named roles",
+                ["crates/theme/src/theme.rs"],
+            ),
+            (
+                "Paint the projection's constructs from the roles.",
+                "no role in the document palette is dead",
+                ["crates/core/src/markdown.rs"],
+            ),
+        ],
+    },
+    "TSK09": {
+        "title": "The fixtures grow real",
+        "outcome": "The mock holds real work in enough shapes that every screen can be judged against it.",
+        "problem": "The mock is lorem ipsum: one sentence per field, one criterion, one step, no questions and no children, so a task opened today is a stub.",
+        "in_scope": [
+            "mock-data/generate.py",
+            "the fixtures it writes",
+        ],
+        "out_of_scope": [
+            "the model in crates/core",
+            "the projection",
+            "raul's screens",
+        ],
+        "criteria": [
+            (
+                "Every field the model defines is populated by some fixture.",
+                "cargo test -p coding-crew-core mock_data",
+            ),
+            (
+                "The generator reproduces the committed tree byte for byte.",
+                "python3 mock-data/generate.py && git diff --exit-code mock-data",
+            ),
+        ],
+        "steps": [
+            (
+                "Write real briefs, criteria and steps for every phase.",
+                "no fixture reads as lorem ipsum",
+                ["mock-data/generate.py"],
+            ),
+            (
+                "Add the review, finding and question shapes the screens need.",
+                "every nested field has a fixture",
+                ["mock-data/generate.py"],
+            ),
+        ],
+    },
+    "TSK10": {
+        "title": "The Overview counts follow the fixtures",
+        "outcome": "Every count the Overview draws is computed from the loaded tasks.",
+        "problem": "The Overview's tests hand-keep the counts, so a new fixture leaves the screen right about the old data and wrong about the new.",
+        "in_scope": [
+            "the Overview's counts",
+            "the pins that read the fixtures",
+        ],
+        "out_of_scope": [
+            "the status model",
+            "the Path tree",
+        ],
+        "criteria": [
+            (
+                "The status counts equal the tasks the store loaded.",
+                "cargo test -p coding-crew-raul overview",
+            ),
+            (
+                "The claimable count equals the tasks a start would accept.",
+                "cargo test -p coding-crew-raul overview",
+            ),
+        ],
+        "steps": [
+            (
+                "Count from the Work the pane was given, not from a constant.",
+                "the count follows the loaded set",
+                ["crates/raul/src/overview.rs"],
+            ),
+            (
+                "Pin the screen against counts derived from the fixtures.",
+                "a fixture added alone does not fail the pin",
+                ["crates/raul/tests/render_plain.rs"],
+            ),
+        ],
+    },
+    "TSK11": {
+        "title": "The Path tree announces a dropped branch",
+        "kind": "feature",
+        "outcome": "A branch the pane cannot fit is named with its count, never dropped silently.",
+        "problem": "A short pane drops a whole branch and the trunk looks like the whole tree.",
+        "in_scope": [
+            "the Path announcement",
+            "the window the tree is drawn in",
+        ],
+        "out_of_scope": [
+            "the Needs you tab",
+            "the Overview",
+        ],
+        "criteria": [
+            (
+                "A dropped branch is named with the rows it hid.",
+                "cargo test -p coding-crew-raul path",
+            ),
+            (
+                "A branch that fits is never announced as hidden.",
+                "cargo test -p coding-crew-raul path",
+            ),
+        ],
+        "steps": [
+            (
+                "Collect the branches the window leaves out.",
+                "each dropped branch carries its count",
+                ["crates/raul/src/path.rs"],
+            ),
+            (
+                "Draw the summary before the trunk when the tree cannot fit.",
+                "the announcement names what it hides",
+                ["crates/raul/src/path.rs"],
+            ),
+        ],
+    },
+    "TSK12": {
+        "title": "hugo's queue names the work it hides",
+        "kind": "bug",
+        "outcome": "The queue's hidden rows are named and counted.",
+        "problem": "A narrow main pane cuts the queue without naming what it leaves out.",
+        "in_scope": [
+            "hugo's queue block",
+            "the hidden count",
+        ],
+        "out_of_scope": [
+            "the crew block",
+            "the configuration",
+        ],
+        "criteria": [
+            (
+                "A cut queue says how many rows it hid.",
+                "cargo test -p coding-crew-hugo",
+            ),
+            (
+                "An empty queue says it is empty rather than zero hidden.",
+                "cargo test -p coding-crew-hugo",
+            ),
+        ],
+        "steps": [
+            (
+                "Window the queue and remember the rows outside it.",
+                "the window and the count agree",
+                ["crates/hugo/src/app.rs"],
+            ),
+            (
+                "Draw the count beside the queue's heading.",
+                "the count is on the heading's row",
+                ["crates/hugo/src/app.rs"],
+            ),
+        ],
+    },
+    "TSK13": {
+        "title": "The detail pane paints the marked note",
+        "outcome": "A ==marked== span in free text is painted on the selection's colours.",
+        "problem": "The engine renders the mark and the pane never gives it a colour, so the mark is a word with two equals signs around it.",
+        "in_scope": [
+            "the projection's mark",
+            "the detail pane's paint",
+        ],
+        "out_of_scope": [
+            "the chrome palette",
+            "the Review section",
+        ],
+        "criteria": [
+            (
+                "A marked span is painted on text.selected.",
+                "cargo test -p coding-crew-core | grep detail",
+            ),
+            (
+                "A fenced rust block keeps syntect's code tokens.",
+                "cargo test -p coding-crew-raul detail",
+            ),
+        ],
+        "steps": [
+            (
+                "Carry the mark through the bridge to the selection's slots.",
+                "the marked words take the selection's colours",
+                ["crates/raul/src/detail.rs"],
+            ),
+            (
+                "Keep the code block's own paint under the mark.",
+                "the fenced block still reads as code",
+                ["crates/raul/src/detail.rs"],
+            ),
+        ],
+    },
+    "TSK14": {
+        "title": "The Needs you row cuts on a grapheme boundary",
+        "outcome": "A row that does not fit is cut between whole graphemes.",
+        "problem": "A scalar cut leaves a dangling combining mark at the edge of a narrow row.",
+        "in_scope": [
+            "the Needs you row",
+            "the cut helper",
+        ],
+        "out_of_scope": [
+            "the Path row",
+            "the footer",
+        ],
+        "criteria": [
+            (
+                "A combining mark never starts a row.",
+                "cargo test -p coding-crew-raul needs",
+            ),
+            (
+                "The cut marker is the last grapheme, not a half one.",
+                "cargo test -p coding-crew-raul needs",
+            ),
+        ],
+        "steps": [
+            (
+                "Cut the title through the shared helper.",
+                "the row keeps whole graphemes",
+                ["crates/raul/src/needs.rs"],
+            ),
+            (
+                "Pin the cut against a title built from combining marks.",
+                "a scalar cut fails the pin",
+                ["crates/raul/src/needs.rs"],
+            ),
+        ],
+    },
+    "TSK15": {
+        "title": "The Backlog group header says its count",
+        "outcome": "Every group header names the rows under it.",
+        "problem": "A header that loses its count reads as a group of an unknown size.",
+        "in_scope": [
+            "the Backlog group headers",
+            "the hidden announcement",
+        ],
+        "out_of_scope": [
+            "the Needs you counts",
+            "the Overview",
+        ],
+        "criteria": [
+            (
+                "A header always names its count.",
+                "cargo test -p coding-crew-raul backlog",
+            ),
+            (
+                "A wholly hidden group is announced, not left as a bare header.",
+                "cargo test -p coding-crew-raul backlog",
+            ),
+        ],
+        "steps": [
+            (
+                "Count the rows of each group and draw the count on its header.",
+                "the header and the rows agree",
+                ["crates/raul/src/backlog.rs"],
+            ),
+            (
+                "Name a hidden group with its count in the announcement.",
+                "no hidden group is a bare count",
+                ["crates/raul/src/backlog.rs"],
+            ),
+        ],
+    },
+    "TSK16": {
+        "title": "The round table fits the pane at forty columns",
+        "outcome": "The review's rounds are readable at the pane's narrow design width.",
+        "problem": "The eight-column round table shrinks every cell at forty columns and abbreviations stand in for words.",
+        "in_scope": [
+            "the rounds' shape",
+            "the forty-column rendering",
+        ],
+        "out_of_scope": [
+            "the review model",
+            "the detail pane's header",
+        ],
+        "criteria": [
+            (
+                "At forty columns every word of a round is whole.",
+                "cargo test -p coding-crew-core markdown",
+            ),
+            (
+                "The round's kind is a word, not a two-letter abbreviation.",
+                "cargo test -p coding-crew-core markdown",
+            ),
+        ],
+        "steps": [
+            (
+                "Replace the table with blocks that wrap.",
+                "a round fits a forty-column pane",
+                ["crates/core/src/markdown.rs"],
+            ),
+            (
+                "Keep each finding under the round that raised it.",
+                "the nesting survives the narrow width",
+                ["crates/core/src/markdown.rs"],
+            ),
+        ],
+    },
+    "TSK17": {
+        "title": "The review budget stops at five rounds",
+        "outcome": "A fifth changes-needed round escalates instead of starting a sixth.",
+        "problem": "A task that can always ask for one more round reviews itself into completion.",
+        "in_scope": [
+            "the budget gate",
+            "the escalate transition",
+        ],
+        "out_of_scope": [
+            "the round record",
+            "the review focus",
+        ],
+        "criteria": [
+            (
+                "The fifth changes-needed round escalates.",
+                "cargo test -p coding-crew-core lifecycle",
+            ),
+            (
+                "A pass on the fifth round is still accepted.",
+                "cargo test -p coding-crew-core lifecycle",
+            ),
+        ],
+        "steps": [
+            (
+                "Read the external rounds against max_rounds in the gate.",
+                "request_changes needs one round left",
+                ["crates/core/src/lifecycle.rs"],
+            ),
+            (
+                "Pin the asymmetric edges on the fifth round.",
+                "a sixth changes-needed round is refused",
+                ["crates/core/tests/task_model.rs"],
+            ),
+        ],
+    },
+    "TSK18": {
+        "title": "hugo's sidebar survives a broken config",
+        "outcome": "A configuration that does not parse is named, left alone, and the defaults are shown beside it.",
+        "problem": "A reload that meets a broken file can blank the sidebar or overwrite the file.",
+        "in_scope": [
+            "the configuration read",
+            "the sidebar's error row",
+        ],
+        "out_of_scope": [
+            "the order's gates",
+            "the model catalogue",
+        ],
+        "criteria": [
+            (
+                "The broken file is named with its error and unchanged.",
+                "cargo test -p coding-crew-hugo config",
+            ),
+            (
+                "The defaults are shown beside the error.",
+                "cargo test -p coding-crew-hugo config",
+            ),
+        ],
+        "steps": [
+            (
+                "Keep the read's error and the file's bytes.",
+                "the file is byte-identical after a reload",
+                ["crates/hugo/src/app.rs"],
+            ),
+            (
+                "Draw the error above the defaults.",
+                "the sidebar names both",
+                ["crates/hugo/src/app.rs"],
+            ),
+        ],
+    },
+    "TSK19": {
+        "title": "The document palette tells the heading levels apart",
+        "outcome": "The heading levels, the alerts, the links, the list depths and the code are told apart by colour.",
+        "problem": "One heading colour for every level makes a long document read as one flat block.",
+        "in_scope": [
+            "the heading roles",
+            "the document palette",
+        ],
+        "out_of_scope": [
+            "the chrome slots",
+            "the syntax theme",
+        ],
+        "criteria": [
+            (
+                "A first-level heading and a second-level heading take different roles.",
+                "cargo test -p coding-crew-theme palette",
+            ),
+            (
+                "An alert takes its own role.",
+                "cargo test -p coding-crew-theme palette",
+            ),
+        ],
+        "steps": [
+            (
+                "Give each level its role.",
+                "the levels differ in colour",
+                ["crates/theme/src/theme.rs"],
+            ),
+            (
+                "Give the alerts a role of their own.",
+                "an alert is not painted as body text",
+                ["crates/theme/src/theme.rs"],
+            ),
+        ],
+    },
+    "TSK20": {
+        "title": "The review nests the findings under the round",
+        "outcome": "The Review section reads as a history: each round, then what it found.",
+        "problem": "Rounds and findings are drawn as two unrelated lists, so the reader has to match timestamps by eye.",
+        "in_scope": [
+            "the Review section",
+            "the finding-to-round link",
+        ],
+        "out_of_scope": [
+            "the finding model",
+            "the row tabs",
+        ],
+        "criteria": [
+            (
+                "The finding ids a round names appear under that round.",
+                "cargo test -p coding-crew-core markdown",
+            ),
+            (
+                "A finding no round names is still on the page.",
+                "cargo test -p coding-crew-core markdown",
+            ),
+        ],
+        "steps": [
+            (
+                "Group the findings by the rounds that name them.",
+                "no finding is painted twice",
+                ["crates/core/src/markdown.rs"],
+            ),
+            (
+                "Draw the unclaimed findings after the rounds.",
+                "an orphan finding stays visible",
+                ["crates/core/src/markdown.rs"],
+            ),
+        ],
+    },
+    "TSK21": {
+        "title": "The code gutter numbers every line",
+        "outcome": "A fenced block carries a numbered gutter down its left edge.",
+        "problem": "A long block cannot be referred to by line, so a finding has to quote it.",
+        "in_scope": [
+            "the fenced code block",
+            "the gutter",
+        ],
+        "out_of_scope": [
+            "the syntax theme",
+            "inline code",
+        ],
+        "criteria": [
+            (
+                "Every line of a block has its number.",
+                "cargo test -p coding-crew-engine code",
+            ),
+            (
+                "A wrapped line does not take a second number.",
+                "cargo test -p coding-crew-engine code",
+            ),
+        ],
+        "steps": [
+            (
+                "Draw the gutter beside the code.",
+                "the numbers align with the lines",
+                ["crates/engine/src/markdown/code.rs"],
+            ),
+            (
+                "Keep the number on the line, not on its wraps.",
+                "a wrapped line has one number",
+                ["crates/engine/src/markdown/code.rs"],
+            ),
+        ],
+    },
+    "TSK22": {
+        "title": "The terminal column table is generated from its rules",
+        "outcome": "The committed column table is what its rule lines generate.",
+        "problem": "A range edited by hand drifts from the rule it claims to unroll.",
+        "in_scope": [
+            "scripts/terminal-columns.txt",
+            "scripts/generate-terminal-columns.py",
+        ],
+        "out_of_scope": [
+            "the sweep's measurements",
+            "the width tests",
+        ],
+        "criteria": [
+            (
+                "Regenerating the table leaves the committed file unchanged.",
+                "python3 scripts/generate-terminal-columns.py --check",
+            ),
+            (
+                "A rule edited without regenerating fails the check.",
+                "cargo test -p coding-crew-raul render_plain",
+            ),
+        ],
+        "steps": [
+            (
+                "Parse the rule lines and derive the ranges from them.",
+                "the table's ranges are the rules unrolled",
+                ["scripts/generate-terminal-columns.py"],
+            ),
+            (
+                "Run the generator in the gate.",
+                "a drifted table fails the gate",
+                ["scripts/test-pty-sweep.sh"],
+            ),
+        ],
+    },
+    "TSK23": {
+        "title": "The Needs you age says under a minute",
+        "outcome": "A wait shorter than a minute is said in words, not as zero.",
+        "problem": "A row that just entered its status shows an age of zero minutes, which reads as no wait at all.",
+        "in_scope": [
+            "the age vocabulary",
+            "the Needs you row",
+        ],
+        "out_of_scope": [
+            "the Path row",
+            "the Overview",
+        ],
+        "criteria": [
+            (
+                "A wait under a minute says so.",
+                "cargo test -p coding-crew-core age",
+            ),
+            (
+                "The same words are used by both tools.",
+                "cargo test -p coding-crew-core age",
+            ),
+        ],
+        "steps": [
+            (
+                "Share the age words from core.",
+                "one vocabulary, two readers",
+                ["crates/core/src/clock.rs"],
+            ),
+            (
+                "Draw the under-a-minute case on the row.",
+                "a fresh wait is not a zero",
+                ["crates/raul/src/needs.rs"],
+            ),
+        ],
+    },
+    "TSK24": {
+        "title": "The Path tab forks a blocked task under its blocker",
+        "outcome": "A blocked task hangs under the first dependency that is not done, and names every dependency it waits on.",
+        "problem": "A flat blocked list hides which task is holding the work.",
+        "in_scope": [
+            "the Path's blocked branch",
+            "the fork parent",
+        ],
+        "out_of_scope": [
+            "the overlay and claim cases",
+            "the dependency graph",
+        ],
+        "criteria": [
+            (
+                "A task with two open dependencies forks under the first.",
+                "cargo test -p coding-crew-raul path",
+            ),
+            (
+                "The row names both dependencies.",
+                "cargo test -p coding-crew-raul path",
+            ),
+        ],
+        "steps": [
+            (
+                "Find the first dependency not done.",
+                "the fork parent is the first open one",
+                ["crates/raul/src/path.rs"],
+            ),
+            (
+                "Group the blocked rows by their fork parent.",
+                "each row hangs under its blocker",
+                ["crates/raul/src/path.rs"],
+            ),
+        ],
+    },
+    "TSK25": {
+        "title": "The settings announcement names its hidden groups",
+        "outcome": "A short Settings pane names every group it hides.",
+        "problem": "The announcement names the groups in view and leaves the hidden ones as a bare count.",
+        "in_scope": [
+            "the Settings announcement",
+            "the group rows",
+        ],
+        "out_of_scope": [
+            "the Backlog announcement",
+            "the theme list",
+        ],
+        "criteria": [
+            (
+                "Every hidden group is named with its count.",
+                "cargo test -p coding-crew-raul settings",
+            ),
+            (
+                "A wholly shown group is not announced as hidden.",
+                "cargo test -p coding-crew-raul settings",
+            ),
+        ],
+        "steps": [
+            (
+                "Collect the groups the window leaves out.",
+                "the hidden rows have a count",
+                ["crates/raul/src/settings.rs"],
+            ),
+            (
+                "Name them in the same words the Backlog uses.",
+                "one announcement vocabulary",
+                ["crates/raul/src/settings.rs"],
+            ),
+        ],
+    },
+    "TSK26": {
+        "title": "The store skips a broken file and names it",
+        "outcome": "One unreadable file is skipped, named, and never hides the rest of the folder.",
+        "problem": "A reader that stops on the first broken file hides a whole folder behind one bad byte.",
+        "in_scope": [
+            "the store's listing",
+            "the unreadable marker",
+        ],
+        "out_of_scope": [
+            "the JSON shape",
+            "the duplicate-id rule",
+        ],
+        "criteria": [
+            (
+                "A broken file does not hide the readable tasks.",
+                "cargo test -p coding-crew-core store",
+            ),
+            (
+                "The broken file is named with its parse error.",
+                "cargo test -p coding-crew-core store",
+            ),
+        ],
+        "steps": [
+            (
+                "Read each file alone and keep the error beside the list.",
+                "a broken file becomes an error row",
+                ["crates/core/src/store.rs"],
+            ),
+            (
+                "Draw the error row after the tasks.",
+                "the folder is never hidden",
+                ["crates/raul/src/overview.rs"],
+            ),
+        ],
+    },
+    "TSK27": {
+        "title": "The candidate row cuts a wide title",
+        "kind": "bug",
+        "outcome": "The candidate row cuts a wide title without splitting a grapheme.",
+        "problem": "A wide title overflows the row and pushes the state off the edge.",
+        "in_scope": [
+            "the candidate row",
+        ],
+        "out_of_scope": [
+            "the Backlog rows",
+        ],
+        "criteria": [
+            (
+                "A wide title is cut at the row's width.",
+                "",
+            ),
+        ],
+        "steps": [],
+    },
+    "TSK28": {
+        "title": "The review nests a round with no findings",
+    },
+    "TSK29": {
+        "title": "The fixtures keep their gates",
+        "outcome": "Every fixture satisfies the gates of the phase it is in, and the set tells one consistent history.",
+        "problem": "A fixture that breaks a gate teaches the screens a state the model forbids.",
+        "in_scope": [
+            "the fixture gates",
+            "the dependency graph",
+        ],
+        "out_of_scope": [
+            "the model's own gates",
+            "the screens",
+        ],
+        "criteria": [
+            (
+                "Every fixture passes the gate of its phase.",
+                "cargo test -p coding-crew-core mock_data",
+            ),
+            (
+                "The dependency graph is acyclic and closed under done work.",
+                "cargo test -p coding-crew-core mock_data",
+            ),
+        ],
+        "steps": [
+            (
+                "Check every phase's gate in one test.",
+                "a fixture that breaks its gate fails the pin",
+                ["crates/core/tests/mock_data.rs"],
+            ),
+            (
+                "Check the graph's order and closure.",
+                "a claim before its dependency fails the pin",
+                ["crates/core/tests/mock_data.rs"],
+            ),
+        ],
+    },
+    "TSK30": {
+        "title": "The review shows a finding that belongs to no round",
+    },
+}
 
-OUTCOMES = [
-    "Tempor incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam.",
-    "Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-    "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat.",
-    "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque.",
-    "Totam rem aperiam eaque ipsa quae ab illo inventore veritatis et quasi architecto.",
-    "Praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi.",
-    "Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.",
-    "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore.",
-    "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
-    "Ut et voluptates repudiandae sint et molestiae non recusandae itaque earum rerum.",
-]
-
-PROBLEMS = [
-    "Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-    "Occaecati cupiditate non provident sed ut perspiciatis unde omnis iste natus error.",
-    "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium.",
-    "Ea voluptate velit esse quam nihil molestiae consequatur vel illum qui dolorem eum.",
-    "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet.",
-    "Soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat.",
-    "Itaque earum rerum hic tenetur a sapiente delectus ut aut reiciendis voluptatibus.",
-    "Nulla pariatur excepteur sint occaecat cupidatat non proident sunt in culpa qui officia.",
-]
-
-ACTIONS = [
-    "Sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.",
-    "Neque porro quisquam est qui dolorem ipsum quia dolor sit amet consectetur.",
-    "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium.",
-    "Itaque earum rerum hic tenetur a sapiente delectus ut aut reiciendis voluptatibus.",
-    "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum soluta.",
-    "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat.",
-    "Nulla pariatur excepteur sint occaecat cupidatat non proident sunt in culpa qui officia.",
-    "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet.",
-]
-
-DONE_WHEN = [
-    "The lorem module is read and its behaviour is described in the notes.",
-    "The lorem tests exist and pass.",
-    "The lorem lorem lorem is covered by a lorem test.",
-    "The lorem behaviour is verified by the lorem command.",
-]
-
-CRITERIA = [
-    "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque.",
-    "Totam rem aperiam eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae.",
-    "Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit sed quia.",
-    "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet.",
-    "Ut et voluptates repudiandae sint et molestiae non recusandae itaque earum rerum hic.",
-    "Soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat.",
-]
-
-FINDINGS = [
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.",
-    "Incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam, quis nostrud.",
-    "Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-    "Consequat duis aute irure dolor in reprehenderit in voluptate velit esse cillum.",
-    "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu.",
-    "Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit sed.",
-]
-
-NOTES = [
-    "Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe.",
-    "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip.",
-    "Et harum quidem rerum facilis est et expedita distinctio nam libero tempore cum.",
-    "Quaerat voluptatem consequatur sunt in culpa qui officia deserunt mollit anim id.",
-]
-
-VERIFICATIONS = [
-    "cargo test --workspace",
-    "cargo test -p coding-crew-core",
-    "cargo clippy --all-targets -- -D warnings",
-    "make check",
-]
-
-SEVERITIES = ["low", "medium", "high"]
 PRIORITIES = ["urgent", "high", "normal", "low"]
 EFFORTS = ["S", "M", "L"]
 FOCI = ["spec-compliance", "edge-cases", "security", "empirical", "design"]
 
-# The done fixtures take ids 22 to 26: they are generated after the seven
-# phases up to needs-human, and before the promoted bug, the child and the
-# late approved task. A task past approved may only wait on done work, and
-# the approved tasks may wait on work that is not done.
+# Real observations a reviewer can raise. The index is the finding's number.
+FINDING_TEXT = [
+    "At forty columns the round's notes wrap into the next column and the reader loses the verdict.",
+    "The row cuts after the age and the finding count disappears from the row.",
+    "The document paints a level-two heading as the first level, so the hierarchy is flat.",
+    "A finding no round names is dropped from the Review section instead of shown after the rounds.",
+    "The queue's count says one and a narrow pane draws none of the rows.",
+    "The cut leaves a combining mark behind and the row is one column wider than the pane.",
+    "The configuration's error is drawn on the dim slot, so it reads as a hint rather than a failure.",
+    "The fenced block's gutter numbers the wrapped rows, so one line has three numbers.",
+    "The mark is rendered but no slot paints it, so two equals signs sit in the sentence.",
+    "The pool of external rounds is counted twice when the panel is redrawn.",
+]
+
+# What each review round was looking at, in the order the rounds run.
+FOCUS_BY_ROUND = ["spec-compliance", "edge-cases", "security", "empirical", "design"]
+
+# The fixed instant the fixtures are read with, as in
+# crates/core/tests/mock_data.rs: it decides whether a claim's lease is
+# still live.
+FIXTURE_NOW = "2026-11-19T08:00:00Z"
+
 DONE_IDS = [f"TSK{number:02d}" for number in range(22, 27)]
+
+
+def brief(task_id):
+    return BRIEFS[task_id]
 
 
 def slugify(title):
@@ -159,36 +976,68 @@ def ts(day, hour, minute=0):
     return f"2026-11-{day:02d}T{hour:02d}:{minute:02d}Z"
 
 
-def evidence(index, by, session, day, hour, passed=True, minute=0):
+def plus_minutes(at, minutes):
+    moment = datetime.strptime(at, "%Y-%m-%dT%H:%MZ") + timedelta(minutes=minutes)
+    return moment.strftime("%Y-%m-%dT%H:%MZ")
+
+
+def pass_evidence(command, by, session, day, hour, minute=0):
     return {
-        "command": pick(VERIFICATIONS, index),
-        "exit_code": 0 if passed else 1,
-        "summary": f"{10 + index} passed; 0 failed" if passed else f"1 failed; {9 + index} passed",
+        "command": command,
+        "exit_code": 0,
+        "summary": "12 passed; 0 failed",
         "at": ts(day, hour, minute),
         "by": by,
         "session": session,
     }
 
 
-def criterion(index, with_evidence=None, deferral=None, cid="ACCEPT-01"):
-    item = {
-        "id": cid,
-        "description": pick(CRITERIA, index),
-        "verification": pick(VERIFICATIONS, index),
-        "status": "pending",
-        "evidence": with_evidence or [],
-        "deferral": deferral,
-        "failure_reason": "",
+def fail_evidence(command, by, session, day, hour, minute=0):
+    return {
+        "command": command,
+        "exit_code": 1,
+        "summary": "1 failed; 11 passed",
+        "at": ts(day, hour, minute),
+        "by": by,
+        "session": session,
     }
-    return item
 
 
-def step(index, order, status, covers, files, deviation="", depends_on=None):
+def criterion(
+    cid,
+    description,
+    verification,
+    status="pending",
+    evidence=None,
+    deferral=None,
+    failure_reason="",
+):
+    return {
+        "id": cid,
+        "description": description,
+        "verification": verification,
+        "status": status,
+        "evidence": evidence or [],
+        "deferral": deferral,
+        "failure_reason": failure_reason,
+    }
+
+
+def step(
+    order,
+    action,
+    done_when,
+    files,
+    covers,
+    status="pending",
+    depends_on=None,
+    deviation="",
+):
     return {
         "id": f"STP-{order:02d}",
         "order": order,
-        "action": pick(ACTIONS, index),
-        "done_when": pick(DONE_WHEN, index),
+        "action": action,
+        "done_when": done_when,
         "files": files,
         "status": status,
         "covers": covers,
@@ -197,20 +1046,33 @@ def step(index, order, status, covers, files, deviation="", depends_on=None):
     }
 
 
-def finding(index, created, status="open", resolution="", resolved=""):
+def comment(cid, author, body, at):
+    return {"id": cid, "author": author, "body": body, "at": at}
+
+
+def finding(
+    number,
+    created,
+    severity="medium",
+    status="open",
+    description=None,
+    resolved="",
+    resolution="",
+    comments=None,
+):
     return {
-        "id": f"FIND-{index:02d}",
-        "severity": pick(SEVERITIES, index),
+        "id": f"FIND-{number:02d}",
+        "severity": severity,
         "status": status,
-        "description": pick(FINDINGS, index),
+        "description": description or pick(FINDING_TEXT, number),
         "created": created,
         "resolved": resolved,
         "resolution": resolution,
-        "comments": [],
+        "comments": comments or [],
     }
 
 
-def round_(n, kind, focus, reviewer, verdict, index, at, findings=None):
+def round_(n, kind, focus, reviewer, verdict, at, notes, findings=None):
     return {
         "n": n,
         "kind": kind,
@@ -218,8 +1080,34 @@ def round_(n, kind, focus, reviewer, verdict, index, at, findings=None):
         "reviewer": reviewer,
         "verdict": verdict,
         "at": at,
-        "notes": pick(NOTES, index),
+        "notes": notes,
         "findings": findings or [],
+    }
+
+
+def note(note_id, author, body, at):
+    return {"id": note_id, "author": author, "body": body, "at": at}
+
+
+def question(
+    qid,
+    text,
+    status,
+    answer,
+    raised_by,
+    raised_at,
+    resolved_by,
+    resolved_at,
+):
+    return {
+        "id": qid,
+        "question": text,
+        "status": status,
+        "answer": answer,
+        "raised_by": raised_by,
+        "raised_at": raised_at,
+        "resolved_by": resolved_by,
+        "resolved_at": resolved_at,
     }
 
 
@@ -229,12 +1117,7 @@ def transition_note(index, author, body, at, note_id="NOTE-01"):
     The model has no separate event log, so a status transition records
     its moment in a note.
     """
-    return {
-        "id": note_id,
-        "author": author,
-        "body": body,
-        "at": at,
-    }
+    return note(note_id, author, body, at)
 
 
 def transition_moment(item):
@@ -244,9 +1127,9 @@ def transition_moment(item):
         return item["created"]
     if status in ("groomed", "approved"):
         prefix = "Groomed by" if status == "groomed" else "Approved by"
-        for note in reversed(item["notes"]):
-            if note["body"].startswith(prefix):
-                return note["at"]
+        for candidate in reversed(item["notes"]):
+            if candidate["body"].startswith(prefix):
+                return candidate["at"]
         raise ValueError(f"{item['id']} has no {prefix} transition note")
     if status == "executing":
         return item["claim"]["at"]
@@ -297,12 +1180,18 @@ def task(task_id, title, status, index, **overrides):
         "children": [],
         "created": created,
         "updated": "",
+        "kind": "task",
+        "promoted_from": None,
         "status": status,
         "status_since": "",
         "overlays": {},
         "claim": None,
         "planned_by": None,
-        "meta": {"priority": pick(PRIORITIES, index), "effort": pick(EFFORTS, index), "tags": ["mock"]},
+        "meta": {
+            "priority": pick(PRIORITIES, index),
+            "effort": pick(EFFORTS, index),
+            "tags": ["mock", "raul"],
+        },
         "intent": {"outcome": "", "problem": ""},
         "scope": {"in_scope": [], "out_of_scope": []},
         "acceptance_criteria": [],
@@ -312,6 +1201,43 @@ def task(task_id, title, status, index, **overrides):
         "notes": [],
         "depends_on": [],
     }
+    item.update(overrides)
+    return item
+
+
+def planned(task_id, index, status, **overrides):
+    """A task with its brief's intent, scope, criteria and planned steps."""
+    b = brief(task_id)
+    criteria = [
+        criterion(f"ACCEPT-{n:02d}", description, verification)
+        for n, (description, verification) in enumerate(b["criteria"], start=1)
+    ]
+    steps = [
+        step(
+            n,
+            action,
+            done_when,
+            files,
+            [f"ACCEPT-{n:02d}"],
+            depends_on=[f"STP-{n - 1:02d}"] if n > 1 else [],
+        )
+        for n, (action, done_when, files) in enumerate(b["steps"], start=1)
+    ]
+    item = task(
+        task_id,
+        b["title"],
+        status,
+        index,
+        intent={"outcome": b["outcome"], "problem": b["problem"]},
+        scope={
+            "in_scope": list(b["in_scope"]),
+            "out_of_scope": list(b["out_of_scope"]),
+        },
+        acceptance_criteria=criteria,
+        steps=steps,
+    )
+    if "kind" in b:
+        item["kind"] = b["kind"]
     item.update(overrides)
     return item
 
@@ -389,15 +1315,6 @@ def event(at, kind, task_id, by, note=""):
     return record
 
 
-def actor(author):
-    """The role or kind an event names from a fixture's author."""
-    if author.startswith("runner"):
-        return "runner"
-    if author.startswith("reviewer"):
-        return "reviewer"
-    return "human"
-
-
 def approval_at(item):
     """When the task left the human lane, from its own history."""
     for note in reversed(item["notes"]):
@@ -470,17 +1387,22 @@ def activity_events(tasks):
             events.append(
                 event(item["status_since"], "completed", task_id, "reviewer", "reviewed clean")
             )
-        for note in item.get("notes", []):
-            if note["body"].startswith("Groomed by") or note["body"].startswith(
+        for candidate in item.get("notes", []):
+            if candidate["body"].startswith("Groomed by") or candidate["body"].startswith(
                 "Approved by"
             ):
                 continue
             # The journal's note is one line, so a multi-line note gives its
             # first line.
-            body = note["body"].splitlines()[0] if note["body"] else ""
-            events.append(
-                event(note["at"], "commented", task_id, actor(note["author"]), body)
-            )
+            body = candidate["body"].splitlines()[0] if candidate["body"] else ""
+            author = candidate["author"]
+            if author.startswith("runner"):
+                by = "runner"
+            elif author.startswith("reviewer"):
+                by = "reviewer"
+            else:
+                by = "human"
+            events.append(event(candidate["at"], "commented", task_id, by, body))
     events.sort(key=lambda record: (record["at"], EVENT_RANK[record["kind"]], record["task"]))
     return events
 
@@ -530,11 +1452,6 @@ def check_activity(tasks, events):
             )
     # The block shows the last few: the source has more than it shows.
     assert len(events) > 5, len(events)
-
-
-# The instant the fixtures are read with, as in crates/core/tests/mock_data.rs:
-# it decides whether a claim's lease is still live.
-FIXTURE_NOW = "2026-11-19T08:00:00Z"
 
 
 def lease_is_live(claim):
@@ -717,7 +1634,6 @@ def check_runtime(record, tasks, events):
             assert stamp(member["since"]) >= started, member
 
 
-
 def build():
     tasks = []
     counter = 0
@@ -729,55 +1645,98 @@ def build():
 
     ids = {}
 
-    # draft — title only, plus one child of an approved task.
+    # draft — a title alone. Two carry an overlay: one parked on purpose,
+    # one cancelled, so every overlay slot has a fixture.
     for i in range(3):
         tid = next_id()
         ids.setdefault("draft", []).append(tid)
-        tasks.append(task(tid, pick(TITLES, i + 14), "draft", i))
+        item = task(tid, brief(tid)["title"], "draft", i)
+        if tid == "TSK02":
+            item["overlays"] = {
+                "cancelled": {
+                    "reason": "Parked until the row tabs share one announcement.",
+                    "by": "human",
+                    "at": ts(7, 11),
+                }
+            }
+        if tid == "TSK03":
+            item["overlays"] = {
+                "deferred": {
+                    "reason": "Waits on the orchestrator's model pick in hugo.",
+                    "by": "human",
+                    "at": ts(9, 10),
+                }
+            }
+        tasks.append(item)
 
-    # groomed — intent, scope, criteria; one of them blocked.
+    # groomed — intent, scope, criteria; one of them blocked, one carries an
+    # open question, one a resolved question.
     for i in range(3):
         tid = next_id()
         ids.setdefault("groomed", []).append(tid)
         groom_at = ts(6 + 2 * i, 9 + i)
+        creator = f"session-creator-{i + 1:02d}"
+        b = brief(tid)
         notes = [
             transition_note(
-                i + 3,
-                f"session-creator-{i + 1:02d}",
-                f"Groomed by session-creator-{i + 1:02d}: intent, scope and criteria written.",
+                i,
+                creator,
+                f"Groomed by {creator}: intent, scope and criteria written.",
                 groom_at,
             )
         ]
-        if i != 1:
-            # A later write, after the transition: the wait starts at the
-            # transition, not at the last write.
+        if tid == "TSK05":
             notes.append(
-                {
-                    "id": "NOTE-02",
-                    "author": f"session-creator-{i + 1:02d}",
-                    "body": pick(NOTES, i),
-                    "at": ts(7 + 2 * i, 10 + i),
-                }
+                note(
+                    "NOTE-02",
+                    creator,
+                    "The blocked reason names the design question the human has to settle first.",
+                    ts(8, 14),
+                )
             )
-        item = task(
+        questions = []
+        if tid == "TSK04":
+            questions.append(
+                question(
+                    "QST-01",
+                    "Does the review state fit beside the age at forty columns?",
+                    "open",
+                    "",
+                    "human",
+                    ts(6, 10),
+                    "",
+                    "",
+                )
+            )
+        if tid == "TSK06":
+            questions.append(
+                question(
+                    "QST-01",
+                    "How much of the body does the row carry?",
+                    "resolved",
+                    "The first words that fit; the cut marker names the rest.",
+                    "human",
+                    ts(10, 12),
+                    "session-creator-03",
+                    ts(10, 13),
+                )
+            )
+        item = planned(
             tid,
-            pick(TITLES, i + 8),
-            "groomed",
             i + 3,
-            planned_by=f"session-creator-{i + 1:02d}",
-            intent={"outcome": pick(OUTCOMES, i), "problem": pick(PROBLEMS, i)},
-            scope={
-                "in_scope": [pick(ACTIONS, i)],
-                "out_of_scope": [pick(PROBLEMS, i + 4)],
-            },
-            acceptance_criteria=[criterion(i)],
+            "groomed",
+            planned_by=creator,
             notes=notes,
+            questions=questions,
         )
-        if i == 1:
+        # The brief supplies the criteria; the steps are planned once the
+        # task is approved.
+        item["steps"] = []
+        if tid == "TSK05":
             item["overlays"] = {
                 "blocked": {
-                    "reason": pick(FINDINGS, i),
-                    "by": f"creator-{i + 1:02d}",
+                    "reason": "The engine's viewport ownership is still a design question.",
+                    "by": "human",
                     "at": ts(8, 14),
                 }
             }
@@ -787,62 +1746,57 @@ def build():
     for i in range(3):
         tid = next_id()
         ids.setdefault("approved", []).append(tid)
-        item = task(
+        creator = f"session-creator-{i + 1:02d}"
+        questions = []
+        if tid == "TSK07":
+            questions.append(
+                question(
+                    "QST-01",
+                    "Does a round with no findings get an empty line or no line?",
+                    "resolved",
+                    "An empty line, so the reader knows the round looked.",
+                    "human",
+                    ts(4, 10),
+                    creator,
+                    ts(5, 15),
+                )
+            )
+        item = planned(
             tid,
-            pick(TITLES, i + 2),
-            "approved",
             i + 6,
-            planned_by=f"session-creator-{i + 1:02d}",
-            intent={"outcome": pick(OUTCOMES, i + 3), "problem": pick(PROBLEMS, i + 2)},
-            scope={
-                "in_scope": [pick(ACTIONS, i + 1)],
-                "out_of_scope": [pick(PROBLEMS, i + 5)],
-            },
-            acceptance_criteria=[criterion(i, cid="ACCEPT-01"), criterion(i + 3, cid="ACCEPT-02")],
-            steps=[
-                step(i, 1, "pending", ["ACCEPT-01"], ["crates/core/src/task.rs"]),
-                step(i + 1, 2, "pending", ["ACCEPT-02"], ["crates/core/tests/task_model.rs"], depends_on=["STP-01"]),
-            ],
+            "approved",
+            planned_by=creator,
             notes=[
                 transition_note(
-                    i + 6,
-                    f"session-creator-{i + 1:02d}",
-                    f"Groomed by session-creator-{i + 1:02d}: intent, scope and criteria written.",
+                    i,
+                    creator,
+                    f"Groomed by {creator}: intent, scope and criteria written.",
                     ts(4 + i, 9),
                 ),
                 transition_note(
-                    i + 6,
-                    f"session-creator-{i + 1:02d}",
-                    f"Approved by session-creator-{i + 1:02d}: criteria covered, steps planned.",
+                    i + 3,
+                    creator,
+                    f"Approved by {creator}: criteria covered, steps planned.",
                     ts(5 + i, 16 + i),
                     note_id="NOTE-02",
                 ),
             ],
-            # The overlay and the claim fixtures wait only on done work: each
-            # is held by exactly one thing, so the tests can tell the two
-            # reasons apart. The dependency fixture waits on two groomed
-            # tasks, both still unfinished.
+            questions=questions,
             depends_on=(
                 [ids["groomed"][0], ids["groomed"][1]]
                 if i == 0
                 else [DONE_IDS[i - 1]]
             ),
         )
-        if i == 1:
-            # An overlay holds the task: this is the case of a task blocked
-            # by something other than a dependency.
+        if tid == "TSK08":
             item["overlays"] = {
                 "blocked": {
-                    "reason": pick(PROBLEMS, 2),
+                    "reason": "The palette table waits for the human's pick of eighteen roles.",
                     "by": "creator-02",
                     "at": ts(13, 15),
                 }
             }
-        if i == 2:
-            # A claim another session holds: the case of a task blocked by
-            # a live claim. The lease has an expiry, far enough out that the
-            # case stays held whenever the fixtures are read; it does not
-            # lean on an empty lease, which the model reads as never ending.
+        if tid == "TSK09":
             item["claim"] = {
                 "by": "runner-09",
                 "session": "session-runner-09",
@@ -851,295 +1805,543 @@ def build():
             }
         tasks.append(item)
 
-    # executing — claimed, evidence on the first criterion; one defers a criterion.
+    # executing — claimed, evidence on the first criterion; one defers a
+    # criterion, one leaves one unproven, one asks a question.
     for i in range(3):
         tid = next_id()
         ids.setdefault("executing", []).append(tid)
         claim_day = 9 + i
+        runner = f"runner-{i + 1:02d}"
+        session = f"session-runner-{i + 1:02d}"
+        b = brief(tid)
+        first_verification = b["criteria"][0][1]
         criteria = [
             criterion(
-                i,
-                with_evidence=[
-                    evidence(
-                        i,
-                        f"runner-{i + 1:02d}",
-                        f"session-runner-{i + 1:02d}",
-                        claim_day,
-                        12,
-                    )
+                "ACCEPT-01",
+                b["criteria"][0][0],
+                first_verification,
+                status="passed",
+                evidence=[
+                    pass_evidence(first_verification, runner, session, claim_day, 12)
                 ],
-            ),
-            criterion(i + 3),
+            )
         ]
-        if i == 1:
-            criteria[1]["status"] = "deferred"
-            criteria[1]["deferral"] = {
-                "reason": pick(PROBLEMS, i + 1),
-                "follow_up": ids["draft"][2],
-            }
+        if tid == "TSK11":
+            criteria.append(
+                criterion(
+                    "ACCEPT-02",
+                    b["criteria"][1][0],
+                    b["criteria"][1][1],
+                    status="unproven",
+                )
+            )
+        elif tid == "TSK12":
+            criteria.append(
+                criterion(
+                    "ACCEPT-02",
+                    b["criteria"][1][0],
+                    b["criteria"][1][1],
+                    status="deferred",
+                    deferral={
+                        "reason": "The queue's count reads the same window the rows do; that belongs to the row tabs.",
+                        "follow_up": ids["draft"][0],
+                    },
+                )
+            )
+        else:
+            criteria.append(
+                criterion(
+                    "ACCEPT-02",
+                    b["criteria"][1][0],
+                    b["criteria"][1][1],
+                )
+            )
+        steps = [
+            step(
+                1,
+                b["steps"][0][0],
+                b["steps"][0][1],
+                b["steps"][0][2],
+                ["ACCEPT-01"],
+                status="in-progress" if tid == "TSK10" else "done",
+                deviation=(
+                    "The count moved into the existing panel rather than a new one."
+                    if tid == "TSK10"
+                    else ""
+                ),
+            ),
+            step(
+                2,
+                b["steps"][1][0],
+                b["steps"][1][1],
+                b["steps"][1][2],
+                ["ACCEPT-02"],
+                depends_on=["STP-01"],
+            ),
+        ]
+        questions = []
+        if tid == "TSK11":
+            questions.append(
+                question(
+                    "QST-01",
+                    "Should a dropped branch be announced above the trunk or at the foot?",
+                    "open",
+                    "",
+                    runner,
+                    ts(claim_day, 13, 30),
+                    "",
+                    "",
+                )
+            )
         item = task(
             tid,
-            pick(TITLES, i + 11),
+            b["title"],
             "executing",
             i + 9,
+            kind=b.get("kind", "task"),
             planned_by=f"session-creator-{i + 1:02d}",
             claim={
-                "by": f"runner-{i + 1:02d}",
-                "session": f"session-runner-{i + 1:02d}",
+                "by": runner,
+                "session": session,
                 "at": ts(claim_day, 9),
                 "lease_expires_at": ts(claim_day, 17),
             },
-            intent={"outcome": pick(OUTCOMES, i + 5), "problem": pick(PROBLEMS, i + 3)},
+            intent={"outcome": b["outcome"], "problem": b["problem"]},
             scope={
-                "in_scope": [pick(ACTIONS, i + 2)],
-                "out_of_scope": [pick(PROBLEMS, i + 6)],
+                "in_scope": list(b["in_scope"]),
+                "out_of_scope": list(b["out_of_scope"]),
             },
             acceptance_criteria=criteria,
-            steps=[
-                step(
-                    i,
-                    1,
-                    "in-progress" if i == 0 else "done",
-                    ["ACCEPT-01"],
-                    ["crates/core/tests/task_model.rs"],
-                    deviation=pick(NOTES, i) if i == 0 else "",
+            steps=steps,
+            notes=[
+                note(
+                    "NOTE-01",
+                    runner,
+                    "The first criterion is proven. The second is waiting on the fixture the next unit writes.",
+                    ts(claim_day, 13),
                 )
             ],
-            review={"max_rounds": 5, "rounds": [], "verdict": None, "findings": []},
-            notes=[
-                {
-                    "id": "NOTE-01",
-                    "author": f"runner-{i + 1:02d}",
-                    "body": pick(NOTES, i),
-                    "at": ts(claim_day, 13),
-                }
-            ],
+            questions=questions,
             depends_on=[DONE_IDS[i]],
         )
         tasks.append(item)
 
-    # code-review — steps settled, evidence, self round, one open finding.
+    # code-review — steps settled, evidence, self round, findings: one open,
+    # one resolved with a comment, and one finding no round names.
     for i in range(3):
         tid = next_id()
         ids.setdefault("code-review", []).append(tid)
         review_day = 10 + i
         claim_at = ts(review_day, 9)
         round_at = ts(review_day, 16)
-        findings = [finding(i + 1, round_at)]
-        item = task(
-            tid,
-            pick(TITLES, i + 5),
-            "code-review",
-            i + 12,
-            planned_by=f"session-creator-{i + 1:02d}",
-            claim={
-                "by": f"runner-{i + 1:02d}",
-                "session": f"session-runner-{i + 1:02d}",
-                "at": claim_at,
-                "lease_expires_at": ts(review_day, 18),
-            },
-            intent={"outcome": pick(OUTCOMES, i + 7), "problem": pick(PROBLEMS, i + 4)},
-            scope={
-                "in_scope": [pick(ACTIONS, i + 3)],
-                "out_of_scope": [pick(PROBLEMS, i)],
-            },
-            acceptance_criteria=[
-                criterion(
-                    i,
-                    with_evidence=[
-                        evidence(
-                            i,
-                            f"runner-{i + 1:02d}",
-                            f"session-runner-{i + 1:02d}",
-                            review_day,
-                            14,
+        runner = f"runner-{i + 1:02d}"
+        session = f"session-runner-{i + 1:02d}"
+        b = brief(tid)
+        findings = [
+            finding(
+                1,
+                round_at,
+                severity="high" if tid == "TSK14" else "medium",
+                description=pick(FINDING_TEXT, i),
+                comments=(
+                    [
+                        comment(
+                            "CMT-01",
+                            f"reviewer-{i + 1:02d}",
+                            "The row keeps the count when the cut moves it.",
+                            ts(review_day, 17),
+                        )
+                    ]
+                    if tid == "TSK14"
+                    else []
+                ),
+            )
+        ]
+        if tid == "TSK13":
+            findings.append(
+                finding(
+                    2,
+                    round_at,
+                    severity="low",
+                    status="fixed",
+                    description="The mark's background says nothing about the selection.",
+                    resolved=ts(review_day, 16, 30),
+                    resolution="The mark now reads the selection's two slots, foreground and background.",
+                    comments=[
+                        comment(
+                            "CMT-01",
+                            "runner-01",
+                            "Took the slots from the pane rather than inventing a third colour.",
+                            ts(review_day, 16, 10),
                         )
                     ],
                 )
-            ],
-            steps=[step(i, 1, "done", ["ACCEPT-01"], ["crates/core/tests/task_model.rs"])],
-            review={
-                "max_rounds": 5,
-                "rounds": [
-                    # `n` counts external rounds; the self pre-screen is
-                    # round 0 and does not spend the budget.
-                    round_(
-                        0,
-                        "self",
-                        "spec-compliance",
-                        f"runner-{i + 1:02d}",
-                        "changes-needed",
-                        i,
-                        round_at,
-                        ["FIND-01"],
-                    )
-                ],
-                "verdict": None,
-                "findings": findings,
+            )
+        elif tid == "TSK15":
+            findings.append(
+                finding(
+                    2,
+                    round_at,
+                    severity="high",
+                    description=pick(FINDING_TEXT, 7),
+                )
+            )
+        item = planned(
+            tid,
+            i + 12,
+            "code-review",
+            planned_by=f"session-creator-{i + 1:02d}",
+            claim={
+                "by": runner,
+                "session": session,
+                "at": claim_at,
+                "lease_expires_at": ts(review_day, 18),
             },
             notes=[
-                {
-                    "id": "NOTE-01",
-                    "author": f"runner-{i + 1:02d}",
-                    "body": pick(NOTES, i),
-                    "at": ts(review_day + 1, 9),
-                }
+                note(
+                    "NOTE-01",
+                    runner,
+                    "The first criterion is proven and the second follows the same command.",
+                    ts(review_day + 1, 9),
+                )
             ],
             depends_on=[DONE_IDS[i], DONE_IDS[(i + 1) % len(DONE_IDS)]],
         )
-        if i == 0:
+        # Both criteria carry evidence: a code-review task has finished
+        # executing, so every criterion is proven or failed.
+        for number, acceptance in enumerate(item["acceptance_criteria"], start=1):
+            acceptance["status"] = "passed"
+            acceptance["evidence"] = [
+                pass_evidence(
+                    acceptance["verification"],
+                    runner,
+                    session,
+                    review_day,
+                    14,
+                    (number - 1) * 5,
+                )
+            ]
+        for planned_step in item["steps"]:
+            planned_step["status"] = "done"
+        if tid == "TSK13":
             # The detail pane's fixture. Its note carries a ==mark==, so the
             # document paints text.selected on free text; it carries a fenced
             # code block, so the document paints syntect's code tokens; and
             # its criterion's verification carries a shell pipe, so the
-            # criteria table holds a code span with an escaped pipe in it.
+            # criteria table holds a code span with an escaped pipe.
             item["notes"][0]["body"] += (
-                " The ==key finding== is marked for the next round.\n\n"
+                "\n\nThe ==key finding== is marked for the next round.\n\n"
                 "```rust\n"
                 "let answer = 42;\n"
                 "```"
             )
-            item["acceptance_criteria"][0]["verification"] = (
-                "cargo test -p coding-crew-core | grep detail"
-            )
+        item["review"] = {
+            "max_rounds": 5,
+            "rounds": [
+                round_(
+                    0,
+                    "self",
+                    "spec-compliance",
+                    runner,
+                    "changes-needed",
+                    round_at,
+                    "The pre-screen found the row and the mark before the external round spent budget.",
+                    [finding["id"] for finding in findings if finding["created"] == round_at],
+                )
+            ],
+            "verdict": None,
+            "findings": findings,
+        }
         tasks.append(item)
 
-    # remediating — external round with changes-needed, findings open.
+    # remediating — external round with changes-needed: one finding fixed,
+    # one open, and on the third fixture one dismissed.
     for i in range(3):
         tid = next_id()
         ids.setdefault("remediating", []).append(tid)
         claim_day = 13 + i // 2
         claim_hour = 9 + i % 2
-        evidence_hour = claim_hour + 4
-        self_hour = claim_hour + 6
-        external_hour = claim_hour + 8
-        external_at = ts(claim_day, external_hour)
-        item = task(
+        external_at = ts(claim_day, claim_hour + 8)
+        runner = f"runner-{i + 2:02d}"
+        session = f"session-runner-{i + 2:02d}"
+        b = brief(tid)
+        findings = [
+            finding(
+                1,
+                external_at,
+                severity="medium",
+                status="fixed" if tid == "TSK16" else "open",
+                description=pick(FINDING_TEXT, i + 1),
+                resolved=ts(claim_day, claim_hour + 9) if tid == "TSK16" else "",
+                resolution=(
+                    "The round now draws as blocks; the table is gone."
+                    if tid == "TSK16"
+                    else ""
+                ),
+                comments=(
+                    [
+                        comment(
+                            "CMT-01",
+                            runner,
+                            "Fixed by moving the round out of the table.",
+                            ts(claim_day, claim_hour + 8, 30),
+                        )
+                    ]
+                    if tid == "TSK16"
+                    else []
+                ),
+            )
+        ]
+        second = finding(
+            2,
+            external_at,
+            severity="high",
+            description=pick(FINDING_TEXT, i + 4),
+        )
+        if tid == "TSK18":
+            second["status"] = "dismissed"
+            second["resolved"] = ts(claim_day, claim_hour + 9)
+            second["resolution"] = (
+                "The file is already left byte-identical; the notice only needed a name."
+            )
+            second["comments"] = [
+                comment(
+                    "CMT-01",
+                    runner,
+                    "The bytes are untouched; only the wording changed.",
+                    ts(claim_day, claim_hour + 8, 45),
+                )
+            ]
+        findings.append(second)
+        item = planned(
             tid,
-            pick(TITLES, i + 9),
-            "remediating",
             i + 15,
+            "remediating",
             planned_by=f"session-creator-{i + 2:02d}",
             claim={
-                "by": f"runner-{i + 2:02d}",
-                "session": f"session-runner-{i + 2:02d}",
+                "by": runner,
+                "session": session,
                 "at": ts(claim_day, claim_hour),
-                "lease_expires_at": ts(claim_day, external_hour),
-            },
-            intent={"outcome": pick(OUTCOMES, i + 2), "problem": pick(PROBLEMS, i + 5)},
-            scope={
-                "in_scope": [pick(ACTIONS, i + 4)],
-                "out_of_scope": [pick(PROBLEMS, i + 1)],
-            },
-            acceptance_criteria=[
-                criterion(
-                    i,
-                    with_evidence=[
-                        evidence(
-                            i,
-                            f"runner-{i + 2:02d}",
-                            f"session-runner-{i + 2:02d}",
-                            claim_day,
-                            evidence_hour,
-                        )
-                    ],
-                )
-            ],
-            steps=[step(i, 1, "done", ["ACCEPT-01"], ["crates/core/tests/task_model.rs"])],
-            review={
-                "max_rounds": 5,
-                "rounds": [
-                    round_(
-                        0,
-                        "self",
-                        "spec-compliance",
-                        f"runner-{i + 2:02d}",
-                        "ok",
-                        i,
-                        ts(claim_day, self_hour),
-                    ),
-                    round_(
-                        1,
-                        "external",
-                        pick(FOCI, i + 1),
-                        f"reviewer-{i + 1:02d}",
-                        "changes-needed",
-                        i,
-                        external_at,
-                        ["FIND-01"],
-                    ),
-                ],
-                "verdict": "changes-needed",
-                "findings": [finding(i + 1, external_at)],
+                "lease_expires_at": ts(claim_day, claim_hour + 8),
             },
             depends_on=[DONE_IDS[(i + 1) % len(DONE_IDS)]],
         )
+        for number, acceptance in enumerate(item["acceptance_criteria"], start=1):
+            acceptance["status"] = "passed"
+            acceptance["evidence"] = [
+                pass_evidence(
+                    acceptance["verification"],
+                    runner,
+                    session,
+                    claim_day,
+                    claim_hour + 4,
+                    (number - 1) * 5,
+                )
+            ]
+        for planned_step in item["steps"]:
+            planned_step["status"] = "done"
+        item["review"] = {
+            "max_rounds": 5,
+            "rounds": [
+                round_(
+                    0,
+                    "self",
+                    "spec-compliance",
+                    runner,
+                    "ok",
+                    ts(claim_day, claim_hour + 6),
+                    "The pre-screen found nothing to fix before the external round.",
+                ),
+                round_(
+                    1,
+                    "external",
+                    pick(FOCI, i + 1),
+                    f"reviewer-{i + 1:02d}",
+                    "changes-needed",
+                    external_at,
+                    "The round is readable, but the second finding needs a decision.",
+                    ["FIND-01", "FIND-02"],
+                ),
+            ],
+            "verdict": "changes-needed",
+            "findings": findings,
+        }
         tasks.append(item)
 
-    # needs-human — five external rounds exhausted.
+    # needs-human — five external rounds exhausted. The findings carry the
+    # history of the loop: fixed, dismissed and still open.
     for i in range(3):
         tid = next_id()
         ids.setdefault("needs-human", []).append(tid)
         claim_day = 14 + i
+        runner = f"runner-{i + 3:02d}"
+        session = f"session-runner-{i + 3:02d}"
+        b = brief(tid)
         rounds = [
             round_(
                 0,
                 "self",
                 "spec-compliance",
-                f"runner-{i + 3:02d}",
+                runner,
                 "ok",
-                i,
                 ts(claim_day, 5),
+                "The pre-screen is clean; the work is ready for an external round.",
             )
         ]
         findings = []
         for n in range(1, 6):
             at = ts(claim_day, 5 + n)
-            findings.append(finding(n, at))
+            status = "open"
+            resolved = ""
+            resolution = ""
+            comments = []
+            if tid == "TSK19" and n in (1, 3):
+                status = "fixed"
+                resolved = ts(claim_day, 5 + n, 30)
+                resolution = "The heading now takes its own level's role."
+                comments = [
+                    comment(
+                        f"CMT-{n:02d}",
+                        runner,
+                        "The role follows the level rather than the document.",
+                        ts(claim_day, 5 + n, 15),
+                    )
+                ]
+            if tid == "TSK19" and n == 2:
+                status = "dismissed"
+                resolved = ts(claim_day, 7, 30)
+                resolution = "The alert role is already distinct; the report named the body colour."
+                comments = [
+                    comment(
+                        "CMT-02",
+                        runner,
+                        "Checked against the palette table; the alert has its own role.",
+                        ts(claim_day, 7, 15),
+                    )
+                ]
+            if tid == "TSK20" and n in (1, 2, 3):
+                status = "fixed"
+                resolved = ts(claim_day, 5 + n, 30)
+                resolution = "The finding is nested under the round that raised it."
+            if tid == "TSK21" and n in (1,):
+                comments = [
+                    comment(
+                        "CMT-01",
+                        f"reviewer-{n:02d}",
+                        "The gutter is drawn but the wrap still takes a number.",
+                        ts(claim_day, 5 + n, 20),
+                    )
+                ]
+            findings.append(
+                finding(
+                    n,
+                    at,
+                    severity=["medium", "high", "low", "medium", "high"][n - 1],
+                    status=status,
+                    description=pick(FINDING_TEXT, i + n),
+                    resolved=resolved,
+                    resolution=resolution,
+                    comments=comments,
+                )
+            )
             rounds.append(
                 round_(
                     n,
                     "external",
-                    pick(FOCI, n),
+                    pick(FOCUS_BY_ROUND, n),
                     f"reviewer-{n:02d}",
                     "changes-needed",
-                    n,
                     at,
+                    "The round found the next defect and the budget moved one round closer to spent.",
                     [f"FIND-{n:02d}"],
+                )
+            )
+        criteria = []
+        for number, (description, verification) in enumerate(b["criteria"], start=1):
+            if tid == "TSK21" and number == 2:
+                criteria.append(
+                    criterion(
+                        "ACCEPT-02",
+                        description,
+                        verification,
+                        status="failed",
+                        evidence=[
+                            fail_evidence(
+                                verification, runner, session, claim_day, 3, 30
+                            )
+                        ],
+                        failure_reason="A wrapped line still takes a second number in the gutter.",
+                    )
+                )
+            else:
+                criteria.append(
+                    criterion(
+                        f"ACCEPT-{number:02d}",
+                        description,
+                        verification,
+                        status="passed",
+                        evidence=[
+                            pass_evidence(
+                                verification,
+                                runner,
+                                session,
+                                claim_day,
+                                3,
+                                (number - 1) * 10,
+                            )
+                        ],
+                    )
+                )
+        steps = [
+            step(
+                n,
+                action,
+                done_when,
+                files,
+                [f"ACCEPT-{n:02d}"],
+                status="failed" if tid == "TSK21" and n == 2 else "done",
+                depends_on=[f"STP-{n - 1:02d}"] if n > 1 else [],
+                deviation=(
+                    "The wrap number is still drawn; the fix belongs to the gutter unit."
+                    if tid == "TSK21" and n == 2
+                    else ""
+                ),
+            )
+            for n, (action, done_when, files) in enumerate(b["steps"], start=1)
+        ]
+        questions = []
+        if tid == "TSK20":
+            questions.append(
+                question(
+                    "QST-01",
+                    "Does an orphan finding go before or after the unclaimed findings?",
+                    "resolved",
+                    "After the rounds, in its own block.",
+                    "human",
+                    ts(claim_day - 1, 12),
+                    "session-creator-04",
+                    ts(claim_day - 1, 13),
                 )
             )
         item = task(
             tid,
-            pick(TITLES, i + 17),
+            b["title"],
             "needs-human",
             i + 18,
             planned_by=f"session-creator-{i + 3:02d}",
             claim={
-                "by": f"runner-{i + 3:02d}",
-                "session": f"session-runner-{i + 3:02d}",
+                "by": runner,
+                "session": session,
                 "at": ts(claim_day, 1),
                 "lease_expires_at": ts(claim_day, 11),
             },
-            intent={"outcome": pick(OUTCOMES, i + 4), "problem": pick(PROBLEMS, i + 6)},
+            intent={"outcome": b["outcome"], "problem": b["problem"]},
             scope={
-                "in_scope": [pick(ACTIONS, i + 5)],
-                "out_of_scope": [pick(PROBLEMS, i + 2)],
+                "in_scope": list(b["in_scope"]),
+                "out_of_scope": list(b["out_of_scope"]),
             },
-            acceptance_criteria=[
-                criterion(
-                    i,
-                    with_evidence=[
-                        evidence(
-                            i,
-                            f"runner-{i + 3:02d}",
-                            f"session-runner-{i + 3:02d}",
-                            claim_day,
-                            3,
-                        )
-                    ],
-                )
-            ],
-            steps=[step(i, 1, "done", ["ACCEPT-01"], ["crates/core/tests/task_model.rs"])],
+            acceptance_criteria=criteria,
+            steps=steps,
             review={
                 "max_rounds": 5,
                 "rounds": rounds,
@@ -1147,22 +2349,20 @@ def build():
                 "findings": findings,
             },
             notes=[
-                {
-                    "id": "NOTE-01",
-                    "author": f"reviewer-{5:02d}",
-                    "body": pick(NOTES, i),
-                    "at": ts(claim_day, 12),
-                }
+                note(
+                    "NOTE-01",
+                    f"reviewer-05",
+                    "The budget is spent and the loop stops here: a human decides the next move.",
+                    ts(claim_day, 12),
+                )
             ],
+            questions=questions,
             depends_on=[DONE_IDS[i], DONE_IDS[(i + 2) % len(DONE_IDS)]],
         )
         tasks.append(item)
 
     # done — clean verdict, no open findings. Five of them, chained only
     # among themselves: the done set is closed under its waits-on edges.
-    # The chain is scheduled first in the month, before every task that
-    # waits on it, so each of those can be claimed after its dependencies
-    # finished.
     done_dependencies = [
         [],
         [DONE_IDS[0]],
@@ -1173,7 +2373,7 @@ def build():
     done_schedule = [
         (ts(5, 15), (5, 16, 0), ts(5, 17), ts(5, 18)),
         (ts(6, 16), (6, 17, 0), ts(6, 18), ts(6, 19)),
-        (ts(7, 17), (7, 18, 0), ts(7, 19), ts(7, 20)),
+        (ts(7, 17), (7, 17, 30), ts(7, 17, 45), ts(7, 18, 45)),
         (ts(7, 20, 30), (7, 20, 40), ts(7, 20, 50), ts(7, 21)),
         (ts(8, 9), (8, 10, 0), ts(8, 11), ts(8, 12)),
     ]
@@ -1182,73 +2382,252 @@ def build():
         assert tid == DONE_IDS[i], (tid, DONE_IDS[i])
         ids.setdefault("done", []).append(tid)
         claim_at, (evidence_day, evidence_hour, evidence_minute), self_at, external_at = done_schedule[i]
+        runner = f"runner-{i + 4:02d}"
+        session = f"session-runner-{i + 4:02d}"
+        b = brief(tid)
+        findings = []
+        rounds = [
+            round_(
+                0,
+                "self",
+                "spec-compliance",
+                runner,
+                "ok",
+                self_at,
+                "The pre-screen is clean; the work leaves for the external round.",
+            )
+        ]
+        if tid == "TSK23":
+            findings.append(
+                finding(
+                    1,
+                    ts(6, 19),
+                    severity="medium",
+                    status="fixed",
+                    description="A fresh wait reads as zero minutes instead of words.",
+                    resolved=ts(6, 19, 30),
+                    resolution="The shared age vocabulary says under a minute.",
+                    comments=[
+                        comment(
+                            "CMT-01",
+                            runner,
+                            "Both readers now share the words.",
+                            ts(6, 19, 15),
+                        )
+                    ],
+                )
+            )
+            rounds.append(
+                round_(
+                    1,
+                    "external",
+                    pick(FOCUS_BY_ROUND, 1),
+                    f"reviewer-{i + 5:02d}",
+                    "changes-needed",
+                    ts(6, 19),
+                    "The under-a-minute case was not exercised.",
+                    ["FIND-01"],
+                )
+            )
+            rounds.append(
+                round_(
+                    2,
+                    "external",
+                    pick(FOCUS_BY_ROUND, 2),
+                    f"reviewer-{i + 5:02d}",
+                    "ok",
+                    ts(6, 20),
+                    "The words and the row agree.",
+                )
+            )
+        elif tid == "TSK24":
+            for n, minute in enumerate((0, 15, 30), start=1):
+                findings.append(
+                    finding(
+                        n,
+                        ts(7, 18, minute),
+                        severity=["medium", "high", "low"][n - 1],
+                        status="fixed",
+                        description=pick(FINDING_TEXT, n + 2),
+                        resolved=ts(7, 18, minute + 5),
+                        resolution="The fork parent is found from the first open dependency.",
+                    )
+                )
+                rounds.append(
+                    round_(
+                        n,
+                        "external",
+                        pick(FOCUS_BY_ROUND, n),
+                        f"reviewer-{i + 5:02d}",
+                        "changes-needed",
+                        ts(7, 18, minute),
+                        "The fork parent moved when a dependency was added.",
+                        [f"FIND-{n:02d}"],
+                    )
+                )
+            rounds.append(
+                round_(
+                    4,
+                    "external",
+                    pick(FOCUS_BY_ROUND, 4),
+                    f"reviewer-{i + 5:02d}",
+                    "ok",
+                    external_at,
+                    "The fork is stable and the row names both dependencies.",
+                )
+            )
+        elif tid == "TSK26":
+            findings.append(
+                finding(
+                    1,
+                    ts(8, 9, 30),
+                    severity="low",
+                    status="dismissed",
+                    description="The broken file's name is cut at a narrow pane.",
+                    resolved=ts(8, 9, 45),
+                    resolution="The name is the row's own; the cut is the pane's, and the marker says so.",
+                    comments=[
+                        comment(
+                            "CMT-01",
+                            f"reviewer-{i + 5:02d}",
+                            "A cut name is still a name; the marker carries the rest.",
+                            ts(8, 9, 40),
+                        )
+                    ],
+                )
+            )
+            rounds.append(
+                round_(
+                    1,
+                    "external",
+                    pick(FOCUS_BY_ROUND, 1),
+                    f"reviewer-{i + 5:02d}",
+                    "ok",
+                    external_at,
+                    "The folder is never hidden and the error is named.",
+                )
+            )
+        else:
+            rounds.append(
+                round_(
+                    1,
+                    "external",
+                    pick(FOCUS_BY_ROUND, i),
+                    f"reviewer-{i + 5:02d}",
+                    "ok",
+                    external_at,
+                    "The work is reviewed clean and the criteria are proven.",
+                )
+            )
+        questions = []
+        if tid in ("TSK22", "TSK25"):
+            questions.append(
+                question(
+                    "QST-01",
+                    "Does the row carry the count before or after the label?",
+                    "resolved",
+                    "After the label, so the count reads as the label's.",
+                    "human",
+                    ts(4, 10 + i),
+                    f"session-creator-{i + 4:02d}",
+                    ts(5, 14),
+                )
+            )
+        notes = [
+            note(
+                "NOTE-01",
+                runner,
+                "The work is done and the evidence is attached; the review is closed.",
+                ts(evidence_day, evidence_hour, evidence_minute + 5),
+            )
+        ]
+        # The last note sits after the last round: a done task is written to
+        # when the review closes, so it is stamped from the round that closed
+        # it, not from the schedule's nominal external round.
+        notes.append(
+            note(
+                "NOTE-02",
+                f"reviewer-{i + 5:02d}",
+                "Reviewed clean: the criteria are proven and no finding is open.",
+                plus_minutes(rounds[-1]["at"], 10),
+            )
+        )
         item = task(
             tid,
-            pick(TITLES, i + 12),
+            b["title"],
             "done",
             i + 21,
             planned_by=f"session-creator-{i + 4:02d}",
             claim={
-                "by": f"runner-{i + 4:02d}",
-                "session": f"session-runner-{i + 4:02d}",
+                "by": runner,
+                "session": session,
                 "at": claim_at,
                 "lease_expires_at": external_at,
             },
-            intent={"outcome": pick(OUTCOMES, i + 6), "problem": pick(PROBLEMS, i)},
+            intent={"outcome": b["outcome"], "problem": b["problem"]},
             scope={
-                "in_scope": [pick(ACTIONS, i + 6)],
-                "out_of_scope": [pick(PROBLEMS, i + 3)],
+                "in_scope": list(b["in_scope"]),
+                "out_of_scope": list(b["out_of_scope"]),
             },
             acceptance_criteria=[
                 criterion(
-                    i,
-                    with_evidence=[
-                        evidence(
-                            i,
-                            f"runner-{i + 4:02d}",
-                            f"session-runner-{i + 4:02d}",
+                    f"ACCEPT-{number:02d}",
+                    description,
+                    verification,
+                    status="passed",
+                    evidence=[
+                        pass_evidence(
+                            verification,
+                            runner,
+                            session,
                             evidence_day,
                             evidence_hour,
-                            minute=evidence_minute,
+                            evidence_minute + (number - 1) * 5,
                         )
                     ],
                 )
+                for number, (description, verification) in enumerate(
+                    b["criteria"], start=1
+                )
             ],
-            steps=[step(i, 1, "done", ["ACCEPT-01"], ["crates/core/tests/task_model.rs"])],
+            steps=[
+                step(
+                    n,
+                    action,
+                    done_when,
+                    files,
+                    [f"ACCEPT-{n:02d}"],
+                    status=(
+                        "skipped"
+                        if tid == "TSK24" and n == 2
+                        else "done"
+                    ),
+                    depends_on=[f"STP-{n - 1:02d}"] if n > 1 else [],
+                    deviation=(
+                        "The dependency fixture already covered this case; the step was not run."
+                        if tid == "TSK24" and n == 2
+                        else ""
+                    ),
+                )
+                for n, (action, done_when, files) in enumerate(b["steps"], start=1)
+            ],
             review={
                 "max_rounds": 5,
-                "rounds": [
-                    round_(
-                        0,
-                        "self",
-                        "spec-compliance",
-                        f"runner-{i + 4:02d}",
-                        "ok",
-                        i,
-                        self_at,
-                    ),
-                    round_(
-                        1,
-                        "external",
-                        pick(FOCI, i),
-                        f"reviewer-{i + 5:02d}",
-                        "ok",
-                        i,
-                        external_at,
-                    ),
-                ],
+                "rounds": rounds,
                 "verdict": "ok",
-                "findings": [],
+                "findings": findings,
             },
+            questions=questions,
+            notes=notes,
             depends_on=done_dependencies[i],
         )
         tasks.append(item)
 
     done_ids = ids["done"]
 
-    # smaller tasks — ideas, bugs and small features, plus the trail of one
-    # that became a task.
-    def item(item_id, title, kind, status, body="", scope=None, promoted_to=None,
+    # smaller tasks — ideas, bugs and small features, each with a body and
+    # a scope that say what the item is worth.
+    def item(item_id, title, kind, status, body, scope, promoted_to=None,
              dismissed_reason=""):
         return {
             "schema_version": 1,
@@ -1258,7 +2637,7 @@ def build():
             "kind": kind,
             "status": status,
             "body": body,
-            "scope": scope or [],
+            "scope": scope,
             "tags": ["mock"],
             "created": ts(2, 8),
             "updated": ts(6, 15),
@@ -1267,94 +2646,119 @@ def build():
         }
 
     items = [
-        item("ITM01", "Lorem ipsum dolor sit amet", "idea", "open",
-             body="Consectetur adipiscing elit, sed do eiusmod tempor incididunt."),
-        item("ITM02", "Tempor incididunt ut labore et dolore", "feature", "open",
-             body="Magna aliqua, ut enim ad minim veniam.",
-             scope=["the lorem pane"]),
-        item("ITM03", "Quis nostrud exercitation ullamco laboris", "bug", "open",
-             body="Nisi ut aliquip ex ea commodo consequat.",
-             scope=["the lorem list"]),
-        item("ITM04", "Sed do eiusmod tempor incididunt", "feature", "dismissed",
-             body="Ut labore et dolore magna aliqua.",
-             dismissed_reason="Lorem ipsum dolor sit amet, consectetur."),
+        item(
+            "ITM01",
+            "The Overview says how long the run has been going",
+            "idea",
+            "open",
+            "The activity block says what happened; it does not say when the run began.",
+            ["the Overview's activity block"],
+        ),
+        item(
+            "ITM02",
+            "The Path row names the round it waits on",
+            "feature",
+            "open",
+            "A task in review waits on a round number the Path row does not show.",
+            ["the Path rows", "the review state"],
+        ),
+        item(
+            "ITM03",
+            "hugo says its configuration home could not be made",
+            "bug",
+            "open",
+            "A home that cannot be created blanks the sidebar instead of naming the path.",
+            ["hugo's sidebar", "the configuration home"],
+        ),
+        item(
+            "ITM04",
+            "The light theme families",
+            "feature",
+            "dismissed",
+            "Catppuccin Latte, Nord Light and Dracula Alucard would finish the families.",
+            ["Catppuccin Latte", "Nord Light", "Dracula Alucard"],
+            dismissed_reason="Deferred by the human: the light themes wait until the dark presets are settled.",
+        ),
     ]
 
     # A bug that was promoted: the task it became is a small task.
-    promoted_title = "Duis aute irure dolor in reprehenderit"
+    promoted_title = brief("TSK27")["title"]
     promoted_id = next_id()
+    assert promoted_id == "TSK27", promoted_id
     promoted_task = task(promoted_id, promoted_title, "draft", 4)
     promoted_task["kind"] = "bug"
     promoted_task["promoted_from"] = "ITM05"
     promoted_task["intent"] = {
-        "outcome": promoted_title,
-        "problem": "Velit esse cillum dolore eu fugiat.",
+        "outcome": brief("TSK27")["outcome"],
+        "problem": brief("TSK27")["problem"],
     }
-    promoted_task["scope"] = {"in_scope": ["the lorem button"], "out_of_scope": []}
+    promoted_task["scope"] = {
+        "in_scope": list(brief("TSK27")["in_scope"]),
+        "out_of_scope": list(brief("TSK27")["out_of_scope"]),
+    }
     promoted_task["acceptance_criteria"] = [
-        {
-            "id": "ACCEPT-01",
-            "description": promoted_title,
-            "verification": "",
-            "status": "pending",
-            "evidence": [],
-            "deferral": None,
-            "failure_reason": "",
-        }
+        criterion("ACCEPT-01", brief("TSK27")["criteria"][0][0], "")
     ]
     tasks.append(promoted_task)
     items.append(
-        item("ITM05", promoted_title, "bug", "promoted",
-             body="Velit esse cillum dolore eu fugiat.",
-             scope=["the lorem button"],
-             promoted_to=promoted_id)
+        item(
+            "ITM05",
+            promoted_title,
+            "bug",
+            "promoted",
+            "The candidate row overflows when the title is wider than the row.",
+            ["the candidate row"],
+            promoted_to=promoted_id,
+        )
     )
 
-    # parent / child: the first approved task owns a draft child.
-    child = next_id()
-    ids.setdefault("draft", []).append(child)
-    child_task = task(child, pick(TITLES, 19), "draft", 2)
+    # parent / child: the first approved task owns two draft children. The
+    # first refines the round's shape, the second adds a finding no round
+    # names.
+    child_one = next_id()
+    assert child_one == "TSK28", child_one
+    ids.setdefault("draft", []).append(child_one)
+    child_task = task(child_one, brief(child_one)["title"], "draft", 2)
     child_task["parent"] = ids["approved"][0]
     tasks.append(child_task)
-    for item in tasks:
-        if item["id"] == ids["approved"][0]:
-            item["children"] = [child]
 
     # approved after the last cycle finished: its dependencies are done, so
-    # an agent can claim it right now. It is generated last, so it takes the
-    # next id and the ids of the older fixtures keep their meaning.
+    # an agent can claim it right now. It is generated before the second
+    # child, so the claimable fixture keeps its id.
     tid = next_id()
+    assert tid == "TSK29", tid
     ids.setdefault("approved", []).append(tid)
+    b = brief(tid)
     tasks.append(
         task(
             tid,
-            pick(TITLES, 20),
+            b["title"],
             "approved",
             6,
             planned_by="session-creator-05",
-            intent={"outcome": pick(OUTCOMES, 8), "problem": pick(PROBLEMS, 7)},
+            intent={"outcome": b["outcome"], "problem": b["problem"]},
             scope={
-                "in_scope": [pick(ACTIONS, 7)],
-                "out_of_scope": [pick(PROBLEMS, 3)],
+                "in_scope": list(b["in_scope"]),
+                "out_of_scope": list(b["out_of_scope"]),
             },
             acceptance_criteria=[
-                criterion(2, cid="ACCEPT-01"),
-                criterion(5, cid="ACCEPT-02"),
+                criterion(f"ACCEPT-{n:02d}", description, verification)
+                for n, (description, verification) in enumerate(b["criteria"], start=1)
             ],
             steps=[
-                step(2, 1, "pending", ["ACCEPT-01"], ["crates/core/src/task.rs"]),
                 step(
-                    5,
-                    2,
-                    "pending",
-                    ["ACCEPT-02"],
-                    ["crates/core/tests/task_model.rs"],
-                    depends_on=["STP-01"],
-                ),
+                    n,
+                    action,
+                    done_when,
+                    files,
+                    [f"ACCEPT-{n:02d}"],
+                    depends_on=[f"STP-{n - 1:02d}"] if n > 1 else [],
+                )
+                for n, (action, done_when, files) in enumerate(b["steps"], start=1)
             ],
             notes=[
                 transition_note(
-                    6,
+                    5,
                     "session-creator-05",
                     "Groomed by session-creator-05: intent, scope and criteria written.",
                     ts(13, 10),
@@ -1371,6 +2775,17 @@ def build():
             depends_on=[done_ids[0]],
         )
     )
+
+    child_two = next_id()
+    assert child_two == "TSK30", child_two
+    ids.setdefault("draft", []).append(child_two)
+    second_child = task(child_two, brief(child_two)["title"], "draft", 3)
+    second_child["parent"] = ids["approved"][0]
+    tasks.append(second_child)
+
+    for item in tasks:
+        if item["id"] == ids["approved"][0]:
+            item["children"] = [child_one, child_two]
 
     for task_item in tasks:
         finalize(task_item)

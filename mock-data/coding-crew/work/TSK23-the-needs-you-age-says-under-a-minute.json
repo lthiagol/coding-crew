@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "id": "TSK23",
+  "title": "The Needs you age says under a minute",
+  "slug": "the-needs-you-age-says-under-a-minute",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-06T15:00Z",
+  "updated": "2026-11-06T20:10Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "done",
+  "status_since": "2026-11-06T20:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-05",
+    "session": "session-runner-05",
+    "at": "2026-11-06T16:00Z",
+    "lease_expires_at": "2026-11-06T19:00Z"
+  },
+  "planned_by": "session-creator-05",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A wait shorter than a minute is said in words, not as zero.",
+    "problem": "A row that just entered its status shows an age of zero minutes, which reads as no wait at all."
+  },
+  "scope": {
+    "in_scope": [
+      "the age vocabulary",
+      "the Needs you row"
+    ],
+    "out_of_scope": [
+      "the Path row",
+      "the Overview"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A wait under a minute says so.",
+      "verification": "cargo test -p coding-crew-core age",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-core age",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-06T17:00Z",
+          "by": "runner-05",
+          "session": "session-runner-05"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The same words are used by both tools.",
+      "verification": "cargo test -p coding-crew-core age",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-core age",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-06T17:05Z",
+          "by": "runner-05",
+          "session": "session-runner-05"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Share the age words from core.",
+      "done_when": "one vocabulary, two readers",
+      "files": [
+        "crates/core/src/clock.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Draw the under-a-minute case on the row.",
+      "done_when": "a fresh wait is not a zero",
+      "files": [
+        "crates/raul/src/needs.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-05",
+        "verdict": "ok",
+        "at": "2026-11-06T18:00Z",
+        "notes": "The pre-screen is clean; the work leaves for the external round.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "reviewer-06",
+        "verdict": "changes-needed",
+        "at": "2026-11-06T19:00Z",
+        "notes": "The under-a-minute case was not exercised.",
+        "findings": [
+          "FIND-01"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "security",
+        "reviewer": "reviewer-06",
+        "verdict": "ok",
+        "at": "2026-11-06T20:00Z",
+        "notes": "The words and the row agree.",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "medium",
+        "status": "fixed",
+        "description": "A fresh wait reads as zero minutes instead of words.",
+        "created": "2026-11-06T19:00Z",
+        "resolved": "2026-11-06T19:30Z",
+        "resolution": "The shared age vocabulary says under a minute.",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "runner-05",
+            "body": "Both readers now share the words.",
+            "at": "2026-11-06T19:15Z"
+          }
+        ]
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-05",
+      "body": "The work is done and the evidence is attached; the review is closed.",
+      "at": "2026-11-06T17:05Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "reviewer-06",
+      "body": "Reviewed clean: the criteria are proven and no finding is open.",
+      "at": "2026-11-06T20:10Z"
+    }
+  ],
+  "depends_on": [
+    "TSK22"
+  ]
+}

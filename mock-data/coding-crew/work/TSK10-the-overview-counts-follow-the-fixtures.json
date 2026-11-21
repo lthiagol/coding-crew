@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "id": "TSK10",
+  "title": "The Overview counts follow the fixtures",
+  "slug": "the-overview-counts-follow-the-fixtures",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-05T10:00Z",
+  "updated": "2026-11-09T13:00Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "executing",
+  "status_since": "2026-11-09T09:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-01",
+    "session": "session-runner-01",
+    "at": "2026-11-09T09:00Z",
+    "lease_expires_at": "2026-11-09T17:00Z"
+  },
+  "planned_by": "session-creator-01",
+  "meta": {
+    "priority": "high",
+    "effort": "S",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "Every count the Overview draws is computed from the loaded tasks.",
+    "problem": "The Overview's tests hand-keep the counts, so a new fixture leaves the screen right about the old data and wrong about the new."
+  },
+  "scope": {
+    "in_scope": [
+      "the Overview's counts",
+      "the pins that read the fixtures"
+    ],
+    "out_of_scope": [
+      "the status model",
+      "the Path tree"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "The status counts equal the tasks the store loaded.",
+      "verification": "cargo test -p coding-crew-raul overview",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul overview",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-09T12:00Z",
+          "by": "runner-01",
+          "session": "session-runner-01"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The claimable count equals the tasks a start would accept.",
+      "verification": "cargo test -p coding-crew-raul overview",
+      "status": "pending",
+      "evidence": [],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Count from the Work the pane was given, not from a constant.",
+      "done_when": "the count follows the loaded set",
+      "files": [
+        "crates/raul/src/overview.rs"
+      ],
+      "status": "in-progress",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": "The count moved into the existing panel rather than a new one."
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Pin the screen against counts derived from the fixtures.",
+      "done_when": "a fixture added alone does not fail the pin",
+      "files": [
+        "crates/raul/tests/render_plain.rs"
+      ],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "verdict": null,
+    "findings": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-01",
+      "body": "The first criterion is proven. The second is waiting on the fixture the next unit writes.",
+      "at": "2026-11-09T13:00Z"
+    }
+  ],
+  "depends_on": [
+    "TSK22"
+  ]
+}

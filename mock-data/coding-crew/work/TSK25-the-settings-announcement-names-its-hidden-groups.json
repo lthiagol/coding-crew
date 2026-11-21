@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "id": "TSK25",
+  "title": "The settings announcement names its hidden groups",
+  "slug": "the-settings-announcement-names-its-hidden-groups",
+  "parent": null,
+  "children": [],
+  "created": "2026-11-02T09:00Z",
+  "updated": "2026-11-07T21:10Z",
+  "kind": "task",
+  "promoted_from": null,
+  "status": "done",
+  "status_since": "2026-11-07T21:00Z",
+  "overlays": {},
+  "claim": {
+    "by": "runner-07",
+    "session": "session-runner-07",
+    "at": "2026-11-07T20:30Z",
+    "lease_expires_at": "2026-11-07T21:00Z"
+  },
+  "planned_by": "session-creator-07",
+  "meta": {
+    "priority": "urgent",
+    "effort": "S",
+    "tags": [
+      "mock",
+      "raul"
+    ]
+  },
+  "intent": {
+    "outcome": "A short Settings pane names every group it hides.",
+    "problem": "The announcement names the groups in view and leaves the hidden ones as a bare count."
+  },
+  "scope": {
+    "in_scope": [
+      "the Settings announcement",
+      "the group rows"
+    ],
+    "out_of_scope": [
+      "the Backlog announcement",
+      "the theme list"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "Every hidden group is named with its count.",
+      "verification": "cargo test -p coding-crew-raul settings",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul settings",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-07T20:40Z",
+          "by": "runner-07",
+          "session": "session-runner-07"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A wholly shown group is not announced as hidden.",
+      "verification": "cargo test -p coding-crew-raul settings",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "cargo test -p coding-crew-raul settings",
+          "exit_code": 0,
+          "summary": "12 passed; 0 failed",
+          "at": "2026-11-07T20:45Z",
+          "by": "runner-07",
+          "session": "session-runner-07"
+        }
+      ],
+      "deferral": null,
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Collect the groups the window leaves out.",
+      "done_when": "the hidden rows have a count",
+      "files": [
+        "crates/raul/src/settings.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Name them in the same words the Backlog uses.",
+      "done_when": "one announcement vocabulary",
+      "files": [
+        "crates/raul/src/settings.rs"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [
+        "STP-01"
+      ],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "runner-07",
+        "verdict": "ok",
+        "at": "2026-11-07T20:50Z",
+        "notes": "The pre-screen is clean; the work leaves for the external round.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "reviewer-08",
+        "verdict": "ok",
+        "at": "2026-11-07T21:00Z",
+        "notes": "The work is reviewed clean and the criteria are proven.",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Does the row carry the count before or after the label?",
+      "status": "resolved",
+      "answer": "After the label, so the count reads as the label's.",
+      "raised_by": "human",
+      "raised_at": "2026-11-04T13:00Z",
+      "resolved_by": "session-creator-07",
+      "resolved_at": "2026-11-05T14:00Z"
+    }
+  ],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "runner-07",
+      "body": "The work is done and the evidence is attached; the review is closed.",
+      "at": "2026-11-07T20:45Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "reviewer-08",
+      "body": "Reviewed clean: the criteria are proven and no finding is open.",
+      "at": "2026-11-07T21:10Z"
+    }
+  ],
+  "depends_on": [
+    "TSK24"
+  ]
+}
