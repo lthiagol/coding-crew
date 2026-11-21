@@ -56,22 +56,8 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Seven units, in the order they run. The order is in `docs/plan.md` — rows 44 to
-50 — and this is the list of them.
-
-### 44 · The fixtures grow real
-
-The mock is lorem ipsum: one sentence per field, one acceptance criterion, one
-step, no questions, no children, and three tasks with a real review history out
-of twenty-nine. The Backlog tab drops the item body the generator already
-writes. A task opened today is a stub, and no tab can be judged against it.
-
-**Done when:** the mock holds tasks with zero, one and five review rounds;
-findings that are open, and findings resolved with a resolution and a comment;
-open and resolved questions; children; done tasks with their history; and
-items with a body and a scope that say something — **every field the model
-defines is populated by some fixture**, and the generator still reproduces the
-tree byte for byte. The counts the UI draws stay computable from the fixtures.
+Six units, in the order they run. The order is in `docs/plan.md` — rows 45 to
+51 — and this is the list of them.
 
 ### 45 · The review nests
 
@@ -139,6 +125,19 @@ code has no background at all, because `ChromeBorder` carries no `bg`.
 **Done when:** each preset pairs a syntax theme of its own; the fenced code
 carries a numbered gutter; and inline code has a background of its own.
 
+### 51 · The criteria table reads
+
+The Acceptance criteria section is a **seven-column** table — id, description,
+verification, status, evidence, deferral, failure reason — squeezed into the
+pane's width. At 40 columns every column is one character wide and the header
+wraps vertically, one letter per line. It is the same defect the review table
+had, in a different section.
+
+**Done when:** each criterion reads as a block with its own fields, the way
+Steps and the review read; the section is readable at 40 columns as well as at
+100; the verification and the evidence stay inside their code spans, and the
+injection property holds.
+
 ---
 
 ## DECISIONS OF RECORD
@@ -155,7 +154,11 @@ carries a numbered gutter; and inline code has a background of its own.
 - **raul draws task content; hugo draws tasks only as items of a queue.** The
   seam is the data.
 - **The Path tree holds the live work only.** Done tasks have no home of their
-  own, and that is accepted for now.
+  own, and that is accepted for now. **Open question for the human:** the
+  five done fixtures now carry a full history, and no tab shows them — the
+  Path tree hides them and no other view holds them, so a reader cannot reach
+  a finished task without knowing its id. Either the Path tab grows a
+  finished branch, or a Done view exists.
 
 ---
 
@@ -163,6 +166,15 @@ carries a numbered gutter; and inline code has a background of its own.
 
 None blocking. Carried from the closed units.
 
+- **The theme catalog's count guard** recognises a count only through a fixed
+  noun vocabulary — `crates/theme/src/theme.rs:2515` holds fourteen nouns —
+  so a count phrased outside it escapes silently. The same shape was found
+  and **fixed** in the mock data's README guard: the guard must decide by the
+  number the sentence states, and a number that is not a count must be listed
+  explicitly. The pattern is known; the theme guard has not been changed.
+- **`number_word` mis-sums a scaled hyphen compound** — "two-hundred" reads as
+  102, "three-thousand" as 1003. Detection is unaffected; only a recompute
+  would be wrong, and no prose states one today.
 - **The Backlog:** a one- or two-row pane below 39 columns gives a total hidden
   count without naming the groups; the compact announcement can resemble the
   group header's shape; very narrow panes cut or drop group names and counts.

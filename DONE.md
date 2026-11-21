@@ -968,6 +968,37 @@ WHERE WE ARE
   Next: the plan holds no open row. The interfaces are built; the
   follow-ups stay recorded.
 
+Unit closed: the fixtures grow real (plan 44). Three build and review rounds.
+The mock was lorem ipsum - one sentence per field, one acceptance criterion,
+one step, no questions, no children, no resolved finding - so a task opened
+was a stub and no tab could be judged against it. The fixtures now hold real
+work in the shapes the interface has to read: tasks with zero, one, two,
+three, five and six review rounds; seventeen open findings and fourteen
+resolved, with resolutions and comments; open and resolved questions; a
+parent with its subtasks; five done tasks carrying their history; and items
+with a body and a scope. The text is this project's own work, and every
+finding describes a defect the review rounds have really found. A new test,
+every_field_the_model_defines_is_populated_by_a_fixture, walks every field of
+the model's seventeen structs and every enum variant, so a field nobody fills
+fails the gate. The generator still reproduces the tree byte for byte, and
+the counts the interface draws are computed from the fixtures.
+The first round found one blocking defect of the project's own class - the
+folder's README still said the text was lorem ipsum, still counted five
+drafts where the tree holds six, and still said twenty-one open findings
+where the record holds seventeen, and no test read any of it - and the fix
+added the pin that was missing: a test that recomputes every count and phase
+shape the README states. The second round found the pin itself was hollow:
+the guard decided that a sentence was a count sentence by a noun list, so the
+README's "one reason alone" escaped it entirely, and a probe that changed it
+to "seven reasons alone" left the suite green. The fix closed the class - the
+guard now decides by the number the sentence states, a number that is not a
+count is listed explicitly, and a planted count with no claim fails the gate
+with its plant proved to land - which settles the theme catalog's
+long-recorded low, whose guard has the same shape and has not been changed.
+Two lows were ruled and not fixed: the runtime guards do compute from the
+fixtures, and a done task whose rounds raised no finding has none to carry.
+One low stands recorded: number_word mis-sums a scaled hyphen compound.
+
 ---
 
 ## Lessons
