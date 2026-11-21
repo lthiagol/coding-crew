@@ -56,19 +56,8 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Six units, in the order they run. The order is in `docs/plan.md` — rows 46 to
+Five units, in the order they run. The order is in `docs/plan.md` — rows 47 to
 51 — and this is the list of them.
-
-### 46 · The row says the review state — **in flight**
-
-**Needs you** and **Path** show an id, a reason, a title and an age. A human
-deciding whether to review a task with five open findings, two of them high,
-and the review budget spent, cannot see any of it.
-
-**Done when:** a Needs you row and a Path row carry the review state — the
-round spent of the budget and the findings open, with their severities — and a
-row that does not fit is cut on a grapheme boundary, never showing a count as if
-it were the whole count.
 
 ### 47 · The backlog row says its body
 

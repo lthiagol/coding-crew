@@ -1030,6 +1030,38 @@ on - a round is numbered by the model, unpadded, and the self pre-screen is
 round 0 - and docs/tui/screens.md still described the rounds as a table,
 which the orchestrator fixed at the close.
 
+Unit closed: the row says the review state (plan 46). Two build and review
+rounds. The human reads the Needs you and Path tabs to decide what to look at
+next, and the rows carried an id, a reason, a title and an age - and nothing
+about the review - so a task with five external rounds spent, five open
+findings and two of them high looked exactly like a task with nothing wrong
+with it. A row now carries the review state as a suffix before the age: the
+findings open with their severities named, then the external rounds spent of
+the task's own budget. The self pre-screen is round 0 and is not part of the
+external budget, a finding that is fixed or dismissed is not open, and a task
+with nothing to report carries nothing - its row is byte-identical to the row
+it was. The wording, the severity rule and the cut live once, in
+crates/raul/src/review_state.rs, and both tabs call it.
+The first round found one blocking finding and one low, and both were of the
+project's own class. The blocking one: on the Path tab at 100 columns - the
+plain render's default - five of the eight state rows named the count and no
+severity, every ESCALATED row among them, so the unit's own motivating case
+read "5/5 rounds - 5 open findings..." and never said high. The bare-count
+rule was not broken - the count was labelled, whole, and the cut marked - but
+the severities were the requirement and they were not met. The reviewer
+proposed splitting the severity list per severity, and the orchestrator
+measured it and found it did not fit: the Path state takes only the room the
+row's last line leaves, twenty-seven columns at width 100, and the reviewer's
+form needed thirty-three. What fits is the triage fact first - the findings
+and their severities lead, because "is there something high here" is what the
+human decides on, and the rounds are context - with the severity list split
+per severity, most urgent first, so a cut keeps the most urgent one. The low
+was the one-implementation scan: it read four of the fourteen files in the
+tree and matched three exact signatures, so a copy under any other name would
+pass the test while failing the rule - a check that cannot fail. It now walks
+the whole tree and matches on the severity mapping and the state words, and a
+planted copy proves the pin can fail. The delta review found nothing at all.
+
 ---
 
 ## Lessons
