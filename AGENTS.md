@@ -64,7 +64,7 @@ The gate is `make check`; `make ci` is an alias for it.
 
 - The build loop is the global skill `orchestration-flow`
   (`~/.config/opencode/skills/orchestration-flow/SKILL.md`), and its tools
-  sit beside it. It reads this project's `TODO.txt` and `docs/plan.md`.
+  sit beside it. It reads this project's `TODO.md` and `docs/plan.md`.
 - `.orchestration.json` holds the flow's project prefix, `cl`. It stays at the
   repository root: the global skill reads it there.
 - The project's flow files live with the project; `~/.config/coding-crew/`
@@ -118,8 +118,10 @@ The gate is `make check`; `make ci` is an alias for it.
   `docs/tasks/task-model.md`; roles in `docs/roles/roles.md`; raul's screens
   in `docs/tui/screens.md`; hugo's in `docs/hugo/`.
 - Do not invent them ad hoc — follow the docs.
-- `TODO.txt` at the root is the state of the work: what is done, what is open,
-  what is next. Read it before starting; update it when a unit closes.
+- `TODO.md` at the root is the state of the work: what is open, what is next,
+  and what has been decided. `DONE.md` beside it is the archive: what was
+  built and how it got there. Read `TODO.md` before starting; update it when a
+  unit closes, and move the unit's record to `DONE.md`.
 
 ## Naming
 
@@ -143,7 +145,7 @@ The gate is `make check`; `make ci` is an alias for it.
   herdr tab and starts the agent it will run, the first step towards hugo
   driving the loop rather than only showing it; the writers, which wait for
   the flow — nothing writes the journal or the runtime record yet; and the
-  recorded follow-ups in `TODO.txt`.
+  recorded follow-ups in `TODO.md`.
 - talita is written only when explicitly instructed — never automatically
   because raul looks finished or mature enough.
 - `crates/core` stays editable; it is shared with raul and hugo.

@@ -1,43 +1,76 @@
-coding-crew - orchestration state
+# DONE — the archive
 
-updated 2026-11-19 by the orchestrator
-branch main, remote https://github.com/lthiagol/coding-lanes.git
-gate is make check (make ci is an alias): cargo fmt --all -- --check, cargo clippy --all-targets -- -D warnings,
-cargo test --workspace, bash scripts/test-pty-sweep.sh, the flow suites in the
-global skill (skipped when the skill is not installed)
+What this project has built, and how it got there. **Nothing here is a plan.**
+The live state — what is open, what is next — lives in [`TODO.md`](TODO.md).
 
-SCOPE
-  Two TUIs: raul for the work, hugo for the flow. The Autopilot tab is
-  gone from raul; the automation's questions live in hugo, which is one
-  sidebar for configuration and one main pane for what is running, with no
-  tabs. Its configuration is centralized under ~/.config/coding-crew/, and that
-  folder is created on demand when it does not exist.
-  talita is not being built. Do not write talita code, do not extend its
-  commands, do not wire raul to it, until that is said explicitly.
-  crates/core is shared and stays editable.
+This file was split out of `TODO.txt` on 2026-11-21, when the state file
+became a Markdown pair: `TODO.md` for the live state, `DONE.md` for the
+archive. The record below is carried over unchanged.
 
-HOW TO RESUME
-  1. read AGENTS.md, then docs/
-  2. read this file, and docs/plan.md - the plan holds the small units with
-     their done-when lines, the grooming, and the open questions
-  3. read the last review's rulings - they are durable, in the design
-     record for the unit that was reviewed
-  4. pick the first open item you can finish
-  5. run make ci before you claim anything is done
-  6. update this file when the item is closed
+---
 
-  The build loop itself is the global skill orchestration-flow, at
-  ~/.config/opencode/skills/orchestration-flow/SKILL.md - the three agents,
-  the shared Orchestration workspace, the pane recipe, the rounds, the
-  budget. The project's prefix is in .orchestration.json; the role configs
-  live in flow/, and the flow skill does not read them - it generates one per
-  session, outside the repository.
+## What exists now
 
-  The findings of the review rounds are not durable - /tmp does not survive.
-  Copy what matters into this file, or into the design record, before the
-  round is closed. The hugo proposals' rulings are in
-  docs/hugo/design-record.md, and the defects the review found are in the
-  known-issues block of docs/hugo/tui-proposals/index.html.
+**The project.** `coding-crew` — a task management tool for agents. Three
+interfaces: **talita** (CLI, the agent's tool), **raul** (TUI for the work,
+the human's tool), **hugo** (TUI for the flow, the human's tool). The
+Autopilot tab is gone from raul. The packages are `coding-crew-core`,
+`-engine`, `-raul`, `-talita` and `-theme`. The repository directory and
+the GitHub remote keep their old names for now.
+
+**The model** (`crates/core`). A task file with intent, scope, acceptance
+criteria, steps, review rounds, findings, questions, notes, dependencies
+and subtasks. Eight statuses, three overlays, the gates that move a task
+between them, the roles and the session boundaries, evidence with derived
+criterion status, smaller tasks with shaping and one-way promotion, and a
+store of one file per work unit with atomic writes. A task projects to
+Markdown through one pure, terminal-free interface.
+
+**The engine** (`crates/engine`). leaf 1.29.2's markdown modules, vendored
+with a pinned commit, a checksummed deviation ledger, a safe sync script
+and the ported upstream tests.
+
+**The theme** (`crates/theme`). Eighteen slots, five presets — dark, nord,
+catppuccin, dracula, terminal — each from its own family page, with the
+figures recomputed by test. Both TUIs paint with it, so one palette serves
+the whole product.
+
+**raul.** The window shell and five tabs — Overview, Needs you, Path,
+Backlog, Settings. The Overview measures its text the way ratatui draws it,
+so a count is never shown as if it were the whole count. The Needs you tab
+measures the human wait and says what it left out. The Path tab draws the
+tree of the live work. The Backlog tab keeps ideas, smaller tasks and
+drafts in one derived list. The detail pane opens full screen from the row
+tabs and renders the real projected document through the vendored engine,
+painted by the theme bridge, with scroll keys.
+
+**hugo.** One sidebar for the configuration, one main pane for what is
+running, no tabs. The main pane leads with the crew — one row per agent
+with its role, its model, what it holds and how long it has held it — then
+the queue, the round, the budget and the findings. The configuration is
+`~/.config/coding-crew/config.toml`, written on demand, reloaded with `r`,
+and the orchestrator's model is picked from the harness catalogue in the
+sidebar.
+
+**The mock data** (`mock-data/generate.py`). The fixtures are written only
+through the generator, which reproduces the committed tree byte for byte.
+
+**The flow.** The build loop is the global skill `orchestration-flow`, and
+the two-axis review is the global skill `code-review`. The upstream skills —
+`codebase-design`, `diagnosing-bugs`, `domain-modeling`,
+`writing-for-agents` — live global at `~/.config/opencode/skills` with the
+MIT licence and their provenance beside them. This repository carries none
+of them.
+
+**The docs.** The task model, the smaller tasks, the roles, the vocabulary,
+raul's screen spec, hugo's screens and design record, the palette tables,
+and eleven decision records.
+
+---
+
+## The record
+
+Every closed unit, in the order it closed.
 
 WHERE WE ARE
   Unit closed: raul window shell and Overview tab. Six build and review
@@ -935,42 +968,9 @@ WHERE WE ARE
   Next: the plan holds no open row. The interfaces are built; the
   follow-ups stay recorded.
 
-DONE
-  Scaffold: rust workspace with crates core, talita and raul. Rustup toolchain
-  pinned by rust-toolchain.toml, rustfmt and clippy included.
-  Makefile with make check as the gate, make raul against the mock data,
-  build-raul and build-talita, and a GitHub Actions workflow that runs the
-  same gate.
-  Model in crates/core: task file with intent, scope, acceptance criteria,
-  steps, review rounds, findings, questions, notes, dependencies and
-  subtasks. Eight statuses, three overlays, the gates that move a task
-  between them, the roles and the session boundaries, evidence with derived
-  criterion status, smaller tasks with shaping and one-way promotion, and a
-  store of one file per work unit with atomic writes. A task projects to
-  markdown through one pure, terminal-free interface.
-  Docs: task model, smaller tasks, roles, vocabulary, the raul screen spec,
-  and ten decision records.
-  Skills: the upstream four - codebase-design, diagnosing-bugs,
-  domain-modeling, writing-for-agents - live global at
-  ~/.config/opencode/skills with the MIT licence and their provenance beside
-  them; code-review is global too, adapted from mattpocock/skills for the
-  two-axis build-loop review and maintained by hand; orchestration-flow is
-  global and holds the build loop itself. The repository carries none of
-  them.
-  Engine: leaf 1.29.2's markdown modules vendored into crates/engine with a
-  pinned commit, checksummed deviation ledger, safe sync script, and ported
-  upstream tests.
-  Mock data: 34 fixtures, generated by mock-data/generate.py, which reproduces
-  the committed tree byte for byte.
-  raul: the window shell, the five tabs, the Overview, Path, Needs you, and
-  Backlog tabs. The Overview measures its text the way ratatui draws it, so a
-  count is never shown as if it were the whole count. The Needs you tab
-  measures the human wait and says what it left out. The Backlog tab keeps
-  ideas, smaller tasks, and drafts in one derived list. The detail pane opens
-  full screen from the row tabs and renders the real projected document
-  through the vendored engine, painted by the theme bridge, with scroll
-  keys. Settings is a placeholder that says what it will hold; Autopilot is
-  still a stub.
+---
+
+## Lessons
 
 HAPPENED
   The orchestrator committed another agents staged work: it ran git add on
@@ -1055,91 +1055,3 @@ HAPPENED
   width-dependent defects were found, and which cost about fifty minutes a
   round. From now on a reviewer runs the gate and reads the code. A harness
   worth keeping becomes a unit of its own.
-
-OPEN
-  raul and hugo are built, and the plan holds no open row. What is left is
-  the recorded follow-ups and the three things that wait on the flow.
-  The follow-ups still open, none blocking:
-    - the Backlog: a one- or two-row pane below 39 columns gives a total
-      hidden count without naming the groups; the compact announcement can
-      resemble the group header's shape; very narrow panes cut or drop group
-      names and counts.
-    - the shared-helper copy scan covers three of the five helpers, so a
-      private copy of head_to or text_width passes it - the same limitation
-      the cut_to, pad and View::draw pins have.
-    - the description pin checks the phrase, not the attribution, and knows
-      four connectives.
-    - the footer drops the hidden count at the widths where it would fit
-      beside the keys - 17 and 18 columns on the Needs you tab.
-    - the Settings announcement names wholly-in-view groups where the
-      Backlog names only the hidden ones, and a test comment names a help
-      footer that does not exist.
-    - the journal: the mock's approved stamps are minutes before the claim
-      and no fixture holds them; a comment beside the activity panel
-      inverts the order the panels give up their rows; the kinds are
-      provisional.
-    - hugo: with an old config.json and a broken config.toml, the notice
-      and the defaults line can be cut silently at a two- or three-row
-      sidebar; the activity cut marker drops the count of unreadable
-      events; two row-level tests still hand-write an error wording the
-      pipeline never produces.
-    - the plain render: the duplicate-id loader test can be made less
-      filesystem-sensitive with more pairs; some test fixtures leave temp
-      folders; the flags are documented only in --help.
-    - the wake script - in the global skill, not in this repository: bash
-      SECONDS gives a timeout budget that is off by up to a second; a
-      killed pane read can leave partial stdout; a non-JSON Herdr failure
-      loses its message; a Herdr warning on stderr can break the merged
-      JSON parse; the test's wall-clock windows can flake on a loaded CI
-      runner.
-    - the store discovery's Windows-only path tests are compile-checked but
-      CI runs Ubuntu only.
-  What waits on the flow:
-    - the journal's writer (grooming item G2): the kinds are provisional
-      and nothing writes activity.json.
-    - the runtime record's writer: nothing writes runtime.json, so the crew
-      hugo shows is the mock's.
-    - the orchestrator's job: the orchestrator role has no job yet. hugo
-      picks the model for the agent it will start; opening the herdr tab
-      and starting it is its own unit, and it is the first step towards
-      hugo driving the loop rather than only showing it.
-  Where the flow's files live is settled, decided 2026-11-21 and recorded in
-  docs/decisions/0011-flow-files.md: the project's role configs move to
-  coding-crew/flow/ when the project is managed, .orchestration.json stays at
-  the repository root because the global skill reads it there, the findings
-  live inside the task rather than in /tmp, and the task folder replaces this
-  file as the orchestrator's memory. The move waits for the writers. The
-  third copy of the model pair, in mock-data/generate.py, is still unpinned
-  against the role configs.
-  Deferred by the human: the light themes - our light preset and the light
-  variants of the families (Catppuccin Latte, Dracula Alucard, Nord Light).
-  talita's own verbs. Out of scope, and it stays out of scope until it is
-  asked for explicitly.
-
-NEXT
-  The order is in docs/plan.md, and that is the only list of it. The plan
-  holds the small units with their done-when lines, the grooming, and the
-  open questions. It has no open row: raul and hugo are built, and every
-  unit the human asked for is closed.
-  So the next move is a decision, not a unit. What a fresh session can
-  pick up, in the order of what unblocks the most:
-    - the orchestrator's job. hugo picks the model for the agent it will
-      start; the herdr tab it opens and the agent it starts are the next
-      unit, and they are the first step towards hugo driving the loop
-      rather than only showing it. The crew's rules are already in place:
-      three agents means one per role, two means the orchestrator reviews,
-      one means the human reviews.
-    - the batched follow-ups: the recorded lows in the OPEN section, one
-      batch, the way plan 43 closed twenty of them.
-    - the writers. Nothing writes activity.json or runtime.json, so the
-      journal's kinds are provisional and the crew hugo shows is the mock's.
-      The writer is the flow's.
-    - talita's verbs, if the human asks for them explicitly. AGENTS.md
-      keeps talita off-limits until then.
-  The hugo sketches are still on disk under docs/hugo/tui-proposals/ for
-  the record, and the pick - the crew leads - is in
-  docs/hugo/design-record.md. To look at them again in a fresh session:
-  python3 -m http.server 8848 --directory docs/hugo/tui-proposals, then
-  open http://localhost:8848/index.html.
-  The review's rulings are durable in docs/hugo/design-record.md, not in
-  /tmp/opencode/review-hugo-props/, which does not survive.

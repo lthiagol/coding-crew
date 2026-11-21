@@ -335,7 +335,7 @@ fn a_place_that_describes_an_interface_pins_its_description() {
 #[test]
 fn no_file_describes_an_interface_divergently() {
     // The pin is over the working tree, not a hand-picked list: a divergent
-    // description in a file nobody remembered to add fails here. TODO.txt is
+    // description in a file nobody remembered to add fails here. DONE.md is
     // the orchestrator's history ledger and quotes wording that has been
     // replaced, so it is the one file outside the scan.
     let root = repo_root();
@@ -344,7 +344,7 @@ fn no_file_describes_an_interface_divergently() {
         let name = path
             .strip_prefix(&root)
             .expect("a path under the repository");
-        if name == std::path::Path::new("TODO.txt") {
+        if name == std::path::Path::new("DONE.md") {
             continue;
         }
         let bytes = fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));

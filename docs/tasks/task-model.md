@@ -740,7 +740,7 @@ phase and keeps every gate.
 
 The TUI's screens are specified in [tui/screens.md](../tui/screens.md): the
 window, the five tabs, the detail pane, the derived views. The state of the
-work is in `TODO.txt`.
+work is in `TODO.md`.
 
 ## 14. What this doc is not
 

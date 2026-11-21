@@ -46,7 +46,7 @@ on the tool's side, and one file stays at the repository root.**
 - The flow's findings live inside the task, in `review.findings[]`, not in
   `/tmp`. The skill keeps them in `/tmp` for a project that does not manage
   itself; a managed project's findings belong to the task they are about.
-- The orchestrator's memory is the task folder. `TODO.txt` and `docs/plan.md`
+- The orchestrator's memory is the task folder. `TODO.md` and `docs/plan.md`
   hold the state of the work today because nothing writes the task files yet;
   once talita writes them, the tasks are the memory.
 
@@ -70,7 +70,7 @@ ran on.
 ### Negative
 
 - Two files live outside `coding-crew/`: `.orchestration.json` at the root, and
-  `TODO.txt` until the writers land.
+  `TODO.md` until the writers land.
 - The role configs move when dogfooding starts — a path change in the gate's
   pin, in the vocabulary and in AGENTS.md.
 

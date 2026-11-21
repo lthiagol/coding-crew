@@ -1,0 +1,245 @@
+# coding-crew — orchestration state
+
+Updated 2026-11-21 by the orchestrator.
+Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
+The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
+`cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
+`bash scripts/test-pty-sweep.sh`, the flow suites in the global skill (skipped
+when the skill is not installed).
+
+**What is built is in [`DONE.md`](DONE.md).** This file is the live state: what
+is open, what is next, and what has been decided.
+
+---
+
+## SCOPE
+
+Two TUIs: **raul** for the work, **hugo** for the flow. The Autopilot tab is
+gone from raul; the automation's questions live in hugo, which is one sidebar
+for configuration and one main pane for what is running, with no tabs. Its
+configuration is centralized under `~/.config/coding-crew/`, and that folder is
+created on demand when it does not exist.
+
+**talita is not being built.** Do not write talita code, do not extend its
+commands, do not wire raul to it, until that is said explicitly.
+
+`crates/core` is shared and stays editable.
+
+---
+
+## HOW TO RESUME
+
+1. Read `AGENTS.md`, then `docs/`.
+2. Read this file, and `docs/plan.md` — the plan holds the small units with
+   their done-when lines, the grooming, and the open questions.
+3. Read the last review's rulings — they are durable, in the design record for
+   the unit that was reviewed.
+4. Pick the first open item you can finish.
+5. Run `make check` before you claim anything is done.
+6. Update this file when the item is closed, and move its record to
+   `DONE.md`.
+
+The build loop itself is the global skill `orchestration-flow`, at
+`~/.config/opencode/skills/orchestration-flow/SKILL.md` — the three agents, the
+shared Orchestration workspace, the pane recipe, the rounds, the budget. The
+project's prefix is in `.orchestration.json`; the role configs live in `flow/`,
+and the flow skill does not read them — it generates one per session, outside
+the repository.
+
+The findings of the review rounds are not durable — `/tmp` does not survive.
+Copy what matters into this file, or into the design record, before the round is
+closed. The hugo proposals' rulings are in `docs/hugo/design-record.md`, and the
+defects the review found are in the known-issues block of
+`docs/hugo/tui-proposals/index.html`.
+
+---
+
+## THE OPEN UNITS
+
+Seven units, in the order they run. The order is in `docs/plan.md` — rows 44 to
+50 — and this is the list of them.
+
+### 44 · The fixtures grow real
+
+The mock is lorem ipsum: one sentence per field, one acceptance criterion, one
+step, no questions, no children, and three tasks with a real review history out
+of twenty-nine. The Backlog tab drops the item body the generator already
+writes. A task opened today is a stub, and no tab can be judged against it.
+
+**Done when:** the mock holds tasks with zero, one and five review rounds;
+findings that are open, and findings resolved with a resolution and a comment;
+open and resolved questions; children; done tasks with their history; and
+items with a body and a scope that say something — **every field the model
+defines is populated by some fixture**, and the generator still reproduces the
+tree byte for byte. The counts the UI draws stay computable from the fixtures.
+
+### 45 · The review nests
+
+The model already nests: `Round.findings` names the findings each round raised
+(`crates/core/src/task.rs:466`). The projection ignores it — rounds become an
+eight-column table that renders `self` as `se`/`lf` and `external` as
+`ex`/`te`/`rn`/`al` at 100 columns, and the findings then repeat as a flat
+list.
+
+**Done when:** the Review section reads Round 01 with the findings it raised
+under it; a round with no findings says so; a finding that belongs to no round
+is still shown; and the rounds are no longer a table — the shape is readable at
+the pane's width, at 40 columns as well as at 100.
+
+### 46 · The row says the review state
+
+**Needs you** and **Path** show an id, a reason, a title and an age. A human
+deciding whether to review a task with five open findings, two of them high,
+and the review budget spent, cannot see any of it.
+
+**Done when:** a Needs you row and a Path row carry the review state — the
+round spent of the budget and the findings open, with their severities — and a
+row that does not fit is cut on a grapheme boundary, never showing a count as if
+it were the whole count.
+
+### 47 · The backlog row says its body
+
+The generator writes an item's body; the Backlog tab never draws it.
+
+**Done when:** a Backlog row carries the item's own body, cut on a grapheme
+boundary, and the announcement and the cut marker still name what they leave
+out.
+
+### 48 · The document gets its own palette
+
+Leaf's `OCEAN_DARK` markdown palette has 47 fields and **36** distinct
+colours. Our bridge (`crates/theme/src/theme.rs:228-301`) collapses all 47 onto
+**10** of our 18 chrome slots, and the projection only ever paints five of
+those ten, so alerts, links, footnotes, list depths, code and the heading
+levels are dead colour.
+
+**Done when:** the document paints from a palette of **eighteen roles of its
+own** — not the chrome's slots — so the heading levels, the alerts, the links,
+the list depths, the table parts and the code are told apart; the chrome keeps
+its own eighteen slots and the terminal preset stays colourless; the palette is
+recorded in `docs/tui/palettes.md` and its figures are recomputed by test.
+
+### 49 · The projection earns the colours
+
+The projection emits only `##` headings, bold, GFM tables, `- ` lists and
+`<br>`. Nothing in the engine's vocabulary is reached, so a new palette would
+stay dead colour.
+
+**Done when:** the projection emits the constructs the palette paints — a
+level-one heading, sub-headings, blockquotes, task lists, rules and links — so
+no role in the document palette is dead; and the detail pane's snapshot is
+updated to the new document.
+
+### 50 · Per-preset syntax, the code gutter, the inline chip
+
+`crates/raul/src/detail.rs:59-63` pairs `base16-ocean.dark` with every
+preset, so Nord, Catppuccin and Dracula all wear ocean's code tokens. Inline
+code has no background at all, because `ChromeBorder` carries no `bg`.
+
+**Done when:** each preset pairs a syntax theme of its own; the fenced code
+carries a numbered gutter; and inline code has a background of its own.
+
+---
+
+## DECISIONS OF RECORD
+
+- **The document gets eighteen roles of its own** (2026-11-21). Not leaf's
+  thirty-six — our chrome palette is deliberately quiet, and the document
+  should not fight it. Eighteen is the number the human chose.
+- **A row's second line** (2026-11-21): the review state on Needs you and Path,
+  the item's own body on Backlog. Those are the facts a human decides on, and
+  all of them are already in the model.
+- **The state file is a Markdown pair** (2026-11-21): `TODO.md` for the live
+  state, `DONE.md` for the archive. The archive no longer lives in the live
+  file.
+- **raul draws task content; hugo draws tasks only as items of a queue.** The
+  seam is the data.
+- **The Path tree holds the live work only.** Done tasks have no home of their
+  own, and that is accepted for now.
+
+---
+
+## THE FOLLOW-UPS
+
+None blocking. Carried from the closed units.
+
+- **The Backlog:** a one- or two-row pane below 39 columns gives a total hidden
+  count without naming the groups; the compact announcement can resemble the
+  group header's shape; very narrow panes cut or drop group names and counts.
+- **The shared-helper copy scan** covers three of the five helpers, so a private
+  copy of `head_to` or `text_width` passes it — the same limitation the
+  `cut_to`, `pad` and `View::draw` pins have.
+- **The description pin** checks the phrase, not the attribution, and knows four
+  connectives.
+- **The footer** drops the hidden count at the widths where it would fit beside
+  the keys — 17 and 18 columns on the Needs you tab.
+- **The Settings announcement** names wholly-in-view groups where the Backlog
+  names only the hidden ones, and a test comment names a help footer that does
+  not exist.
+- **The journal:** the mock's approved stamps are minutes before the claim and
+  no fixture holds them; a comment beside the activity panel inverts the order
+  the panels give up their rows; the kinds are provisional.
+- **hugo:** with an old `config.json` and a broken `config.toml`, the notice
+  and the defaults line can be cut silently at a two- or three-row sidebar; the
+  activity cut marker drops the count of unreadable events; two row-level tests
+  still hand-write an error wording the pipeline never produces.
+- **The plain render:** the duplicate-id loader test can be made less
+  filesystem-sensitive with more pairs; some test fixtures leave temp folders;
+  the flags are documented only in `--help`.
+- **The store discovery's** Windows-only path tests are compile-checked but CI
+  runs Ubuntu only.
+- **The wake script** — in the global skill, not in this repository: bash
+  `SECONDS` gives a timeout budget that is off by up to a second; a killed pane
+  read can leave partial stdout; a non-JSON Herdr failure loses its message; a
+  Herdr warning on stderr can break the merged JSON parse; the test's wall-clock
+  windows can flake on a loaded CI runner.
+
+## WHAT WAITS ON THE FLOW
+
+- **The journal's writer** (grooming G2): the kinds are provisional and nothing
+  writes `activity.json`.
+- **The runtime record's writer:** nothing writes `runtime.json`, so the crew
+  hugo shows is the mock's.
+- **The orchestrator's job:** the orchestrator role has no job yet. hugo picks
+  the model for the agent it will start; opening the herdr tab and starting it
+  is its own unit, and it is the first step towards hugo driving the loop
+  rather than only showing it. The crew's rules are already in place: three
+  agents means one per role, two means the orchestrator reviews, one means the
+  human reviews.
+
+**Where the flow's files live** is settled, decided 2026-11-21 and recorded in
+`docs/decisions/0011-flow-files.md`: the project's role configs move to
+`coding-crew/flow/` when the project is managed, `.orchestration.json` stays at
+the repository root because the global skill reads it there, the findings live
+inside the task rather than in `/tmp`, and the task folder replaces this file as
+the orchestrator's memory. The move waits for the writers. The third copy of
+the model pair, in `mock-data/generate.py`, is still unpinned against the role
+configs.
+
+**Deferred by the human:** the light themes — our `light` preset and the light
+variants of the families (Catppuccin Latte, Dracula Alucard, Nord Light).
+**Out of scope:** talita's own verbs, until it is asked for explicitly.
+
+---
+
+## LESSONS THAT STILL BIND
+
+- **Stage by name.** Never `git add -A`, never `git add .` — a blanket stage
+  sweeps another agent's in-flight work into the commit. It happened twice.
+- **Never close an agent tab while its wake command is in flight.** Wait for
+  the wake to return, then close the tab by its **tab** id (`wX:t7`, never the
+  pane id). A `tab_not_found` answer means the id was wrong, not that the tab
+  is gone. A pane killed on purpose takes its wake with it — kill the pane,
+  then kill the wake.
+- **`/tmp` does not survive a server restart.** The round files, the snapshots
+  and the gate logs go with it; the working tree is the real surface. The round
+  files live under a project-prefixed path — `/tmp/opencode/cl-<unit>` — and the
+  review brief names that path in its first line.
+- **After every wake, read the pane and check the input box.** A prompt can
+  arrive unsubmitted; herdr reports the pane idle while the text waits. Submit
+  it with a bare Enter.
+- **A gate failure that says "no space" is the disk, not the code.** The
+  tmpfs holds 2 GB; prune the sweep's kept output as the session goes.
+- **The builder is DeepSeek, the reviewer is GLM.** Different families, and
+  that difference is what separates the lenses. The pair was tested across
+  units 14–17.
