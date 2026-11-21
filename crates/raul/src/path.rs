@@ -15,6 +15,7 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_crew_core::{Status, Task};
 
 use crate::data::{Work, has_overlay, live_claim};
+use crate::review_state::{self, Part};
 use crate::tabs::Tab;
 use crate::view::View;
 use coding_crew_theme::text::{cut_to, first_grapheme, head_to, text_width};
@@ -109,6 +110,8 @@ pub struct Entry {
     pub waits_on: Vec<String>,
     /// What holds it, when it is not only the dependencies.
     pub hold: Option<Hold>,
+    /// The review state the row carries, when there is one to carry.
+    pub review: Option<Vec<Part>>,
 }
 
 /// A group of the blocked branch: the tasks that wait on the same
@@ -206,6 +209,7 @@ fn entry(task: &Task, work: &Work) -> Entry {
         status: task.status,
         waits_on: unfinished(task, work),
         hold: None,
+        review: review_state::state(task),
     }
 }
 
@@ -311,6 +315,7 @@ fn blocked(work: &Work, now: &str) -> BranchView {
             status: task.status,
             waits_on,
             hold,
+            review: review_state::state(task),
         };
         // The group of a task is the first of its dependencies that is not
         // done.
@@ -1198,6 +1203,21 @@ fn row(
             }
         }
     }
+    // The review state trails the row, after the title and its note: how far
+    // the review has got and what it found. It gives way before the title:
+    // it takes only the room the last line leaves, so no row grows a line
+    // and the tree's row arithmetic does not move.
+    if let Some(parts) = entry.review.as_deref()
+        && let Some(used) = lines.last().map(|line| line.width())
+    {
+        let room = width.saturating_sub(used).saturating_sub(2);
+        if let Some(state) = review_state::fit(parts, room)
+            && let Some(last) = lines.last_mut()
+        {
+            last.spans.push(Span::raw("  "));
+            last.spans.extend(review_state::paint(&state, theme));
+        }
+    }
     if selected {
         return lines
             .into_iter()
@@ -1592,6 +1612,7 @@ mod tests {
             status: Status::Approved,
             waits_on: vec!["TSK04".to_string(), "TSK05".to_string()],
             hold: None,
+            review: None,
         };
         let lines = row(" ● ", &entry, 100, &theme(), false);
         let text = lines
@@ -1750,6 +1771,7 @@ mod tests {
                         status: Status::Executing,
                         waits_on: Vec::new(),
                         hold: None,
+                        review: None,
                     }],
                 }],
             }],
@@ -2098,6 +2120,7 @@ mod tests {
                 status,
                 waits_on: Vec::new(),
                 hold: None,
+                review: None,
             };
             let lines = row(" ● ", &entry, 100, &theme, false);
             let style = phase_style(&theme, status);
@@ -2120,6 +2143,7 @@ mod tests {
             status: Status::Approved,
             waits_on: Vec::new(),
             hold: None,
+            review: None,
         };
         // A row that is not the cursor's keeps the slot of its phase.
         let plain = row(" ● ", &entry, 60, &theme, false);
@@ -2182,5 +2206,229 @@ mod tests {
         let cells = draw_cells(&mock_work(), 100, 40);
         let count = colour_at(&cells, "BLOCKED · 3", "BLOCKED · ".chars().count());
         assert_eq!(count, theme.text.strong.fg);
+    }
+
+    /// Every entry of the tree, the spine and the branches.
+    fn entries(tree: &Tree) -> Vec<Entry> {
+        let mut all = tree.spine.clone();
+        all.extend(
+            tree.branches
+                .iter()
+                .flat_map(|view| view.groups.iter())
+                .flat_map(|group| group.rows.iter().cloned()),
+        );
+        all
+    }
+
+    /// The entry of the tree with the id.
+    fn entry_of(tree: &Tree, id: &str) -> Entry {
+        entries(tree)
+            .into_iter()
+            .find(|entry| entry.id == id)
+            .unwrap_or_else(|| panic!("no entry for {id}"))
+    }
+
+    #[test]
+    fn the_tree_carries_the_review_state_from_the_record() {
+        let tree = tree(&mock_work(), now());
+        assert!(
+            entry_of(&tree, "TSK29").review.is_none(),
+            "an approved task with no review has no state"
+        );
+        assert!(
+            entry_of(&tree, "TSK04").review.is_none(),
+            "a groomed task has no state"
+        );
+        assert_eq!(
+            review_state::text(entry_of(&tree, "TSK21").review.as_deref().expect("a state")),
+            "5 open findings (2 high, 2 medium, 1 low) · 5/5 rounds"
+        );
+    }
+
+    #[test]
+    fn a_path_row_says_the_review_state_after_the_title() {
+        let rows = inner(&draw(&mock_work(), 100, 40));
+        // A row with the room for the whole state says it whole, severities
+        // and all.
+        let row = rows
+            .iter()
+            .find(|row| row.contains("TSK13"))
+            .unwrap_or_else(|| panic!("no row for TSK13: {rows:?}"));
+        assert!(
+            row.ends_with("1 open finding (1 medium)"),
+            "TSK13 loses its state: {row}"
+        );
+        // A long title leaves less room: the state is cut and says so, and
+        // the cut keeps the most urgent severity rather than the rounds.
+        let row = rows
+            .iter()
+            .find(|row| row.contains("TSK19"))
+            .unwrap_or_else(|| panic!("no row for TSK19: {rows:?}"));
+        assert!(row.contains("2 open findings (1 high…"), "{row}");
+        assert!(!row.contains("rounds"), "{row}");
+    }
+
+    #[test]
+    fn a_path_row_without_a_state_is_the_row_it_was() {
+        // The pin the unit must not move: a row with no state is the row it
+        // was, the note and all.
+        let work = mock_work();
+        let tree = tree(&work, now());
+        let rows = inner(&draw(&work, 100, 40));
+        for id in ["TSK04", "TSK07", "TSK29"] {
+            let entry = entry_of(&tree, id);
+            let row = rows
+                .iter()
+                .find(|row| row.contains(id))
+                .unwrap_or_else(|| panic!("no row for {id}: {rows:?}"));
+            let mut expected = format!("{id}   {}", entry.title);
+            if !entry.waits_on.is_empty() {
+                expected.push_str(&format!("  waits on {}", entry.waits_on.join(", ")));
+            }
+            assert!(
+                row.ends_with(&expected),
+                "{id}: {row} does not end in {expected:?}"
+            );
+            for word in ["rounds", "finding", "open"] {
+                assert!(!row.contains(word), "{id} carries {word}: {row}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_state_does_not_change_the_row_height() {
+        // The suffix trails the last line the row already draws: a row that
+        // carries one asks the tree for the same number of lines.
+        let tree = tree(&mock_work(), now());
+        for width in [40usize, 60, 100] {
+            for entry in entries(&tree) {
+                let with = row(" ● ", &entry, width, &theme(), false);
+                let mut plain = entry.clone();
+                plain.review = None;
+                let without = row(" ● ", &plain, width, &theme(), false);
+                assert_eq!(
+                    with.len(),
+                    without.len(),
+                    "{width}: {} grew a line for its state",
+                    entry.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_cut_path_state_keeps_every_count_whole() {
+        // The row's last line leaves less room than the whole state wants:
+        // the state gives up whole parts, and the cut is marked.
+        let tree = tree(&mock_work(), now());
+        let entry = entry_of(&tree, "TSK21");
+        let whole = review_state::text(entry.review.as_deref().expect("a state"));
+        let rows = inner(&draw(&mock_work(), 100, 40));
+        let row = rows
+            .iter()
+            .find(|row| row.contains("TSK21"))
+            .unwrap_or_else(|| panic!("no row for TSK21: {rows:?}"));
+        let at = row.find(&entry.title).expect("the title") + entry.title.len();
+        let shown = row[at..].trim();
+        assert!(shown.ends_with('…'), "{row}");
+        let head = shown.strip_suffix('…').expect("a cut");
+        assert!(
+            whole.starts_with(head),
+            "{shown:?} is not a prefix of {whole:?}"
+        );
+        let last = head.trim_end().chars().next_back().expect("a head");
+        assert!(
+            !last.is_ascii_digit() && last != '/',
+            "a count is cut: {shown:?}"
+        );
+    }
+
+    #[test]
+    fn a_narrow_path_row_gives_the_state_up() {
+        // A title that fills every line leaves the state no room: it is not
+        // shown, and the row is the row it was.
+        let work = mock_work();
+        let tree = tree(&work, now());
+        let mut entry = entry_of(&tree, "TSK19");
+        entry.review = review_state::state(work.task("TSK21").expect("the task"));
+        for width in [40usize, 60, 100] {
+            // A one-word title, cut into lines that fill the pane: the last
+            // line leaves no column for a state.
+            let available = width - (" ● ".chars().count() + 5 + GAP);
+            entry.title = "x".repeat(available * 2);
+            let lines = row(" ● ", &entry, width, &theme(), false);
+            for line in &lines {
+                assert!(line.width() <= width, "{width}: {line:?}");
+                assert!(
+                    !text_of_line(line).contains("rounds"),
+                    "{width}: the state took the title's room: {line:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_state_counts_are_strong_and_its_words_dim() {
+        let theme = theme();
+        let strong = theme.text.strong.fg.expect("the strong colour");
+        let dim = theme.text.dim.fg.expect("the dim colour");
+        let cells = draw_cells(&mock_work(), 100, 40);
+        // The count, then the word after it, on the same state.
+        assert_eq!(colour_at(&cells, "1/5 rounds", 0), Some(strong), "a count");
+        assert_eq!(colour_at(&cells, "1/5 rounds", 4), Some(dim), "a word");
+    }
+
+    #[test]
+    fn the_state_trails_the_note_and_the_row_still_fits() {
+        // A row that names a hold and carries a state says both, and neither
+        // grows past the pane.
+        let work = mock_work();
+        let tree = tree(&work, now());
+        let mut entry = entry_of(&tree, "TSK07");
+        entry.review = review_state::state(work.task("TSK21").expect("the task"));
+        for width in [40usize, 60, 100] {
+            let lines = row(" ● ", &entry, width, &theme(), false);
+            for line in &lines {
+                assert!(
+                    line.width() <= width,
+                    "{width}: a line is {} wide: {line:?}",
+                    line.width()
+                );
+            }
+            let text = lines
+                .iter()
+                .map(text_of_line)
+                .collect::<Vec<String>>()
+                .join(" ");
+            if let (Some(note), Some(state)) =
+                (text.find("waits on TSK04, TSK05"), text.find("rounds"))
+            {
+                assert!(
+                    note < state,
+                    "{width}: the state is before the note: {text}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_selected_row_takes_the_selection_paint_over_its_state() {
+        let tree = tree(&mock_work(), now());
+        let entry = entry_of(&tree, "TSK21");
+        let theme = theme();
+        let plain = row(" ● ", &entry, 100, &theme, false);
+        assert!(
+            plain
+                .iter()
+                .any(|line| line.spans.iter().any(|span| span.content.contains("high"))),
+            "the row carries no state: {plain:?}"
+        );
+        let selected = row(" ● ", &entry, 100, &theme, true);
+        for line in &selected {
+            assert_eq!(line.width(), 100, "the selection bar stops short");
+            for span in &line.spans {
+                assert_eq!(span.style, theme.text.selected, "{:?}", span);
+            }
+        }
     }
 }

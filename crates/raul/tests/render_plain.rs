@@ -701,6 +701,114 @@ fn the_row_tabs_fit_their_width_at_every_canonical_width() {
     }
 }
 
+#[test]
+fn the_row_tabs_carry_the_review_state() {
+    // Needs you at 100: the escalated task with the budget spent and five
+    // findings open says both facts, severities and all.
+    let needs = render_tab("needs-you", 100);
+    assert!(
+        needs.contains("5 open findings (2 high, 2 medium, 1 low) · 5/5 rounds"),
+        "{needs}"
+    );
+    // Path at 100: a review row says the findings open and their severity.
+    let path = render_tab("path", 100);
+    assert!(path.contains("1 open finding (1 medium)"), "{path}");
+    // A row with nothing to report carries no state in either tab.
+    for (tab, text) in [("needs-you", &needs), ("path", &path)] {
+        let row = text
+            .lines()
+            .find(|row| row.contains("TSK04"))
+            .unwrap_or_else(|| panic!("{tab}: no row for TSK04: {text}"));
+        for word in ["rounds", "finding", "open"] {
+            assert!(!row.contains(word), "{tab}: TSK04 carries {word}: {row}");
+        }
+    }
+}
+
+/// The most urgent severity among a task's open findings.
+fn most_urgent(task: &coding_crew_core::Task) -> Option<&'static str> {
+    let mut found = [false; 3];
+    for finding in task
+        .review
+        .findings
+        .iter()
+        .filter(|finding| finding.status == coding_crew_core::FindingStatus::Open)
+    {
+        match finding.severity {
+            coding_crew_core::Severity::High => found[0] = true,
+            coding_crew_core::Severity::Medium => found[1] = true,
+            coding_crew_core::Severity::Low => found[2] = true,
+        }
+    }
+    if found[0] {
+        Some("high")
+    } else if found[1] {
+        Some("medium")
+    } else if found[2] {
+        Some("low")
+    } else {
+        None
+    }
+}
+
+#[test]
+fn a_rendered_row_that_names_the_open_findings_names_the_most_urgent_severity() {
+    // The pin is on the rows the binary draws at 40, 60 and 100 columns. At
+    // 100, every row that names the open findings names the most urgent
+    // severity among them — TSK19, TSK20 and TSK21 included — on both tabs.
+    let tasks = coding_crew_core::Store::new(repo_root().join(WORK))
+        .list()
+        .expect("the fixtures");
+    let mut named = Vec::new();
+    for tab in ["needs-you", "path"] {
+        for width in [40u16, 60, 100] {
+            let text = render_tab(tab, width);
+            let rows: Vec<&str> = text.lines().collect();
+            for line in &rows {
+                assert!(
+                    display_width(line) <= width as usize,
+                    "{tab} at {width}: a row is wider than the pane: {line:?}"
+                );
+            }
+            for task in &tasks {
+                let Some(row) = rows.iter().find(|row| row.contains(&task.id)) else {
+                    continue;
+                };
+                if !row.contains("open finding") {
+                    continue;
+                }
+                // The count is labelled, at every width.
+                assert!(
+                    row.contains(" open finding"),
+                    "{tab} at {width}: {} shows a bare count: {row}",
+                    task.id
+                );
+                if width < 100 {
+                    continue;
+                }
+                let urgent =
+                    most_urgent(task).unwrap_or_else(|| panic!("{} has no open finding", task.id));
+                assert!(
+                    row.contains(urgent),
+                    "{tab} at {width}: {} names no {urgent}: {row}",
+                    task.id
+                );
+                named.push((tab, task.id.clone()));
+            }
+        }
+    }
+    // The pin is not vacuous: the unit's motivating rows are named on both
+    // tabs, not skipped because the row was absent or the state dropped.
+    for tab in ["needs-you", "path"] {
+        for id in ["TSK19", "TSK20", "TSK21"] {
+            let checked = named
+                .iter()
+                .any(|(checked_tab, checked_id)| *checked_tab == tab && checked_id == id);
+            assert!(checked, "{tab} does not name the severity of {id} at 100");
+        }
+    }
+}
+
 /// Every tab the window has, by its command-line name.
 const TAB_NAMES: [&str; 5] = ["overview", "needs-you", "path", "backlog", "settings"];
 

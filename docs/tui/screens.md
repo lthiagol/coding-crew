@@ -72,11 +72,17 @@ The human lane: **approve**, **review**, **escalate**.
 | id | `TSK01` |
 | why | `approve` · `review` · `escalated` |
 | title | the task title |
+| review | the review state: the findings open with their severities, then the external rounds spent of the budget. A task with no open finding and no external round carries none |
 | age | how long it has waited |
 
 Rows: `groomed` → approve, `code-review` → review, `needs-human` → escalated.
 A task with an overlay (`blocked`, `deferred`) drops out of this tab — it is
 not waiting on a human.
+
+The review state is a suffix, before the age. It is given up whole parts at a
+time: the most urgent severity is named before the others, and the rounds are
+what a narrow row drops first, because the severity is what the human decides
+on and the rounds are context.
 
 ### Path
 
@@ -124,6 +130,11 @@ Rules:
 - The status is not in the branch — it is the **colour** of the row, from the
   theme's phase mapping. The branch says who the next action belongs to.
 - A row names its dependencies: `waits on TSK05, TSK06`.
+- A row carries the **review state** as a suffix, before the age — the findings
+  open with their severities, then the external rounds spent of the budget.
+  The branch already names the phase, so the state does not repeat it. It is
+  given up whole parts at a time, and the rounds are what a narrow row drops
+  first.
 - The tree is drawn as styled lines with a spine, and it scrolls.
 
 This is master-plan's shape with our statuses: its lanes were *awaiting

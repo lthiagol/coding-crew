@@ -16,6 +16,7 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 use coding_crew_core::{Task, age_text, parse_rfc3339};
 
 use crate::data::{Reason, Work};
+use crate::review_state::{self, Part};
 use crate::tabs::Tab;
 use crate::view::View;
 use coding_crew_theme::text::{cut_to, pad};
@@ -51,6 +52,8 @@ pub struct Row {
     pub reason: Reason,
     /// How long the task has waited, in seconds.
     pub waited: i64,
+    /// The review state the row carries, when there is one to carry.
+    pub review: Option<Vec<Part>>,
 }
 
 /// The tasks that wait for the same reason.
@@ -150,6 +153,7 @@ pub fn groups(work: &Work, now: &str) -> Vec<Group> {
             title: task.title.clone(),
             reason,
             waited: waited_since(task, now),
+            review: review_state::state(task),
         });
     }
     for group in &mut groups {
@@ -592,6 +596,25 @@ fn row_line_plain(row: &Row, width: usize, age_width: usize, theme: &Theme) -> L
     // The row with every column.
     let head = format!("{indent}{id}{gap}{why}{gap}");
     let title_width = width.saturating_sub(head.chars().count() + tail_width);
+    // The review state sits before the age, in the room the title leaves.
+    // The title keeps its comfortable width, so the state gives way first —
+    // whole parts at a time, and a state that cannot say anything gives way
+    // to nothing. A row without a state is the row it was.
+    if let Some(parts) = row.review.as_deref() {
+        let room = title_width.saturating_sub(COMFORTABLE_TITLE + GAP);
+        if let Some(state) = review_state::fit(parts, room) {
+            let state_width = state.iter().map(Part::width).sum::<usize>();
+            let title_width = title_width - GAP - state_width;
+            let mut spans = vec![
+                Span::styled(head, style),
+                Span::styled(pad(&cut_to(&row.title, title_width), title_width), style),
+                Span::raw(gap.clone()),
+            ];
+            spans.extend(review_state::paint(&state, theme));
+            spans.extend(tail);
+            return Line::from(spans);
+        }
+    }
     if title_width >= COMFORTABLE_TITLE {
         let mut spans = vec![
             Span::styled(head, style),
@@ -1063,6 +1086,7 @@ mod tests {
     use super::*;
     use crate::data::{Missing, has_overlay};
     use coding_crew_core::Status;
+    use coding_crew_core::{Finding, FindingStatus, Round, RoundKind, Severity};
     use coding_crew_theme::Preset;
 
     fn mock_work() -> Work {
@@ -1151,7 +1175,9 @@ mod tests {
     fn colour_of(cells: &[Vec<(char, Color)>], needle: &str) -> Option<Color> {
         for row in cells {
             let text: String = row.iter().map(|(symbol, _)| *symbol).collect();
-            if let Some(start) = text.find(needle) {
+            if let Some(byte) = text.find(needle) {
+                // The index of a string is a byte index; a cell is a character.
+                let start = text[..byte].chars().count();
                 return row.get(start).map(|(_, colour)| *colour);
             }
         }
@@ -2051,6 +2077,7 @@ mod tests {
             reason: Reason::Approve,
             // A two-day wait: the age column below is two columns wide.
             waited: 2 * 86_400,
+            review: None,
         };
         // At this width the title column is twelve columns wide.
         let line = row_line_plain(&row, 39, 2, &theme());
@@ -2059,6 +2086,184 @@ mod tests {
         let head = cut.strip_suffix('…').expect("a cut title");
         assert!(is_grapheme_prefix(head, &title), "{head:?} cuts a grapheme");
         assert_eq!(head, "e\u{0301}".repeat(11));
+    }
+
+    /// A task with the review facts given: external rounds, and findings of a
+    /// severity and a status.
+    fn reviewed_task(rounds: usize, findings: &[(Severity, FindingStatus)]) -> Task {
+        let mut task = Task::new("TSK01", "a task");
+        task.status = coding_crew_core::Status::CodeReview;
+        task.status_since = "2026-11-07T13:00:00Z".to_string();
+        for n in 1..=rounds {
+            task.review.rounds.push(Round {
+                n: n as u32,
+                kind: RoundKind::External,
+                ..Round::default()
+            });
+        }
+        for (index, (severity, status)) in findings.iter().enumerate() {
+            task.review.findings.push(Finding {
+                id: format!("FIND-{index:02}"),
+                severity: *severity,
+                status: *status,
+                ..Finding::default()
+            });
+        }
+        task
+    }
+
+    /// The text of a line.
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
+    }
+
+    #[test]
+    fn a_row_without_a_review_state_is_the_row_it_was() {
+        // The pin the unit must not move: a row with no state is drawn with
+        // the columns and the cut it had before the state existed.
+        let row = Row {
+            id: "TSK01".to_string(),
+            title: "a task".to_string(),
+            reason: Reason::Approve,
+            waited: 2 * 86_400,
+            review: None,
+        };
+        let line = row_line_plain(&row, 60, 2, &theme());
+        let expected = format!(
+            "    {:<5}  {:<9}  {:<33}  {:<2} ",
+            "TSK01", "approve", "a task", "2d"
+        );
+        assert_eq!(line_text(&line), expected);
+    }
+
+    #[test]
+    fn the_rows_carry_the_review_state_from_the_record() {
+        let work = mock_work();
+        let all: Vec<Row> = groups(&work, now())
+            .into_iter()
+            .flat_map(|group| group.rows)
+            .collect();
+        let row = |id: &str| {
+            all.iter()
+                .find(|row| row.id == id)
+                .unwrap_or_else(|| panic!("no row for {id}"))
+        };
+        assert!(row("TSK04").review.is_none(), "an approval has no state");
+        assert_eq!(
+            review_state::text(row("TSK21").review.as_deref().expect("a state")),
+            "5 open findings (2 high, 2 medium, 1 low) · 5/5 rounds"
+        );
+        assert_eq!(
+            review_state::text(row("TSK13").review.as_deref().expect("a state")),
+            "1 open finding (1 medium)"
+        );
+    }
+
+    #[test]
+    fn a_row_says_the_review_state_before_the_age() {
+        let work = mock_work();
+        let rows = inner(&draw(&work, 100, 40));
+        let row = rows
+            .iter()
+            .find(|row| row.contains("TSK21"))
+            .unwrap_or_else(|| panic!("no row for TSK21: {rows:?}"));
+        assert!(row.starts_with("    TSK21  escalated  "), "{row}");
+        assert!(
+            row.contains("5 open findings (2 high, 2 medium, 1 low) · 5/5 rounds"),
+            "{row}"
+        );
+        // The age stays right-aligned at the end of the row.
+        let task = work.task("TSK21").expect("the task");
+        let age = age_text(waited_since(task, now()));
+        assert!(row.ends_with(&age), "{row} does not end in {age:?}");
+    }
+
+    #[test]
+    fn a_row_with_nothing_to_report_carries_no_suffix() {
+        let work = mock_work();
+        let rows = inner(&draw(&work, 100, 40));
+        let row = rows
+            .iter()
+            .find(|row| row.contains("TSK04"))
+            .unwrap_or_else(|| panic!("no row for TSK04: {rows:?}"));
+        for word in ["rounds", "finding", "open"] {
+            assert!(!row.contains(word), "TSK04 carries {word}: {row}");
+        }
+        let task = work.task("TSK04").expect("the task");
+        let age = age_text(waited_since(task, now()));
+        assert!(row.ends_with(&age), "{row} does not end in {age:?}");
+    }
+
+    #[test]
+    fn a_narrow_row_gives_the_state_up_before_the_title() {
+        // Forty columns leave the title its comfortable width and no more:
+        // the state is dropped, and the row is the row it was.
+        let rows = inner(&draw(&mock_work(), 40, 40));
+        let row = rows
+            .iter()
+            .find(|row| row.contains("TSK21"))
+            .unwrap_or_else(|| panic!("no row for TSK21: {rows:?}"));
+        assert!(!row.contains("rounds"), "{row}");
+        assert!(!row.contains("finding"), "{row}");
+        assert!(row.contains("TSK21"), "{row}");
+    }
+
+    #[test]
+    fn a_cut_state_keeps_every_count_whole_and_says_it_is_cut() {
+        // Sixty columns fit the findings count and no more: the state is cut
+        // between whole parts and marked, never inside a count.
+        let rows = inner(&draw(&mock_work(), 60, 40));
+        let row = rows
+            .iter()
+            .find(|row| row.contains("TSK21"))
+            .unwrap_or_else(|| panic!("no row for TSK21: {rows:?}"));
+        assert!(row.contains("5 open findings…"), "{row}");
+        assert!(!row.contains("(2 high"), "{row}");
+        // A findings-only state is cut the same way.
+        let row = rows
+            .iter()
+            .find(|row| row.contains("TSK13"))
+            .unwrap_or_else(|| panic!("no row for TSK13: {rows:?}"));
+        assert!(row.contains("1 open finding…"), "{row}");
+        assert!(!row.contains("1 medium"), "{row}");
+    }
+
+    #[test]
+    fn the_state_counts_are_strong_and_its_words_dim() {
+        let theme = theme();
+        let strong = theme.text.strong.fg.expect("the strong colour");
+        let dim = theme.text.dim.fg.expect("the dim colour");
+        let cells = draw_cells(&mock_work(), 100, 40);
+        assert_eq!(colour_of(&cells, "5/5 rounds"), Some(strong), "a count");
+        assert_eq!(colour_of(&cells, "rounds"), Some(dim), "a word");
+    }
+
+    #[test]
+    fn a_selected_row_takes_the_selection_paint_over_its_state() {
+        let theme = theme();
+        let selection = theme.text.selected;
+        let task = reviewed_task(
+            5,
+            &[
+                (Severity::High, FindingStatus::Open),
+                (Severity::Medium, FindingStatus::Open),
+            ],
+        );
+        let row = Row {
+            id: task.id.clone(),
+            title: task.title.clone(),
+            reason: Reason::Review,
+            waited: 2 * 86_400,
+            review: review_state::state(&task),
+        };
+        let line = row_line(&row, 60, 2, &theme, Some("TSK01"));
+        assert_eq!(line.width(), 60, "the selection bar stops short");
+        for span in &line.spans {
+            assert_eq!(span.style, selection, "{:?} is not the selection", span);
+        }
     }
 
     /// The text of a buffer.
