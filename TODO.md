@@ -56,22 +56,8 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Four units, in the order they run. The order is in `docs/plan.md` — rows 48 to
+Three units, in the order they run. The order is in `docs/plan.md` — rows 49 to
 51 — and this is the list of them.
-
-### 48 · The document gets its own palette
-
-Leaf's `OCEAN_DARK` markdown palette has 47 fields and **36** distinct
-colours. Our bridge (`crates/theme/src/theme.rs:228-301`) collapses all 47 onto
-**10** of our 18 chrome slots, and the projection only ever paints five of
-those ten, so alerts, links, footnotes, list depths, code and the heading
-levels are dead colour.
-
-**Done when:** the document paints from a palette of **eighteen roles of its
-own** — not the chrome's slots — so the heading levels, the alerts, the links,
-the list depths, the table parts and the code are told apart; the chrome keeps
-its own eighteen slots and the terminal preset stays colourless; the palette is
-recorded in `docs/tui/palettes.md` and its figures are recomputed by test.
 
 ### 49 · The projection earns the colours
 
@@ -149,6 +135,16 @@ injection property holds.
 
 None blocking. Carried from the closed units.
 
+- **The document's roles are slots in the rule's sense** (2026-11-21). Rule 1
+  means every colour is named by something the theme crate owns and a preset
+  decides — so the document's eighteen roles are slots, and the rules bind
+  them as they bind the chrome's. The rule was **extended** to say so, not
+  weakened: `theme.md` rule 5 and `palettes.md` rule 11.
+- **The heading levels are settled** (2026-11-21): the ten sections are `#`,
+  an item under a section `##`, a finding under its round `###`. The engine's
+  `heading_4` and `heading_other` join the deepest, because the document has
+  no level below `###`. **The document has no h1 of its own** — the record's
+  title is a label and must not be interpreted, so it is never a heading.
 - **The theme catalog's count guard** recognises a count only through a fixed
   noun vocabulary — `crates/theme/src/theme.rs:2515` holds fourteen nouns —
   so a count phrased outside it escapes silently. The same shape was found
@@ -158,6 +154,12 @@ None blocking. Carried from the closed units.
 - **`number_word` mis-sums a scaled hyphen compound** — "two-hundred" reads as
   102, "three-thousand" as 1003. Detection is unaffected; only a recompute
   would be wrong, and no prose states one today.
+- **The document palette, in Dracula:** six roles share `#6272a4` —
+  `heading_finding`, `list_depth_3`, `code.chip`, `rule.line`, `search.hit`
+  and `task.open` — so a `###` heading reads like a table border. The
+  apartness pins reach only *within* a group, so the cross-group repeats are
+  unpinned. They are the family's own narrowness: Dracula names two whites
+  and one grey, and rule 9 forbids inventing hues. Documented, not hidden.
 - **The Backlog:** a one- or two-row pane below 39 columns gives a total hidden
   count without naming the groups; the compact announcement can resemble the
   group header's shape; very narrow panes cut or drop group names and counts.

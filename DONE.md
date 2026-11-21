@@ -1084,6 +1084,41 @@ atomicity pin sweeps only the unscrolled window; and the two normative texts
 - the screen spec and the decision of record - the orchestrator wrote at the
 close.
 
+Unit closed: the document gets its own palette (plan 48). Two build and review
+rounds. Leaf's markdown palette has 47 fields and 36 distinct colours, and our
+bridge collapsed all 47 onto 10 of the chrome's 18 slots - so h3 was the same
+colour as body text, table_border the same as table_separator, list_level_2 the
+same as list_level_3, and the note and important alerts the same as a link -
+and the projection never emitted the constructs that would have used them, so
+the document showed five colours. The document now has eighteen roles of its
+own, the number the human chose, with all 47 engine fields mapped onto them
+and the mapping pinned. Six roles carry a pair - the prose, the code and its
+chip, the table's line and its header rule, the mark, the search and the task.
+The roles that carry meaning are apart in every preset, and every document
+colour is one of that preset's own chrome slot colours, so the document and
+the chrome are one palette and not two. The terminal preset paints no colour,
+and the search ruling is unchanged: the hit background is readable now and the
+doc says so with recomputed figures, but the current match stays below 3:1 in
+every colour preset, so the search stays un-offered, and the test fails if any
+preset ever reaches 3:1.
+The first round found one blocking finding, and it was against the
+orchestrator's own ruling. The builder had asked the right question - the
+theme's rule 1 says every colour comes from a slot, and the document's colours
+now come from its own roles - and correctly refused to change a normative
+rule. The orchestrator ruled that the rule means every colour is named by
+something the theme crate owns and a preset decides, so the document's roles
+are slots in that sense and the rule's wording is to be extended, not
+weakened. The substance held and the wording did not: the orchestrator had
+not carried out the wording it required, and the fix round inserted it
+verbatim - a new rule 5 in theme.md, a new rule 11 in palettes.md, and a
+sentence binding the document palette section to the rules. Two lows came with
+it and both were closed: Catppuccin's derivation note named none of its
+repeats while Nord's and Dracula's named every one, and a future mapping entry
+could name the two sides of a single-colour role and pass every pin. Two
+lows stand recorded: Dracula's six roles share one colour, which is the
+family's own narrowness, and the touch to a raul test was forced by the code
+label's remap.
+
 ---
 
 ## Lessons
