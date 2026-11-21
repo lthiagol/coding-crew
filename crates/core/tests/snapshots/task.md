@@ -74,14 +74,24 @@ lane the human is working in.
 
 **Rounds**
 
-| n | kind | focus | reviewer | verdict | at | notes | findings |
-|---|---|---|---|---|---|---|---|
-| `1` | `self` | `spec-compliance` | `runner-1` | `ok` | `2026-11-16T16:30:00Z` | Read the diff against the criteria. | _none_ |
-| `2` | `external` | `edge-cases` | `reviewer-1` | `changes-needed` | `2026-11-16T17:00:00Z` | The empty lane is counted before the filter. | `FIND-01` |
+### Round `1` — `self`
 
-**Findings**
+- **focus:** `spec-compliance`
+- **reviewer:** `runner-1`
+- **verdict:** `ok`
+- **at:** `2026-11-16T16:30:00Z`
+- **notes:** Read the diff against the criteria.
+- **findings:** _none_
 
-### `FIND-01`
+### Round `2` — `external`
+
+- **focus:** `edge-cases`
+- **reviewer:** `reviewer-1`
+- **verdict:** `changes-needed`
+- **at:** `2026-11-16T17:00:00Z`
+- **notes:** The empty lane is counted before the filter.
+
+#### `FIND-01`
 
 - **severity:** `high`
 - **status:** `open`
@@ -94,6 +104,8 @@ lane the human is working in.
 
 - `CMT-01` — `reviewer-1` at `2026-11-16T17:01:00Z`
   The count is drawn from the unfiltered list.
+
+**Findings not in a round**
 
 ### `FIND-02`
 

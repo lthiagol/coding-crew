@@ -709,6 +709,205 @@ fn the_header_names_the_kind_and_the_review_shows_the_budget() {
     );
 }
 
+fn finding(id: &str, severity: Severity) -> Finding {
+    Finding {
+        id: id.to_string(),
+        severity,
+        description: format!("The defect {id} names."),
+        created: "2026-11-14T10:00:00Z".to_string(),
+        ..Finding::default()
+    }
+}
+
+fn round(n: u32, kind: RoundKind, findings: &[&str]) -> Round {
+    Round {
+        n,
+        kind,
+        focus: Focus::SpecCompliance,
+        reviewer: format!("reviewer-{n}"),
+        verdict: Verdict::ChangesNeeded,
+        at: format!("2026-11-14T1{n}:00:00Z"),
+        notes: format!("The notes of round {n}."),
+        findings: findings.iter().map(|id| id.to_string()).collect(),
+    }
+}
+
+#[test]
+fn the_review_nests_a_finding_under_the_round_that_raised_it() {
+    let mut task = minimal("TSK01");
+    task.review = Review {
+        max_rounds: 5,
+        rounds: vec![
+            round(0, RoundKind::SelfReview, &[]),
+            round(1, RoundKind::External, &["FIND-01"]),
+        ],
+        verdict: Some(Verdict::ChangesNeeded),
+        findings: vec![finding("FIND-01", Severity::High)],
+    };
+
+    let document = task_to_markdown(&task, &[]);
+    let review = section(&document, "## Review");
+
+    let first = review
+        .find("### Round `0` — `self`")
+        .unwrap_or_else(|| panic!("no first round heading:\n{review}"));
+    let second = review
+        .find("### Round `1` — `external`")
+        .unwrap_or_else(|| panic!("no second round heading:\n{review}"));
+    let nested = review
+        .find("#### `FIND-01`")
+        .unwrap_or_else(|| panic!("the finding is not under its round:\n{review}"));
+    assert!(first < second && second < nested, "{review}");
+
+    // The round's fields are bullets under its heading.
+    let external = &review[second..nested];
+    for bullet in [
+        "- **focus:** `spec-compliance`",
+        "- **reviewer:** `reviewer-1`",
+        "- **verdict:** `changes-needed`",
+        "- **at:** `2026-11-14T11:00:00Z`",
+        "- **notes:** The notes of round 1.",
+    ] {
+        assert!(
+            external.contains(bullet),
+            "{bullet} is missing:\n{external}"
+        );
+    }
+
+    // The finding is shown once, and its fields are under it.
+    assert_eq!(review.matches("`FIND-01`").count(), 1, "{review}");
+    let finding = &review[nested..];
+    assert!(finding.contains("- **severity:** `high`"), "{review}");
+    assert!(finding.contains("The defect FIND-01 names."), "{review}");
+}
+
+#[test]
+fn a_round_with_no_findings_says_so() {
+    let mut task = minimal("TSK01");
+    task.review = Review {
+        max_rounds: 5,
+        rounds: vec![round(0, RoundKind::SelfReview, &[])],
+        ..Review::default()
+    };
+
+    let document = task_to_markdown(&task, &[]);
+    let review = section(&document, "## Review");
+
+    let round = review
+        .find("### Round `0` — `self`")
+        .unwrap_or_else(|| panic!("no round heading:\n{review}"));
+    assert!(
+        review[round..].contains("- **findings:** _none_"),
+        "a clean round does not say so:\n{review}"
+    );
+    assert!(!review.contains("#### `"), "{review}");
+    assert!(!review.contains("\n\n\n"), "the round is padded:\n{review}");
+}
+
+#[test]
+fn a_finding_that_belongs_to_no_round_is_shown_after_the_rounds() {
+    let mut task = minimal("TSK01");
+    task.review = Review {
+        max_rounds: 5,
+        rounds: vec![round(1, RoundKind::External, &["FIND-01"])],
+        findings: vec![
+            finding("FIND-01", Severity::High),
+            finding("FIND-02", Severity::Low),
+            // The same finding listed twice is still shown once.
+            finding("FIND-02", Severity::Low),
+        ],
+        ..Review::default()
+    };
+
+    let document = task_to_markdown(&task, &[]);
+    let review = section(&document, "## Review");
+
+    let nested = review
+        .find("#### `FIND-01`")
+        .unwrap_or_else(|| panic!("FIND-01 is not nested:\n{review}"));
+    let label = review
+        .find("**Findings not in a round**")
+        .unwrap_or_else(|| panic!("the orphan findings have no block:\n{review}"));
+    let orphan = review
+        .find("### `FIND-02`")
+        .unwrap_or_else(|| panic!("FIND-02 is dropped:\n{review}"));
+    assert!(nested < label && label < orphan, "{review}");
+    assert!(
+        review[orphan..].contains("- **severity:** `low`"),
+        "{review}"
+    );
+    assert_eq!(review.matches("`FIND-02`").count(), 1, "{review}");
+}
+
+#[test]
+fn a_finding_is_shown_when_the_record_holds_no_rounds() {
+    let mut task = minimal("TSK01");
+    task.review = Review {
+        findings: vec![finding("FIND-01", Severity::Medium)],
+        ..Review::default()
+    };
+
+    let document = task_to_markdown(&task, &[]);
+    let review = section(&document, "## Review");
+
+    assert!(review.contains("**Rounds**\n\n_none_"), "{review}");
+    assert!(review.contains("**Findings not in a round**"), "{review}");
+    assert!(review.contains("### `FIND-01`"), "{review}");
+}
+
+#[test]
+fn a_round_naming_a_finding_that_does_not_exist_says_so() {
+    let mut task = minimal("TSK01");
+    task.review = Review {
+        max_rounds: 5,
+        rounds: vec![round(1, RoundKind::External, &["FIND-99"])],
+        ..Review::default()
+    };
+
+    let document = task_to_markdown(&task, &[]);
+    let review = section(&document, "## Review");
+
+    assert!(
+        review.contains("- **missing finding:** `FIND-99`"),
+        "the missing reference is dropped:\n{review}"
+    );
+    assert!(review.contains("### Round `1` — `external`"), "{review}");
+    assert!(!review.contains("#### `"), "{review}");
+}
+
+#[test]
+fn a_finding_claimed_by_two_rounds_is_shown_under_the_first_one() {
+    let mut task = minimal("TSK01");
+    task.review = Review {
+        max_rounds: 5,
+        rounds: vec![
+            round(1, RoundKind::External, &["FIND-01"]),
+            round(2, RoundKind::External, &["FIND-01"]),
+        ],
+        findings: vec![finding("FIND-01", Severity::High)],
+        ..Review::default()
+    };
+
+    let document = task_to_markdown(&task, &[]);
+    let review = section(&document, "## Review");
+
+    let first = review
+        .find("### Round `1` — `external`")
+        .unwrap_or_else(|| panic!("no first round:\n{review}"));
+    let nested = review
+        .find("#### `FIND-01`")
+        .unwrap_or_else(|| panic!("the finding is not shown:\n{review}"));
+    let second = review
+        .find("### Round `2` — `external`")
+        .unwrap_or_else(|| panic!("no second round:\n{review}"));
+    assert!(first < nested && nested < second, "{review}");
+    assert_eq!(review.matches("#### `FIND-01`").count(), 1, "{review}");
+    assert!(
+        !review[second..].contains("FIND-01"),
+        "the second round claims the finding again:\n{review}"
+    );
+}
+
 #[test]
 fn a_listed_child_absent_from_the_context_is_unknown() {
     let mut task = minimal("TSK10");
@@ -970,11 +1169,13 @@ fn backslashes_before_pipes_never_split_a_table_row() {
         let document = task_to_markdown(&task, &[]);
         assert_eq!(headings(&document), HEADINGS, "{value}");
 
-        for (heading, expected_columns, expected_rows) in [
-            ("## Header", 2, 10),
-            ("## Acceptance criteria", 7, 3),
-            ("## Review", 8, 2),
-        ] {
+        assert!(
+            table_rows(&document, "## Review").is_empty(),
+            "the review is still a table:\n{document}"
+        );
+        for (heading, expected_columns, expected_rows) in
+            [("## Header", 2, 10), ("## Acceptance criteria", 7, 3)]
+        {
             let rows = table_rows(&document, heading);
             assert_eq!(
                 rows.len(),
@@ -1142,17 +1343,43 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
     }
 
     // The fixed-value attacks cannot open a cell or a row.
-    for (heading, expected) in [
-        ("## Header", 2),
-        ("## Acceptance criteria", 7),
-        ("## Review", 8),
-    ] {
+    for (heading, expected) in [("## Header", 2), ("## Acceptance criteria", 7)] {
         let rows = table_rows(&document, heading);
         assert!(!rows.is_empty(), "{heading} has no table");
         for line in rows {
             assert_eq!(columns(line), expected, "{heading}: {line}");
         }
     }
+
+    // The review is a history, not a table. Its shape is a round heading,
+    // the round's fields, and the finding under it one level deeper. The
+    // attacked values stay in their code spans, so the shape holds.
+    let review = section(&document, "## Review");
+    assert!(table_rows(&document, "## Review").is_empty(), "{review}");
+    assert!(
+        review.contains("### Round `1` — `external`"),
+        "the round heading was broken:\n{review}"
+    );
+    for label in ["focus", "reviewer", "verdict", "at", "notes"] {
+        assert!(
+            review.contains(&format!("- **{label}:**")),
+            "the round lost its {label}:\n{review}"
+        );
+    }
+    assert!(
+        review
+            .lines()
+            .any(|line| line.starts_with("#### `") && line.contains("FIXED-ATTACK")),
+        "the finding is not nested under the round:\n{review}"
+    );
+    assert_eq!(
+        review
+            .lines()
+            .filter(|line| line.starts_with("### "))
+            .count(),
+        1,
+        "{review}"
+    );
 }
 
 #[test]

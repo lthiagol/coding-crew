@@ -431,6 +431,100 @@ fn the_detail_render_matches_the_snapshot() {
     assert!(text.ends_with('\n'), "the render has no final newline");
 }
 
+/// The lines of the Review section, borders and padding removed.
+fn rendered_review(text: &str) -> Vec<String> {
+    let mut inside = false;
+    let mut lines = Vec::new();
+    for line in text.lines() {
+        let content = line.trim_matches('│').trim();
+        if content == "Review" {
+            inside = true;
+            continue;
+        }
+        if inside && content == "Questions" {
+            break;
+        }
+        if inside {
+            lines.push(content.to_string());
+        }
+    }
+    assert!(
+        !lines.is_empty(),
+        "the render has no Review section:\n{text}"
+    );
+    lines
+}
+
+#[test]
+fn the_review_reads_as_rounds_and_findings_at_forty_and_one_hundred_columns() {
+    // At 40 and at 100 the review is a history: the round's heading, its
+    // fields, and the findings under it. The table the unit removed rendered
+    // `self` as `se`/`lf` at 100 and one character per line at 40; neither
+    // width may wrap a heading or split a finding from its round.
+    for (width, height) in [("40", "400"), ("100", "220")] {
+        let output = run(&[
+            "--render",
+            "--plain",
+            "--detail",
+            DETAIL_TASK,
+            "--width",
+            width,
+            "--height",
+            height,
+            WORK,
+        ]);
+        assert!(
+            output.status.success(),
+            "raul failed at {width}: {output:?}"
+        );
+        let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+        let review = rendered_review(&text);
+        let at = |line: &str| {
+            review
+                .iter()
+                .position(|row| row == line)
+                .unwrap_or_else(|| {
+                    panic!("{line} is not a line of the review at {width}:\n{review:#?}")
+                })
+        };
+
+        let round = at("Round  0  —  self");
+        let first = at("FIND-01");
+        let second = at("FIND-02");
+        assert!(
+            round < first && first < second,
+            "a finding is not under its round at {width}:\n{review:#?}"
+        );
+
+        // The round's fields are bullets; the summary above them is too.
+        for bullet in [
+            "• focus:  spec-compliance",
+            "• reviewer:  runner-01",
+            "• verdict:  changes-needed",
+            "• at:  2026-11-10T16:00Z",
+        ] {
+            let row = review
+                .iter()
+                .position(|line| line == bullet)
+                .unwrap_or_else(|| panic!("{bullet} is missing at {width}:\n{review:#?}"));
+            assert!(round < row, "{bullet} is not under the round at {width}");
+        }
+
+        // Nothing is squeezed into a column one character wide: no word from
+        // the old table is left as a fragment on its own line.
+        for fragment in ["s", "e", "l", "f", "ex", "te", "rn", "al"] {
+            assert!(
+                !review.iter().any(|line| line == fragment),
+                "'{fragment}' is a line of the review at {width}:\n{review:#?}"
+            );
+        }
+        assert!(
+            review.iter().any(|line| line.contains("external")),
+            "the word `external` is broken at {width}:\n{review:#?}"
+        );
+    }
+}
+
 /// The Overview at a canonical width, asserted against its snapshot. The
 /// files are what `scripts/pty-sweep.py` writes at that width: one plain
 /// render, byte for byte.

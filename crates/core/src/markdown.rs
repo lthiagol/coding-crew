@@ -14,6 +14,7 @@
 //! terminal or the filesystem.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 
 use crate::lifecycle::{Overlay, Overlays};
@@ -192,29 +193,37 @@ fn review(out: &mut String, task: &Task) {
     ));
 
     out.push_str("\n**Rounds**\n\n");
+    let mut shown = HashSet::new();
     if task.review.rounds.is_empty() {
         out.push_str(EMPTY);
         out.push('\n');
     } else {
-        out.push_str("| n | kind | focus | reviewer | verdict | at | notes | findings |\n");
-        out.push_str("|---|---|---|---|---|---|---|---|\n");
-        for round in &task.review.rounds {
-            out.push_str(&round_row(round));
+        for (index, round) in task.review.rounds.iter().enumerate() {
+            if index > 0 {
+                out.push('\n');
+            }
+            round_block(out, round, &task.review.findings, &mut shown);
         }
     }
 
-    out.push_str("\n**Findings**\n\n");
-    if task.review.findings.is_empty() {
-        out.push_str(EMPTY);
-        out.push('\n');
-        return;
-    }
-
-    for (index, finding) in task.review.findings.iter().enumerate() {
-        if index > 0 {
-            out.push('\n');
+    // A finding no round names is still a finding: it keeps its own block,
+    // after the rounds, at the rounds' own heading level.
+    let mut listed = HashSet::new();
+    let mut orphans: Vec<&Finding> = Vec::new();
+    for finding in &task.review.findings {
+        if shown.contains(finding.id.as_str()) || !listed.insert(finding.id.as_str()) {
+            continue;
         }
-        finding_block(out, finding);
+        orphans.push(finding);
+    }
+    if !orphans.is_empty() {
+        out.push_str("\n**Findings not in a round**\n\n");
+        for (index, finding) in orphans.iter().enumerate() {
+            if index > 0 {
+                out.push('\n');
+            }
+            finding_block(out, finding, 3);
+        }
     }
 }
 
@@ -407,23 +416,58 @@ fn prose_block(out: &mut String, value: &str) {
     out.push('\n');
 }
 
-fn round_row(round: &Round) -> String {
-    let findings = codes(&round.findings);
-    format!(
-        "| {} | {} | {} | {} | {} | {} | {} | {} |\n",
-        cell(&code(&round.n.to_string())),
-        cell(&code(round_kind_str(round.kind))),
-        cell(&code(focus_str(round.focus))),
-        cell(&code(&round.reviewer)),
-        cell(&code(verdict_str(round.verdict))),
-        cell(&code(&round.at)),
-        cell(&round.notes),
-        cell(&findings),
-    )
+/// One round, then the findings it raised.
+///
+/// `shown` carries the findings the earlier rounds already painted: a finding
+/// belongs to the first round that claims it, and a later round that names it
+/// again says nothing.
+fn round_block(out: &mut String, round: &Round, findings: &[Finding], shown: &mut HashSet<String>) {
+    out.push_str(&format!(
+        "### Round {} — {}\n\n",
+        code(&round.n.to_string()),
+        code(round_kind_str(round.kind)),
+    ));
+    fixed_bullet(out, "focus", &code(focus_str(round.focus)));
+    fixed_bullet(out, "reviewer", &code(&round.reviewer));
+    fixed_bullet(out, "verdict", &code(verdict_str(round.verdict)));
+    fixed_bullet(out, "at", &code(&round.at));
+    prose_bullet(out, "notes", &round.notes);
+
+    if round.findings.is_empty() {
+        fixed_bullet(out, "findings", EMPTY);
+    }
+
+    let mut named = HashSet::new();
+    let mut missing = Vec::new();
+    let mut raised = Vec::new();
+    for id in &round.findings {
+        if !named.insert(id.as_str()) {
+            continue;
+        }
+        match findings.iter().find(|finding| finding.id == *id) {
+            Some(finding) => {
+                if shown.insert(finding.id.clone()) {
+                    raised.push(finding);
+                }
+            }
+            None => missing.push(id.as_str()),
+        }
+    }
+
+    for id in missing {
+        fixed_bullet(out, "missing finding", &code(id));
+    }
+    for finding in raised {
+        out.push('\n');
+        finding_block(out, finding, 4);
+    }
 }
 
-fn finding_block(out: &mut String, finding: &Finding) {
-    out.push_str(&format!("### {}\n\n", code(&finding.id)));
+fn finding_block(out: &mut String, finding: &Finding, level: usize) {
+    out.push_str(&"#".repeat(level));
+    out.push(' ');
+    out.push_str(&code(&finding.id));
+    out.push_str("\n\n");
     fixed_bullet(out, "severity", &code(severity_str(finding.severity)));
     fixed_bullet(out, "status", &code(finding_status_str(finding.status)));
     fixed_bullet(out, "created", &code(&finding.created));

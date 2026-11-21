@@ -110,25 +110,12 @@
 │                                                                                                  │
 │Rounds                                                                                            │
 │                                                                                                  │
-│┌───┬───┬────────────────┬─────────────┬────────────────┬────────────────┬────────────┬──────────┐│
-││ n │ k │ focus          │ reviewer    │ verdict        │ at             │ notes      │ findings ││
-││   │ i │                │             │                │                │            │          ││
-││   │ n │                │             │                │                │            │          ││
-││   │ d │                │             │                │                │            │          ││
-│╞═══╪═══╪════════════════╪═════════════╪════════════════╪════════════════╪════════════╪══════════╡│
-││  0  │  s  │  spec-complia  │  runner-01  │  changes-need  │  2026-11-10T1  │ The        │  FIND-│
-││   │  e  │  nce           │             │  ed            │  6:00Z         │ pre-screen │  1 ,    │
-││   │  l  │                │             │                │                │ found the  │  FIND-0 │
-││   │  f  │                │             │                │                │ row and    │  2      │
-││   │   │                │             │                │                │ the mark   │          ││
-││   │   │                │             │                │                │ before the │          ││
-││   │   │                │             │                │                │ external   │          ││
-││   │   │                │             │                │                │ round      │          ││
-││   │   │                │             │                │                │ spent      │          ││
-││   │   │                │             │                │                │ budget.    │          ││
-│└───┴───┴────────────────┴─────────────┴────────────────┴────────────────┴────────────┴──────────┘│
-│                                                                                                  │
-│Findings                                                                                          │
+│Round  0  —  self                                                                                 │
+│• focus:  spec-compliance                                                                         │
+│• reviewer:  runner-01                                                                            │
+│• verdict:  changes-needed                                                                        │
+│• at:  2026-11-10T16:00Z                                                                          │
+│• notes: The pre-screen found the row and the mark before the external round spent budget.        │
 │                                                                                                  │
 │ FIND-01                                                                                          │
 │• severity:  medium                                                                               │
@@ -191,6 +178,19 @@
 │Children                                                                                          │
 │────────                                                                                          │
 │none                                                                                              │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
