@@ -244,13 +244,15 @@ variants of the families (Catppuccin Latte, Dracula Alucard, Nord Light).
   the wake to return, then close the tab by its **tab** id (`wX:t7`, never the
   pane id). A `tab_not_found` answer means the id was wrong, not that the tab
   is gone. A pane killed on purpose takes its wake with it — kill the pane,
-  then kill the wake. **It happened again on unit 46's delta reviewer:** the
-  report arrived, the orchestrator closed the tab, and the wake polled a pane
-  that was gone until it hit its 1800-second bound and exited 3. No work was
-  lost — the report had arrived — but the wake's exit was noise that said the
-  round failed when it had not. **The check is one thing: the wake's own
-  completion notice has arrived before the tab is closed, not the agent's
-  report.**
+  then kill the wake. **It happened twice in one session, on unit 46's delta
+  reviewer and unit 47's CODE reviewer:** the report arrived, the
+  orchestrator closed the tab, and the wake polled a pane that was gone until
+  it hit its 1800-second bound and exited 3. No work was lost — the report
+  had arrived — but the wake's exit was noise that said the round failed when
+  it had not. **The practice, not the rule, is what has to change: the tab is
+  closed by a wrapper that waits for the wake's own process to exit**, never
+  by a hand-timed close. `/tmp/opencode/cl-flow/close-after-wake.sh <pane>
+  <wake-pid>` waits and closes in one step.**
 - **`/tmp` does not survive a server restart.** The round files, the snapshots
   and the gate logs go with it; the working tree is the real surface. The round
   files live under a project-prefixed path — `/tmp/opencode/cl-<unit>` — and the
