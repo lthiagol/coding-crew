@@ -999,6 +999,28 @@ Two lows were ruled and not fixed: the runtime guards do compute from the
 fixtures, and a done task whose rounds raised no finding has none to carry.
 One low stands recorded: number_word mis-sums a scaled hyphen compound.
 
+Unit closed: the review nests (plan 45). One clean build and review round.
+The model already nests - Round.findings names the findings each round raised
+- and the projection ignored it: the rounds became an eight-column table
+squeezed into the pane's width, where self rendered as se over lf and
+external as ex te rn al with the findings column one character wide, and the
+findings then repeated as a separate flat list. The review now reads as a
+history. Each round is a heading with its fields as bullets, and the findings
+it raised sit one heading level under it; a round with no findings says none;
+a round naming a finding that does not exist says so rather than dropping it;
+a finding belongs to the first round that claims it and is shown once; and a
+finding no round names is still shown, after the rounds, in its own block.
+The shape follows the projection's own idiom - the Steps section is already a
+heading per item then bullets - so the document keeps one vocabulary, and
+moving the notes out of a table cell closed a latent defect: a newline in the
+notes would have broken a table row. The review reads at 40 columns as well
+as at 100, and both widths are pinned.
+Both axes found nothing blocking. Two lows stand recorded: the done-when
+wrote Round 01 and the heading reads Round 1, which the orchestrator ruled
+on - a round is numbered by the model, unpadded, and the self pre-screen is
+round 0 - and docs/tui/screens.md still described the rounds as a table,
+which the orchestrator fixed at the close.
+
 ---
 
 ## Lessons

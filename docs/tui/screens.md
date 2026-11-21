@@ -187,9 +187,10 @@ The document carries the task's sections, in reading order:
 | dependencies | what it waits on, what waits on it |
 | children | child tasks and their progress |
 
-The projection is the shape, not the wording: headings per section, tables for
-the criteria and the rounds, lists for the steps and the findings, and the
-verification commands as code. The task's own free text — the intent, the
+The projection is the shape, not the wording: headings per section, a table for
+the criteria, lists for the steps, and each review round a heading with its
+own fields and the findings it raised under it; the verification commands as
+code. The task's own free text — the intent, the
 criterion descriptions, the notes — is markdown in its own right and is
 rendered as such; the title is a label and is escaped like the other fields
 that must not be interpreted.

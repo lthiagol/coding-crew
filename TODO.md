@@ -56,21 +56,8 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Six units, in the order they run. The order is in `docs/plan.md` — rows 45 to
+Five units, in the order they run. The order is in `docs/plan.md` — rows 46 to
 51 — and this is the list of them.
-
-### 45 · The review nests
-
-The model already nests: `Round.findings` names the findings each round raised
-(`crates/core/src/task.rs:466`). The projection ignores it — rounds become an
-eight-column table that renders `self` as `se`/`lf` and `external` as
-`ex`/`te`/`rn`/`al` at 100 columns, and the findings then repeat as a flat
-list.
-
-**Done when:** the Review section reads Round 01 with the findings it raised
-under it; a round with no findings says so; a finding that belongs to no round
-is still shown; and the rounds are no longer a table — the shape is readable at
-the pane's width, at 40 columns as well as at 100.
 
 ### 46 · The row says the review state
 
@@ -159,6 +146,12 @@ injection property holds.
   Path tree hides them and no other view holds them, so a reader cannot reach
   a finished task without knowing its id. Either the Path tab grows a
   finished branch, or a Done view exists.
+- **A round is numbered by the model, unpadded** (2026-11-21). The review
+  heading reads `Round 1`, not `Round 01`. The self pre-screen is round 0, and
+  padding it would render "Round 00"; the model's own number is what the
+  record holds. The human's sketch wrote "Round 01" to show the nesting, and
+  the number was its example. Ruled on the SPEC review's reading of the
+  kickoff; a one-line change and its pins would overrule it.
 
 ---
 
