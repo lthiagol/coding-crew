@@ -56,16 +56,8 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Five units, in the order they run. The order is in `docs/plan.md` — rows 47 to
+Four units, in the order they run. The order is in `docs/plan.md` — rows 48 to
 51 — and this is the list of them.
-
-### 47 · The backlog row says its body
-
-The generator writes an item's body; the Backlog tab never draws it.
-
-**Done when:** a Backlog row carries the item's own body, cut on a grapheme
-boundary, and the announcement and the cut marker still name what they leave
-out.
 
 ### 48 · The document gets its own palette
 
@@ -128,8 +120,11 @@ injection property holds.
   all of them are already in the model. **The mechanism is settled per tab:**
   the review state is a compact **suffix** on the row, not a second line — a
   second line would move the Path tree's row arithmetic, and a Path row that
-  grows a line changes what the tab counts. The Backlog's body is still open
-  (unit 47).
+  grows a line changes what the tab counts. The **Backlog's body is a second
+  line**, dim and indented to where the row's title starts, cut by the theme
+  crate's shared `cut_to` so a cut body ends in the tab's own `…`; a row with
+  a body is two lines everywhere the tab counts, and a row is drawn in both
+  its lines or in neither.
 - **The state file is a Markdown pair** (2026-11-21): `TODO.md` for the live
   state, `DONE.md` for the archive. The archive no longer lives in the live
   file.
@@ -166,6 +161,19 @@ None blocking. Carried from the closed units.
 - **The Backlog:** a one- or two-row pane below 39 columns gives a total hidden
   count without naming the groups; the compact announcement can resemble the
   group header's shape; very narrow panes cut or drop group names and counts.
+- **The Backlog's body line:** at narrow widths the id and kind columns drop,
+  so the body is flush-left and "belongs to the row above" rests on the dim
+  slot alone; a one-line pane drops the cursor row's body unnamed, the
+  footer's count naming hidden rows and not the absent body; a multi-line
+  body is normalised to one line — every word kept, so not a summary — and
+  no fixture body is multi-line, so no pinned render exercises it.
+- **The Backlog's counting:** the comment *"only a pane of one line shows the
+  row alone"* is misleading — a two-line row on a two-line pane also leaves
+  no room and shows the row alone with no announcement; `body_line` does not
+  guard `width == 0` the way `columns_line` does, so a body row would paint a
+  second blank line at width 0 (unreachable below height 2); and the
+  atomicity pin sweeps only `first == 0`, so the scrolled window with
+  two-line rows is covered only indirectly.
 - **The shared-helper copy scan** — `crates/raul/src/data.rs:648` — covers
   **three of the theme crate's five** text helpers: `head_to` and `text_width`
   would pass it. It also scans **only `crates/raul`**, so a private copy in

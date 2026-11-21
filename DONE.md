@@ -1062,6 +1062,28 @@ pass the test while failing the rule - a check that cannot fail. It now walks
 the whole tree and matches on the severity mapping and the state words, and a
 planted copy proves the pin can fail. The delta review found nothing at all.
 
+Unit closed: the backlog row says its body (plan 47). One clean build and
+review round. The generator writes every item's body - a sentence saying what
+the item is about - and the Backlog tab never drew it, so an idea, a smaller
+task and a draft task all looked the same: a title and a phrase. The body is
+the row's second line, dim and indented to where the row's title starts, so it
+reads as belonging to the row above it. It is the item's own body, never a
+summary, cut by the theme crate's shared cut_to, so a body that does not fit
+ends in the tab's own marker on a grapheme boundary. An item with no body
+draws no second line and its row is the row it was. A row with a body is two
+lines everywhere the tab counts - the window, the announcement of what it
+hides, the footer's count - and a row is drawn in both its lines or in
+neither, so a row drawn in two lines and counted as one cannot happen.
+Both axes found nothing blocking. Seven lows stand recorded: the body is
+flush-left at the narrow widths where the id and kind columns drop; a
+one-line pane drops the cursor row's body unnamed; a multi-line body is
+normalised to one line and no fixture exercises it; a comment on when the
+footer must carry the hidden count misreads a two-line pane as a one-line
+one; body_line does not guard width == 0 the way columns_line does; the
+atomicity pin sweeps only the unscrolled window; and the two normative texts
+- the screen spec and the decision of record - the orchestrator wrote at the
+close.
+
 ---
 
 ## Lessons
