@@ -78,8 +78,22 @@ The border of a block is `chrome.border`, and the border of the focused one is
 
 The detail pane draws with the vendored leaf engine. Its `MarkdownTheme` has
 47 colour fields and its own four palettes; raul uses none of them. Instead
-`Theme::markdown_theme()` maps every field onto one of the eighteen slots, so
-`MarkdownTheme`'s document speaks the same palette as the chrome.
+`Theme::markdown_theme()` paints every field from the **document's own
+palette**: eighteen roles, which are not the chrome's eighteen slots. The
+roles are recorded in [palettes.md](palettes.md), role by role, with the
+value each preset gives them and the figures the tests recompute.
+
+The document's headings are the three levels the projection writes: `#` for a
+section, `##` for an item under it, and `###` for a finding under its round.
+The engine's `heading_4` and `heading_other` join the deepest, because the
+document has no level below `###`. The record's title is a label, not prose,
+and is never a heading.
+
+A field takes **one side of one role**: a foreground for a field that paints
+a word or a line, a background for a field that paints one. Six of the roles
+name a pair, and the side column says which side a field takes. `ENGINE_ROLES`
+in the theme crate is the mapping; the test below holds this table and the
+code together.
 
 That promise stops at `MarkdownTheme`. The engine paints the **tokens of a
 code block** with syntect's own theme: the default preset pairs with
@@ -96,89 +110,92 @@ avoiding it: an empty syntax set panics, and a scope-less syntect theme
 paints the tokens black. The engine's code tokens are the one paint the
 presets do not change.
 
-A field that paints a **foreground** takes its slot's foreground. A field that
-paints a **background** takes its slot's background. `MarkdownTheme` carries
-colours only: no slot and no attributes reach it. A slot with no colour in the
-preset becomes `Color::Reset`, so the terminal preset names no colour at all,
-and what still tells one role from another is the engine's own modifiers —
-bold on headings and strong text, underlined on links among them.
+`MarkdownTheme` carries colours only: no role and no attributes reach it. In
+the terminal preset every role resolves to `Color::Reset`, so the engine
+names no colour at all, and what still tells one role from another is the
+engine's own modifiers — bold on headings and strong text, underlined on
+links among them.
 
 **The search is not offered in any preset.** The engine paints a hit's
-background and keeps the searched span's own foreground.
+background and keeps the searched span's own foreground. The document
+palette gives a hit a background of its own — the line's grade — but the
+current match needs a stronger patch, and the palette's strongest patch is
+the accent, which the selection already spends on the mark.
 
-- In the **dark** preset the mapping gives the hit the selection's
-  background, but the foreground stays `text.normal`, which reads at 1.26:1
-  on that background — no slot carries a dark background to pair with the
-  accent.
-- In the **nord** preset the same pairing, `text.normal` on the selection's
-  nord8, reads at 1.64:1 — the accent is a mid-tone, not the dark backdrop
-  the hit's foreground needs.
-- In the **catppuccin** preset the same pairing, `text.normal` on the
-  selection's mauve, reads at 1.40:1 — the accent is a pastel mid-tone, and
-  the hit's foreground stays `text.normal` on it.
-- In the **dracula** preset the same pairing, `text.normal` on the
-  selection's purple, reads at 2.26:1 — the brightest grey the family has is
-  still too pale against its accent for a hit's foreground to read.
+- In the **dark** preset the hit's background is the line's `#3d444d`, and the
+  prose on it reads at 6.38:1; the current match is the accent `#79c0ff`, and
+  the prose on it reads at 1.26:1.
+- In the **nord** preset the hit's background is nord3 `#4c566a`, and the
+  prose on it reads at 5.46:1; the current match is nord8 `#88c0d0`, and the
+  prose on it reads at 1.48:1.
+- In the **catppuccin** preset the hit's background is surface1 `#45475a`,
+  and the prose on it reads at 5.15:1; the current match is mauve `#cba6f7`,
+  and the prose on it reads at 1.15:1.
+- In the **dracula** preset the hit's background is the current line
+  `#6272a4`, and the prose on it reads at 4.41:1; the current match is purple
+  `#bd93f9`, and the prose on it reads at 2.26:1.
 - In the **terminal** preset the engine's fields are `Color::Reset`, so the
   engine paints no background at all: the current match is a bold word with
   no box around it, and the other hits are not marked.
 
-Search waits for a readable pairing.
+The current match reads below 3:1 in every colour preset. Search waits for a
+readable pairing; the document's own palette did not give it one, and the
+ruling stands.
 
-| field | slot | why |
-|---|---|---|
-| `search_highlight_bg` | `text.selected` | a hit takes the selection's background; the engine keeps the span's own foreground, so the hit is unreadable and search is not offered |
-| `search_match_bg` | `text.selected` | the current match; the same background and the same limitation |
-| `code_gutter` | `text.dim` | line numbers are words in the document, so they take the text grade, never the chrome index |
-| `code_frame` | `chrome.border` | a code block's frame is a border |
-| `code_label` | `text.dim` | the language label is secondary text |
-| `inline_code_fg` | `text.strong` | inline code is raised prose |
-| `inline_code_bg` | `chrome.border` | the code family's chrome; it has no background, so Reset |
-| `blockquote_marker` | `chrome.border` | the quote's marker is a line |
-| `blockquote_text` | `text.dim` | quoted prose is secondary |
-| `rule` | `chrome.border` | a rule is a line |
-| `table_border` | `chrome.border` | a table's border is a border |
-| `table_separator` | `chrome.border` | the separator is a line |
-| `table_header` | `text.strong` | a table header is strong text |
-| `table_cell` | `text.normal` | a cell is ordinary prose |
-| `list_level_1` | `text.normal` | the first list level is ordinary text |
-| `list_level_2` | `text.dim` | the second is a step dimmer |
-| `list_level_3` | `text.dim` | the third stops at the text grade: a document word never drops to the chrome index |
-| `ordered_list` | `text.normal` | an ordered marker ranks with the first list level |
-| `heading_1` | `chrome.title` | the brightest foreground, bold |
-| `heading_2` | `text.strong` | the raised step |
-| `heading_3` | `text.normal` | the ordinary step |
-| `heading_4` | `text.dim` | the muted step |
-| `heading_other` | `text.dim` | h5 and h6 share the dimmest heading step |
-| `heading_underline` | `chrome.border` | an underline is a line |
-| `link_icon` | `semantic.info` | links are neutral information |
-| `link_text` | `semantic.info` | links are neutral information, never a lane |
-| `link_hover` | `semantic.info` | mapped for the 47, but the vendored engine never reads it |
-| `text` | `text.normal` | ordinary prose |
-| `strong_text` | `text.strong` | strong prose |
-| `latex_inline_fg` | `text.strong` | inline math is raised prose |
-| `latex_inline_bg` | `chrome.border` | the code/maths family's chrome; no background, so Reset |
-| `latex_block_fg` | `text.strong` | block math is raised prose |
-| `mermaid_keyword` | `text.strong` | a diagram keyword is raised text |
-| `mermaid_arrow` | `chrome.border` | an arrow is a line |
-| `mermaid_label` | `text.normal` | a node label is ordinary text |
-| `mermaid_block_fg` | `text.dim` | the diagram's block chrome is secondary |
-| `mark_fg` | `text.selected` | a marked word takes the selection's own foreground, the pair the palette records |
-| `mark_bg` | `text.selected` | a mark is a highlight; selection is the slot with a background |
-| `task_checked` | `semantic.ok` | a checked task is a clean result |
-| `task_unchecked` | `text.dim` | an unchecked task is secondary |
-| `alert_note` | `semantic.info` | a note is neutral information |
-| `alert_tip` | `semantic.ok` | a tip is a clean result |
-| `alert_important` | `semantic.info` | an important callout is neutral information, not a fact that waits on a human |
-| `alert_warning` | `semantic.warn` | a warning wants attention and is not broken |
-| `alert_caution` | `semantic.error` | a caution is a failure; it never shares the warning's slot |
-| `footnote_ref` | `semantic.info` | a reference is neutral information |
-| `footnote_text` | `text.dim` | a note is secondary text |
+| field | role | side | why |
+|---|---|---|---|
+| `search_highlight_bg` | `document.search` | hit | a hit takes the document's hit background; the engine keeps the span's own foreground, so the search is not offered |
+| `search_match_bg` | `document.search` | match | the current match takes the stronger background; the same limitation |
+| `code_gutter` | `document.text` | body | line numbers are words in the document, so they take the prose, never the chrome index |
+| `blockquote_marker` | `document.rule` | line | a quote's marker is a line |
+| `list_level_1` | `document.list.1` | — | the first list depth is the first step of its own scale |
+| `list_level_2` | `document.list.2` | — | the second is a step dimmer |
+| `list_level_3` | `document.list.3` | — | the third is a step dimmer again |
+| `ordered_list` | `document.list.1` | — | an ordered marker ranks with the first list depth |
+| `table_border` | `document.rule` | line | a table's frame is a line |
+| `table_separator` | `document.rule` | header | the header rule is part of the header, so it takes the header's grade |
+| `table_header` | `document.text` | emphasis | a table header is strong prose |
+| `table_cell` | `document.text` | body | a cell is ordinary prose |
+| `heading_1` | `document.heading.section` | — | the `#` line: a section |
+| `heading_2` | `document.heading.item` | — | the `##` line: an item under a section |
+| `heading_3` | `document.heading.finding` | — | the `###` line: a finding under its round |
+| `heading_4` | `document.heading.finding` | — | the document has no level below `###` |
+| `heading_other` | `document.heading.finding` | — | h5 and h6 join the deepest level |
+| `heading_underline` | `document.rule` | line | an underline is a line |
+| `code_frame` | `document.rule` | line | a code block's frame is a line |
+| `code_label` | `document.text` | body | the language label is a word |
+| `inline_code_fg` | `document.code` | text | inline code is the code's ink |
+| `inline_code_bg` | `document.code` | chip | the chip behind the ink |
+| `rule` | `document.rule` | line | a rule is a line |
+| `link_icon` | `document.link` | — | links are one role |
+| `link_text` | `document.link` | — | the text of a link |
+| `link_hover` | `document.link` | — | mapped for the 47; the vendored engine never reads it |
+| `blockquote_text` | `document.text` | body | quoted prose is prose |
+| `text` | `document.text` | body | ordinary prose |
+| `strong_text` | `document.text` | emphasis | strong prose is the prose's emphasis |
+| `latex_inline_fg` | `document.code` | text | inline maths is the code family's ink |
+| `latex_inline_bg` | `document.code` | chip | and its chip |
+| `latex_block_fg` | `document.code` | text | block maths is the code family's ink |
+| `mermaid_keyword` | `document.code` | text | a diagram keyword is the code family's ink |
+| `mermaid_arrow` | `document.rule` | line | an arrow is a line |
+| `mermaid_label` | `document.text` | body | a node label is a word |
+| `mermaid_block_fg` | `document.code` | text | the diagram's ink |
+| `mark_fg` | `document.selection` | foreground | a marked word takes the mark's foreground |
+| `mark_bg` | `document.selection` | background | and its background |
+| `task_checked` | `document.task` | done | a checked box |
+| `task_unchecked` | `document.task` | open | an open box |
+| `alert_note` | `document.alert.note` | — | a note is one of the five alerts |
+| `alert_tip` | `document.alert.tip` | — | a tip is one of the five |
+| `alert_important` | `document.alert.important` | — | importance is one of the five |
+| `alert_warning` | `document.alert.warning` | — | a warning is one of the five |
+| `alert_caution` | `document.alert.caution` | — | a caution is one of the five |
+| `footnote_ref` | `document.link` | — | a footnote's reference ranks with a link |
+| `footnote_text` | `document.text` | body | a footnote's note is prose |
 
 The engine's own four markdown palettes — arctic, forest, ocean and
 solarized-dark — are never read. A family palette from
-[palettes.md](palettes.md) reaches `MarkdownTheme` through the same eighteen
-slots as the chrome; syntect's code-token theme is the one part that does not.
+[palettes.md](palettes.md) reaches `MarkdownTheme` through the document's own
+eighteen roles; syntect's code-token theme is the one part that does not.
 
 ## The presets
 
@@ -202,6 +219,11 @@ flavour, and its eighteen values are recorded there too; the other three
 flavours wait with the light theme. The `dracula` preset is the Dracula
 family's Dracula Classic variant, and its eighteen values are recorded there
 too; alucard waits with the light theme.
+
+The four colour presets paint the document's eighteen roles from the same
+family palettes; the roles, their values and their figures are recorded in
+[palettes.md](palettes.md). The terminal preset paints every document role
+`Color::Reset`, the way it paints no slot's colour.
 
 **The dark, nord, catppuccin and dracula presets assume a terminal with a
 dark background, and do not paint one.** The background is the terminal's
@@ -268,6 +290,10 @@ one.
 3. The domain knows nothing about any of this.
 4. A theme changes the paint, never the words: the same screen says the same
    thing in every preset.
+5. The **document's roles are slots** in this rule's sense: the theme crate
+   names them, a preset decides what they look like, and the rules above bind
+   them as they bind the chrome's. The chrome and the document keep their own
+   vocabularies, and neither paints with the other's.
 
 ## Not yet
 

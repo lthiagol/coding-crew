@@ -1079,12 +1079,12 @@ mod tests {
         let dark = Theme::preset(Preset::Dark);
         let lines = document_lines(&work, &detail, 138, &dark);
         let (header, row, tokens) = code_block(&lines);
-        // The frame is `chrome.border` and the label `text.dim`: the block
-        // around the tokens is ours.
+        // The frame is the document's line and the label the document's
+        // prose: the block around the tokens is ours.
         assert_eq!(
             header.spans.first().and_then(|span| span.style.fg),
-            dark.chrome.border.fg,
-            "the code frame is not chrome.border"
+            Some(dark.document().rule.line),
+            "the code frame is not the document's line"
         );
         let label = header
             .spans
@@ -1092,8 +1092,9 @@ mod tests {
             .find(|span| span.content == "rust ")
             .expect("the block names its language");
         assert_eq!(
-            label.style.fg, dark.text.dim.fg,
-            "the code label is not text.dim"
+            label.style.fg,
+            Some(dark.document().text.body),
+            "the code label is not the document's prose"
         );
         // The code row says the fixture's code, and it is painted.
         assert_eq!(

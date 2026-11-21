@@ -212,92 +212,424 @@ impl Theme {
         }
     }
 
-    /// The markdown engine's theme, mapped onto our slots.
+    /// The document's palette in this theme's preset.
     ///
-    /// The engine has its own palettes; raul and hugo do not use them. Every field
-    /// takes its slot's foreground, or the slot's background for a field that
-    /// paints one. A slot with no colour in the preset becomes `Color::Reset`,
-    /// so the terminal preset names no colour at all.
+    /// The document — the markdown pane — has a palette of its own: the
+    /// eighteen [`DocRole`]s are not the chrome's [`Slot`]s. The two
+    /// vocabularies sit side by side, and this theme's preset paints both from
+    /// the same family palette.
+    pub fn document(&self) -> DocPalette {
+        document_palette(self.preset)
+    }
+
+    /// The markdown engine's theme, painted from the document's roles.
+    ///
+    /// The engine has its own palettes; raul and hugo do not use them. Every
+    /// field takes one side of one document role — a foreground for a field
+    /// that paints a word or a line, a background for a field that paints one.
+    /// The mapping is the `ENGINE_ROLES` table, and the test below holds the
+    /// two together.
+    ///
+    /// The terminal preset paints every document role `Color::Reset`, so the
+    /// engine names no colour at all and only its own modifiers distinguish
+    /// the roles.
     ///
     /// The promise stops at `MarkdownTheme`: the engine paints code tokens
-    /// with syntect's own theme, which this mapping does not reach. And
-    /// `MarkdownTheme` carries colours only, so the terminal preset leaves
-    /// every document field `Reset` and only the engine's own modifiers
-    /// distinguish the roles.
+    /// with syntect's own theme, which this mapping does not reach.
     #[allow(dead_code)] // The detail pane's first caller.
     pub fn markdown_theme(&self) -> MarkdownTheme {
-        let fg = |slot: Slot| self.slot(slot).fg.unwrap_or(Color::Reset);
-        let bg = |slot: Slot| self.slot(slot).bg.unwrap_or(Color::Reset);
+        let doc = self.document();
+        let at = |role: DocRole, side: DocSide| doc.paint(role, side);
         MarkdownTheme {
-            // A search hit takes the selection's background, but the engine
-            // keeps the searched span's own foreground: the mapping cannot
-            // make the hit readable, so search is not offered in the dark
-            // document until a readable pairing exists.
-            search_highlight_bg: bg(Slot::TextSelected),
-            search_match_bg: bg(Slot::TextSelected),
-            // Code: the gutter and the label are document words, so they
-            // take the text grade; the frame is a border; inline code is
-            // raised prose.
-            code_gutter: fg(Slot::TextDim),
-            code_frame: fg(Slot::ChromeBorder),
-            code_label: fg(Slot::TextDim),
-            inline_code_fg: fg(Slot::TextStrong),
-            inline_code_bg: bg(Slot::ChromeBorder),
-            // Quotes, rules, tables and blockquote markers are chrome.
-            blockquote_marker: fg(Slot::ChromeBorder),
-            blockquote_text: fg(Slot::TextDim),
-            rule: fg(Slot::ChromeBorder),
-            table_border: fg(Slot::ChromeBorder),
-            table_separator: fg(Slot::ChromeBorder),
-            table_header: fg(Slot::TextStrong),
-            table_cell: fg(Slot::TextNormal),
-            // Lists: a deliberate text hierarchy, one step dimmer each time,
-            // but a document word never drops below the text grade.
-            list_level_1: fg(Slot::TextNormal),
-            list_level_2: fg(Slot::TextDim),
-            list_level_3: fg(Slot::TextDim),
-            ordered_list: fg(Slot::TextNormal),
-            // Headings: the brightest title down to the dimmest step.
-            heading_1: fg(Slot::ChromeTitle),
-            heading_2: fg(Slot::TextStrong),
-            heading_3: fg(Slot::TextNormal),
-            heading_4: fg(Slot::TextDim),
-            heading_other: fg(Slot::TextDim),
-            heading_underline: fg(Slot::ChromeBorder),
-            // Links are neutral information, never a lane.
-            link_icon: fg(Slot::SemanticInfo),
-            link_text: fg(Slot::SemanticInfo),
-            link_hover: fg(Slot::SemanticInfo),
-            // Ordinary and strong prose.
-            text: fg(Slot::TextNormal),
-            strong_text: fg(Slot::TextStrong),
-            // LaTeX and Mermaid are prose with the code family's chrome.
-            latex_inline_fg: fg(Slot::TextStrong),
-            latex_inline_bg: bg(Slot::ChromeBorder),
-            latex_block_fg: fg(Slot::TextStrong),
-            mermaid_keyword: fg(Slot::TextStrong),
-            mermaid_arrow: fg(Slot::ChromeBorder),
-            mermaid_label: fg(Slot::TextNormal),
-            mermaid_block_fg: fg(Slot::TextDim),
-            // A mark is the selection: its background is the selection's
-            // background and its foreground is the selection's own, the
-            // pair the palette records.
-            mark_fg: fg(Slot::TextSelected),
-            mark_bg: bg(Slot::TextSelected),
-            // Tasks.
-            task_checked: fg(Slot::SemanticOk),
-            task_unchecked: fg(Slot::TextDim),
-            // Alerts, one semantic slot each. The warning and the failure
-            // never share a slot; importance is information, not a lane.
-            alert_note: fg(Slot::SemanticInfo),
-            alert_tip: fg(Slot::SemanticOk),
-            alert_important: fg(Slot::SemanticInfo),
-            alert_warning: fg(Slot::SemanticWarn),
-            alert_caution: fg(Slot::SemanticError),
-            // Footnotes: the reference is information, the note is secondary.
-            footnote_ref: fg(Slot::SemanticInfo),
-            footnote_text: fg(Slot::TextDim),
+            // The search: a hit takes the document's hit background, the
+            // current match its stronger one. The engine keeps the searched
+            // span's own foreground, which is why the figures in theme.md are
+            // the prose on each background, and why the search is not
+            // offered.
+            search_highlight_bg: at(DocRole::Search, DocSide::One),
+            search_match_bg: at(DocRole::Search, DocSide::Two),
+            // The code's gutter and label are the document's words, so they
+            // take the prose; the frame is a line. Inline code and its chip
+            // are the code role.
+            code_gutter: at(DocRole::Text, DocSide::One),
+            code_frame: at(DocRole::Rule, DocSide::One),
+            code_label: at(DocRole::Text, DocSide::One),
+            inline_code_fg: at(DocRole::Code, DocSide::One),
+            inline_code_bg: at(DocRole::Code, DocSide::Two),
+            // Quotes, rules and the table's frame are lines; the table's
+            // header rule is the header's own grade. A header and a cell are
+            // the prose at its two weights.
+            blockquote_marker: at(DocRole::Rule, DocSide::One),
+            blockquote_text: at(DocRole::Text, DocSide::One),
+            rule: at(DocRole::Rule, DocSide::One),
+            table_border: at(DocRole::Rule, DocSide::One),
+            table_separator: at(DocRole::Rule, DocSide::Two),
+            table_header: at(DocRole::Text, DocSide::Two),
+            table_cell: at(DocRole::Text, DocSide::One),
+            // Three list depths, a step apart each time; an ordered marker
+            // ranks with the first.
+            list_level_1: at(DocRole::ListDepth1, DocSide::One),
+            list_level_2: at(DocRole::ListDepth2, DocSide::One),
+            list_level_3: at(DocRole::ListDepth3, DocSide::One),
+            ordered_list: at(DocRole::ListDepth1, DocSide::One),
+            // Three heading levels; the engine's deeper ones join the
+            // deepest, because the document has no level below `###`.
+            heading_1: at(DocRole::HeadingSection, DocSide::One),
+            heading_2: at(DocRole::HeadingItem, DocSide::One),
+            heading_3: at(DocRole::HeadingFinding, DocSide::One),
+            heading_4: at(DocRole::HeadingFinding, DocSide::One),
+            heading_other: at(DocRole::HeadingFinding, DocSide::One),
+            heading_underline: at(DocRole::Rule, DocSide::One),
+            // Links are one role: the marker, the text, the hover and a
+            // footnote's reference.
+            link_icon: at(DocRole::Link, DocSide::One),
+            link_text: at(DocRole::Link, DocSide::One),
+            link_hover: at(DocRole::Link, DocSide::One),
+            // Ordinary and strong prose are the prose's two weights.
+            text: at(DocRole::Text, DocSide::One),
+            strong_text: at(DocRole::Text, DocSide::Two),
+            // LaTeX and Mermaid are the code family's ink and chip.
+            latex_inline_fg: at(DocRole::Code, DocSide::One),
+            latex_inline_bg: at(DocRole::Code, DocSide::Two),
+            latex_block_fg: at(DocRole::Code, DocSide::One),
+            mermaid_keyword: at(DocRole::Code, DocSide::One),
+            mermaid_arrow: at(DocRole::Rule, DocSide::One),
+            mermaid_label: at(DocRole::Text, DocSide::One),
+            mermaid_block_fg: at(DocRole::Code, DocSide::One),
+            // A mark is the selection's pair: its foreground and its
+            // background, the two sides the palette records.
+            mark_fg: at(DocRole::Selection, DocSide::One),
+            mark_bg: at(DocRole::Selection, DocSide::Two),
+            // Tasks: a done box and an open one.
+            task_checked: at(DocRole::Task, DocSide::One),
+            task_unchecked: at(DocRole::Task, DocSide::Two),
+            // Five alerts, five roles: note, tip, important, warning and
+            // caution are five different facts, and no two share a role.
+            alert_note: at(DocRole::AlertNote, DocSide::One),
+            alert_tip: at(DocRole::AlertTip, DocSide::One),
+            alert_important: at(DocRole::AlertImportant, DocSide::One),
+            alert_warning: at(DocRole::AlertWarning, DocSide::One),
+            alert_caution: at(DocRole::AlertCaution, DocSide::One),
+            // A footnote's reference ranks with a link; its note is prose.
+            footnote_ref: at(DocRole::Link, DocSide::One),
+            footnote_text: at(DocRole::Text, DocSide::One),
         }
+    }
+}
+
+/// A role the document paints with.
+///
+/// The document — the markdown pane — has a palette of its own. These
+/// eighteen roles are not the chrome's [`Slot`]s: the two vocabularies sit
+/// side by side, and nothing in `crates/core` names either one. A role is a
+/// job the document has, and each preset decides what that job looks like.
+///
+/// Six roles name a pair rather than a single colour, because their job has
+/// two sides: [`DocRole::Text`] the prose and its emphasis, [`DocRole::Code`]
+/// the code's ink and its chip, [`DocRole::Rule`] the document's line and the
+/// table's header rule, [`DocRole::Selection`] a mark's foreground and
+/// background, [`DocRole::Search`] a hit and the current match, and
+/// [`DocRole::Task`] a done box and an open one. The other twelve name one
+/// colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DocRole {
+    /// The `#` line: one of the ten sections.
+    HeadingSection,
+    /// The `##` line: an item under a section.
+    HeadingItem,
+    /// The `###` line: a finding under its round. The engine's deeper
+    /// headings join it, because the document has no level below `###`.
+    HeadingFinding,
+    /// The document's prose, and its emphasis.
+    Text,
+    /// The first list depth, and an ordered list's marker.
+    ListDepth1,
+    /// The second list depth.
+    ListDepth2,
+    /// The third list depth.
+    ListDepth3,
+    /// A `[!NOTE]` alert.
+    AlertNote,
+    /// A `[!TIP]` alert.
+    AlertTip,
+    /// A `[!IMPORTANT]` alert.
+    AlertImportant,
+    /// A `[!WARNING]` alert.
+    AlertWarning,
+    /// A `[!CAUTION]` alert.
+    AlertCaution,
+    /// A link's marker, its text, its hover state, and a footnote's
+    /// reference.
+    Link,
+    /// Code and its kin: the ink and the chip behind it.
+    Code,
+    /// The document's lines, and the table's header rule.
+    Rule,
+    /// A mark: the reader's highlight.
+    Selection,
+    /// The search: a hit and the current match.
+    Search,
+    /// A task list's box: done and open.
+    Task,
+}
+
+/// One side of a role's pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocSide {
+    /// The role's first colour: its only colour, unless the role names a pair.
+    One,
+    /// The role's second colour: the other side of a pair.
+    Two,
+}
+
+impl DocRole {
+    /// Every document role, in the order of the palette doc.
+    pub const ALL: [DocRole; 18] = [
+        DocRole::HeadingSection,
+        DocRole::HeadingItem,
+        DocRole::HeadingFinding,
+        DocRole::Text,
+        DocRole::ListDepth1,
+        DocRole::ListDepth2,
+        DocRole::ListDepth3,
+        DocRole::AlertNote,
+        DocRole::AlertTip,
+        DocRole::AlertImportant,
+        DocRole::AlertWarning,
+        DocRole::AlertCaution,
+        DocRole::Link,
+        DocRole::Code,
+        DocRole::Rule,
+        DocRole::Selection,
+        DocRole::Search,
+        DocRole::Task,
+    ];
+
+    /// The name of the role, as the palette doc writes it.
+    pub fn name(&self) -> &'static str {
+        match self {
+            DocRole::HeadingSection => "document.heading.section",
+            DocRole::HeadingItem => "document.heading.item",
+            DocRole::HeadingFinding => "document.heading.finding",
+            DocRole::Text => "document.text",
+            DocRole::ListDepth1 => "document.list.1",
+            DocRole::ListDepth2 => "document.list.2",
+            DocRole::ListDepth3 => "document.list.3",
+            DocRole::AlertNote => "document.alert.note",
+            DocRole::AlertTip => "document.alert.tip",
+            DocRole::AlertImportant => "document.alert.important",
+            DocRole::AlertWarning => "document.alert.warning",
+            DocRole::AlertCaution => "document.alert.caution",
+            DocRole::Link => "document.link",
+            DocRole::Code => "document.code",
+            DocRole::Rule => "document.rule",
+            DocRole::Selection => "document.selection",
+            DocRole::Search => "document.search",
+            DocRole::Task => "document.task",
+        }
+    }
+
+    /// Whether the role's job has two sides.
+    pub fn carries_a_pair(&self) -> bool {
+        matches!(
+            self,
+            DocRole::Text
+                | DocRole::Code
+                | DocRole::Rule
+                | DocRole::Selection
+                | DocRole::Search
+                | DocRole::Task
+        )
+    }
+
+    /// The name of one side of the role, as the palette doc writes it.
+    ///
+    /// A role that names no pair has one colour, and its side is the colour
+    /// itself; the doc writes that as an em dash.
+    pub fn side_name(&self, side: DocSide) -> &'static str {
+        match (self, side) {
+            (DocRole::Text, DocSide::One) => "body",
+            (DocRole::Text, DocSide::Two) => "emphasis",
+            (DocRole::Code, DocSide::One) => "text",
+            (DocRole::Code, DocSide::Two) => "chip",
+            (DocRole::Rule, DocSide::One) => "line",
+            (DocRole::Rule, DocSide::Two) => "header",
+            (DocRole::Selection, DocSide::One) => "foreground",
+            (DocRole::Selection, DocSide::Two) => "background",
+            (DocRole::Search, DocSide::One) => "hit",
+            (DocRole::Search, DocSide::Two) => "match",
+            (DocRole::Task, DocSide::One) => "done",
+            (DocRole::Task, DocSide::Two) => "open",
+            _ => "—",
+        }
+    }
+}
+
+/// The prose's two weights.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextPaint {
+    pub body: Color,
+    pub emphasis: Color,
+}
+
+/// The code's ink and the chip behind it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CodePaint {
+    pub text: Color,
+    pub chip: Color,
+}
+
+/// The document's line and the table's header rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RulePaint {
+    pub line: Color,
+    pub header: Color,
+}
+
+/// A mark's foreground and background.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SelectionPaint {
+    pub foreground: Color,
+    pub background: Color,
+}
+
+/// The search's two backgrounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SearchPaint {
+    pub hit: Color,
+    pub current: Color,
+}
+
+/// A task's two boxes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaskPaint {
+    pub done: Color,
+    pub open: Color,
+}
+
+/// The document's palette: one paint per role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DocPalette {
+    pub heading_section: Color,
+    pub heading_item: Color,
+    pub heading_finding: Color,
+    pub text: TextPaint,
+    pub list_depth_1: Color,
+    pub list_depth_2: Color,
+    pub list_depth_3: Color,
+    pub alert_note: Color,
+    pub alert_tip: Color,
+    pub alert_important: Color,
+    pub alert_warning: Color,
+    pub alert_caution: Color,
+    pub link: Color,
+    pub code: CodePaint,
+    pub rule: RulePaint,
+    pub selection: SelectionPaint,
+    pub search: SearchPaint,
+    pub task: TaskPaint,
+}
+
+impl DocPalette {
+    /// The colour a role's side paints.
+    ///
+    /// A role that names no pair has one colour, and either side is that
+    /// colour: a single role cannot be asked for a colour it does not name.
+    pub fn paint(&self, role: DocRole, side: DocSide) -> Color {
+        match role {
+            DocRole::HeadingSection => self.heading_section,
+            DocRole::HeadingItem => self.heading_item,
+            DocRole::HeadingFinding => self.heading_finding,
+            DocRole::Text => match side {
+                DocSide::One => self.text.body,
+                DocSide::Two => self.text.emphasis,
+            },
+            DocRole::ListDepth1 => self.list_depth_1,
+            DocRole::ListDepth2 => self.list_depth_2,
+            DocRole::ListDepth3 => self.list_depth_3,
+            DocRole::AlertNote => self.alert_note,
+            DocRole::AlertTip => self.alert_tip,
+            DocRole::AlertImportant => self.alert_important,
+            DocRole::AlertWarning => self.alert_warning,
+            DocRole::AlertCaution => self.alert_caution,
+            DocRole::Link => self.link,
+            DocRole::Code => match side {
+                DocSide::One => self.code.text,
+                DocSide::Two => self.code.chip,
+            },
+            DocRole::Rule => match side {
+                DocSide::One => self.rule.line,
+                DocSide::Two => self.rule.header,
+            },
+            DocRole::Selection => match side {
+                DocSide::One => self.selection.foreground,
+                DocSide::Two => self.selection.background,
+            },
+            DocRole::Search => match side {
+                DocSide::One => self.search.hit,
+                DocSide::Two => self.search.current,
+            },
+            DocRole::Task => match side {
+                DocSide::One => self.task.done,
+                DocSide::Two => self.task.open,
+            },
+        }
+    }
+
+    /// The palette the terminal preset paints: every role is `Reset`.
+    pub const fn reset() -> Self {
+        DocPalette {
+            heading_section: Color::Reset,
+            heading_item: Color::Reset,
+            heading_finding: Color::Reset,
+            text: TextPaint {
+                body: Color::Reset,
+                emphasis: Color::Reset,
+            },
+            list_depth_1: Color::Reset,
+            list_depth_2: Color::Reset,
+            list_depth_3: Color::Reset,
+            alert_note: Color::Reset,
+            alert_tip: Color::Reset,
+            alert_important: Color::Reset,
+            alert_warning: Color::Reset,
+            alert_caution: Color::Reset,
+            link: Color::Reset,
+            code: CodePaint {
+                text: Color::Reset,
+                chip: Color::Reset,
+            },
+            rule: RulePaint {
+                line: Color::Reset,
+                header: Color::Reset,
+            },
+            selection: SelectionPaint {
+                foreground: Color::Reset,
+                background: Color::Reset,
+            },
+            search: SearchPaint {
+                hit: Color::Reset,
+                current: Color::Reset,
+            },
+            task: TaskPaint {
+                done: Color::Reset,
+                open: Color::Reset,
+            },
+        }
+    }
+}
+
+/// The document's palette in a preset.
+///
+/// The four colour presets paint the eighteen roles from the same family
+/// palette the chrome draws from; the terminal preset paints none of them.
+pub fn document_palette(preset: Preset) -> DocPalette {
+    match preset {
+        Preset::Dark => dark_document(),
+        Preset::Nord => nord_document(),
+        Preset::Catppuccin => catppuccin_document(),
+        Preset::Dracula => dracula_document(),
+        Preset::Terminal => DocPalette::reset(),
     }
 }
 
@@ -563,6 +895,57 @@ fn dark_style(slot: Slot) -> Style {
     }
 }
 
+/// The document's colours in the dark palette.
+///
+/// The roles are painted from the values the chrome draws with: the headings
+/// from the three brightest foregrounds, the prose from the main one, the
+/// lists a step apart, the alerts one hue each, the mark from the selection's
+/// pair and the search from the line's grade and the accent.
+fn dark_document() -> DocPalette {
+    use dark::{
+        ACCENT, BACKGROUND, BORDER, BRIGHTEST, DIMMED, ERROR, FOREGROUND, INFO, MUTED, OK, RAISED,
+        SECOND, SECOND_ACCENT, WARN,
+    };
+    DocPalette {
+        heading_section: BRIGHTEST,
+        heading_item: RAISED,
+        heading_finding: SECOND,
+        text: TextPaint {
+            body: FOREGROUND,
+            emphasis: RAISED,
+        },
+        list_depth_1: FOREGROUND,
+        list_depth_2: MUTED,
+        list_depth_3: DIMMED,
+        alert_note: INFO,
+        alert_tip: OK,
+        alert_important: SECOND_ACCENT,
+        alert_warning: WARN,
+        alert_caution: ERROR,
+        link: ACCENT,
+        code: CodePaint {
+            text: RAISED,
+            chip: BORDER,
+        },
+        rule: RulePaint {
+            line: BORDER,
+            header: RAISED,
+        },
+        selection: SelectionPaint {
+            foreground: BACKGROUND,
+            background: ACCENT,
+        },
+        search: SearchPaint {
+            hit: BORDER,
+            current: ACCENT,
+        },
+        task: TaskPaint {
+            done: OK,
+            open: MUTED,
+        },
+    }
+}
+
 /// The twelve Nord colours that the slots spend.
 ///
 /// The family's palette has sixteen values in four groups: polar night
@@ -646,6 +1029,56 @@ fn nord_style(slot: Slot) -> Style {
         Slot::SemanticHuman => Style::new().fg(NORD8),
         // The agent lane takes the second accent.
         Slot::SemanticAgent => Style::new().fg(NORD7),
+    }
+}
+
+/// The document's colours in the Nord palette.
+///
+/// Nord names four word grades — the three snow storm greys and the frost —
+/// and the document's eight word roles take them. The section heading is
+/// nord6, the item nord5, the prose nord4, and the finding the frost, a cool
+/// step below the prose. The lists take nord5, nord4 and nord9; the note
+/// takes the same nord5 the chrome's information does, because the family
+/// spends its neutral.
+fn nord_document() -> DocPalette {
+    use nord::{NORD0, NORD3, NORD4, NORD5, NORD6, NORD7, NORD8, NORD9, NORD11, NORD13, NORD14};
+    DocPalette {
+        heading_section: NORD6,
+        heading_item: NORD5,
+        heading_finding: NORD9,
+        text: TextPaint {
+            body: NORD4,
+            emphasis: NORD6,
+        },
+        list_depth_1: NORD5,
+        list_depth_2: NORD4,
+        list_depth_3: NORD9,
+        alert_note: NORD5,
+        alert_tip: NORD14,
+        alert_important: NORD7,
+        alert_warning: NORD13,
+        alert_caution: NORD11,
+        link: NORD8,
+        code: CodePaint {
+            text: NORD6,
+            chip: NORD3,
+        },
+        rule: RulePaint {
+            line: NORD3,
+            header: NORD6,
+        },
+        selection: SelectionPaint {
+            foreground: NORD0,
+            background: NORD8,
+        },
+        search: SearchPaint {
+            hit: NORD3,
+            current: NORD8,
+        },
+        task: TaskPaint {
+            done: NORD14,
+            open: NORD4,
+        },
     }
 }
 
@@ -744,6 +1177,57 @@ fn catppuccin_style(slot: Slot) -> Style {
     }
 }
 
+/// The document's colours in the Catppuccin mocha palette.
+///
+/// The three word greys above the muted one serve the heading levels: the
+/// section takes rosewater, the item text, and the prose subtext1, a step
+/// under the chrome's ordinary text. The finding takes overlay2, the cool
+/// grey the chrome gives the tabs that are not showing.
+fn catppuccin_document() -> DocPalette {
+    use catppuccin::{
+        BASE, GREEN, MAUVE, OVERLAY2, PEACH, RED, ROSEWATER, SUBTEXT0, SUBTEXT1, SURFACE1, TEAL,
+        TEXT,
+    };
+    DocPalette {
+        heading_section: ROSEWATER,
+        heading_item: TEXT,
+        heading_finding: OVERLAY2,
+        text: TextPaint {
+            body: SUBTEXT1,
+            emphasis: ROSEWATER,
+        },
+        list_depth_1: TEXT,
+        list_depth_2: SUBTEXT1,
+        list_depth_3: SUBTEXT0,
+        alert_note: SUBTEXT0,
+        alert_tip: GREEN,
+        alert_important: TEAL,
+        alert_warning: PEACH,
+        alert_caution: RED,
+        link: MAUVE,
+        code: CodePaint {
+            text: ROSEWATER,
+            chip: SURFACE1,
+        },
+        rule: RulePaint {
+            line: SURFACE1,
+            header: ROSEWATER,
+        },
+        selection: SelectionPaint {
+            foreground: BASE,
+            background: MAUVE,
+        },
+        search: SearchPaint {
+            hit: SURFACE1,
+            current: MAUVE,
+        },
+        task: TaskPaint {
+            done: GREEN,
+            open: SUBTEXT1,
+        },
+    }
+}
+
 /// The eleven Dracula values that the slots spend.
 ///
 /// The family's page lists twelve values in its color palette and sixteen in
@@ -830,6 +1314,58 @@ fn dracula_style(slot: Slot) -> Style {
         Slot::SemanticHuman => Style::new().fg(PURPLE),
         // The agent lane takes the second accent.
         Slot::SemanticAgent => Style::new().fg(CYAN),
+    }
+}
+
+/// The document's colours in the Dracula Classic palette.
+///
+/// Dracula names two whites and one blue-grey. The section heading takes the
+/// bright white, the item and the prose the foreground (the weight is what
+/// separates them), and the finding the comment — a step well below the prose,
+/// so the level the report named is apart. The first list depth takes the
+/// bright white, so the three depths stay apart.
+fn dracula_document() -> DocPalette {
+    use dracula::{
+        BACKGROUND, BRIGHT_WHITE, COMMENT, CURRENT_LINE, CYAN, FOREGROUND, GREEN, ORANGE, PURPLE,
+        RED,
+    };
+    DocPalette {
+        heading_section: BRIGHT_WHITE,
+        heading_item: FOREGROUND,
+        heading_finding: COMMENT,
+        text: TextPaint {
+            body: FOREGROUND,
+            emphasis: BRIGHT_WHITE,
+        },
+        list_depth_1: BRIGHT_WHITE,
+        list_depth_2: FOREGROUND,
+        list_depth_3: COMMENT,
+        alert_note: FOREGROUND,
+        alert_tip: GREEN,
+        alert_important: CYAN,
+        alert_warning: ORANGE,
+        alert_caution: RED,
+        link: PURPLE,
+        code: CodePaint {
+            text: BRIGHT_WHITE,
+            chip: CURRENT_LINE,
+        },
+        rule: RulePaint {
+            line: CURRENT_LINE,
+            header: BRIGHT_WHITE,
+        },
+        selection: SelectionPaint {
+            foreground: BACKGROUND,
+            background: PURPLE,
+        },
+        search: SearchPaint {
+            hit: CURRENT_LINE,
+            current: PURPLE,
+        },
+        task: TaskPaint {
+            done: GREEN,
+            open: COMMENT,
+        },
     }
 }
 
@@ -982,59 +1518,69 @@ mod tests {
     /// The doc states it; the test below holds the two together.
     const NEUTRAL_TOLERANCE: u8 = 48;
 
-    /// The engine's theme fields, the slot each maps to, and whether the
-    /// field paints a background.
+    /// The engine's theme fields, the document role each maps to, the side of
+    /// the role it paints, and whether the field paints a background.
     ///
     /// The engine exposes no reflection, so this list is the coverage of the
     /// 47 fields: a field added upstream has to be added here and in the doc.
-    const ENGINE_SLOTS: [(&str, Slot, bool); 47] = [
-        ("search_highlight_bg", Slot::TextSelected, true),
-        ("search_match_bg", Slot::TextSelected, true),
-        ("code_gutter", Slot::TextDim, false),
-        ("blockquote_marker", Slot::ChromeBorder, false),
-        ("list_level_1", Slot::TextNormal, false),
-        ("list_level_2", Slot::TextDim, false),
-        ("list_level_3", Slot::TextDim, false),
-        ("ordered_list", Slot::TextNormal, false),
-        ("table_border", Slot::ChromeBorder, false),
-        ("table_separator", Slot::ChromeBorder, false),
-        ("table_header", Slot::TextStrong, false),
-        ("table_cell", Slot::TextNormal, false),
-        ("heading_1", Slot::ChromeTitle, false),
-        ("heading_2", Slot::TextStrong, false),
-        ("heading_3", Slot::TextNormal, false),
-        ("heading_4", Slot::TextDim, false),
-        ("heading_other", Slot::TextDim, false),
-        ("heading_underline", Slot::ChromeBorder, false),
-        ("code_frame", Slot::ChromeBorder, false),
-        ("code_label", Slot::TextDim, false),
-        ("inline_code_fg", Slot::TextStrong, false),
-        ("inline_code_bg", Slot::ChromeBorder, true),
-        ("rule", Slot::ChromeBorder, false),
-        ("link_icon", Slot::SemanticInfo, false),
-        ("link_text", Slot::SemanticInfo, false),
-        ("link_hover", Slot::SemanticInfo, false),
-        ("blockquote_text", Slot::TextDim, false),
-        ("text", Slot::TextNormal, false),
-        ("strong_text", Slot::TextStrong, false),
-        ("latex_inline_fg", Slot::TextStrong, false),
-        ("latex_inline_bg", Slot::ChromeBorder, true),
-        ("latex_block_fg", Slot::TextStrong, false),
-        ("mermaid_keyword", Slot::TextStrong, false),
-        ("mermaid_arrow", Slot::ChromeBorder, false),
-        ("mermaid_label", Slot::TextNormal, false),
-        ("mermaid_block_fg", Slot::TextDim, false),
-        ("mark_fg", Slot::TextSelected, false),
-        ("mark_bg", Slot::TextSelected, true),
-        ("task_checked", Slot::SemanticOk, false),
-        ("task_unchecked", Slot::TextDim, false),
-        ("alert_note", Slot::SemanticInfo, false),
-        ("alert_tip", Slot::SemanticOk, false),
-        ("alert_important", Slot::SemanticInfo, false),
-        ("alert_warning", Slot::SemanticWarn, false),
-        ("alert_caution", Slot::SemanticError, false),
-        ("footnote_ref", Slot::SemanticInfo, false),
-        ("footnote_text", Slot::TextDim, false),
+    const ENGINE_ROLES: [(&str, DocRole, DocSide, bool); 47] = [
+        ("search_highlight_bg", DocRole::Search, DocSide::One, true),
+        ("search_match_bg", DocRole::Search, DocSide::Two, true),
+        ("code_gutter", DocRole::Text, DocSide::One, false),
+        ("blockquote_marker", DocRole::Rule, DocSide::One, false),
+        ("list_level_1", DocRole::ListDepth1, DocSide::One, false),
+        ("list_level_2", DocRole::ListDepth2, DocSide::One, false),
+        ("list_level_3", DocRole::ListDepth3, DocSide::One, false),
+        ("ordered_list", DocRole::ListDepth1, DocSide::One, false),
+        ("table_border", DocRole::Rule, DocSide::One, false),
+        ("table_separator", DocRole::Rule, DocSide::Two, false),
+        ("table_header", DocRole::Text, DocSide::Two, false),
+        ("table_cell", DocRole::Text, DocSide::One, false),
+        ("heading_1", DocRole::HeadingSection, DocSide::One, false),
+        ("heading_2", DocRole::HeadingItem, DocSide::One, false),
+        ("heading_3", DocRole::HeadingFinding, DocSide::One, false),
+        ("heading_4", DocRole::HeadingFinding, DocSide::One, false),
+        (
+            "heading_other",
+            DocRole::HeadingFinding,
+            DocSide::One,
+            false,
+        ),
+        ("heading_underline", DocRole::Rule, DocSide::One, false),
+        ("code_frame", DocRole::Rule, DocSide::One, false),
+        ("code_label", DocRole::Text, DocSide::One, false),
+        ("inline_code_fg", DocRole::Code, DocSide::One, false),
+        ("inline_code_bg", DocRole::Code, DocSide::Two, true),
+        ("rule", DocRole::Rule, DocSide::One, false),
+        ("link_icon", DocRole::Link, DocSide::One, false),
+        ("link_text", DocRole::Link, DocSide::One, false),
+        ("link_hover", DocRole::Link, DocSide::One, false),
+        ("blockquote_text", DocRole::Text, DocSide::One, false),
+        ("text", DocRole::Text, DocSide::One, false),
+        ("strong_text", DocRole::Text, DocSide::Two, false),
+        ("latex_inline_fg", DocRole::Code, DocSide::One, false),
+        ("latex_inline_bg", DocRole::Code, DocSide::Two, true),
+        ("latex_block_fg", DocRole::Code, DocSide::One, false),
+        ("mermaid_keyword", DocRole::Code, DocSide::One, false),
+        ("mermaid_arrow", DocRole::Rule, DocSide::One, false),
+        ("mermaid_label", DocRole::Text, DocSide::One, false),
+        ("mermaid_block_fg", DocRole::Code, DocSide::One, false),
+        ("mark_fg", DocRole::Selection, DocSide::One, false),
+        ("mark_bg", DocRole::Selection, DocSide::Two, true),
+        ("task_checked", DocRole::Task, DocSide::One, false),
+        ("task_unchecked", DocRole::Task, DocSide::Two, false),
+        ("alert_note", DocRole::AlertNote, DocSide::One, false),
+        ("alert_tip", DocRole::AlertTip, DocSide::One, false),
+        (
+            "alert_important",
+            DocRole::AlertImportant,
+            DocSide::One,
+            false,
+        ),
+        ("alert_warning", DocRole::AlertWarning, DocSide::One, false),
+        ("alert_caution", DocRole::AlertCaution, DocSide::One, false),
+        ("footnote_ref", DocRole::Link, DocSide::One, false),
+        ("footnote_text", DocRole::Text, DocSide::One, false),
     ];
 
     /// The engine fields it consumes with `.bg()`.
@@ -1528,6 +2074,12 @@ mod tests {
     fn ratio_in(cell: &str) -> Option<f64> {
         let (number, _) = cell.split_once(":1")?;
         number.trim().parse().ok()
+    }
+
+    /// The ratio a table cell states after a colour, like `` `#ffffff` 18.9:1 ``.
+    fn figure_in(cell: &str) -> Option<f64> {
+        let (before, _) = cell.split_once(":1")?;
+        before.split_whitespace().last()?.trim().parse().ok()
     }
 
     /// The base of a family: the background its figures are measured
@@ -3222,49 +3774,339 @@ mod tests {
         assert_eq!(Preset::parse(""), None);
     }
 
+    /// The colour a document role's side paints in a preset.
+    fn document(preset: Preset, role: DocRole, side: DocSide) -> Color {
+        document_palette(preset).paint(role, side)
+    }
+
+    /// The presets that paint colour: every one but the terminal.
+    fn colour_presets() -> Vec<Preset> {
+        Preset::ALL
+            .into_iter()
+            .filter(|preset| *preset != Preset::Terminal)
+            .collect()
+    }
+
+    /// The background a preset's document figures are measured against.
+    fn document_base(preset: Preset) -> Color {
+        match preset {
+            Preset::Dark => dark::BACKGROUND,
+            Preset::Nord => nord::NORD0,
+            Preset::Catppuccin => catppuccin::BASE,
+            Preset::Dracula => dracula::BACKGROUND,
+            Preset::Terminal => Color::Reset,
+        }
+    }
+
     #[test]
-    fn every_markdown_field_maps_to_its_slot() {
+    fn every_markdown_field_paints_its_document_role() {
         for preset in Preset::ALL {
             let theme = Theme::preset(preset);
             let markdown = theme.markdown_theme();
             let fields = engine_fields(&markdown);
             assert_eq!(
                 fields.len(),
-                ENGINE_SLOTS.len(),
+                ENGINE_ROLES.len(),
                 "{} leaves a field outside the doc's list",
                 preset.name()
             );
-            for ((field, actual, background), (expected_field, slot, expected_background)) in
-                fields.iter().zip(ENGINE_SLOTS.iter())
+            for ((field, actual, background), (expected_field, role, side, expected_background)) in
+                fields.iter().zip(ENGINE_ROLES.iter())
             {
                 assert_eq!(field, expected_field, "the two field lists disagree");
                 assert_eq!(
                     background, expected_background,
                     "{field} paints a side the doc does not name"
                 );
-                let expected = if *background {
-                    theme.slot(*slot).bg.unwrap_or(Color::Reset)
-                } else {
-                    theme.slot(*slot).fg.unwrap_or(Color::Reset)
-                };
                 assert_eq!(
                     *actual,
-                    expected,
-                    "{} paints {field} from the wrong side of {}",
+                    document(preset, *role, *side),
+                    "{} paints {field} from another role than {} {}",
                     preset.name(),
-                    slot.name()
+                    role.name(),
+                    role.side_name(*side)
                 );
             }
         }
     }
 
-    /// The slot a field maps to.
-    fn slot_of(field: &str) -> Slot {
-        ENGINE_SLOTS
+    #[test]
+    fn the_document_has_eighteen_roles() {
+        let names: Vec<&str> = DocRole::ALL.iter().map(|role| role.name()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "document.heading.section",
+                "document.heading.item",
+                "document.heading.finding",
+                "document.text",
+                "document.list.1",
+                "document.list.2",
+                "document.list.3",
+                "document.alert.note",
+                "document.alert.tip",
+                "document.alert.important",
+                "document.alert.warning",
+                "document.alert.caution",
+                "document.link",
+                "document.code",
+                "document.rule",
+                "document.selection",
+                "document.search",
+                "document.task",
+            ]
+        );
+        assert_eq!(DocRole::ALL.len(), 18, "the document has eighteen roles");
+        let mut sorted = names.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), names.len(), "two document roles share a name");
+        for role in DocRole::ALL {
+            assert!(
+                role.name().starts_with("document."),
+                "{} is not a document role name",
+                role.name()
+            );
+        }
+    }
+
+    #[test]
+    fn every_document_role_is_painted_by_a_field() {
+        // A role that names no pair has one colour, and a field that took its
+        // second side would paint the first and pass every other pin
+        // unobserved: `paint` ignores the side, the dead-side loop below skips
+        // it, and the doc's side column says the same either way.
+        for (field, role, side, _) in ENGINE_ROLES {
+            assert!(
+                role.carries_a_pair() || side == DocSide::One,
+                "{field} takes the {side:?} side of {}, which names no pair",
+                role.name()
+            );
+        }
+        for role in DocRole::ALL {
+            assert!(
+                ENGINE_ROLES.iter().any(|(_, used, _, _)| *used == role),
+                "{} is a role no engine field uses",
+                role.name()
+            );
+            for side in [DocSide::One, DocSide::Two] {
+                if side == DocSide::Two && !role.carries_a_pair() {
+                    continue;
+                }
+                assert!(
+                    ENGINE_ROLES
+                        .iter()
+                        .any(|(_, used, used_side, _)| *used == role && *used_side == side),
+                    "{}'s {} side is a colour no engine field uses",
+                    role.name(),
+                    role.side_name(side)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_six_pair_roles_are_the_ones_the_doc_names() {
+        // A role that names a pair carries two colours; a role that names one
+        // carries the same colour on both sides.
+        let pairs: Vec<&str> = DocRole::ALL
             .iter()
-            .find(|(name, _, _)| *name == field)
-            .map(|(_, slot, _)| *slot)
-            .unwrap_or_else(|| panic!("{field} is not in the mapping"))
+            .filter(|role| role.carries_a_pair())
+            .map(|role| role.name())
+            .collect();
+        assert_eq!(
+            pairs,
+            vec![
+                "document.text",
+                "document.code",
+                "document.rule",
+                "document.selection",
+                "document.search",
+                "document.task",
+            ]
+        );
+        for preset in colour_presets() {
+            for role in DocRole::ALL {
+                let one = document(preset, role, DocSide::One);
+                let two = document(preset, role, DocSide::Two);
+                if role.carries_a_pair() {
+                    assert_ne!(
+                        one,
+                        two,
+                        "{}'s {} names a pair and paints one colour",
+                        preset.name(),
+                        role.name()
+                    );
+                } else {
+                    assert_eq!(
+                        one,
+                        two,
+                        "{}'s {} names no pair and paints two colours",
+                        preset.name(),
+                        role.name()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_document_headings_are_three_and_apart() {
+        // The three levels the projection writes: `#`, `##` and `###`.
+        for preset in colour_presets() {
+            let palette = document_palette(preset);
+            let headings = [
+                palette.heading_section,
+                palette.heading_item,
+                palette.heading_finding,
+            ];
+            for (index, one) in headings.iter().enumerate() {
+                for other in &headings[index + 1..] {
+                    assert_ne!(
+                        one,
+                        other,
+                        "{} paints two heading levels alike",
+                        preset.name()
+                    );
+                }
+            }
+            // The report's own defect: the third level was the prose's colour.
+            assert_ne!(
+                palette.heading_finding,
+                palette.text.body,
+                "{} paints the finding heading as the prose",
+                preset.name()
+            );
+            assert_ne!(
+                palette.heading_section,
+                palette.text.body,
+                "{} paints the section heading as the prose",
+                preset.name()
+            );
+        }
+    }
+
+    #[test]
+    fn the_document_list_depths_are_apart() {
+        for preset in colour_presets() {
+            let palette = document_palette(preset);
+            let depths = [
+                palette.list_depth_1,
+                palette.list_depth_2,
+                palette.list_depth_3,
+            ];
+            for (index, one) in depths.iter().enumerate() {
+                for other in &depths[index + 1..] {
+                    assert_ne!(one, other, "{} paints two list depths alike", preset.name());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_document_alerts_keep_their_five() {
+        for preset in colour_presets() {
+            let palette = document_palette(preset);
+            let alerts = [
+                palette.alert_note,
+                palette.alert_tip,
+                palette.alert_important,
+                palette.alert_warning,
+                palette.alert_caution,
+            ];
+            for (index, one) in alerts.iter().enumerate() {
+                for other in &alerts[index + 1..] {
+                    assert_ne!(
+                        one,
+                        other,
+                        "{} paints two alert severities alike",
+                        preset.name()
+                    );
+                }
+            }
+            for alert in alerts {
+                assert_ne!(
+                    alert,
+                    palette.link,
+                    "{} paints an alert as a link",
+                    preset.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_document_table_parts_are_apart() {
+        for preset in colour_presets() {
+            let palette = document_palette(preset);
+            // The report's own defect: the border and the header rule were
+            // the same colour.
+            assert_ne!(
+                palette.rule.line,
+                palette.rule.header,
+                "{} paints a table's border and its header rule alike",
+                preset.name()
+            );
+            assert_ne!(
+                palette.text.emphasis,
+                palette.text.body,
+                "{} paints a table's header and its cell alike",
+                preset.name()
+            );
+            assert_ne!(
+                palette.rule.line,
+                palette.text.body,
+                "{} paints a table's line as a word",
+                preset.name()
+            );
+        }
+    }
+
+    /// The role sides that paint a word: the headings, the prose, the lists,
+    /// the alerts, the link, the code's ink and the task's boxes.
+    fn document_word_sides() -> Vec<(DocRole, DocSide)> {
+        vec![
+            (DocRole::HeadingSection, DocSide::One),
+            (DocRole::HeadingItem, DocSide::One),
+            (DocRole::HeadingFinding, DocSide::One),
+            (DocRole::Text, DocSide::One),
+            (DocRole::Text, DocSide::Two),
+            (DocRole::ListDepth1, DocSide::One),
+            (DocRole::ListDepth2, DocSide::One),
+            (DocRole::ListDepth3, DocSide::One),
+            (DocRole::AlertNote, DocSide::One),
+            (DocRole::AlertTip, DocSide::One),
+            (DocRole::AlertImportant, DocSide::One),
+            (DocRole::AlertWarning, DocSide::One),
+            (DocRole::AlertCaution, DocSide::One),
+            (DocRole::Link, DocSide::One),
+            (DocRole::Code, DocSide::One),
+            (DocRole::Task, DocSide::One),
+            (DocRole::Task, DocSide::Two),
+        ]
+    }
+
+    #[test]
+    fn every_document_word_reads_on_its_background() {
+        // Rule 3 of the palette doc, applied to the document's roles: a word
+        // reads at 3:1 or better on the background it sits on. The dark
+        // palette is ours and holds its words to 4.5:1, the way it holds the
+        // chrome's.
+        for preset in colour_presets() {
+            let base = document_base(preset);
+            let floor = if preset == Preset::Dark { 4.5 } else { 3.0 };
+            for (role, side) in document_word_sides() {
+                let colour = document(preset, role, side);
+                let ratio = contrast(colour, base);
+                assert!(
+                    ratio >= floor,
+                    "{}'s {} {} reads at {ratio:.1}:1, and a word needs {floor}:1",
+                    preset.name(),
+                    role.name(),
+                    role.side_name(side)
+                );
+            }
+        }
     }
 
     /// The theme fields a line names, in order.
@@ -3351,8 +4193,19 @@ mod tests {
         fields
     }
 
+    /// The five fields the engine paints with a background, and the role
+    /// sides they take: the search's two, the code's chip and the mark's
+    /// background.
+    const BACKGROUND_FIELD_ROLES: [(&str, DocRole, DocSide); 5] = [
+        ("search_highlight_bg", DocRole::Search, DocSide::One),
+        ("search_match_bg", DocRole::Search, DocSide::Two),
+        ("inline_code_bg", DocRole::Code, DocSide::Two),
+        ("latex_inline_bg", DocRole::Code, DocSide::Two),
+        ("mark_bg", DocRole::Selection, DocSide::Two),
+    ];
+
     #[test]
-    fn only_the_engines_background_fields_take_a_slot_background() {
+    fn only_the_engines_background_fields_take_a_role_background() {
         // The engine paints five fields with `.bg()` and the other 42 with a
         // foreground. The five are named here, so a field moved to the wrong
         // side cannot pass by moving both of the mapping's lists with it —
@@ -3369,30 +4222,31 @@ mod tests {
         );
         for preset in Preset::ALL {
             let theme = Theme::preset(preset);
-            let markdown = theme.markdown_theme();
             let mut backgrounds = Vec::new();
-            for (field, color, paints_background) in engine_fields(&markdown) {
-                let slot = slot_of(field);
-                let expected = ENGINE_BACKGROUND_FIELDS.contains(&field);
+            for (field, colour, paints_background) in engine_fields(&theme.markdown_theme()) {
+                let (_, role, side, _) = ENGINE_ROLES
+                    .iter()
+                    .find(|(name, _, _, _)| *name == field)
+                    .unwrap_or_else(|| panic!("{field} is not in the mapping"));
+                let expected = BACKGROUND_FIELD_ROLES.iter().any(
+                    |(name, background_role, background_side)| {
+                        *name == field && background_role == role && background_side == side
+                    },
+                );
                 assert_eq!(
                     paints_background,
                     expected,
                     "{} paints {field} on a side the engine does not use",
                     preset.name()
                 );
-                let side = if expected {
-                    theme.slot(slot).bg
-                } else {
-                    theme.slot(slot).fg
-                };
                 assert_eq!(
-                    color,
-                    side.unwrap_or(Color::Reset),
+                    colour,
+                    document(preset, *role, *side),
                     "{} paints {field} from the wrong side of {}",
                     preset.name(),
-                    slot.name()
+                    role.name()
                 );
-                if expected {
+                if paints_background {
                     backgrounds.push(field);
                 }
             }
@@ -3407,16 +4261,19 @@ mod tests {
 
     #[test]
     fn the_search_figures_in_the_doc_are_recomputed_from_the_palettes() {
-        // The doc states a hit's ratio for every preset that has a
-        // background; recompute each from that preset's palette, so a
-        // changed foreground or selection leaves the figure stale here
+        // The doc states a hit's figure and the current match's for every
+        // preset that has a background; recompute each from the document
+        // palette, so a changed background leaves the figure stale here
         // rather than in the prose.
         let search = THEME
             .split_once("**The search is not offered")
             .expect("the theme doc records the search limitation")
             .1;
+        assert!(
+            THEME.contains("**The search is not offered in any preset.**"),
+            "the theme doc no longer says the search is not offered"
+        );
         let mut with_a_background = 0;
-        let mut without_a_background = 0;
         for preset in Preset::ALL {
             let bullet = search
                 .split("\n- ")
@@ -3427,111 +4284,125 @@ mod tests {
                         preset.name()
                     )
                 });
-            let theme = Theme::preset(preset);
-            let Some(background) = theme.slot(Slot::TextSelected).bg else {
+            if preset == Preset::Terminal {
                 // The terminal preset paints no background; the doc says so.
                 assert!(
                     bullet.contains("paints no background"),
                     "the search paragraph does not say why the {} preset has no hit",
                     preset.name()
                 );
-                without_a_background += 1;
                 continue;
-            };
-            let figure = ratio_in(
-                bullet
-                    .split_once("reads at")
-                    .unwrap_or_else(|| {
-                        panic!("the {} search paragraph states no ratio", preset.name())
-                    })
-                    .1,
-            )
-            .unwrap_or_else(|| panic!("the {} search paragraph states no ratio", preset.name()));
-            let computed = contrast(
-                theme
-                    .slot(Slot::TextNormal)
-                    .fg
-                    .expect("text.normal names a foreground"),
-                background,
+            }
+            let figures: Vec<f64> = bullet
+                .split("reads at ")
+                .skip(1)
+                .filter_map(ratio_in)
+                .collect();
+            assert_eq!(
+                figures.len(),
+                2,
+                "the {} search bullet states {} figures, and the doc needs the hit's and the match's",
+                preset.name(),
+                figures.len()
+            );
+            let palette = document_palette(preset);
+            let body = palette.text.body;
+            let hit = contrast(body, palette.search.hit);
+            let current = contrast(body, palette.search.current);
+            assert!(
+                (hit - figures[0]).abs() < 0.05,
+                "{}'s search hit reads at {hit:.2}:1, and the doc says {}:1",
+                preset.name(),
+                figures[0]
             );
             assert!(
-                (computed - figure).abs() < 0.05,
-                "{}'s search hit reads at {computed:.2}:1, and the doc says {figure}:1",
+                (current - figures[1]).abs() < 0.05,
+                "{}'s current match reads at {current:.2}:1, and the doc says {}:1",
+                preset.name(),
+                figures[1]
+            );
+            // The ruling: the current match is the background no word reads
+            // on, so the search stays un-offered.
+            assert!(
+                current < 3.0,
+                "{}'s current match reads at {current:.2}:1, so the search could be offered",
                 preset.name()
             );
             with_a_background += 1;
         }
-        assert!(
-            with_a_background >= 2,
-            "the search figure covers {with_a_background} presets"
-        );
         assert_eq!(
-            with_a_background + without_a_background,
-            Preset::ALL.len(),
-            "the search paragraph does not cover every preset"
+            with_a_background,
+            colour_presets().len(),
+            "the search figure covers {with_a_background} colour presets"
         );
     }
 
     #[test]
     fn a_mark_is_the_selection_pair() {
-        // The engine paints a mark as mark_fg on mark_bg, the only pair the
-        // mapping splits across two slots. Both halves are text.selected: the
-        // pair the palette records at 9.7:1.
+        // The engine paints a mark as mark_fg on mark_bg: the two sides of
+        // the selection role, the pair the palette records.
         for preset in Preset::ALL {
             let theme = Theme::preset(preset);
-            let selected = theme.slot(Slot::TextSelected);
+            let palette = theme.document();
             let markdown = theme.markdown_theme();
             assert_eq!(
                 markdown.mark_fg,
-                selected.fg.unwrap_or(Color::Reset),
-                "{} paints a mark's foreground from another slot",
+                palette.selection.foreground,
+                "{} paints a mark's foreground from another role",
                 preset.name()
             );
             assert_eq!(
                 markdown.mark_bg,
-                selected.bg.unwrap_or(Color::Reset),
-                "{} paints a mark's background from another slot",
+                palette.selection.background,
+                "{} paints a mark's background from another role",
                 preset.name()
             );
         }
-        let theme = Theme::preset(Preset::Dark);
-        let selected = theme.slot(Slot::TextSelected);
-        let ratio = contrast(
-            selected.fg.expect("the selection names a foreground"),
-            selected.bg.expect("the selection names a background"),
-        );
-        assert!(
-            ratio >= 4.5,
-            "a marked word reads at {ratio:.1}:1, and a word needs 4.5:1"
-        );
+        for preset in colour_presets() {
+            let palette = document_palette(preset);
+            let ratio = contrast(palette.selection.foreground, palette.selection.background);
+            assert!(
+                ratio >= 4.5,
+                "{}'s mark reads at {ratio:.1}:1, and a word needs 4.5:1",
+                preset.name()
+            );
+        }
+    }
+
+    #[test]
+    fn the_inline_code_chip_reads() {
+        // The code role's pair: the ink on the chip behind it.
+        for preset in colour_presets() {
+            let palette = document_palette(preset);
+            let ratio = contrast(palette.code.text, palette.code.chip);
+            assert!(
+                ratio >= 4.5,
+                "{}'s inline code reads at {ratio:.1}:1 on its chip, and a word needs 4.5:1",
+                preset.name()
+            );
+        }
     }
 
     #[test]
     fn the_terminal_markdown_theme_names_no_colour() {
-        // The terminal preset has no colour in any slot: every engine field
+        // The terminal preset has no colour in any role: every engine field
         // is Reset, which is the terminal's own paint.
         let theme = Theme::preset(Preset::Terminal);
-        for (field, color, background) in engine_fields(&theme.markdown_theme()) {
-            let slot = ENGINE_SLOTS
-                .iter()
-                .find(|(name, _, _)| *name == field)
-                .map(|(_, slot, _)| *slot)
-                .unwrap_or_else(|| panic!("{field} is not in the mapping"));
-            if background {
+        let palette = theme.document();
+        for role in DocRole::ALL {
+            for side in [DocSide::One, DocSide::Two] {
                 assert_eq!(
-                    theme.slot(slot).bg,
-                    None,
-                    "{field}'s slot names a background in the terminal preset"
-                );
-            } else {
-                assert_eq!(
-                    theme.slot(slot).fg,
-                    None,
-                    "{field}'s slot names a foreground in the terminal preset"
+                    palette.paint(role, side),
+                    Color::Reset,
+                    "{}'s {} names a colour in the terminal preset",
+                    role.name(),
+                    role.side_name(side)
                 );
             }
+        }
+        for (field, colour, _) in engine_fields(&theme.markdown_theme()) {
             assert_eq!(
-                color,
+                colour,
                 Color::Reset,
                 "{field} names a colour the terminal preset does not have"
             );
@@ -3539,9 +4410,10 @@ mod tests {
     }
 
     #[test]
-    fn every_colour_preset_keeps_the_markdown_theme_inside_its_slots() {
-        // Every colour the engine is handed is a colour one of the eighteen
-        // slots already paints with: no leaf or family palette leaks in.
+    fn every_colour_preset_keeps_the_document_inside_its_slots() {
+        // Every colour a document role paints is a colour one of the
+        // preset's eighteen slots already paints with: no leaf or family
+        // palette leaks in, and the document and the chrome are one palette.
         let mut painted_in_all = 0;
         for preset in Preset::ALL {
             let theme = Theme::preset(preset);
@@ -3551,35 +4423,318 @@ mod tests {
                 palette.extend(style.fg);
                 palette.extend(style.bg);
             }
+            let document = theme.document();
             let mut painted = 0;
-            for (field, color, _) in engine_fields(&theme.markdown_theme()) {
-                if color == Color::Reset {
-                    continue;
+            for role in DocRole::ALL {
+                let sides: &[DocSide] = if role.carries_a_pair() {
+                    &[DocSide::One, DocSide::Two]
+                } else {
+                    &[DocSide::One]
+                };
+                for side in sides {
+                    let colour = document.paint(role, *side);
+                    if preset == Preset::Terminal {
+                        assert_eq!(
+                            colour,
+                            Color::Reset,
+                            "{}'s {} names a colour in the terminal preset",
+                            role.name(),
+                            role.side_name(*side)
+                        );
+                        continue;
+                    }
+                    painted += 1;
+                    assert!(
+                        palette.contains(&colour),
+                        "{} paints {} {} with {colour:?}, which is not one of its slots",
+                        preset.name(),
+                        role.name(),
+                        role.side_name(*side)
+                    );
                 }
-                painted += 1;
-                assert!(
-                    palette.contains(&color),
-                    "{} paints {field} with {color:?}, which is not one of the eighteen slots",
-                    preset.name()
-                );
             }
             if preset == Preset::Terminal {
-                assert_eq!(painted, 0, "the terminal preset paints {painted} fields");
+                assert_eq!(painted, 0, "the terminal preset paints {painted} roles");
             } else {
-                assert!(
-                    painted >= 40,
-                    "the {} preset paints only {painted} fields from the palette",
-                    preset.name()
+                assert_eq!(
+                    painted,
+                    DocRole::ALL.len() + 6,
+                    "{} paints {painted} role sides and the doc names {}",
+                    preset.name(),
+                    DocRole::ALL.len() + 6
                 );
                 painted_in_all += painted;
             }
         }
-        assert!(painted_in_all > 0, "no colour preset paints the engine");
+        assert_eq!(
+            painted_in_all,
+            (DocRole::ALL.len() + 6) * colour_presets().len(),
+            "no colour preset paints the document"
+        );
+    }
+
+    /// The document palette's section of the palette doc.
+    fn document_section() -> String {
+        section(PALETTES, "The document palette")
+    }
+
+    /// The rows of the doc's document-role table: the role and the sides it
+    /// names.
+    fn document_role_rows() -> Vec<(DocRole, String)> {
+        let mut rows = Vec::new();
+        for line in document_section().lines() {
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            // | role | job | sides |
+            if cells.len() != 5 || !cells[1].starts_with('`') {
+                continue;
+            }
+            let name = cells[1].trim_matches('`');
+            let Some(role) = DocRole::ALL
+                .iter()
+                .copied()
+                .find(|role| role.name() == name)
+            else {
+                continue;
+            };
+            rows.push((role, cells[3].to_string()));
+        }
+        rows
+    }
+
+    /// The side a name the doc writes names.
+    fn doc_side(role: DocRole, name: &str) -> DocSide {
+        if role.carries_a_pair() {
+            [DocSide::One, DocSide::Two]
+                .into_iter()
+                .find(|side| role.side_name(*side) == name)
+                .unwrap_or_else(|| panic!("{} has no side {name}", role.name()))
+        } else {
+            assert_eq!(
+                name,
+                "—",
+                "{} names no pair and the doc says {name}",
+                role.name()
+            );
+            DocSide::One
+        }
+    }
+
+    /// One row of the doc's document-value table: the role, its side, and
+    /// each colour preset's colour and figure.
+    type DocumentRow = (DocRole, DocSide, Vec<(Color, f64)>);
+
+    /// The rows of the doc's document-value table, in the doc's order.
+    fn document_rows() -> Vec<DocumentRow> {
+        let mut rows = Vec::new();
+        for line in document_section().lines() {
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            // | role | side | dark | nord | catppuccin | dracula |
+            if cells.len() < 7 || !cells[1].starts_with('`') {
+                continue;
+            }
+            let name = cells[1].trim_matches('`');
+            let Some(role) = DocRole::ALL
+                .iter()
+                .copied()
+                .find(|role| role.name() == name)
+            else {
+                continue;
+            };
+            let side = doc_side(role, cells[2]);
+            let mut values = Vec::new();
+            for cell in &cells[3..7] {
+                let colour = hexes_in(cell)
+                    .first()
+                    .copied()
+                    .unwrap_or_else(|| panic!("{} states no colour", role.name()));
+                let ratio =
+                    figure_in(cell).unwrap_or_else(|| panic!("{} states no figure", role.name()));
+                values.push((colour, ratio));
+            }
+            rows.push((role, side, values));
+        }
+        rows
+    }
+
+    #[test]
+    fn the_document_palette_records_every_role_and_side() {
+        // The doc is the source of truth: the code is checked against its
+        // tables, so the two cannot drift apart silently.
+        let roles = document_role_rows();
+        assert_eq!(
+            roles.len(),
+            DocRole::ALL.len(),
+            "the doc's role table holds {} roles and the code has {}",
+            roles.len(),
+            DocRole::ALL.len()
+        );
+        for (role, sides) in &roles {
+            let expected = if role.carries_a_pair() {
+                format!(
+                    "`{}`, `{}`",
+                    role.side_name(DocSide::One),
+                    role.side_name(DocSide::Two)
+                )
+            } else {
+                "one colour".to_string()
+            };
+            assert_eq!(
+                sides,
+                &expected,
+                "{}'s sides are not the ones the code names",
+                role.name()
+            );
+        }
+        let rows = document_rows();
+        assert_eq!(
+            rows.len(),
+            DocRole::ALL.len() + 6,
+            "the doc's value table holds {} rows and the code names {} role sides",
+            rows.len(),
+            DocRole::ALL.len() + 6
+        );
+        for role in DocRole::ALL {
+            assert!(
+                rows.iter().any(|(row, _, _)| *row == role),
+                "{} has no row in the doc's value table",
+                role.name()
+            );
+        }
+        for (role, side, values) in rows {
+            for (index, preset) in colour_presets().iter().enumerate() {
+                assert_eq!(
+                    values[index].0,
+                    document(*preset, role, side),
+                    "{}'s {} {} is not the value the doc records",
+                    preset.name(),
+                    role.name(),
+                    role.side_name(side)
+                );
+            }
+        }
+    }
+
+    /// The figure the doc states for a role side: a word's or a line's
+    /// contrast against the base, the code's ink on its chip, the mark's
+    /// pair, or the prose on a search background.
+    fn document_figure(preset: Preset, role: DocRole, side: DocSide) -> f64 {
+        let palette = document_palette(preset);
+        let base = document_base(preset);
+        match role {
+            DocRole::Code => match side {
+                DocSide::One => contrast(palette.code.text, palette.code.chip),
+                DocSide::Two => contrast(palette.code.chip, base),
+            },
+            DocRole::Selection => match side {
+                DocSide::One => {
+                    contrast(palette.selection.foreground, palette.selection.background)
+                }
+                DocSide::Two => contrast(palette.selection.background, base),
+            },
+            DocRole::Search => contrast(palette.text.body, palette.paint(role, side)),
+            _ => contrast(palette.paint(role, side), base),
+        }
+    }
+
+    #[test]
+    fn the_document_palette_counts_are_recomputed() {
+        // The section's counts are read, the way the family sections' are: a
+        // count the doc states and no test reads is drift waiting to happen.
+        let section = document_section();
+        let headings = DocRole::ALL
+            .iter()
+            .filter(|role| {
+                matches!(
+                    role,
+                    DocRole::HeadingSection | DocRole::HeadingItem | DocRole::HeadingFinding
+                )
+            })
+            .count();
+        let alerts = DocRole::ALL
+            .iter()
+            .filter(|role| {
+                matches!(
+                    role,
+                    DocRole::AlertNote
+                        | DocRole::AlertTip
+                        | DocRole::AlertImportant
+                        | DocRole::AlertWarning
+                        | DocRole::AlertCaution
+                )
+            })
+            .count();
+        let depths = DocRole::ALL
+            .iter()
+            .filter(|role| {
+                matches!(
+                    role,
+                    DocRole::ListDepth1 | DocRole::ListDepth2 | DocRole::ListDepth3
+                )
+            })
+            .count();
+        let fixed = headings + alerts + depths;
+        let rest = DocRole::ALL.len() - fixed;
+        let pairs = DocRole::ALL
+            .iter()
+            .filter(|role| role.carries_a_pair())
+            .count();
+        let sentences = prose_sentences(&section);
+        let sentence = |anchor: &str| {
+            sentences
+                .iter()
+                .find(|sentence| sentence.contains(anchor))
+                .unwrap_or_else(|| panic!("the document section no longer states {anchor}"))
+        };
+        assert_eq!(
+            number_words_in(sentence("is the human's number")),
+            vec![DocRole::ALL.len()],
+            "the section no longer states the eighteen roles the code has"
+        );
+        assert_eq!(
+            number_words_in(sentence("are fixed by the constraints")),
+            vec![fixed, headings, alerts, depths],
+            "the section's fixed-role counts are not the roles the code names"
+        );
+        assert_eq!(
+            number_words_in(sentence("are the rest of the document's work")),
+            vec![rest],
+            "the section's count of the other roles is not the code's"
+        );
+        let pair_sentence = number_words_in(sentence("name a **pair**"));
+        assert_eq!(
+            &pair_sentence[..2],
+            &[pairs, rest],
+            "the section's pair count is not the code's"
+        );
+        assert_eq!(
+            number_words_in(sentence("roles name one colour")),
+            vec![DocRole::ALL.len() - pairs, 1],
+            "the section's single-colour count is not the code's"
+        );
+    }
+
+    #[test]
+    fn the_document_contrast_figures_of_the_palettes_are_right() {
+        // Every figure the doc states is recomputed from the values the same
+        // table states, the way the chrome palette's figures are.
+        for (role, side, values) in document_rows() {
+            for (index, preset) in colour_presets().iter().enumerate() {
+                let computed = document_figure(*preset, role, side);
+                let stated = values[index].1;
+                assert!(
+                    (computed - stated).abs() < 0.05,
+                    "{}'s {} {} reads at {computed:.2}:1, and the doc says {stated}:1",
+                    preset.name(),
+                    role.name(),
+                    role.side_name(side)
+                );
+            }
+        }
     }
 
     /// The rows of the engine mapping table in the theme doc: the field, the
-    /// slot and the rationale.
-    fn engine_doc_rows() -> Vec<(String, String, String)> {
+    /// role, the side and the rationale.
+    fn engine_doc_rows() -> Vec<(String, String, String, String)> {
         let section = THEME
             .split_once("## The markdown engine")
             .expect("the theme doc has a markdown engine section")
@@ -3590,13 +4745,14 @@ mod tests {
         let mut rows = Vec::new();
         for line in section.lines() {
             let cells: Vec<&str> = line.split('|').map(str::trim).collect();
-            if cells.len() < 4 || !cells[1].starts_with('`') || !cells[2].starts_with('`') {
+            if cells.len() < 5 || !cells[1].starts_with('`') || !cells[2].starts_with('`') {
                 continue;
             }
             rows.push((
                 cells[1].trim_matches('`').to_string(),
                 cells[2].trim_matches('`').to_string(),
                 cells[3].to_string(),
+                cells[4].to_string(),
             ));
         }
         rows
@@ -3607,50 +4763,67 @@ mod tests {
         let rows = engine_doc_rows();
         assert_eq!(
             rows.len(),
-            ENGINE_SLOTS.len(),
+            ENGINE_ROLES.len(),
             "the doc lists {} fields and the engine has {}",
             rows.len(),
-            ENGINE_SLOTS.len()
+            ENGINE_ROLES.len()
         );
-        for (field, slot, _) in ENGINE_SLOTS {
-            let (doc_slot, why) = rows
+        for (field, role, side, _) in ENGINE_ROLES {
+            let (doc_role, doc_side_name, why) = rows
                 .iter()
-                .find(|(doc_field, _, _)| doc_field == field)
-                .map(|(_, slot, why)| (slot, why))
+                .find(|(doc_field, _, _, _)| doc_field == field)
+                .map(|(_, role, side, why)| (role, side, why))
                 .unwrap_or_else(|| panic!("{field} is missing from the doc"));
             assert_eq!(
-                doc_slot,
-                slot.name(),
-                "{field} maps to {doc_slot} in the doc and {} in the code",
-                slot.name()
+                doc_role,
+                role.name(),
+                "{field} maps to {doc_role} in the doc and {} in the code",
+                role.name()
+            );
+            assert_eq!(
+                doc_side_name,
+                role.side_name(side),
+                "{field} takes {} in the doc and {} in the code",
+                doc_side_name,
+                role.side_name(side)
             );
             assert!(!why.is_empty(), "{field}'s row states no rationale");
         }
-        for (field, _, _) in &rows {
+        for (field, _, _, _) in &rows {
             assert!(
-                ENGINE_SLOTS.iter().any(|(known, _, _)| known == field),
+                ENGINE_ROLES.iter().any(|(known, _, _, _)| known == field),
                 "{field} is in the doc and not in the code"
             );
         }
     }
 
     #[test]
-    fn the_markdown_alerts_use_the_semantic_slots() {
-        let slot = |field: &str| {
-            ENGINE_SLOTS
+    fn the_markdown_alerts_use_the_five_alert_roles() {
+        let role = |field: &str| {
+            ENGINE_ROLES
                 .iter()
-                .find(|(name, _, _)| *name == field)
-                .map(|(_, slot, _)| *slot)
+                .find(|(name, _, _, _)| *name == field)
+                .map(|(_, role, _, _)| *role)
                 .unwrap_or_else(|| panic!("{field} is not in the mapping"))
         };
-        assert_eq!(slot("alert_note"), Slot::SemanticInfo);
-        assert_eq!(slot("alert_tip"), Slot::SemanticOk);
-        assert_eq!(slot("alert_important"), Slot::SemanticInfo);
-        assert_eq!(slot("alert_warning"), Slot::SemanticWarn);
-        assert_eq!(slot("alert_caution"), Slot::SemanticError);
-        // A warning and a failure are never painted alike.
-        assert_ne!(slot("alert_warning"), slot("alert_caution"));
-        assert_ne!(slot("alert_warning"), Slot::SemanticError);
-        assert_ne!(slot("alert_caution"), Slot::SemanticWarn);
+        assert_eq!(role("alert_note"), DocRole::AlertNote);
+        assert_eq!(role("alert_tip"), DocRole::AlertTip);
+        assert_eq!(role("alert_important"), DocRole::AlertImportant);
+        assert_eq!(role("alert_warning"), DocRole::AlertWarning);
+        assert_eq!(role("alert_caution"), DocRole::AlertCaution);
+        // Five facts, five roles: no two share one, and none is the link.
+        let alerts = [
+            role("alert_note"),
+            role("alert_tip"),
+            role("alert_important"),
+            role("alert_warning"),
+            role("alert_caution"),
+        ];
+        for (index, one) in alerts.iter().enumerate() {
+            for other in &alerts[index + 1..] {
+                assert_ne!(one, other, "two alerts share a role");
+            }
+            assert_ne!(*one, role("link_text"), "an alert shares the link's role");
+        }
     }
 }
