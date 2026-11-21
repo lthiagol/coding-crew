@@ -154,6 +154,17 @@ together, so the human sees one backlog.
 | scope | the scope, when it is known |
 | state | `open` · `dismissed` · `promoted` |
 
+Below the row, the **body** — the item's own sentence, saying what the item
+is about. It is the row's **second line**, dim, indented to where the row's
+title starts, so it reads as belonging to the row above it. It is the item's
+own body, never a summary, and it is cut by the theme crate's shared `cut_to`,
+so a body that does not fit ends in the tab's own `…` on a grapheme boundary.
+
+An item with **no body** draws no second line at all, and its row is the row
+it was. A row with a body is **two lines everywhere the tab counts** — the
+window, the announcement of what it hides, and the footer's count — and a row
+is drawn in both its lines or in neither.
+
 Smaller tasks are grouped by kind — ideas first, then the small tasks that
 could be worked. The grouping is derived from the kind; it is never stored.
 

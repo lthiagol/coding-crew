@@ -725,6 +725,35 @@ fn the_row_tabs_carry_the_review_state() {
     }
 }
 
+#[test]
+fn the_backlog_row_carries_its_body_on_the_second_line() {
+    // The real binary draws the item's own body under the row's columns,
+    // indented to where the row's title starts. A draft carries none, so its
+    // row is followed by the next row, not by a second line.
+    let text = render_tab("backlog", 100);
+    let rows: Vec<&str> = text.lines().collect();
+    let at = rows
+        .iter()
+        .position(|row| row.contains("ITM01"))
+        .unwrap_or_else(|| panic!("no ITM01 row: {text}"));
+    let body = "The activity block says what happened; it does not say when the run began.";
+    assert!(rows[at + 1].contains(body), "{:#?}", &rows[at..at + 2]);
+    assert_eq!(
+        rows[at + 1].find(body),
+        rows[at].find("The Overview says"),
+        "the body is not indented to the row's own text"
+    );
+    let draft = rows
+        .iter()
+        .position(|row| row.contains("TSK01"))
+        .unwrap_or_else(|| panic!("no TSK01 row: {text}"));
+    assert!(
+        rows[draft + 1].contains("TSK02"),
+        "a draft row grew a second line: {:#?}",
+        &rows[draft..draft + 2]
+    );
+}
+
 /// The most urgent severity among a task's open findings.
 fn most_urgent(task: &coding_crew_core::Task) -> Option<&'static str> {
     let mut found = [false; 3];

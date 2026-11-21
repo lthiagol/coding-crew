@@ -61,6 +61,8 @@ pub struct Row {
     pub scope: Option<String>,
     /// `open`, `dismissed`, `promoted` or `draft`.
     pub state: String,
+    /// What the item is about: the body it carries, as one line.
+    pub body: Option<String>,
     /// A draft or a settled item: the row may be dimmed.
     pub settled: bool,
 }
@@ -137,6 +139,7 @@ fn item_row(item: &Item) -> Row {
         title: item.title.clone(),
         scope: scope_text(&item.scope),
         state: item.status.as_str().to_string(),
+        body: body_text(&item.body),
         settled: item.status != ItemStatus::Open,
     }
 }
@@ -149,8 +152,18 @@ fn task_row(task: &Task) -> Row {
         title: task.title.clone(),
         scope: scope_text(&task.scope.in_scope),
         state: Status::Draft.as_str().to_string(),
+        body: None,
         settled: true,
     }
+}
+
+/// The item's body as one line of text, when it has one.
+///
+/// The body is the item's own sentence: only its whitespace is normalised, so
+/// a multi-line body still reads as the one body the item carries.
+fn body_text(body: &str) -> Option<String> {
+    let words: Vec<&str> = body.split_whitespace().collect();
+    (!words.is_empty()).then(|| words.join(" "))
 }
 
 /// The scope, when it is known.
@@ -343,7 +356,11 @@ fn window(
         state: state_width(groups),
     };
     let total: usize = groups.iter().map(|group| group.rows.len()).sum();
-    let wanted: usize = groups.iter().map(|group| 1 + group.rows.len()).sum();
+    // The pane counts lines, and a row with a body is two of them.
+    let wanted: usize = groups
+        .iter()
+        .map(|group| 1 + group.rows.iter().map(row_height).sum::<usize>())
+        .sum();
     if first == 0 && wanted <= height {
         return (
             all_lines(groups, width, metrics, theme, selected),
@@ -394,27 +411,32 @@ fn window(
     if let Some((mut out, said, shown)) = with_cursor.or(shortest) {
         if let Some(id) = selected
             && !shown.iter().any(|index| row_id(groups, *index) == id)
-            && let Some((index, line)) = cursor_row(groups, width, metrics, theme, id)
+            && let Some((index, mut rows)) = cursor_lines(groups, width, metrics, theme, id)
         {
             // The pane is too short for the cursor's row and the layout: the
             // row is drawn, and what is left says what the pane hides. Only a
-            // pane of one line shows the row alone.
-            let mut rows = vec![line];
+            // pane of one line shows the row alone, and there its body gives
+            // way with the pane: the row is drawn in the one line it is
+            // counted as.
+            rows.truncate(height);
             let room = height - rows.len();
+            let mut announced = false;
             if room > 0 {
                 let omitted = omitted_with_only(groups, index);
                 let present = present_with_only(groups, index);
                 let headers = [false; 3];
                 let (word, _) = announcement(&omitted, &headers, &present, width, room, theme);
+                announced = !word.is_empty();
                 rows.extend(word);
             }
-            let announced = rows.len() > 1;
             return (rows, announced, vec![index], false);
         }
         if said.is_empty()
             && height >= 2
             && let Some(id) = selected
             && let Some(cursor) = (0..total).find(|at| row_id(groups, *at) == id)
+            && let Some((_, mut rows)) = cursor_lines(groups, width, metrics, theme, id)
+            && rows.len() < height
         {
             // The rows took every line and said nothing about what they hid.
             // The header gives way: the cursor's row is drawn, and the rest of
@@ -422,11 +444,9 @@ fn window(
             let omitted = omitted_with_only(groups, cursor);
             let present = present_with_only(groups, cursor);
             let headers = [false; 3];
-            let (word, _) = announcement(&omitted, &headers, &present, width, height - 1, theme);
-            if !word.is_empty()
-                && let Some((_, line)) = cursor_row(groups, width, metrics, theme, id)
-            {
-                let mut rows = vec![line];
+            let room = height - rows.len();
+            let (word, _) = announcement(&omitted, &headers, &present, width, room, theme);
+            if !word.is_empty() {
                 rows.extend(word);
                 return (rows, true, vec![cursor], false);
             }
@@ -438,9 +458,10 @@ fn window(
     // No layout was chosen: the pane is too narrow to draw a header and too
     // short to say anything. The cursor's row is still drawn, alone.
     if let Some(id) = selected
-        && let Some((index, line)) = cursor_row(groups, width, metrics, theme, id)
+        && let Some((index, mut rows)) = cursor_lines(groups, width, metrics, theme, id)
     {
-        return (vec![line], false, vec![index], false);
+        rows.truncate(height);
+        return (rows, false, vec![index], false);
     }
     (Vec::new(), false, Vec::new(), false)
 }
@@ -489,19 +510,19 @@ fn present_with_only(groups: &[Group], cursor: usize) -> [bool; 3] {
     present
 }
 
-/// The line of the cursor's row, and its place among the tab's rows.
-fn cursor_row(
+/// The lines of the cursor's row, and its place among the tab's rows.
+fn cursor_lines(
     groups: &[Group],
     width: usize,
     metrics: Metrics,
     theme: &Theme,
     id: &str,
-) -> Option<(usize, Line<'static>)> {
+) -> Option<(usize, Vec<Line<'static>>)> {
     let mut index = 0;
     for group in groups {
         for row in &group.rows {
             if row.id == id {
-                return Some((index, row_line(row, width, metrics, theme, Some(id))));
+                return Some((index, row_lines(row, width, metrics, theme, Some(id))));
             }
             index += 1;
         }
@@ -533,7 +554,7 @@ fn all_lines(
     for group in groups {
         out.push(header(group, width, theme));
         for row in &group.rows {
-            out.push(row_line(row, width, metrics, theme, selected));
+            out.extend(row_lines(row, width, metrics, theme, selected));
         }
     }
     out
@@ -542,8 +563,10 @@ fn all_lines(
 /// The rows of the tab that fit in `capacity` lines, how many rows of each
 /// group are left out of them, which headers are shown, and the rows drawn.
 ///
-/// The groups keep their order: the header of a group, then its rows. A
-/// header's count is the whole group; the omitted count is what the
+/// The capacity is in lines, and a row is atomic: its columns and its body
+/// are drawn together or not at all, so the row the window counts is the row
+/// it draws. The groups keep their order: the header of a group, then its
+/// rows. A header's count is the whole group; the omitted count is what the
 /// announcement says instead, and the two are meant to differ. A group
 /// whose header does not fit is not shown at all, every one of its rows is
 /// left out of view, and the announcement says the header itself was hidden
@@ -580,8 +603,9 @@ fn layout_groups(
                 && used < capacity
             {
                 let row_index = start + cursor;
-                if row_index >= first {
-                    out.push(row_line(
+                let height = row_height(&group.rows[cursor]);
+                if row_index >= first && used + height <= capacity {
+                    out.extend(row_lines(
                         &group.rows[cursor],
                         width,
                         metrics,
@@ -590,7 +614,7 @@ fn layout_groups(
                     ));
                     shown_rows.push(row_index);
                     omitted[index] = group.rows.len() - 1;
-                    used += 1;
+                    used += height;
                     continue;
                 }
             }
@@ -601,13 +625,17 @@ fn layout_groups(
         headers[index] = true;
         used += 1;
         let skip = first.saturating_sub(start).min(group.rows.len());
-        let visible = group.rows.len() - skip;
-        let shown = (capacity - used).min(visible);
-        for (offset, row) in group.rows.iter().skip(skip).take(shown).enumerate() {
-            out.push(row_line(row, width, metrics, theme, selected));
+        let mut shown = 0;
+        for (offset, row) in group.rows.iter().skip(skip).enumerate() {
+            let height = row_height(row);
+            if used + height > capacity {
+                break;
+            }
+            out.extend(row_lines(row, width, metrics, theme, selected));
             shown_rows.push(start + skip + offset);
+            used += height;
+            shown += 1;
         }
-        used += shown;
         if shown < group.rows.len() {
             omitted[index] = group.rows.len() - shown;
         }
@@ -721,9 +749,52 @@ fn flex_widths(title: usize, scope: usize, available: usize, has_scope: bool) ->
     (title_width, scope_width)
 }
 
-/// A row: the id, the kind, the title, the scope and the state.
+/// The lines a row takes in the pane.
+///
+/// A row with a body is two lines: its columns, then the body. Everything the
+/// tab counts — the window, the announcement and the hidden count — counts
+/// these lines, so a row drawn in two lines is never counted as one.
+fn row_height(row: &Row) -> usize {
+    1 + usize::from(row.body.is_some())
+}
+
+/// The lines of a row: its columns, and its body under them.
+fn row_lines(
+    row: &Row,
+    width: usize,
+    metrics: Metrics,
+    theme: &Theme,
+    selected: Option<&str>,
+) -> Vec<Line<'static>> {
+    let layout = layout(row, width, metrics);
+    let mut lines = vec![columns_line(row, &layout, width, metrics, theme, selected)];
+    if let Some(line) = body_line(row, &layout, width, metrics, theme, selected) {
+        lines.push(line);
+    }
+    lines
+}
+
+/// The row's columns line: the id, the kind, the title, the scope and the
+/// state.
+///
+/// The tests read a row's first line through this; the tab draws a row
+/// through [`row_lines`].
+#[cfg(test)]
 fn row_line(
     row: &Row,
+    width: usize,
+    metrics: Metrics,
+    theme: &Theme,
+    selected: Option<&str>,
+) -> Line<'static> {
+    let layout = layout(row, width, metrics);
+    columns_line(row, &layout, width, metrics, theme, selected)
+}
+
+/// The row's own line: the id, the kind, the title, the scope and the state.
+fn columns_line(
+    row: &Row,
+    layout: &Layout,
     width: usize,
     metrics: Metrics,
     theme: &Theme,
@@ -732,7 +803,6 @@ fn row_line(
     if width == 0 {
         return Line::from("");
     }
-    let layout = layout(row, width, metrics);
     let row_style = if row.settled {
         theme.text.dim
     } else {
@@ -775,6 +845,49 @@ fn row_line(
         return selected_line(line, width, theme);
     }
     line
+}
+
+/// The column the row's title starts at: the columns before it, and their
+/// gaps.
+fn title_start(layout: &Layout, metrics: Metrics) -> usize {
+    let mut start = 0;
+    if layout.columns.id {
+        start += metrics.id + GAP;
+    }
+    if layout.columns.kind {
+        start += metrics.kind + GAP;
+    }
+    start
+}
+
+/// The row's second line: the item's own body, cut, under the row's text.
+///
+/// The body is indented to where the row's title starts, so it reads as the
+/// row's own and not as a row of its own. It is painted with the dim slot,
+/// the grade the tab gives a hint or a marker, so it never competes with the
+/// title. It is the body, cut by the shared grapheme helper: never a summary,
+/// and a cut body always ends in the tab's own marker.
+fn body_line(
+    row: &Row,
+    layout: &Layout,
+    width: usize,
+    metrics: Metrics,
+    theme: &Theme,
+    selected: Option<&str>,
+) -> Option<Line<'static>> {
+    let body = row.body.as_deref()?;
+    let indent = title_start(layout, metrics).min(width);
+    let room = width - indent;
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    if indent > 0 {
+        spans.push(Span::raw(" ".repeat(indent)));
+    }
+    spans.push(Span::styled(cut_to(body, room), theme.text.dim));
+    let line = Line::from(spans);
+    if selected == Some(row.id.as_str()) {
+        return Some(selected_line(line, width, theme));
+    }
+    Some(line)
 }
 
 /// Add the gap between two columns.
@@ -1325,6 +1438,23 @@ mod tests {
             .join("\n")
     }
 
+    /// The text of one built line.
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>()
+    }
+
+    /// The widths of the fixed columns, as the tab builds them.
+    fn metrics(groups: &[Group]) -> Metrics {
+        Metrics {
+            id: id_width(groups),
+            kind: kind_width(groups),
+            state: state_width(groups),
+        }
+    }
+
     /// The lines of the tab that are wider than the pane.
     ///
     /// The check the width test is made of: it must be able to fail.
@@ -1360,6 +1490,7 @@ mod tests {
         title: &str,
         scope: Option<&str>,
         state: &str,
+        body: Option<&str>,
         settled: bool,
     ) -> Row {
         Row {
@@ -1368,6 +1499,7 @@ mod tests {
             title: title.to_string(),
             scope: scope.map(str::to_string),
             state: state.to_string(),
+            body: body.map(str::to_string),
             settled,
         }
     }
@@ -1392,6 +1524,7 @@ mod tests {
                 "The Overview says how long the run has been going",
                 Some("the Overview's activity block"),
                 "open",
+                Some("The activity block says what happened; it does not say when the run began."),
                 false,
             )]
         );
@@ -1404,6 +1537,7 @@ mod tests {
                     "The Path row names the round it waits on",
                     Some("the Path rows, the review state"),
                     "open",
+                    Some("A task in review waits on a round number the Path row does not show."),
                     false,
                 ),
                 row(
@@ -1412,6 +1546,9 @@ mod tests {
                     "hugo says its configuration home could not be made",
                     Some("hugo's sidebar, the configuration home"),
                     "open",
+                    Some(
+                        "A home that cannot be created blanks the sidebar instead of naming the path."
+                    ),
                     false,
                 ),
                 row(
@@ -1420,6 +1557,9 @@ mod tests {
                     "The light theme families",
                     Some("Catppuccin Latte, Nord Light, Dracula Alucard"),
                     "dismissed",
+                    Some(
+                        "Catppuccin Latte, Nord Light and Dracula Alucard would finish the families."
+                    ),
                     true,
                 ),
                 row(
@@ -1428,6 +1568,7 @@ mod tests {
                     "The candidate row cuts a wide title",
                     Some("the candidate row"),
                     "promoted",
+                    Some("The candidate row overflows when the title is wider than the row."),
                     true,
                 ),
             ]
@@ -1441,6 +1582,7 @@ mod tests {
                     "The Settings tab remembers the chosen theme",
                     None,
                     "draft",
+                    None,
                     true,
                 ),
                 row(
@@ -1449,6 +1591,7 @@ mod tests {
                     "The footer says how many rows it hides",
                     None,
                     "draft",
+                    None,
                     true,
                 ),
                 row(
@@ -1457,6 +1600,7 @@ mod tests {
                     "hugo opens the herdr tab and starts its agent",
                     None,
                     "draft",
+                    None,
                     true,
                 ),
                 row(
@@ -1465,6 +1609,7 @@ mod tests {
                     "The candidate row cuts a wide title",
                     Some("the candidate row"),
                     "draft",
+                    None,
                     true,
                 ),
                 row(
@@ -1473,6 +1618,7 @@ mod tests {
                     "The review nests a round with no findings",
                     None,
                     "draft",
+                    None,
                     true,
                 ),
                 row(
@@ -1481,6 +1627,7 @@ mod tests {
                     "The review shows a finding that belongs to no round",
                     None,
                     "draft",
+                    None,
                     true,
                 ),
             ]
@@ -1782,7 +1929,8 @@ mod tests {
                         .iter()
                         .map(|span| span.content.as_ref())
                         .collect::<String>();
-                    at += 1;
+                    // The row's next line is its body, when it has one.
+                    at += row_height(row);
                     let layout = layout(row, width, metrics);
                     // A fixed column is shown whole, or not at all.
                     if layout.columns.id {
@@ -1806,6 +1954,233 @@ mod tests {
                         );
                     }
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn a_row_shows_the_item_body_on_its_second_line() {
+        // The body is the row's own second line, indented to where the row's
+        // title starts and painted dim, so it reads as the row's and never
+        // competes with the title.
+        let work = mock_work();
+        let groups = groups(&work);
+        let metrics = metrics(&groups);
+        let theme = theme();
+        let row = &groups[0].rows[0];
+        let body = row.body.clone().expect("the idea carries a body");
+        let built = row_lines(row, 98, metrics, &theme, None);
+        assert_eq!(built.len(), 2, "the row is not two lines");
+        let layout = layout(row, 98, metrics);
+        let indent = " ".repeat(title_start(&layout, metrics));
+        assert!(!indent.is_empty(), "the body is not indented");
+        assert_eq!(line_text(&built[1]), format!("{indent}{body}"));
+        let body_span = built[1]
+            .spans
+            .iter()
+            .find(|span| !span.content.trim().is_empty())
+            .expect("the body span");
+        assert_eq!(body_span.style, theme.text.dim, "the body is not dim");
+        let title_span = built[0]
+            .spans
+            .iter()
+            .find(|span| span.content.as_ref() == row.title)
+            .expect("the title span");
+        assert_eq!(title_span.style, theme.text.strong);
+        // The screen draws the same two lines.
+        let screen = draw(&work, 100, 40);
+        let at = screen
+            .iter()
+            .position(|line| line.contains("ITM01"))
+            .unwrap_or_else(|| panic!("no ITM01 row: {screen:#?}"));
+        assert!(screen[at + 1].contains(&body), "{:#?}", &screen[at..at + 3]);
+    }
+
+    #[test]
+    fn a_body_that_does_not_fit_is_cut_with_the_tab_marker() {
+        // Only the body gives way: the columns keep their widths, and a cut
+        // body always ends in the tab's own marker. The cut is on a grapheme
+        // boundary, so half a grapheme is never drawn.
+        let body = "é👩‍💻e\u{0301}界abc ".repeat(4);
+        let mut item = Item::new("ITM01", "a title");
+        item.body = body.clone();
+        let work = work_of(Vec::new(), vec![item]);
+        let groups = groups(&work);
+        let metrics = metrics(&groups);
+        let row = &groups[0].rows[0];
+        let body = row.body.clone().expect("the body the row carries");
+        assert_eq!(row_height(row), 2);
+        for width in 1..=120 {
+            let built = row_lines(row, width, metrics, &theme(), None);
+            assert_eq!(built.len(), 2, "{width}: the row is not two lines");
+            assert!(built[1].width() <= width, "{width}: a wider body");
+            let layout = layout(row, width, metrics);
+            let indent = " ".repeat(title_start(&layout, metrics));
+            let text = line_text(&built[1]);
+            let shown = text
+                .strip_prefix(&indent)
+                .unwrap_or_else(|| panic!("{width}: the body is not indented: {text:?}"));
+            let head = shown.strip_suffix('…').unwrap_or(shown);
+            assert!(
+                is_grapheme_prefix(head, &body),
+                "{width}: {shown:?} cuts a grapheme"
+            );
+            if text_width(&body) + indent.len() > width {
+                assert!(
+                    shown.ends_with('…'),
+                    "{width}: a cut body reads as the whole one: {shown:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_row_with_a_body_is_drawn_in_both_lines_or_in_neither() {
+        // The row is atomic: its columns and its body are drawn together, so
+        // the row the window counts is the row it draws. A two-line row is
+        // never counted as one.
+        let work = mock_work();
+        let groups = groups(&work);
+        let theme = theme();
+        let metrics = metrics(&groups);
+        let rows: Vec<&Row> = groups.iter().flat_map(|group| group.rows.iter()).collect();
+        for width in [40usize, 60, 98] {
+            for height in 1..=14 {
+                let (built, _, shown, _) = window(&groups, width, height, &theme, None, 0);
+                assert!(
+                    built.len() <= height,
+                    "{width}x{height}: {} lines",
+                    built.len()
+                );
+                let texts: Vec<String> = built.iter().map(line_text).collect();
+                for index in &shown {
+                    let row = rows[*index];
+                    for line in row_lines(row, width, metrics, &theme, None) {
+                        let text = line_text(&line);
+                        assert!(
+                            texts.contains(&text),
+                            "{width}x{height}: {} is drawn in half: {texts:#?}",
+                            row.id
+                        );
+                    }
+                }
+                // A row with no body draws no second line at all.
+                assert!(
+                    !texts.iter().any(|text| text.trim().is_empty()),
+                    "{width}x{height}: a blank second line: {texts:#?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_two_line_row_is_counted_as_two_in_the_announcement() {
+        // At five content rows the idea's row fits only when its body line is
+        // counted: the header, the row and its body fill three, the second
+        // header one, and the announcement one. The next row is left out
+        // whole rather than squeezed in as its columns alone.
+        let work = mock_work();
+        let groups = groups(&work);
+        let (built, announced, shown, whole) = window(&groups, 98, 5, &theme(), None, 0);
+        assert!(announced && whole, "the window did not choose to announce");
+        assert_eq!(shown, vec![0], "the window shows one row");
+        let text = text_of(&built);
+        assert!(text.contains("ITM01"), "{text}");
+        assert!(text.contains("The activity block"), "{text}");
+        assert!(!text.contains("ITM02"), "{text}");
+        let small = groups[1].rows.len();
+        assert!(
+            text.contains(&format!("SMALL TASKS ({small} hidden)")),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn an_item_with_no_body_draws_the_row_it_draws_today() {
+        // An item with no body is one line, byte for byte the row of today.
+        let mut item = Item::new("ITM01", "only an idea");
+        item.body = String::new();
+        item.scope = Vec::new();
+        let work = work_of(Vec::new(), vec![item]);
+        let groups = groups(&work);
+        let metrics = metrics(&groups);
+        let row = &groups[0].rows[0];
+        assert_eq!(row.body, None, "an empty body is not a body");
+        assert_eq!(row_height(row), 1);
+        assert_eq!(
+            row_lines(row, 98, metrics, &theme(), None),
+            vec![row_line(row, 98, metrics, &theme(), None)]
+        );
+        // Three headers and the row: no second line is drawn for it.
+        let built = lines(&groups, 98, 40, &theme(), None);
+        assert_eq!(built.len(), 4, "{built:#?}");
+        assert!(text_of(&built).contains("only an idea"));
+    }
+
+    #[test]
+    fn a_multi_line_body_is_drawn_as_the_one_body_it_is() {
+        // The body is one sentence: its whitespace is normalised, never cut at
+        // the first line, so the row never shows a summary of it.
+        let mut item = Item::new("ITM01", "a title");
+        item.body = "first line\nsecond   line".to_string();
+        let work = work_of(Vec::new(), vec![item]);
+        let groups = groups(&work);
+        assert_eq!(
+            groups[0].rows[0].body,
+            Some("first line second line".to_string())
+        );
+    }
+
+    #[test]
+    fn the_cursor_is_never_on_a_row_drawn_in_half() {
+        // At every height from two up, the cursor's row is drawn whole: its
+        // columns and its body. Only a one-line pane cannot hold the body,
+        // and there the row is drawn in the one line it is counted as.
+        let work = mock_work();
+        let groups = groups(&work);
+        let theme = theme();
+        let metrics = metrics(&groups);
+        let ids = row_ids(&work);
+        let rows: Vec<&Row> = groups.iter().flat_map(|group| group.rows.iter()).collect();
+        for id in &ids {
+            let index = ids.iter().position(|other| other == id).expect("an id");
+            let row = rows[index];
+            for height in 2..=10 {
+                let (built, _, _, _) = window(&groups, 98, height, &theme, Some(id), 0);
+                for line in row_lines(row, 98, metrics, &theme, Some(id)) {
+                    let text = line_text(&line);
+                    assert!(
+                        built.iter().any(|built_line| line_text(built_line) == text),
+                        "{id} at {height}: the cursor's row is drawn in half: {built:#?}"
+                    );
+                }
+            }
+            // A one-line pane draws the columns line, and counts one row.
+            let (built, announced, shown, _) = window(&groups, 98, 1, &theme, Some(id), 0);
+            assert_eq!(built.len(), 1, "{id}: a one-line pane drew more");
+            assert!(!announced, "{id}: a one-line pane announced");
+            assert_eq!(shown, vec![index], "{id}: the cursor's row is not counted");
+            assert_eq!(
+                line_text(&built[0]),
+                line_text(&row_line(row, 98, metrics, &theme, Some(id))),
+                "{id}: a one-line pane did not draw the row"
+            );
+        }
+    }
+
+    #[test]
+    fn a_selected_row_paints_its_body_with_the_selection_too() {
+        let theme = theme();
+        let groups = groups(&mock_work());
+        let metrics = metrics(&groups);
+        let row = &groups[0].rows[0];
+        let selection = theme.text.selected;
+        let built = row_lines(row, 98, metrics, &theme, Some("ITM01"));
+        assert_eq!(built.len(), 2);
+        for line in &built {
+            assert_eq!(line.width(), 98, "the selection bar stops short");
+            for span in &line.spans {
+                assert_eq!(span.style, selection, "{span:?} is not the selection");
             }
         }
     }
@@ -2034,23 +2409,31 @@ mod tests {
 
     #[test]
     fn the_announcement_counts_the_hidden_rows_and_not_the_group_total() {
-        // At 100x10 the DRAFTS header holds the whole group's count, and
+        // At 100x10 the SMALL TASKS header holds the whole group's count, and
         // the announcement says what is left out of view instead.
         let work = mock_work();
-        let drafts = groups(&work)[2].rows.len();
+        let small = groups(&work)[1].rows.len();
         let text = draw(&work, 100, 10).join("\n");
+        assert!(text.contains(&format!("SMALL TASKS · {small}")), "{text}");
         assert!(
-            text.contains(&format!("DRAFTS ({drafts} hidden)")),
+            text.contains(&format!("SMALL TASKS ({} hidden)", small - 1)),
             "{text}"
         );
-        assert!(!text.contains(&format!("DRAFTS · {drafts}")), "{text}");
+        assert!(
+            !text.contains(&format!("SMALL TASKS · {}", small - 1)),
+            "{text}"
+        );
     }
 
     #[test]
     fn every_height_that_omits_a_row_says_so() {
         let work = mock_work();
         let groups = groups(&work);
-        let wanted: usize = groups.iter().map(|group| 1 + group.rows.len()).sum();
+        // The pane counts lines: a row with a body is two of them.
+        let wanted: usize = groups
+            .iter()
+            .map(|group| 1 + group.rows.iter().map(row_height).sum::<usize>())
+            .sum();
         for height in 1..=wanted + 2 {
             let built = lines(&groups, 100, height, &theme(), None);
             let text = text_of(&built);
