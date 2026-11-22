@@ -640,37 +640,39 @@ fn layout_groups(
     (out, omitted, headers, shown_rows)
 }
 
-/// The widths of the fixed columns, and whether the rows lead with an icon.
+/// The widths of the fixed columns, and the candidate the group shows.
 #[derive(Debug, Clone, Copy)]
 struct Metrics {
     id: usize,
     kind: usize,
     state: usize,
-    icon: bool,
+    columns: Columns,
 }
 
 /// The metrics of a group of a pane `width` wide.
 ///
-/// The icon is decided for the group, not the row: the group shows icons only
-/// when every one of its rows keeps its own, so its ids share a column. The
-/// group headers separate the groups, so a group that gives its icons up
-/// does not take them from the others.
+/// The columns are decided for the group, not the row: the group shows the
+/// first candidate that every one of its rows fits, so its icons, ids, kinds
+/// and states share their columns. The group headers separate the groups, so
+/// a group that gives its columns up does not take them from the others.
 fn group_metrics(groups: &[Group], group: &Group, width: usize) -> Metrics {
     let metrics = Metrics {
         id: id_width(groups),
         kind: kind_width(groups),
         state: state_width(groups),
-        icon: true,
+        columns: CANDIDATES[0],
     };
-    let keeps_icon = group.rows.iter().all(|row| {
-        layout(row, width.saturating_sub(view::BAR), metrics)
-            .columns
-            .icon
-    });
-    Metrics {
-        icon: keeps_icon,
-        ..metrics
-    }
+    let width = width.saturating_sub(view::BAR);
+    let columns = CANDIDATES
+        .into_iter()
+        .find(|candidate| {
+            group.rows.iter().all(|row| {
+                (!candidate.icon || row_icon(row).is_some())
+                    && fit(row, width, metrics, *candidate).is_some()
+            })
+        })
+        .unwrap_or(CANDIDATES[CANDIDATES.len() - 1]);
+    Metrics { columns, ..metrics }
 }
 
 /// How a row is laid out in the pane.
@@ -684,49 +686,56 @@ struct Layout {
     scope: usize,
 }
 
-/// The layout of a row: the first candidate that leaves the fixed columns
-/// whole and room for the title and the scope.
+/// The layout of a row: the group's candidate, or the first candidate after it
+/// that leaves the fixed columns whole and room for the title and the scope.
 fn layout(row: &Row, width: usize, metrics: Metrics) -> Layout {
+    CANDIDATES
+        .iter()
+        .skip_while(|candidate| **candidate != metrics.columns)
+        .find_map(|candidate| fit(row, width, metrics, *candidate))
+        .unwrap_or(Layout {
+            columns: Columns {
+                icon: false,
+                id: false,
+                kind: false,
+                state: false,
+                scope: false,
+            },
+            title: width,
+            scope: 0,
+        })
+}
+
+/// The layout of a row in a candidate, if the candidate's fixed columns fit
+/// the row with room for its title and its scope.
+fn fit(row: &Row, width: usize, metrics: Metrics, candidate: Columns) -> Option<Layout> {
     let title = text_width(&row.title);
     let scope = row.scope.as_deref().map(text_width).unwrap_or(0);
-    for mut columns in CANDIDATES {
-        if row.scope.is_none() {
-            columns.scope = false;
-        }
-        if row_icon(row).is_none() || !metrics.icon {
-            columns.icon = false;
-        }
-        let (fixed, gaps) = fixed_width(columns, metrics);
-        let flex = 1 + usize::from(columns.scope);
-        if fixed + gaps + flex > width {
-            continue;
-        }
-        let available = width - fixed - gaps;
-        // A fixed column is kept only when the title and the scope still
-        // fit whole: otherwise it gives way, so they are not cut to make
-        // room for it.
-        let has_fixed = columns.id || columns.kind || columns.state;
-        if has_fixed && title + scope > available {
-            continue;
-        }
-        let (title_width, scope_width) = flex_widths(title, scope, available, columns.scope);
-        return Layout {
-            columns,
-            title: title_width,
-            scope: scope_width,
-        };
+    let mut columns = candidate;
+    if row.scope.is_none() {
+        columns.scope = false;
     }
-    Layout {
-        columns: Columns {
-            icon: false,
-            id: false,
-            kind: false,
-            state: false,
-            scope: false,
-        },
-        title: width,
-        scope: 0,
+    if row_icon(row).is_none() {
+        columns.icon = false;
     }
+    let (fixed, gaps) = fixed_width(columns, metrics);
+    let flex = 1 + usize::from(columns.scope);
+    if fixed + gaps + flex > width {
+        return None;
+    }
+    let available = width - fixed - gaps;
+    // A fixed column is kept only when the title and the scope still fit
+    // whole: otherwise it gives way, so they are not cut to make room for it.
+    let has_fixed = columns.id || columns.kind || columns.state;
+    if has_fixed && title + scope > available {
+        return None;
+    }
+    let (title_width, scope_width) = flex_widths(title, scope, available, columns.scope);
+    Some(Layout {
+        columns,
+        title: title_width,
+        scope: scope_width,
+    })
 }
 
 /// The icon of a row: its kind's, or the draft phase's for a draft task.
@@ -1534,13 +1543,13 @@ mod tests {
             .collect::<String>()
     }
 
-    /// The widths of the fixed columns, with every row keeping its icon.
+    /// The widths of the fixed columns, with every column shown.
     fn metrics(groups: &[Group]) -> Metrics {
         Metrics {
             id: id_width(groups),
             kind: kind_width(groups),
             state: state_width(groups),
-            icon: true,
+            columns: CANDIDATES[0],
         }
     }
 
@@ -1905,7 +1914,7 @@ mod tests {
             id: id_width(&groups),
             kind: kind_width(&groups),
             state: state_width(&groups),
-            icon: true,
+            columns: CANDIDATES[0],
         };
         let line = row_line(
             &groups[0].rows[0],
@@ -1926,7 +1935,9 @@ mod tests {
 
     #[test]
     fn a_dismissed_and_a_promoted_item_are_visible_as_such() {
-        let rows = draw(&mock_work(), 100, 40).join("\n");
+        // The group keeps its states once every one of its rows fits them: at
+        // 110 inside the border every row of SMALL TASKS does.
+        let rows = draw(&mock_work(), 112, 40).join("\n");
         let dismissed = rows
             .lines()
             .find(|line| line.contains("ITM04"))
@@ -1990,9 +2001,11 @@ mod tests {
 
     #[test]
     fn a_wide_row_shows_every_column() {
-        // The selection bar and the icon's lead take columns: the kind of the
-        // dismissed item needs one more than the default width of 100.
-        let text = draw(&mock_work(), 101, 40).join("\n");
+        // A group shows its kind and state only when every one of its rows
+        // fits them beside its title and scope: at 118 inside the border every
+        // row of SMALL TASKS does, and the selection bar and the icon's lead
+        // take their columns.
+        let text = draw(&mock_work(), 120, 40).join("\n");
         let row = text
             .lines()
             .find(|line| line.contains("ITM04"))
@@ -2341,15 +2354,16 @@ mod tests {
 
     #[test]
     fn the_title_and_the_scope_keep_their_room() {
-        // The icon, the kind and the state give way, whole, before the title
-        // and the scope are cut: at this width the id, the title and the scope
-        // are still whole. The selection bar's column is one of them.
+        // The icon, the kind, the state and then the id give way, whole,
+        // before the title and the scope are cut: at 81 the title and the scope
+        // of ITM02 are still whole, and its group's ids have given way with the
+        // rest of the group's fixed columns.
         let groups = groups(&mock_work());
         let text = text_of(&lines(&groups, 81, 40, &theme(), IconSet::Nerd, None));
         let row = text
             .lines()
-            .find(|line| line.contains("ITM02"))
-            .unwrap_or_else(|| panic!("no ITM02 row: {text}"));
+            .find(|line| line.contains("The Path row"))
+            .unwrap_or_else(|| panic!("no 'The Path row' row: {text}"));
         assert!(
             row.contains("The Path row names the round it waits on"),
             "{row}"
@@ -2463,7 +2477,7 @@ mod tests {
             id: id_width(&groups),
             kind: kind_width(&groups),
             state: state_width(&groups),
-            icon: true,
+            columns: CANDIDATES[0],
         };
         let open = &groups[0].rows[0];
         let settled = &groups[1].rows[2];
@@ -2527,30 +2541,27 @@ mod tests {
 
     #[test]
     fn the_ids_of_a_group_share_a_column() {
-        // The icon is decided for the group: a row that cannot keep its icon
-        // takes none away from the others in its group, so the ids of a group
-        // share a column. At 100 and 120 every row keeps its id; at 80 a row
-        // whose title and scope do not fit beside its id gives the id way, and
-        // the ids still share a column.
+        // The columns are decided for the group: at 100 and 120 every row
+        // keeps its id; at 80 the group gives its ids way together. Either way
+        // the ids of a group share a column, or none of its rows shows one.
         let groups = groups(&mock_work());
         let theme = theme();
         for width in [80, 100, 120] {
             for icons in [IconSet::Nerd, IconSet::Unicode] {
                 for group in &groups {
                     let metrics = group_metrics(&groups, group, width);
-                    let starts: Vec<usize> = group
+                    let starts: Vec<Option<usize>> = group
                         .rows
                         .iter()
-                        .filter_map(|row| {
+                        .map(|row| {
                             let text =
                                 line_text(&row_line(row, width, metrics, icons, &theme, None));
                             text.find(&row.id).map(|at| text_width(&text[..at]))
                         })
                         .collect();
                     if width >= 100 {
-                        assert_eq!(
-                            starts.len(),
-                            group.rows.len(),
+                        assert!(
+                            starts.iter().all(Option::is_some),
                             "width {width}: a row lost its id"
                         );
                     }
@@ -2564,13 +2575,39 @@ mod tests {
     }
 
     #[test]
+    fn a_group_shows_the_same_icon_id_kind_and_state_on_every_row() {
+        // The icon, the id, the kind and the state are decided for the group: a
+        // row does not drop one of them while the row beside it keeps it, so
+        // the titles of a group start in one column. The scope stays the row's
+        // own: a row without one has nothing to show.
+        let groups = groups(&mock_work());
+        for width in 1..=120 {
+            for group in &groups {
+                let metrics = group_metrics(&groups, group, width);
+                let shown: Vec<(bool, bool, bool, bool)> = group
+                    .rows
+                    .iter()
+                    .map(|row| {
+                        let columns = layout(row, width.saturating_sub(view::BAR), metrics).columns;
+                        (columns.icon, columns.id, columns.kind, columns.state)
+                    })
+                    .collect();
+                assert!(
+                    shown.windows(2).all(|pair| pair[0] == pair[1]),
+                    "width {width}: the columns of a group differ: {shown:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn a_group_keeps_its_icons_when_another_group_gives_them_up() {
         // SMALL TASKS holds the long row that cannot keep its icon, and only
         // that group gives its icons up: at 100 the drafts keep theirs, and at
         // 120 the ideas and the drafts do.
         let groups = groups(&mock_work());
         let theme = theme();
-        assert!(!group_metrics(&groups, &groups[1], 100).icon);
+        assert!(!group_metrics(&groups, &groups[1], 100).columns.icon);
         for (width, index, icon) in [
             (100, 2, Icon::StatusDraft),
             (120, 0, Icon::KindIdea),
