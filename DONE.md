@@ -1216,6 +1216,20 @@ the human, in TODO.md: the opencode effort levels, the flow files' claude
 pins, and whether an unknown harness should make a file unreadable, as it
 does now. Commit `a251073`.
 
+Unit closed: hugo picks harness, model and effort from lists (plan 65). Three
+build and review rounds: the build, then two fix rounds, the last review clean.
+Every agent's harness, model and effort are picked in hugo's sidebar. `enter`
+opens the table's harnesses (a missing one dim and unpickable), the harness's
+own model list with `type an id…` last, or its effort levels. A harness change
+clears a model the new harness cannot run and resets an effort it does not
+take. `s` refuses while any agent lacks one of the three and names the gap.
+Picks save through the format-preserving config. Round one found three: an
+absent effort read `default` while `s` refused it, a model catalogue that
+failed left no way to type an id, and the doc named the wrong id shape. The
+human ruled that an absent effort is a gap, shown as `pick an effort` on the
+warning slot. The other two were fixed. Ruled on the way, in the design record:
+every agent is configured from hugo. Commit `27cd7df`.
+
 ---
 
 ## Lessons

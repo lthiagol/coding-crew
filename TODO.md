@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 64.
+Updated 2026-11-22 by the orchestrator, after unit 65.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–64 and 63b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–65 and 63b are closed; their record is in
 `DONE.md`.
 
-- 65 · hugo picks harness, model and effort from lists (M)
 - 66 · The footer: centred, dotted, only what matters (M)
 - 67 · hugo has depth, and selection is soft (M)
 - 68 · The document in colour (L)
@@ -98,6 +97,11 @@ Queued in `docs/plan.md`, in order. Units 49–64 and 63b are closed; their reco
   record holds. The human's sketch wrote "Round 01" to show the nesting, and
   the number was its example. Ruled on the SPEC review's reading of the
   kickoff; a one-line change and its pins would overrule it.
+- **An absent effort is a gap** (2026-11-22, unit 65 review). An agent with no
+  `effort` is not yet picked: `s` refuses to start over it, and the sidebar
+  says `pick an effort` on the warning slot. `task-model.md` and `screens.md`
+  say so. This replaces the earlier note that an absent effort runs on the
+  harness's default.
 
 ---
 
@@ -132,9 +136,6 @@ None blocking. Carried from the closed units.
   agent naming a harness outside the table, such as `aider`, or an effort its
   harness does not take, fails the read: the defaults show and the file is left
   alone. The human confirms the rule.
-- **Effort is optional** (2026-11-22, unit 64). An agent with no `effort` runs
-  on its harness's default, and raul shows no line for it, so raul cannot add
-  an absent effort. Unit 65's pickers need that line.
 - **The old `[harness]` table stays in the file** (2026-11-22, unit 64). A save
   leaves it as the human's text. Agents name their own harness, so it is inert.
   The human decides whether it is removed.
@@ -144,6 +145,27 @@ None blocking. Carried from the closed units.
 - **The screen mock still shows old model names** (2026-11-22, unit 64).
   `docs/hugo/screens.md`, the ASCII pictures near lines 22–31, is illustrative
   and was left as it was.
+- **The reset level is `medium`** (2026-11-22, unit 65). A harness switch that
+  the new harness does not take resets the effort to `medium`, the level the
+  table now names as its default. The human confirms it or picks another.
+- **Should the effort list offer `default`?** (2026-11-22, unit 65). The list
+  has no entry that clears an effort, so an agent cannot be set back to none.
+  The human decides whether it should.
+- **A harness switch fills an absent effort** (2026-11-22, unit 65).
+  `switch_harness` sets the harness default when the agent has no effort. That
+  is the switch rule, not the gap rule. The human confirms it reads right.
+- **`skill.rs` still writes `effort default`** (2026-11-22, unit 65).
+  `crates/hugo/src/skill.rs:128` and its test pin it. The line is unreachable,
+  since the crew text is built only after the `s` gap check. Left alone to keep
+  unit 65 to its findings. Align it or leave it.
+- **Esc from the id input drops the catalogue's error** (2026-11-22, unit 65).
+  After a model catalogue fails, `esc` in `type an id…` returns to the list
+  without the error line. Left as it was.
+- **cursor-agent's list and the opencode list are untested live** (2026-11-22,
+  unit 65). Both were exercised with a fake tool only.
+- **The effort ruling is not in the design record** (2026-11-22, unit 65).
+  `docs/hugo/design-record.md` has the harness and model rule but not the
+  effort gap. Add it there at the next edit to the design record.
 
 - **The document overflows below 14 columns** (2026-11-22). The header table
   is 11 columns wide, so an inner width of 10 (a 12-column pane) overflows; a
