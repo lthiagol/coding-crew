@@ -43,8 +43,8 @@ bytes cannot drift apart silently.
 | `src/markdown/mod.rs` | `53177c3e6b309cdca9c9af0e9ef511e7bb7581c29248a4c489fa76b63bfbcebb` | `crates/engine/src/markdown/mod.rs` | `bce4ac2444787e8da9a4b82287d04878b95aace4ff2baac6ae3d7845a8410a31` | 1, 4, 5, 6, 7, 9, 11 |
 | `src/markdown/spans.rs` | `51f40f57a3fbea5638ee3d74b157122c7616b3c480721b7888e6fedd3e2e3be6` | `crates/engine/src/markdown/spans.rs` | `e1e8240ef5ab6dc44f070917889049561e1eb444ce66a52d5d9a91165962dbfd` | 11 |
 | `src/markdown/syntax.rs` | `b46409c050d4c9fc859be1acf958859958f000c77217cec453caff49b81e1403` | `crates/engine/src/markdown/syntax.rs` | `d212bd5b3a97ec44e7b69f88d080954830c3f21eb53a9939ccfb74877b5807ce` | 1, 6, 11, 12 |
-| `src/markdown/table_layout.rs` | `05e2d328a05ae048f2d52c4f72eb365414e21fe621ac62e67f04f8b9f03703a7` | `crates/engine/src/markdown/table_layout.rs` | `dacd198d6e123b0f58da619d3987113d7ebf419b34c287965f9fd2e5448382a7` | 11, 12 |
-| `src/markdown/tables.rs` | `b824647992b0bb665f516e95b8537594ceba3b6846f2d845d66695febfa66a10` | `crates/engine/src/markdown/tables.rs` | `7d222e06bb6f3f27fea566c77e7665f746cc6d0b8e03d44fe6d318c6be1db03f` | 2, 3, 5, 11 |
+| `src/markdown/table_layout.rs` | `05e2d328a05ae048f2d52c4f72eb365414e21fe621ac62e67f04f8b9f03703a7` | `crates/engine/src/markdown/table_layout.rs` | `42d056188046d61106b74bcc6d86998a129a26a00802424225c26b2c2030145e` | 11, 12, 15 |
+| `src/markdown/tables.rs` | `b824647992b0bb665f516e95b8537594ceba3b6846f2d845d66695febfa66a10` | `crates/engine/src/markdown/tables.rs` | `203845bc7e4d59ea26524b9bc6e242722637e1b336cb247b3351c0e00cb6539d` | 2, 3, 5, 11, 15 |
 | `src/markdown/toc.rs` | `68ae47f2387f7cb66ae50929d6554684a25312eb1a5323bbefdf5b82aadca0bd` | `crates/engine/src/markdown/toc.rs` | `9640a529ae05aff4ca96cdde1ff72772bceb7ca336294a81bf79722beec873e8` | 1, 4, 6, 9, 11 |
 | `src/markdown/width.rs` | `e577f4896abf16ec68a9c3a837ddd6e743e1f4da4e86c52b8fa9411b458a7ad2` | `crates/engine/src/markdown/width.rs` | `2e6464c3a7b2d6fd882708b08cda9efcfc9e10cd7c1744a5630b6aa6a163baf4` | 1, 6, 11 |
 | `src/markdown/wrapping.rs` | `758c50ef5145f2d9d331f8ac0b9951ab4ea1e96ebf0160ff597ab4a9431d213d` | `crates/engine/src/markdown/wrapping.rs` | `6ca53158fc40769cd08f36ddbfbc40c557aee276c1b654163f44ba94e90848e0` | 11 |
@@ -256,3 +256,15 @@ bytes on disk, a file marked `identical` must hash the same as upstream, and a
 file with deviation numbers must differ. `crates/engine/tests/vendored.rs`
 enforces that offline; `sync.sh check` enforces both checksum columns against
 the fetched upstream commit and prints the diffs.
+
+### 15. Table fallback keeps each column's drawn minimum
+
+When the cells cannot fit, the fallback in `fit_table_widths` gave every
+column width 1, so a column holding code, math, a mark or a wide grapheme drew
+wider than its border and the `│` stopped lining up with the `┼` and `┬`
+crossings. `min_table_cell_floor` gives each column the narrowest width that
+still draws its fragments whole: 3 cells for code, math and marks, 2 for a wide
+grapheme. The fallback starts from those floors, and the normal path never
+narrows a column below them. `table_layout.rs` and `tables.rs` carry this
+deviation. Plain-text tables render as before. A forced update of either file
+erases it; reapply it.

@@ -12,8 +12,8 @@ use super::spans::{
     normalize_html_tag,
 };
 use super::table_layout::{
-    align_cell, cap_table_widths, fit_table_widths, fragments_display_width, min_table_cell_width,
-    wrap_table_cell,
+    align_cell, cap_table_widths, fit_table_widths, fragments_display_width, min_table_cell_floor,
+    min_table_cell_width, wrap_table_cell,
 };
 use super::width::display_width;
 
@@ -496,17 +496,19 @@ impl TableBuf {
 
         let mut col_widths: Vec<usize> = vec![1; col_count];
         let mut min_widths: Vec<usize> = vec![4; col_count];
+        let mut floor_widths: Vec<usize> = vec![1; col_count];
         for row in &self.rows {
             for (ci, cell) in row.iter().enumerate() {
                 if ci < col_count {
                     col_widths[ci] = col_widths[ci].max(fragments_display_width(cell));
                     min_widths[ci] = min_widths[ci].max(min_table_cell_width(cell));
+                    floor_widths[ci] = floor_widths[ci].max(min_table_cell_floor(cell));
                 }
             }
         }
 
         cap_table_widths(&mut col_widths, render_width);
-        fit_table_widths(&mut col_widths, &min_widths, render_width);
+        fit_table_widths(&mut col_widths, &min_widths, &floor_widths, render_width);
 
         if self.fill_width {
             let border_width = 3 * col_count + 1;

@@ -30,6 +30,26 @@ pub(super) fn min_table_cell_width(frags: &[CellFragment]) -> usize {
     max_width
 }
 
+/// The narrowest column that still draws each fragment whole. Code, math and
+/// marks take one cell of content plus a space either side; a wide grapheme
+/// takes two cells.
+pub(super) fn min_table_cell_floor(frags: &[CellFragment]) -> usize {
+    let widest = |text: &str| iter_cluster_widths(text).map(|(_, w)| w).max().unwrap_or(0);
+    let mut floor = 1usize;
+    for frag in frags {
+        let w = match frag {
+            CellFragment::Text(t, _, _, _) => widest(&expand_tabs(t, 0)),
+            CellFragment::LinkMarker(_) => with_link_marker(display_width),
+            CellFragment::HardBreak => 0,
+            CellFragment::Code(..) | CellFragment::InlineMath(..) | CellFragment::Mark(..) => {
+                widest(&frag.rendered_text()) + 2
+            }
+        };
+        floor = floor.max(w);
+    }
+    floor
+}
+
 fn table_available_width(col_count: usize, render_width: usize) -> usize {
     let border_width = 3 * col_count + 1;
     render_width.saturating_sub(border_width).max(col_count)
@@ -38,6 +58,7 @@ fn table_available_width(col_count: usize, render_width: usize) -> usize {
 pub(super) fn fit_table_widths(
     col_widths: &mut [usize],
     min_widths: &[usize],
+    floor_widths: &[usize],
     render_width: usize,
 ) {
     if col_widths.is_empty() {
@@ -49,15 +70,15 @@ pub(super) fn fit_table_widths(
     let min_total: usize = min_widths.iter().sum();
 
     if min_total >= available {
-        let mut widths = vec![1; col_count];
-        let mut remaining = available.saturating_sub(col_count);
+        let mut widths = floor_widths.to_vec();
+        let mut remaining = available.saturating_sub(widths.iter().sum());
         let mut order: Vec<usize> = (0..col_count).collect();
         order.sort_by_key(|&idx| std::cmp::Reverse(min_widths[idx]));
         for idx in order {
             if remaining == 0 {
                 break;
             }
-            let extra = (min_widths[idx].saturating_sub(1)).min(remaining);
+            let extra = min_widths[idx].saturating_sub(widths[idx]).min(remaining);
             widths[idx] += extra;
             remaining -= extra;
         }
@@ -65,6 +86,9 @@ pub(super) fn fit_table_widths(
         return;
     }
 
+    for (width, floor) in col_widths.iter_mut().zip(floor_widths) {
+        *width = (*width).max(*floor);
+    }
     while col_widths.iter().sum::<usize>() > available {
         let Some((idx, _)) = col_widths
             .iter()

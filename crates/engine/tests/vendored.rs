@@ -330,9 +330,13 @@ esac\n",
     }
 
     fn run_check(&self) -> std::process::Output {
+        self.run_sync(&["check"])
+    }
+
+    fn run_sync(&self, args: &[&str]) -> std::process::Output {
         Command::new("bash")
             .arg(self.engine.join("sync.sh"))
-            .arg("check")
+            .args(args)
             .env(
                 "PATH",
                 format!(
@@ -343,7 +347,7 @@ esac\n",
             )
             .env("FAKE_UPSTREAM", &self.upstream)
             .output()
-            .expect("run sync.sh check")
+            .expect("run sync.sh")
     }
 }
 
@@ -530,4 +534,82 @@ fn added_files_exist() {
             "VENDORED.md lists a missing file: {file}"
         );
     }
+}
+
+#[cfg(unix)]
+impl SyncFixture {
+    /// Edits `module_00` on disk and records the edit under `deviations`, so
+    /// the checksums agree with the bytes and only the local change differs.
+    fn record_local_edit(&self, deviations: &str) {
+        let name = &self.names[0];
+        let vendored = self.engine.join("src/markdown").join(name);
+        fs::write(&vendored, b"pub fn example() -> u8 { 2 }\n").unwrap();
+        let upstream_sha = sha256(&self.upstream.join("src/markdown").join(name));
+        let vendored_sha = sha256(&vendored);
+        let mut rows = self.standard_rows();
+        rows[0] = format!(
+            "| `src/markdown/{name}` | `{upstream_sha}` | \
+`crates/engine/src/markdown/{name}` | `{vendored_sha}` | {deviations} |"
+        );
+        self.write_manifest(&rows);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn sync_update_force_refuses_an_unrecorded_local_edit() {
+    let fixture = SyncFixture::new("force-refused");
+    fixture.record_local_edit("identical");
+    let name = fixture.names[0].clone();
+    let vendored = fixture.engine.join("src/markdown").join(&name);
+    let edited = fs::read(&vendored).unwrap();
+
+    let output = fixture.run_sync(&["update", "--yes", "--force"]);
+    assert_eq!(output.status.code(), Some(3), "{}", report(&output));
+    assert_eq!(
+        fs::read(&vendored).unwrap(),
+        edited,
+        "a refused force must not touch the vendored file"
+    );
+    let report = report(&output);
+    assert!(
+        report.contains("no files were written") && report.contains("--discard-unrecorded"),
+        "the refusal names the escape hatch: {report}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn sync_update_force_discard_flag_overwrites_an_unrecorded_local_edit() {
+    let fixture = SyncFixture::new("force-discard");
+    fixture.record_local_edit("identical");
+    let name = fixture.names[0].clone();
+    let vendored = fixture.engine.join("src/markdown").join(&name);
+
+    let output = fixture.run_sync(&["update", "--yes", "--force", "--discard-unrecorded"]);
+    assert!(output.status.success(), "{}", report(&output));
+    assert_eq!(
+        fs::read(&vendored).unwrap(),
+        fs::read(fixture.upstream.join("src/markdown").join(&name)).unwrap(),
+        "the discard flag copies upstream over the local edit"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn sync_update_force_names_the_deviations_it_erases() {
+    let fixture = SyncFixture::new("force-names");
+    fixture.record_local_edit("3, 9");
+
+    let output = fixture.run_sync(&["update", "--yes", "--force"]);
+    assert!(output.status.success(), "{}", report(&output));
+    let report = report(&output);
+    assert!(
+        report.contains("  3. Fixture deviation") && report.contains("  9. Fixture deviation"),
+        "the warning lists the manifest's deviations for the copied file: {report}"
+    );
+    assert!(
+        !report.contains("  2. Fixture deviation"),
+        "the warning does not list deviations the manifest does not record: {report}"
+    );
 }

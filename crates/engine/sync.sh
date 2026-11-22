@@ -28,13 +28,13 @@
 #   ./sync.sh update --yes --force
 #       Fetch the pin, print every diff, and only then copy upstream over the
 #       vendored modules. Missing modules are copied too; extra local modules
-#       are never deleted. This erases the semantic deviations applied to the
-#       copied files (2, 4, 5, 6, 7 and 10): edition binding, removed helpers,
-#       the threaded table theme, widened visibility, the test-only link-marker
-#       setter gate, and the markers-test adaptation; the formatting and clippy
-#       edits (11 and 12) have to be re-applied. VENDORED.md is not rewritten,
-#       so the checksum table and the numbered deviations must be updated by
-#       hand.
+#       are never deleted. The copied files lose the deviations the manifest
+#       records for them, and the script names those before it copies.
+#       --force refuses unless the check above passes, because a clean check is
+#       what shows the vendored copy has no local changes the manifest does not
+#       record. Add --discard-unrecorded to overwrite anyway. VENDORED.md is not
+#       rewritten, so the checksum table and the numbered deviations must be
+#       updated by hand.
 
 set -euo pipefail
 
@@ -61,12 +61,14 @@ die() {
 mode="check"
 assume_yes=0
 force=0
+discard_unrecorded=0
 for arg in "$@"; do
     case "$arg" in
         check) mode="check" ;;
         update) mode="update" ;;
         --yes) assume_yes=1 ;;
         --force) force=1 ;;
+        --discard-unrecorded) discard_unrecorded=1 ;;
         -h | --help) usage; exit 0 ;;
         *) die "unknown argument '$arg'; try --help" ;;
     esac
@@ -109,6 +111,16 @@ ledger_numbers() {
             sub(/^### /, "")
             sub(/\..*$/, "")
             print
+        }
+    ' "$VENDORED"
+}
+
+ledger_title() {
+    awk -v number="$1" '
+        $1 == "###" && $2 == number "." {
+            sub(/^### [0-9]+\. /, "")
+            print
+            exit
         }
     ' "$VENDORED"
 }
@@ -306,6 +318,35 @@ if (( ${#changed[@]} == 0 && ${#missing[@]} == 0 )); then
     exit 0
 fi
 
+# The copy set is every upstream module that differs from, or is missing in,
+# the vendored copy. The deviations to erase are the ones the manifest records
+# for those files, so the warning below names what the copy will remove.
+copy_names=()
+declare -A erased_numbers=()
+for source in "$upstream"/*.rs; do
+    name="$(basename "$source")"
+    target="$ROOT/$LOCAL_DIR/$name"
+    if [[ -f "$target" ]] && cmp -s "$source" "$target"; then
+        continue
+    fi
+    copy_names+=("$name")
+    deviations="$(manifest_field "crates/engine/$LOCAL_DIR/$name" deviations)"
+    if [[ -n "$deviations" && "$deviations" != "identical" ]]; then
+        IFS=',' read -ra deviation_numbers <<<"$deviations"
+        for raw_number in "${deviation_numbers[@]}"; do
+            erased_numbers["${raw_number//[[:space:]]/}"]=1
+        done
+    fi
+done
+
+describe_erased() {
+    local number
+    (( ${#erased_numbers[@]} )) || return 0
+    while IFS= read -r number; do
+        printf '  %s. %s\n' "$number" "$(ledger_title "$number")"
+    done < <(printf '%s\n' "${!erased_numbers[@]}" | sort -n)
+}
+
 if (( ! assume_yes )); then
     echo
     echo "update: no files were written."
@@ -318,35 +359,36 @@ if (( ! force )); then
     echo
     echo "update: no files were written."
     echo "--yes alone does not overwrite the vendored copy."
-    echo "Rerun with --yes --force to replace it. That removes the semantic"
-    echo "deviations 2, 4, 5, 6, 7 and 10 (edition binding, removed helpers,"
-    echo "the threaded table theme, widened visibility, the test-only"
-    echo "link-marker setter gate, and the markers-test adaptation);"
-    echo "deviations 11 and 12 have to be re-applied."
+    echo "Rerun with --yes --force to replace it. That removes these deviations"
+    echo "from the files it copies: ${copy_names[*]}"
+    describe_erased
+    exit 3
+fi
+
+if (( status != 0 && ! discard_unrecorded )); then
+    echo
+    echo "update: no files were written."
+    echo "The check above reports problems, so --force could overwrite local"
+    echo "changes the manifest does not record. Fix them, or rerun with"
+    echo "--yes --force --discard-unrecorded to overwrite anyway."
     exit 3
 fi
 
 echo
-echo "update: --force is replacing the vendored modules. This removes"
-echo "deviations 2, 4, 5, 6, 7 and 10 from every file it rewrites (edition"
-echo "binding, removed helpers, the threaded table theme, widened visibility,"
-echo "the test-only link-marker setter gate, and the markers-test adaptation);"
-echo "deviations 11 and 12 will have to be re-applied by cargo fmt and the gate."
+echo "update: --force is replacing ${copy_names[*]}"
+if (( ${#erased_numbers[@]} )); then
+    echo "update: this removes these deviations from the copied files:"
+    describe_erased
+    echo "They have to be re-applied, then the gate rerun."
+fi
 
-for source in "$upstream"/*.rs; do
-    name="$(basename "$source")"
-    target="$ROOT/$LOCAL_DIR/$name"
-    if [[ -f "$target" ]] && cmp -s "$source" "$target"; then
-        continue
-    fi
+for name in "${copy_names[@]}"; do
     echo "update: copying $name"
-    cp "$source" "$target"
+    cp "$upstream/$name" "$ROOT/$LOCAL_DIR/$name"
 done
 
 echo
 echo "update: copied upstream files into crates/engine/$LOCAL_DIR"
 echo "VENDORED.md was not changed. Update its checksum table and deviations,"
-echo "re-apply deviations 2, 4, 5, 6, 7 and 10 (edition binding, removed"
-echo "helpers, the threaded table theme, widened visibility, the test-only"
-echo "link-marker setter gate, and the markers-test adaptation), run cargo fmt,"
+echo "re-apply the deviations listed above, run cargo fmt,"
 echo "make ci, and ./sync.sh check."

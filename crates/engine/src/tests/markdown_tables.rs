@@ -276,3 +276,32 @@ fn split_table_code_label_keeps_owner_on_every_row() {
     assert_eq!(rows, ["#", " abcdefghijklmnopqr ", " stuvwxyz "]);
     assert!(parsed.link_spans.iter().all(|span| span.link_id.0 == 0));
 }
+
+/// Display columns of the border glyphs on one rendered table line.
+fn border_columns(line: &str) -> Vec<usize> {
+    line.char_indices()
+        .filter(|(_, c)| "┌┬┐│├┼┤└┴┘╞╪╡".contains(*c))
+        .map(|(i, _)| display_width(&line[..i]))
+        .collect()
+}
+
+#[test]
+fn table_borders_line_up_on_every_row_at_every_width() {
+    let (ss, theme) = test_assets();
+    let tables = [
+        "| a | b | c |\n| --- | --- | --- |\n| `abcdefghij` | `abcdefghij` | `ok` |\n| 中文字 | 中 | x |\n",
+        "| a | b | c | d | e |\n| --- | --- | --- | --- | --- |\n| `abcdefghij` | `abcdefghij` | `ok` | 中文字 | `x` |\n",
+    ];
+    for md in tables {
+        for width in 12..=40 {
+            let (lines, _, _, _) =
+                parse_markdown_with_width(md, &ss, &theme, width, &test_md_theme(), false, true)
+                    .into();
+            let rendered = rendered_non_empty_lines(&lines);
+            let top = border_columns(&rendered[0]);
+            for line in &rendered {
+                assert_eq!(border_columns(line), top, "width {width}: {line:?}");
+            }
+        }
+    }
+}

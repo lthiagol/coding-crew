@@ -669,15 +669,17 @@ mod tests {
                 body.iter().any(|row| !row.trim().is_empty()),
                 "{width}: the body is blank"
             );
-            // F15: the engine's table fallback draws TSK13's criteria table
-            // wider than the pane at every width up to 66. Batch H removes
-            // this skip; until then the overflow is checked above 66 only.
-            if width <= 66 {
+            // The criteria table's narrowest drawing is 35 columns: its column
+            // floors keep each cell whole. A narrower inner width clips it (a
+            // follow-up under unit 51 in TODO.md), so those widths are skipped.
+            // Every width from 35 up is checked for overflow.
+            const CRITERIA_MIN_WIDTH: usize = 35;
+            let inner = usize::from(width) - 2;
+            if inner < CRITERIA_MIN_WIDTH {
                 continue;
             }
             // Nothing is wider than the pane: the document is rendered at
             // the pane's own width, inside the border.
-            let inner = usize::from(width) - 2;
             for line in document_lines(&work, &pane("TSK13"), inner, &theme()) {
                 assert!(line.width() <= inner, "{width}: {line:?}");
             }
