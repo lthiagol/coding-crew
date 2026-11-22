@@ -1145,6 +1145,16 @@ names; `s` starts the orchestrator in a new herdr tab over the queue —
 checked live with a Claude harness.
 
 
+**The redesign, reviewed whole** (2026-11-22). A second full review read
+every screen in both icon sets and found 12 (2 medium, 10 low): Backlog
+columns drifting within a group, a narrow table starving its prose column,
+glyphs written outside the icon table, a broken Path spine, hugo's flow pane
+always wearing the running icon, no status pill, and an orchestrator start
+that could wedge `s`. All closed, `ffb81bd`…`4d01ff8`. Two rulings: the
+header card is one item per field (the border title carries the status icon),
+and only the Overview's cards are padded — a list pane draws against its
+border, because its columns are spent on words.
+
 ---
 
 ## Lessons

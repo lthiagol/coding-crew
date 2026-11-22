@@ -56,7 +56,7 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-None groomed. Units 49–59 closed on 2026-11-22 — the full code review's 35
+None groomed. Units 49–59 and the redesign's whole review closed on 2026-11-22 — the full code review's 35
 findings, the redesign (`docs/tui/redesign.md`), `hugo --skill` and hugo
 starting the orchestrator; their record is in `DONE.md`. Next candidates, for
 the human to pick or groom:
@@ -230,6 +230,15 @@ variants of the families (Catppuccin Latte, Dracula Alucard, Nord Light).
 ---
 
 ## LESSONS THAT STILL BIND
+
+- **A builder must never ask interactively** (2026-11-22). A Haiku builder
+  opened a question dialog nobody watched, and the loop kept dispatching
+  rounds past it. The runner skill and the builder rules now say: decide
+  within the docs, or leave it and put the question in the report; and the
+  loop stops when a builder is blocked.
+- **A builder cannot `git checkout`** under auto mode — the classifier treats
+  it as destructive. A revert the reviewer asks for is the orchestrator's to
+  run, after checking the diff holds only that round's work.
 
 - **Stage by name.** Never `git add -A`, never `git add .` — a blanket stage
   sweeps another agent's in-flight work into the commit. It happened twice.
