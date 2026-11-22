@@ -2,8 +2,11 @@
 
 **Add lane filtering to raul**
 
-`TSK07` · `code-review` · kind `task` · priority `high` · effort `L`
-
+- **id:** `TSK07`
+- **status:** `code-review`
+- **kind:** `task`
+- **priority:** `high`
+- **effort:** `L`
 - **tags:** `tui`, `lane-filter`
 - **claim:** by `runner-1` in `s-runner` at `2026-11-16T12:00:00Z` — lease `2026-11-16T18:00:00Z`
 - **blocked:** The upstream lane table is still being renamed. — by `creator-1` at `2026-11-16T15:00:00Z`

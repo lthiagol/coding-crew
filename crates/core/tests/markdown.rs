@@ -960,12 +960,46 @@ fn the_header_names_the_kind_and_the_review_shows_the_budget() {
     let document = task_to_markdown(&task, &[]);
 
     let header = section(&document, "# Header");
-    assert!(header.contains("kind `bug`"), "{header}");
+    assert!(header.contains("- **kind:** `bug`"), "{header}");
     let review = section(&document, "# Review");
     assert!(
         review.contains("- **budget:** `2/5` external rounds"),
         "{review}"
     );
+}
+
+#[test]
+fn the_header_gives_each_field_its_own_item() {
+    let document = task_to_markdown(&minimal("TSK01"), &[]);
+    let header = section(&document, "# Header");
+    let items: Vec<&str> = header
+        .lines()
+        .filter(|line| line.starts_with("- **"))
+        .map(|line| line.split(':').next().unwrap_or_default())
+        .collect();
+
+    assert_eq!(
+        items,
+        [
+            "- **id",
+            "- **status",
+            "- **kind",
+            "- **priority",
+            "- **effort",
+            "- **tags",
+            "- **claim",
+        ],
+        "{header}"
+    );
+}
+
+#[test]
+fn the_status_item_is_the_word_with_no_icon() {
+    // The detail pane's title carries the status icon, so the card repeats
+    // only the word. The check can fail: an icon before the code span breaks it.
+    let document = task_to_markdown(&minimal("TSK01"), &[]);
+    let header = section(&document, "# Header");
+    assert!(header.contains("- **status:** `draft`\n"), "{header}");
 }
 
 #[test]
@@ -1727,15 +1761,15 @@ fn every_task_status_renders_as_one_code_span() {
 
         let document = task_to_markdown(&task, &[]);
         let header = section(&document, "# Header");
-        let chips = header
+        let line = header
             .lines()
-            .find(|line| line.contains(" · "))
-            .unwrap_or_else(|| panic!("no chips line:\n{header}"));
+            .find(|line| line.starts_with("- **status:**"))
+            .unwrap_or_else(|| panic!("no status line:\n{header}"));
 
         assert_eq!(
-            chips.matches(&format!("`{}`", status.as_str())).count(),
+            line.matches(&format!("`{}`", status.as_str())).count(),
             1,
-            "{chips}"
+            "{line}"
         );
     }
 }

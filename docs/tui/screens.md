@@ -214,8 +214,8 @@ The document carries the task's sections, in reading order:
 
 The projection is the shape, not the wording: each of the ten sections is a
 level-one heading, an item under one a level-two, and a finding under its round
-a level-three; the header a card, a line of chips and a list of its tags, claim
-and overlays; each criterion a heading with its id and
+a level-three; the header a card: the title, then one list item per field — id,
+status, kind, priority, effort, tags, claim and each overlay; each criterion a heading with its id and
 status, its fields a list, as the steps are; each review round a heading with
 its own fields and the findings it raised under it; the
 verification commands as code, with a rule before a fenced one. The evidence is

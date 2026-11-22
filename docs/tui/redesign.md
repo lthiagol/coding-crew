@@ -151,9 +151,10 @@ recorded in `VENDORED.md`'s ledger as deviations.
   in parentheses only when it differs from the text.
 
 **The header section** of a task stops being a two-column table: it is a card
-of `key  value` pairs on two columns — status as a chip with its icon, then
-priority, effort, kind, tags as chips, the claim on its own line. The
-projection emits it as a definition-style list the engine can lay out; how is
-the unit's to decide, within ADR 0009's escaping rule.
+of `key value` pairs, one per row — id, status, kind, priority, effort, then
+tags as chips and the claim on its own line. The status word carries no icon
+in the card, because the detail pane's border title already shows it. The
+projection emits it as a list the engine can lay out; how is the unit's to
+decide, within ADR 0009's escaping rule.
 
 The criteria section is blocks, not a seven-column table — unit 51.

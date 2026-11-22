@@ -57,21 +57,25 @@ pub fn task_to_markdown(task: &Task, tasks: &[Task]) -> String {
     out
 }
 
-/// The header card: the title, a line of chips for the id, status, kind,
-/// priority and effort, then the tags, the claim and each overlay as a list
-/// item. A list item is not a table row, so no cell rule applies to it.
+/// The header card: the title, then each field as a `key value` item, the
+/// tags, the claim and each overlay. A list item is not a table row, so no
+/// cell rule applies to it, and each pair keeps its own line: a narrow pane
+/// never wraps a value away from its key.
 fn header(out: &mut String, task: &Task) {
     out.push_str("# Header\n\n");
     if !task.title.trim().is_empty() {
         out.push_str(&format!("**{}**\n\n", escape_literal(&task.title)));
     }
+    out.push_str(&format!("- **id:** {}\n", code(&task.id)));
+    out.push_str(&format!("- **status:** {}\n", code(task.status.as_str())));
+    out.push_str(&format!("- **kind:** {}\n", code(task.kind.as_str())));
     out.push_str(&format!(
-        "{} · {} · kind {} · priority {} · effort {}\n\n",
-        code(&task.id),
-        code(task.status.as_str()),
-        code(task.kind.as_str()),
-        code(priority_str(task.meta.priority)),
-        code(task.meta.effort.as_str()),
+        "- **priority:** {}\n",
+        code(priority_str(task.meta.priority))
+    ));
+    out.push_str(&format!(
+        "- **effort:** {}\n",
+        code(task.meta.effort.as_str())
     ));
     out.push_str(&format!("- **tags:** {}\n", codes(&task.meta.tags)));
     let claim = task

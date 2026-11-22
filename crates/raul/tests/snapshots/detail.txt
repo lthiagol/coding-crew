@@ -1,8 +1,11 @@
 ╭─ 󰈈 TSK13 · The detail pane paints the marked note ───────────────────────────────────────────────╮
 │▍ Header ─────────────────────────────────────────────────────────────────────────────────────────│
 │The detail pane paints the marked note                                                            │
-│                                                                                                  │
-│ TSK13  ·  code-review  · kind  task  · priority  urgent  · effort  S                             │
+│• id:  TSK13                                                                                      │
+│• status:  code-review                                                                            │
+│• kind:  task                                                                                     │
+│• priority:  urgent                                                                               │
+│• effort:  S                                                                                      │
 │• tags:  mock ,  raul                                                                             │
 │• claim: by  runner-01  in  session-runner-01  at  2026-11-10T09:00Z  — lease  2026-11-10T18:00Z  │
 │                                                                                                  │
@@ -213,8 +216,5 @@
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
- q  quit    esc  close    pgup/pgdn  page    g/G  top/bottom    ↑↓  scroll
+ q  quit   esc  close   pgup/pgdn  page   g/G  top/bottom   ↑↓  scroll

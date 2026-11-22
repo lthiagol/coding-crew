@@ -33,6 +33,7 @@ use coding_crew_engine::{MarkdownTheme, parse_markdown_with_width, syntax_set};
 use crate::app::footer_line;
 use crate::data::Work;
 use crate::tabs::Tab;
+use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, text_width};
 use coding_crew_theme::{Icon, IconSet, Theme, block_title_style, phase_style};
 
@@ -380,51 +381,16 @@ fn cut_labels(labels: Vec<Span<'static>>, width: usize) -> Line<'static> {
 /// narrowing footer gives up the single rows first, then the ends, the
 /// page keys last.
 fn footer(width: u16, theme: &Theme) -> Line<'static> {
-    let key = theme.chrome.key;
-    let label = theme.chrome.footer;
-    let space = || Span::raw("   ");
+    // A key chip, parted from the chip before it by two spaces.
+    let chip = |key: &str, action: &str| {
+        [vec![Span::raw("  ")], chrome::key_chip(key, action, theme)].concat()
+    };
     let parts = vec![
-        (
-            0,
-            vec![Span::styled(" q ", key), Span::styled(" quit", label)],
-            true,
-        ),
-        (
-            1,
-            vec![
-                space(),
-                Span::styled(" esc ", key),
-                Span::styled(" close", label),
-            ],
-            true,
-        ),
-        (
-            2,
-            vec![
-                space(),
-                Span::styled(" pgup/pgdn ", key),
-                Span::styled(" page", label),
-            ],
-            false,
-        ),
-        (
-            3,
-            vec![
-                space(),
-                Span::styled(" g/G ", key),
-                Span::styled(" top/bottom", label),
-            ],
-            false,
-        ),
-        (
-            4,
-            vec![
-                space(),
-                Span::styled(" ↑↓ ", key),
-                Span::styled(" scroll", label),
-            ],
-            false,
-        ),
+        (0, chrome::key_chip("q", "quit", theme), true),
+        (1, chip("esc", "close"), true),
+        (2, chip("pgup/pgdn", "page"), false),
+        (3, chip("g/G", "top/bottom"), false),
+        (4, chip("↑↓", "scroll"), false),
     ];
     footer_line(parts, width)
 }
@@ -1678,11 +1644,25 @@ mod tests {
         let at_55 = text(55);
         assert!(at_55.contains("pgup/pgdn"), "{at_55}");
         assert!(!at_55.contains("g/G"), "{at_55}");
-        // At 40 the page keys are gone last: nothing optional wider than
-        // the single rows still fits.
-        let at_40 = text(40);
-        assert!(!at_40.contains("pgup/pgdn"), "{at_40}");
-        assert!(!at_40.contains("g/G"), "{at_40}");
+        // At 38 the page keys are gone last: q, esc and the page keys need
+        // 39 columns, so nothing optional wider than the single rows fits.
+        let at_38 = text(38);
+        assert!(!at_38.contains("pgup/pgdn"), "{at_38}");
+        assert!(!at_38.contains("g/G"), "{at_38}");
+    }
+
+    #[test]
+    fn the_footer_chips_are_the_shared_key_chips() {
+        // The keys are reversed, and the chips are parted by two spaces, as
+        // the tabs' footer draws them.
+        let line = footer(100, &theme());
+        let spans = &line.spans;
+        assert_eq!(spans[0].content, " q ");
+        assert!(spans[0].style.add_modifier.contains(Modifier::REVERSED));
+        assert_eq!(spans[1].content, " quit");
+        assert_eq!(spans[2].content, "  ");
+        assert_eq!(spans[3].content, " esc ");
+        assert!(spans[3].style.add_modifier.contains(Modifier::REVERSED));
     }
 
     #[test]

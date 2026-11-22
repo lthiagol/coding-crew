@@ -14,6 +14,9 @@ will check your change afterwards.
   happens next.
 - A job that would contradict a decision of record: do not force it. Leave
   the code as it is and say why in the report.
+- Never ask a question interactively — nobody watches your pane. Pick the
+  option within the docs, or leave it undone, and put the question and your
+  recommendation in the report.
 - Finish by running the project's gate. It must pass; if something cannot be
   fixed, say why instead of faking it.
 - Write the report to the `REPORT` path in the brief: per item, done or not
