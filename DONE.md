@@ -1201,6 +1201,21 @@ from 138.1 s to 108.3 s, max RSS from 868 MiB to 774 MiB, and `target/` from
 3.0 G to 1.3 G. No test reads backtrace or location content. Commit
 `0790adb`.
 
+Unit closed: the harness table, and a harness per role (plan 64). Two build
+and review rounds. `crates/core/src/harness.rs` is the one table of harnesses:
+claude, opencode and cursor-agent, each with its binary, herdr kind, effort
+levels, start args, env and model listing. hugo's skill and launcher read it,
+and their own mappings are gone. Every agent in `config.toml` names its own
+harness, model and effort, and the global `[harness]` is no longer written.
+An old file still loads: an agent with no harness takes the old global one,
+and `#effort` splits off the model. Nothing is rewritten until a save.
+Round one found that a save changing only an old agent's effort or harness
+was refused as lost, because its model line kept `#effort`; the fix rewrites
+the model of a changed agent, and both cases are read back in tests. Left for
+the human, in TODO.md: the opencode effort levels, the flow files' claude
+pins, and whether an unknown harness should make a file unreadable, as it
+does now. Commit `a251073`.
+
 ---
 
 ## Lessons

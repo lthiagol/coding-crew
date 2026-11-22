@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 63b.
+Updated 2026-11-22 by the orchestrator, after unit 64.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–63 and 63b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–64 and 63b are closed; their record is in
 `DONE.md`.
 
-- 64 · The harness table, and a harness per role (M)
 - 65 · hugo picks harness, model and effort from lists (M)
 - 66 · The footer: centred, dotted, only what matters (M)
 - 67 · hugo has depth, and selection is soft (M)
@@ -112,8 +111,8 @@ None blocking. Carried from the closed units.
   with or without `work/`. Left as a known limit; changing it means amending
   ADR 0010 to require a marker — the human's call.
 - **Settings: inline tables and dotted keys are text** (2026-11-22, review of
-  unit 63). `harness = { tool = …, driven = … }`, `[raul] tasks = { … }` and
-  `tasks.sort = …` are valid and saved into, but drawn as text with no stop.
+  unit 63). `[raul] tasks = { … }` and `tasks.sort = …` are valid and saved
+  into, but drawn as text with no stop.
   Each value needs its own stop and its own cursor on a shared line, or the
   line is split. Design call for the human; `docs/tui/screens.md` § Settings
   says so.
@@ -121,10 +120,30 @@ None blocking. Carried from the closed units.
   external round records its reviewer's actor id, not a session, so
   `fixtures_keep_their_gates` replays the review with an invented session.
   The fix adds a `session` to `Round` — a model change, for the human.
-- **The `opencode` harness's model flag is assumed** (2026-11-22): `hugo
-  --skill` and hugo's launcher pass `--model <id>` for opencode; opencode is
-  not installed here, so it was not checked. `claude` was checked live: `s`
-  started a Claude orchestrator in a new herdr tab and prompted it.
+- **opencode's effort levels are assumed** (2026-11-22, unit 64): `low medium
+  high`, as `#variant` suffixes. Only the free `opencode/*` models are listed
+  here, so no provider's variants could be read. The human confirms the list.
+- **The flow files name claude ids** (2026-11-22, unit 64). `flow/builder.json`
+  and `flow/reviewer.json` are in opencode's format, and they now carry
+  `claude-haiku-5-5` and `claude-opus-5-5` so the pin test matches the new
+  defaults. opencode does not know those ids. The human chooses: keep the pin,
+  or drop the model pin and let the files name only the agent.
+- **An unknown harness makes the file unreadable** (2026-11-22, unit 64). An
+  agent naming a harness outside the table, such as `aider`, or an effort its
+  harness does not take, fails the read: the defaults show and the file is left
+  alone. The human confirms the rule.
+- **Effort is optional** (2026-11-22, unit 64). An agent with no `effort` runs
+  on its harness's default, and raul shows no line for it, so raul cannot add
+  an absent effort. Unit 65's pickers need that line.
+- **The old `[harness]` table stays in the file** (2026-11-22, unit 64). A save
+  leaves it as the human's text. Agents name their own harness, so it is inert.
+  The human decides whether it is removed.
+- **The opencode live check is not run** (2026-11-22, unit 64). An opencode role
+  started through herdr should show its configured free model in its pane. It
+  was optional and was not done.
+- **The screen mock still shows old model names** (2026-11-22, unit 64).
+  `docs/hugo/screens.md`, the ASCII pictures near lines 22–31, is illustrative
+  and was left as it was.
 
 - **The document overflows below 14 columns** (2026-11-22). The header table
   is 11 columns wide, so an inner width of 10 (a 12-column pane) overflows; a
