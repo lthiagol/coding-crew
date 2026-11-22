@@ -102,7 +102,9 @@ pub fn load_at(home: &Path) -> ConfigRead {
     };
     let legacy = legacy_at(&dir);
     let path = config_path(home);
-    let state = if path.exists() {
+    // A dangling link is a configuration the human left: it is named as
+    // unreadable, and the defaults are not written through it.
+    let state = if path.symlink_metadata().is_ok() {
         match Config::read(&path) {
             Ok(config) => ConfigState::Config(config),
             Err(error) => {
@@ -314,6 +316,35 @@ mod tests {
             fs::read_to_string(&path).expect("the file"),
             "round_limit = \n",
             "the load wrote over a configuration it could not read"
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_link_is_named_and_the_defaults_are_not_written_through_it() {
+        let home = scratch("dangling");
+        fs::create_dir_all(home_at(&home)).expect("the home");
+        let path = config_path(&home);
+        let missing = home.join("gone").join("hugo.toml");
+        std::os::unix::fs::symlink(&missing, &path).expect("a dangling link");
+        match load_at(&home) {
+            ConfigRead {
+                state: ConfigState::Unreadable(error),
+                ..
+            } => assert_eq!(error.file, CONFIG_FILE),
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            path.symlink_metadata()
+                .expect("the link")
+                .file_type()
+                .is_symlink(),
+            "the link was replaced"
+        );
+        assert!(
+            !missing.exists(),
+            "the defaults were written through the link"
         );
         let _ = fs::remove_dir_all(&home);
     }

@@ -7,6 +7,7 @@
 
 use std::io::Stdout;
 
+use crossterm::cursor::Show;
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -46,10 +47,28 @@ pub fn plain_text(buffer: &Buffer) -> String {
 
 /// Enter raw mode and the alternate screen.
 pub fn setup() -> std::io::Result<Terminal<CrosstermBackend<Stdout>>> {
+    chain_hook(leave_terminal);
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     Terminal::new(CrosstermBackend::new(stdout))
+}
+
+/// Chain a panic hook that runs `leave` before the hook already set prints the
+/// panic, so the message lands on the shell's screen rather than behind the
+/// alternate one.
+pub fn chain_hook(leave: fn()) {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info: &std::panic::PanicHookInfo<'_>| {
+        leave();
+        previous(info);
+    }));
+}
+
+/// Leave raw mode and the alternate screen, and show the cursor again.
+fn leave_terminal() {
+    let _ = disable_raw_mode();
+    let _ = execute!(std::io::stdout(), LeaveAlternateScreen, Show);
 }
 
 /// Leave the alternate screen and raw mode, and show the cursor again.

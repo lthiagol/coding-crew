@@ -76,17 +76,20 @@ impl Config {
 
     /// Write TOML text, atomically, as the store writes a task.
     ///
+    /// A symbolic link is written through: the file it names is replaced, and
+    /// the link stays where the human put it. The new file keeps the mode of
+    /// the one it replaces.
+    ///
     /// The temporary name is unique to the write: two hugo instances on one
     /// home must not rename each other's file.
     pub fn write_text(path: &Path, text: &str) -> Result<(), ConfigError> {
-        let tmp = temp_path(path);
-        {
-            let mut file = fs::File::create(&tmp)?;
-            file.write_all(text.as_bytes())?;
-            file.sync_all()?;
+        let path = resolve_links(path)?;
+        let tmp = temp_path(&path);
+        let result = write_beside(&tmp, &path, text);
+        if result.is_err() {
+            let _ = fs::remove_file(&tmp);
         }
-        fs::rename(&tmp, path)?;
-        Ok(())
+        Ok(result?)
     }
 
     /// The configuration's text with the orchestrator's model replaced.
@@ -226,6 +229,43 @@ fn temp_path(path: &Path) -> PathBuf {
         .unwrap_or_else(|| "config.toml".to_string());
     let nonce = NEXT.fetch_add(1, Ordering::Relaxed);
     path.with_file_name(format!(".{name}.{}.{nonce}.tmp", std::process::id()))
+}
+
+/// The file a path names, with its symbolic links followed.
+///
+/// A path that is not a link, or is not there, names itself: a new
+/// configuration is written where it was asked for.
+fn resolve_links(path: &Path) -> std::io::Result<PathBuf> {
+    // A chain of links is followed to its end; a loop is an error, not a hang.
+    const LIMIT: usize = 32;
+    let mut path = path.to_path_buf();
+    for _ in 0..LIMIT {
+        match fs::symlink_metadata(&path) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                let target = fs::read_link(&path)?;
+                path = match path.parent() {
+                    Some(parent) => parent.join(target),
+                    None => target,
+                };
+            }
+            _ => return Ok(path),
+        }
+    }
+    Err(std::io::Error::other("too many symbolic links"))
+}
+
+/// Write `text` to `tmp`, give it the mode of `path` when there is one, and
+/// rename it over `path`.
+fn write_beside(tmp: &Path, path: &Path, text: &str) -> std::io::Result<()> {
+    {
+        let mut file = fs::File::create(tmp)?;
+        if let Ok(meta) = fs::metadata(path) {
+            file.set_permissions(meta.permissions())?;
+        }
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
+    }
+    fs::rename(tmp, path)
 }
 
 /// A TOML string, escaped.
@@ -528,6 +568,73 @@ mod tests {
         let text = fs::read_to_string(&path).expect("the file");
         assert!(text.ends_with('\n'), "the file has no final newline");
         assert_eq!(Config::read(&path).expect("the record"), config);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_write_goes_through_a_symbolic_link() {
+        // The link is the human's: the file it names changes, and the link
+        // stays where it was.
+        let dir =
+            std::env::temp_dir().join(format!("coding-crew-config-link-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch folder");
+        let target = dir.join("dotfiles-hugo.toml");
+        fs::write(&target, "round_limit = 1\n").expect("the target");
+        let path = dir.join(CONFIG_FILE);
+        std::os::unix::fs::symlink(&target, &path).expect("a link");
+        Config::write_text(&path, "round_limit = 2\n").expect("the write");
+        assert!(
+            path.symlink_metadata()
+                .expect("the link")
+                .file_type()
+                .is_symlink(),
+            "the link was replaced by a file"
+        );
+        assert_eq!(
+            fs::read_to_string(&target).expect("the target"),
+            "round_limit = 2\n"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_write_keeps_the_mode_of_the_file_it_replaces() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir =
+            std::env::temp_dir().join(format!("coding-crew-config-mode-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch folder");
+        let path = dir.join(CONFIG_FILE);
+        fs::write(&path, "round_limit = 1\n").expect("the file");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("a private mode");
+        Config::write_text(&path, "round_limit = 2\n").expect("the write");
+        let mode = fs::metadata(&path).expect("the file").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "the write reset the mode");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_failed_write_leaves_no_temporary_file() {
+        // A folder where the file must go makes the rename fail, after the
+        // temporary file has been written beside it.
+        let dir =
+            std::env::temp_dir().join(format!("coding-crew-config-failed-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch folder");
+        let path = dir.join(CONFIG_FILE);
+        fs::create_dir_all(&path).expect("a folder where the file goes");
+        assert!(Config::write_text(&path, "round_limit = 2\n").is_err());
+        let leftovers: Vec<String> = fs::read_dir(&dir)
+            .expect("the folder")
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
         let _ = fs::remove_dir_all(&dir);
     }
 

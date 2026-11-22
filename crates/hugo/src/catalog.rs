@@ -16,7 +16,8 @@
 
 use std::io::Read;
 use std::process::{Command, Stdio};
-use std::thread::{self, JoinHandle};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::thread;
 use std::time::{Duration, Instant};
 
 /// How long the catalogue's tool may take before the read is given up.
@@ -80,8 +81,6 @@ impl Catalog {
                 Ok(None) if Instant::now() >= deadline => {
                     let _ = child.kill();
                     let _ = child.wait();
-                    // The drains are abandoned rather than joined: a tool that
-                    // left a child holding its pipes must not hold this read.
                     break None;
                 }
                 Ok(None) => thread::sleep(POLL),
@@ -92,11 +91,14 @@ impl Catalog {
                 }
             }
         };
+        let timed_out = || format!("{tool} models timed out after {bound:?}");
         let Some(status) = status else {
-            return Err(format!("{tool} models timed out after {bound:?}"));
+            return Err(timed_out());
         };
-        let stdout = stdout.join().unwrap_or_default();
-        let stderr = stderr.join().unwrap_or_default();
+        // The output is held to the same bound as the wait: a tool that left a
+        // child holding its pipes must not hold this read past it.
+        let stdout = received(&stdout, deadline).ok_or_else(timed_out)?;
+        let stderr = received(&stderr, deadline).ok_or_else(timed_out)?;
         if !status.success() {
             let why = String::from_utf8_lossy(&stderr);
             let why = why.trim();
@@ -154,15 +156,30 @@ pub fn base_of(model: &str) -> &str {
 }
 
 /// Read a pipe to its end on its own thread, so the wait on the tool is not
-/// the wait on its output.
-fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> JoinHandle<Vec<u8>> {
+/// the wait on its output. The bytes come back over a channel, so the read
+/// can give up on them at the bound.
+fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> Receiver<Vec<u8>> {
+    let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
         let mut bytes = Vec::new();
         if let Some(mut pipe) = pipe {
             let _ = pipe.read_to_end(&mut bytes);
         }
-        bytes
-    })
+        let _ = sender.send(bytes);
+    });
+    receiver
+}
+
+/// The bytes a drain read, when it finishes by the deadline. A drain that
+/// ended without sending (its thread failed) reads as no bytes. A drain still
+/// reading at the deadline is abandoned, not joined: its thread ends with the
+/// pipe.
+fn received(drain: &Receiver<Vec<u8>>, deadline: Instant) -> Option<Vec<u8>> {
+    match drain.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+        Ok(bytes) => Some(bytes),
+        Err(RecvTimeoutError::Timeout) => None,
+        Err(RecvTimeoutError::Disconnected) => Some(Vec::new()),
+    }
 }
 
 /// A scratch folder holding an executable tool that answers with the script's
@@ -301,6 +318,23 @@ mod tests {
             .expect_err("a hanging tool cannot be read");
         assert!(error.contains("timed out"), "{error}");
         assert!(error.contains("a-tool"), "{error}");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the read outlived its bound: {:?}",
+            started.elapsed()
+        );
+        let _ = std::fs::remove_dir_all(tool.parent().expect("the scratch folder"));
+    }
+
+    #[test]
+    fn a_tool_whose_child_holds_its_output_is_given_up_at_the_bound() {
+        // The tool answers and exits, but a child it left behind keeps the
+        // output pipes open: the read is still bounded.
+        let tool = scratch_tool("orphan", "#!/bin/sh\n(sleep 30) &\necho p/m\n");
+        let started = Instant::now();
+        let error = Catalog::read_within(&tool.to_string_lossy(), Duration::from_millis(300))
+            .expect_err("a read held by a child's pipes cannot be read");
+        assert!(error.contains("timed out"), "{error}");
         assert!(
             started.elapsed() < Duration::from_secs(5),
             "the read outlived its bound: {:?}",

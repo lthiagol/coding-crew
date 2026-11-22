@@ -233,14 +233,16 @@ fn the_crew_leads_the_main_pane_the_shell_has_content() {
 
 #[test]
 fn a_project_without_a_record_shows_the_named_empty_state() {
-    // The repository root is not a project: there is no coding-crew folder,
-    // so there is nothing to read and the pane says so.
+    // A folder with no coding-crew folder above it is not a project: there is
+    // nothing to read and the pane says so.
     let home = home();
-    let text = screen_in(&repo_root(), &home);
+    let outside = outside_any_project("no-project");
+    let text = screen_in(&outside, &home);
     assert!(text.contains("nothing is running"), "{text}");
     // The configuration is the tool's, not the project's: a project without a
     // record still shows the configuration the tool wrote.
     assert!(text.contains("build-and-fix rounds"), "{text}");
+    let _ = fs::remove_dir_all(&outside);
 
     // The same through a project whose coding-crew folder holds no record.
     let dir = std::env::temp_dir().join(format!("hugo-no-record-{}", std::process::id()));
@@ -416,7 +418,7 @@ fn the_shell_runs_without_a_home_folder() {
     // a reason to fail: the flow still shows, and the sidebar says there is
     // no configuration.
     let output = Command::new(env!("CARGO_BIN_EXE_hugo"))
-        .current_dir(repo_root())
+        .current_dir(outside_any_project("no-home"))
         .env_remove("HOME")
         .args(["--render", "--plain", "--width", "100", "--height", "20"])
         .output()
@@ -543,6 +545,15 @@ fn an_old_json_configuration_is_named_and_not_read() {
         "hugo converted the old configuration"
     );
     let _ = fs::remove_dir_all(&home);
+}
+
+/// A scratch folder under the system's temporary folder, which has no
+/// coding-crew folder above it: a run from here is not inside any project.
+fn outside_any_project(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("hugo-{name}-outside-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).expect("a scratch folder");
+    dir
 }
 
 /// A scratch home of this test's own: the configuration is written into it.
