@@ -1273,6 +1273,18 @@ carrying out the approved coloured design. The ruling went in as the fourth
 fix round. The unit ran on the herdr-crew skill, which stopped it with
 NO_PROGRESS when the ruling was needed. Commit `82cfe86`.
 
+Unit closed: raul's Settings picks, the Path spine, no freeze (plan 69). One
+build round and one fix round; the second review clean. `←→` switches tabs on
+Settings, and `enter` on a choice opens a picker. The picker is shared with
+hugo's choice popup (`crates/theme/src/picker.rs`), previews as the cursor
+moves and restores on `esc`. The Path fork sits in the trunk's column at 40
+and 100. The detail keeps its rendered document per source, width, theme and
+icons, and the loop drains queued keys before one redraw. Round one found that
+`enter` on a pick opened on an unset effort kept nothing; fixed, with a test.
+Left in TODO.md: the fork's column, which the spec sketch had one column
+right, and the freeze, measured but not reproduced in a terminal. Commit
+`54b325f`.
+
 ---
 
 ## Lessons

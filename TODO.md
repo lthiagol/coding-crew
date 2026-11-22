@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 68.
+Updated 2026-11-22 by the orchestrator, after unit 69.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,11 +56,19 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–68 and 63b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–69 and 63b are closed; their record is in
 `DONE.md`.
 
-None. Every unit in `docs/plan.md` is ✓. What remains there is grooming (G1–G4)
-and question Q5, which wait on decisions or the flow.
+- 70 · One table per role, and the builder is the builder (M)
+- 70b · hugo: the crew size, and choices for this session only (M)
+- 71 · Effort comes from the model, and raul picks from lists (M)
+- 72 · hugo shows where the flow is, and picks the tasks (L)
+- 73 · Mouse in both TUIs (M)
+- 74 · The review reads in layers (M)
+- 75 · Backlog items have documents (S)
+- 76 · Settings in colour (S)
+
+Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 ---
 
@@ -183,10 +191,22 @@ None blocking. Carried from the closed units.
   The footer is `esc close · ? help · q quit`, as the unit's item 2 says, and
   the scroll keys moved to the overlay. The build took this without asking.
   The human confirms it, or puts the scroll keys back in the footer.
-- **Settings' footer lacks `enter edit` and `←→ change`** (2026-11-22, unit
-  66). The footer reads `w save · u undo · r reload`, as the brief's example
-  does. Both keys are in the `?` overlay. The human decides whether they join
-  the footer.
+- **Settings' footer lacks `enter` and `←→`** (2026-11-22, unit 66; amended
+  unit 69). The footer reads `w save · u undo · r reload`. `←→` now switches
+  tabs on Settings, and `enter edit or pick` is in the `?` overlay. An `enter`
+  chip pushed the footer onto two rows at 38 columns and broke a pinned test,
+  so it was left out. The human decides whether it joins the footer, and
+  whether the footer may take a second row.
+- **The Path fork's column is the builder's call** (2026-11-22, unit 69). The
+  fork line `╵` moved from column 2 to column 1, with the trunk and the bar. The
+  spec sketch in `docs/tui/screens.md` had it one column right, so the build
+  changed the sketch too. If the offset was meant, revert `fork_line` in
+  `crates/raul/src/path.rs` and the sketch. The human confirms.
+- **The freeze is not reproduced live** (2026-11-22, unit 69). The fix was
+  measured on the mock data and pinned by a test that counts engine runs, not
+  in a terminal. The folder read and the projection still run on every redraw,
+  and on a large work folder they may still cost. The key drain in
+  `crates/raul/src/main.rs` has no test: it lives in the interactive loop.
 - **The `?` popup is twenty rows** (2026-11-22, unit 66). `enter open` takes a
   line, so at twenty rows the Tasks help drops `g/G`. The human decides whether
   the popup should be taller.
