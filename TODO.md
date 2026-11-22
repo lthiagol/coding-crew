@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 76.
+Updated 2026-11-22 by the orchestrator, after unit 77.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,7 +56,7 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–76, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–77, 63b and 70b are closed; their record is in
 `DONE.md`.
 
 None. Every Ready row is closed.
@@ -102,6 +102,10 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 - **Done tasks are counted on Path, listed on Tasks** (2026-11-22, the human's
   ruling). Path ends with a FINISHED row that counts the done tasks; the Tasks
   tab is their home. Closes the open question on done tasks. Unit 77.
+- **Store discovery accepts any folder named `coding-crew`** (2026-11-22, the
+  human, review F4). Kept as is. A checkout of this repository is discovered as
+  a project; the limit is recorded in ADR 0010. A marker would fix it, and waits
+  for a writer.
 - **A round is numbered by the model, unpadded** (2026-11-21). The review
   heading reads `Round 1`, not `Round 01`. The self pre-screen is round 0, and
   padding it would render "Round 00"; the model's own number is what the
@@ -136,11 +140,6 @@ None blocking. Carried from the closed units.
 - **Settings' step-role picker lists `creator`** (2026-11-22, unit 70). It sits
   beside orchestrator, builder and reviewer. The human confirms whether the
   picker should offer it.
-- **Store discovery accepts any folder named `coding-crew`** (2026-11-22,
-  review F4). A checkout of this repository is itself discovered as a
-  project, because ADR 0010 says the nearest `coding-crew/` owns the result
-  with or without `work/`. Left as a known limit; changing it means amending
-  ADR 0010 to require a marker — the human's call.
 - **Settings: inline tables and dotted keys are text** (2026-11-22, review of
   unit 63). `[raul] tasks = { … }` and `tasks.sort = …` are valid and saved
   into, but drawn as text with no stop.
@@ -486,6 +485,24 @@ None blocking. Carried from the closed units.
 - **`Theme::document_style` rebuilds the document palette on every call**
   (2026-11-22, unit 76). Not cached. The builder judged it cheap, pure
   arithmetic. No action unless a profile shows it.
+- **FINISHED hides silently with the cursor above it** (2026-11-22, unit 77).
+  When every live row fits but FINISHED does not, the row is off screen with no
+  word until the cursor reaches the last task. The builder took option (a), the
+  reviewers' recommendation, and `docs/tui/screens.md` § Path says so. Naming it
+  in the footer was rejected: it crowded a 40×4 pane. At 40×6 with the cursor on
+  the last task, FINISHED is also off screen; the layout rules allow it. The
+  human confirms (a).
+- **The `window` doc comment omits the FINISHED exception** (2026-11-22, unit
+  77). `crates/raul/src/path.rs:532` says what does not fit is said out loud,
+  which FINISHED does not do. One line, left as it was.
+- **The no-selection case is unchecked** (2026-11-22, unit 77). With no
+  selection nothing scrolls, so FINISHED stays hidden when every row fits. The
+  build did not check whether the app ever passes no selection with rows present.
+- **FINISHED's colours** (2026-11-22, unit 77). The icon and label take
+  `semantic.ok`, the words `text.dim`. The brief said "dim, on the done phase's
+  colour"; the builder read it as that split. The human confirms it.
+- **A Path with only done tasks** (2026-11-22, unit 77). It shows the FINISHED
+  row, not "no live work yet". The builder's choice; the human confirms it.
 
 ## WHAT WAITS ON THE FLOW
 

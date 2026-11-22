@@ -1379,6 +1379,19 @@ modifiers. Ruling: keep the table, since the done-when says the terminal preset
 uses attributes; both docs now record it. The key-role and colour choices wait
 for the human (see THE FOLLOW-UPS). Commit `f245f20`.
 
+Unit closed: Path counts the finished work (plan 77). Four build rounds and four
+reviews; the fourth clean. Path ends with one FINISHED row, `N tasks finished`,
+dim, with its branch icon. It is not a row, so `enter` does nothing on it, and
+with no done task it is skipped. Done tasks are counted here and listed on the
+Tasks tab. The scroll moves for the row only when the cursor is on the last
+task. Rounds one to three found four defects: FINISHED unreachable when the tree
+scrolls, FINISHED drawn under a cut spine, live rows hidden to make room for a
+FINISHED row that still did not fit, and a scroll on every cursor move once
+every row fits. All four are fixed, with tests. No ruling was made. FINISHED
+closes the scroll and is not announced while off screen: option (a), the
+reviewers' recommendation, taken in round two and written into
+`docs/tui/screens.md` § Path (see THE FOLLOW-UPS). Commit `4f82a56`.
+
 ---
 
 ## Lessons

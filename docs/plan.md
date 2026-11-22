@@ -96,7 +96,7 @@ A unit without one is not ready, and belongs under **Grooming** instead.
 | 74 | **The review reads in layers** ✓ | done | each round a heading, its findings grouped by severity, details and comments nested beneath, spaced apart; TSK19 reads cleanly at 60 and 100 |
 | 75 | **Backlog items have documents** ✓ | done | an item opens a detail pane from its own projection, instead of "no document yet" |
 | 76 | **Settings in colour** ✓ | done | the Settings TOML is painted by the syntax roles: headers, keys, strings, numbers, booleans, comments |
-| 77 | **Path counts the finished work** | S | a FINISHED branch at the end of Path is one summary row, the number of done tasks; finished tasks live in the Tasks tab |
+| 77 | **Path counts the finished work** ✓ | done | a FINISHED branch at the end of Path is one summary row, the number of done tasks; finished tasks live in the Tasks tab |
 
 ## Grooming
 
