@@ -124,6 +124,7 @@ pub fn lines(
                 prefix,
                 groups(config, theme, icons, cursor),
                 theme,
+                icons,
                 width,
                 height,
             );
@@ -158,6 +159,7 @@ pub fn lines(
             prefix,
             groups(&Config::default(), theme, icons, usize::MAX),
             theme,
+            icons,
             width,
             height,
         ),
@@ -301,13 +303,14 @@ fn fits(
     prefix: Vec<(String, Line<'static>)>,
     groups: Vec<Group>,
     theme: &Theme,
+    icons: IconSet,
     width: usize,
     height: usize,
 ) -> Drawn {
     let total: usize = groups.iter().map(|group| group.rows.len() + 1).sum();
     if prefix.len() + total <= height {
         let mut lines: Vec<Line<'static>> = prefix.into_iter().map(|(_, line)| line).collect();
-        lines.extend(drawn(&groups, width, theme));
+        lines.extend(drawn(&groups, width, icons, theme));
         return Drawn {
             lines,
             agents: !groups.is_empty(),
@@ -347,7 +350,7 @@ fn fits(
         used += held;
         shown += 1;
     }
-    lines.extend(drawn(&groups[..shown], width, theme));
+    lines.extend(drawn(&groups[..shown], width, icons, theme));
     let mut hidden: Vec<String> = prefix[kept..]
         .iter()
         .map(|(name, _)| name.clone())
@@ -372,29 +375,37 @@ fn fits(
 
 /// The groups drawn: each title, then its rows. The cursor's row takes the
 /// selection's bar and paint, bar to the pane's edge.
-fn drawn(groups: &[Group], width: usize, theme: &Theme) -> Vec<Line<'static>> {
+fn drawn(groups: &[Group], width: usize, icons: IconSet, theme: &Theme) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for group in groups {
         lines.push(line(group.title, group.style, width));
         for row in &group.rows {
-            lines.push(row_line(&row.text, row.style, row.selected, width, theme));
+            lines.push(row_line(
+                &row.text,
+                row.style,
+                row.selected,
+                width,
+                icons,
+                theme,
+            ));
         }
     }
     lines
 }
 
-/// A row with the bar column first: `▌` in the focus slot when the cursor is
-/// on it, a space otherwise, so every row shares one left edge.
+/// A row with the bar column first: the cursor bar in the focus slot when the
+/// cursor is on it, a space otherwise, so every row shares one left edge.
 fn row_line(
     text: &str,
     style: Style,
     selected: bool,
     width: usize,
+    icons: IconSet,
     theme: &Theme,
 ) -> Line<'static> {
     let body = Line::from(Span::styled(cut_to(text, width.saturating_sub(BAR)), style));
     let (bar, body) = if selected {
-        let bar = Span::styled("▌", theme.chrome.border_focus);
+        let bar = Span::styled(Icon::CursorBar.glyph(icons), theme.chrome.border_focus);
         (bar, selected_line(body, width.saturating_sub(BAR), theme))
     } else {
         (Span::raw(" "), body)

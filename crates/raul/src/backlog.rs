@@ -925,6 +925,7 @@ fn columns_line(
         Line::from(spans),
         width,
         selected == Some(row.id.as_str()),
+        icons,
         theme,
     )
 }

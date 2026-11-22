@@ -26,8 +26,6 @@ use coding_crew_theme::{Icon, IconSet, Theme, phase_style};
 const BORDER: usize = 2;
 /// The gap between the id of a row and its title.
 const GAP: usize = 3;
-/// The marker of the task that happens next.
-const NEXT: &str = "●";
 /// The name of the spine, for the announcement.
 const SPINE: &str = "EXECUTION";
 
@@ -934,7 +932,7 @@ fn pieces(
         .enumerate()
         .map(|(index, entry)| {
             let prefix = if index == 0 {
-                format!(" {NEXT} ")
+                format!(" {} ", Icon::Next.glyph(icons))
             } else {
                 " ├─ ".to_string()
             };
@@ -1213,7 +1211,7 @@ fn row(
     );
     let mut lines: Vec<Line<'static>> = Vec::new();
     let mut head = vec![
-        view::bar(selected, theme),
+        view::bar(selected, icons, theme),
         Span::styled(rest.to_string(), theme.text.dim),
         Span::styled(mark, style),
         Span::styled(id.to_string(), style),
@@ -1231,7 +1229,7 @@ fn row(
     // piece is drawn from the column.
     for chunk in first.filter(|_| !beside).into_iter().chain(chunks) {
         lines.push(Line::from(vec![
-            view::bar(selected, theme),
+            view::bar(selected, icons, theme),
             Span::raw(" ".repeat(text_col - 1)),
             Span::styled(chunk.clone(), style),
         ]));
@@ -1258,7 +1256,7 @@ fn row(
         } else {
             for chunk in wrap(&note, width.saturating_sub(text_col).max(1)) {
                 lines.push(Line::from(vec![
-                    view::bar(selected, theme),
+                    view::bar(selected, icons, theme),
                     Span::raw(" ".repeat(text_col - 1)),
                     Span::styled(chunk, theme.text.dim),
                 ]));
@@ -1495,7 +1493,11 @@ mod tests {
         assert_eq!(row_ids(&work, free), vec!["TSK01".to_string()]);
         let mut view = View::default();
         let text = text_of(&draw_at(&work, 60, 12, free, &mut view));
-        let spine = format!(" ● {} TSK01", phase_glyph("approved"));
+        let spine = format!(
+            " {} {} TSK01",
+            Icon::Next.glyph(IconSet::Nerd),
+            phase_glyph("approved")
+        );
         assert!(text.contains(&spine), "the spine is not drawn: {text}");
         assert!(
             !text.contains("BLOCKED"),
@@ -1766,7 +1768,11 @@ mod tests {
         let rows = draw(&mock_work(), 100, 40);
         let text = text_of(&rows);
         // The spine, with the marker of what happens next.
-        let spine = format!(" ● {} TSK29", phase_glyph("approved"));
+        let spine = format!(
+            " {} {} TSK29",
+            Icon::Next.glyph(IconSet::Nerd),
+            phase_glyph("approved")
+        );
         assert!(text.contains(&spine), "{text}");
         // The branch headers, with the count of the group they count.
         assert!(text.contains("AWAITING APPROVAL  2"), "{text}");
@@ -1789,7 +1795,11 @@ mod tests {
         // branches, and the branches hang off it.
         let rows = inner(&draw(&mock_work(), 100, 40));
         // The spine hangs on the trunk.
-        let spine = format!(" ● {} TSK29", phase_glyph("approved"));
+        let spine = format!(
+            " {} {} TSK29",
+            Icon::Next.glyph(IconSet::Nerd),
+            phase_glyph("approved")
+        );
         assert!(rows.iter().any(|row| row.starts_with(&spine)), "{rows:?}");
         // The fork sits one column right of the trunk.
         assert!(rows.iter().any(|row| row.starts_with("  ╵")), "{rows:?}");
@@ -1882,6 +1892,16 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn the_next_marker_is_the_icon_of_the_set() {
+        // The marker of the task that happens next is the icon table's `next`
+        // in the set in force: the nerd set draws its own glyph.
+        let work = mock_work();
+        let text = text_of(&draw(&work, 100, 40));
+        assert!(text.contains(Icon::Next.glyph(IconSet::Nerd)), "{text}");
+        assert!(!text.contains(Icon::Next.glyph(IconSet::Unicode)), "{text}");
     }
 
     #[test]

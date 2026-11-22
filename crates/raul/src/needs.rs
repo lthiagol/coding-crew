@@ -591,7 +591,7 @@ fn row_line(
         };
     }
     let line = row_line_plain(row, width - view::BAR, age_width, icons, theme);
-    view::barred(line, width, selected, theme)
+    view::barred(line, width, selected, icons, theme)
 }
 
 /// The icon of a reason: the status the task waits in.

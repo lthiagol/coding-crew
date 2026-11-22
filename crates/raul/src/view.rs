@@ -18,16 +18,16 @@
 
 use ratatui::text::{Line, Span};
 
-use coding_crew_theme::{Theme, selected_line};
+use coding_crew_theme::{Icon, IconSet, Theme, selected_line};
 
 /// The columns the selection bar takes: the first column of every row.
 pub const BAR: usize = 1;
 
-/// The selection bar: `▌` in `chrome.border_focus` on the selected row, a
-/// space on the rest.
-pub fn bar(selected: bool, theme: &Theme) -> Span<'static> {
+/// The selection bar: the cursor bar in `chrome.border_focus` on the selected
+/// row, a space on the rest.
+pub fn bar(selected: bool, icons: IconSet, theme: &Theme) -> Span<'static> {
     if selected {
-        Span::styled("▌", theme.chrome.border_focus)
+        Span::styled(Icon::CursorBar.glyph(icons), theme.chrome.border_focus)
     } else {
         Span::raw(" ")
     }
@@ -54,8 +54,14 @@ pub fn selected_row(
 
 /// A row with its selection bar at the left edge, drawn in the `width - BAR`
 /// columns after the bar's column.
-pub fn barred(line: Line<'static>, width: usize, selected: bool, theme: &Theme) -> Line<'static> {
-    let mut spans = vec![bar(selected, theme)];
+pub fn barred(
+    line: Line<'static>,
+    width: usize,
+    selected: bool,
+    icons: IconSet,
+    theme: &Theme,
+) -> Line<'static> {
+    let mut spans = vec![bar(selected, icons, theme)];
     spans.extend(line.spans);
     selected_row(Line::from(spans), width, selected, theme)
 }
@@ -245,7 +251,7 @@ mod tests {
     fn a_selected_row_is_barred_and_painted_whole() {
         let theme = Theme::preset(Preset::Dark);
         let line = Line::from(Span::styled("ab", theme.text.strong));
-        let row = barred(line, 5, true, &theme);
+        let row = barred(line, 5, true, IconSet::Nerd, &theme);
         assert_eq!(row.spans[0].content, "▌");
         assert_eq!(row.spans[0].style, theme.chrome.border_focus);
         assert_eq!(row.width(), 5);
@@ -258,7 +264,7 @@ mod tests {
     fn an_unselected_row_keeps_its_paint_behind_a_space() {
         let theme = Theme::preset(Preset::Dark);
         let line = Line::from(Span::styled("ab", theme.text.strong));
-        let row = barred(line, 5, false, &theme);
+        let row = barred(line, 5, false, IconSet::Nerd, &theme);
         assert_eq!(row.spans[0].content, " ");
         assert_eq!(row.spans[1].content, "ab");
         assert_eq!(row.spans[1].style, theme.text.strong);

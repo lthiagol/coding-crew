@@ -411,8 +411,14 @@ impl App {
             tab_icon(self.tab).glyph(self.icons),
             self.tab.label()
         );
+        let left = Icon::TabMarkerLeft.glyph(self.icons);
+        let right = Icon::TabMarkerRight.glyph(self.icons);
         let parts = [
-            (format!(" ‹ {name} › "), self.tab_style(self.tab), true),
+            (
+                format!(" {left} {name} {right} "),
+                self.tab_style(self.tab),
+                true,
+            ),
             (format!(" {name} "), self.tab_style(self.tab), true),
             (
                 format!("{}/{}", self.tab.index() + 1, Tab::ALL.len()),
@@ -466,7 +472,10 @@ impl App {
         let columns = columns.min(width - start);
         Line::from(vec![
             Span::styled("─".repeat(start), self.theme.chrome.border),
-            Span::styled("▔".repeat(columns), self.theme.chrome.tab_active),
+            Span::styled(
+                Icon::TabUnderline.glyph(self.icons).repeat(columns),
+                self.theme.chrome.tab_active,
+            ),
             Span::styled(
                 "─".repeat(width - start - columns),
                 self.theme.chrome.border,
@@ -734,7 +743,7 @@ mod tests {
 
     use super::*;
     use crate::data::Work;
-    use coding_crew_theme::Preset;
+    use coding_crew_theme::{Icon, IconSet, Preset};
 
     /// The tests' clock: one instant for the rows and the draw that shows
     /// them. Every fixture entered its status before it.
@@ -894,9 +903,11 @@ mod tests {
             // The active tab alone, the index alone, or nothing: no part
             // of the line is cut in half.
             let glyph = Icon::TabOverview.glyph(IconSet::Nerd);
+            let left = Icon::TabMarkerLeft.glyph(IconSet::Nerd);
+            let right = Icon::TabMarkerRight.glyph(IconSet::Nerd);
             assert!(
                 [
-                    format!(" ‹ {glyph} Overview › "),
+                    format!(" {left} {glyph} Overview {right} "),
                     format!(" {glyph} Overview "),
                     "1/5".to_string(),
                     String::new(),
@@ -989,7 +1000,7 @@ mod tests {
         let expected = format!(
             "{}{}{}",
             "─".repeat(start),
-            "▔".repeat(len),
+            Icon::TabUnderline.glyph(IconSet::Nerd).repeat(len),
             "─".repeat(100 - start - len)
         );
         assert_eq!(rows[2], expected);
@@ -1152,18 +1163,19 @@ mod tests {
         let (rows, paint) = render(&mut app, 100, 45);
         // The icon set in force is marked too, on its own group's rows: the
         // theme's rows are the ones that say what kind of theme they are.
+        let mark = Icon::InUse.glyph(IconSet::Nerd);
         let marked: Vec<usize> = rows
             .iter()
             .enumerate()
             .filter(|(_, row)| {
-                row.contains('●') && (row.contains("palette") || row.contains("terminal colours"))
+                row.contains(mark) && (row.contains("palette") || row.contains("terminal colours"))
             })
             .map(|(index, _)| index)
             .collect();
         assert_eq!(marked.len(), 1, "{}", rows.join("\n"));
         let row = &rows[marked[0]];
         assert!(row.contains("Dark"), "{row}");
-        let column = row[..row.find('●').expect("the mark")].chars().count();
+        let column = row[..row.find(mark).expect("the mark")].chars().count();
         assert_eq!(
             paint[marked[0]][column].fg,
             theme.text.strong.fg.expect("the strong colour"),
@@ -1435,9 +1447,10 @@ mod tests {
                     .take(rows.len().saturating_sub(3))
                     .find(|(y, _)| paint[*y][1] == selection)
                     .unwrap_or_else(|| panic!("{cursor} is not painted: {rows:?}"));
+                let mark = Icon::InUse.glyph(IconSet::Nerd);
                 let text = row.trim_matches('│').trim();
                 assert!(
-                    text.starts_with(&label) || text.starts_with(&format!("● {label}")),
+                    text.starts_with(&label) || text.starts_with(&format!("{mark} {label}")),
                     "{cursor}: the selected line is {text:?}"
                 );
             }

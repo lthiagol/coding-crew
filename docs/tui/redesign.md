@@ -57,6 +57,18 @@ paint and never the words. This redesign adds glyphs, not words.
 | `running` | `󰑮` U+F046E | `●` | the automation runs |
 | `stopped` | `󰏤` U+F03E4 | `■` | the automation stopped |
 | `config` | `󰒓` U+F0493 | `⚙` | hugo's configuration |
+| `next` | `󰑊` U+F044A | `●` | the task that happens next (Path's marker) |
+| `cursor_bar` | `▌` U+258C | `▌` | the selected row's bar, in both sets |
+| `in_use` | `󰐾` U+F043E | `●` | the value in use (Settings) |
+| `task_open` | `󰄱` U+F0131 | `○` | an open task-list item |
+| `alert_note` | `󰋼` U+F02FC | `ℹ` | `> [!NOTE]` |
+| `alert_tip` | `󰛩` U+F06E9 | `✦` | `> [!TIP]` |
+| `alert_important` | `󰍢` U+F0362 | `!` | `> [!IMPORTANT]` |
+| `alert_warning` | `󰀦` U+F0026 | `⚠` | `> [!WARNING]` |
+| `alert_caution` | `󰅜` U+F015C | `✗` | `> [!CAUTION]` |
+| `tab_marker_left` | `‹` U+2039 | `‹` | the mark before the active tab's label, in both sets |
+| `tab_marker_right` | `›` U+203A | `›` | the mark after the active tab's label, in both sets |
+| `tab_underline` | `▔` U+2594 | `▔` | the rule under the active tab's label, in both sets |
 
 A status icon takes its status's slot (`theme.md` § the phases). Other icons
 take the slot of the word they sit beside.

@@ -277,13 +277,20 @@ fn document_lines(
     .lines
 }
 
-/// The engine's theme for the document: the theme's palette, with the task
-/// and link glyphs taken from the icon set the pane draws its icons with.
+/// The engine's theme for the document: the theme's palette, with the task,
+/// link and alert glyphs taken from the icon set the pane draws its icons with.
 fn markdown_theme(theme: &Theme, icons: IconSet) -> MarkdownTheme {
     MarkdownTheme {
         task_done_glyph: Icon::StatusDone.glyph(icons),
-        task_open_glyph: Icon::StatusDraft.glyph(icons),
+        task_open_glyph: Icon::TaskOpen.glyph(icons),
         link_glyph: Icon::Link.glyph(icons),
+        alert_glyphs: [
+            Icon::AlertNote.glyph(icons),
+            Icon::AlertTip.glyph(icons),
+            Icon::AlertImportant.glyph(icons),
+            Icon::AlertWarning.glyph(icons),
+            Icon::AlertCaution.glyph(icons),
+        ],
         ..theme.markdown_theme()
     }
 }
@@ -1221,7 +1228,7 @@ mod tests {
         );
         assert_eq!(
             child_text
-                .matches(Icon::StatusDraft.glyph(IconSet::Nerd))
+                .matches(Icon::TaskOpen.glyph(IconSet::Nerd))
                 .count(),
             1,
             "the child does not render one open box: {child_text}"
@@ -1692,5 +1699,27 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_task_and_alert_glyphs_are_the_icon_sets() {
+        // The engine takes its glyphs as configuration, so the document draws
+        // the set in force: the nerd set in the nerd set, and the unicode
+        // glyphs the engine always drew in the unicode one.
+        let nerd = markdown_theme(&theme(), IconSet::Nerd);
+        assert_eq!(nerd.task_open_glyph, Icon::TaskOpen.glyph(IconSet::Nerd));
+        assert_eq!(
+            nerd.alert_glyphs,
+            [
+                Icon::AlertNote.glyph(IconSet::Nerd),
+                Icon::AlertTip.glyph(IconSet::Nerd),
+                Icon::AlertImportant.glyph(IconSet::Nerd),
+                Icon::AlertWarning.glyph(IconSet::Nerd),
+                Icon::AlertCaution.glyph(IconSet::Nerd),
+            ]
+        );
+        let unicode = markdown_theme(&theme(), IconSet::Unicode);
+        assert_eq!(unicode.task_open_glyph, "○");
+        assert_eq!(unicode.alert_glyphs, ["ℹ", "✦", "!", "⚠", "✗"]);
     }
 }

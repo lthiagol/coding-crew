@@ -826,13 +826,13 @@ fn row_line(
 /// A theme row: the mark of the theme in use, the name, and its kind.
 fn theme_line(row: &Row, width: usize, metrics: Metrics, theme: &Theme) -> Line<'static> {
     let in_use = row.preset == Some(theme.preset);
-    marked_line(row, in_use, metrics.theme, width, theme)
+    marked_line(row, in_use, metrics.theme, metrics.set, width, theme)
 }
 
 /// An icons row: the mark of the set in force, the name, and what it needs.
 fn icons_line(row: &Row, width: usize, metrics: Metrics, theme: &Theme) -> Line<'static> {
     let in_use = row.set == Some(metrics.set);
-    marked_line(row, in_use, metrics.icons, width, theme)
+    marked_line(row, in_use, metrics.icons, metrics.set, width, theme)
 }
 
 /// A row that names one of a group's values: the mark of the value in use,
@@ -841,10 +841,15 @@ fn marked_line(
     row: &Row,
     in_use: bool,
     label_width: usize,
+    icons: IconSet,
     width: usize,
     theme: &Theme,
 ) -> Line<'static> {
-    let mark = if in_use { "●" } else { " " };
+    let mark = if in_use {
+        Icon::InUse.glyph(icons)
+    } else {
+        " "
+    };
     let indent = " ".repeat(ROW_INDENT);
     let name = pad(&row.label, label_width);
     let head = ROW_INDENT + 1 + 1 + label_width;
@@ -1120,7 +1125,8 @@ mod tests {
         for preset in Preset::ALL {
             let theme = Theme::preset(preset);
             let text = inner(&draw(&theme, 100, 40)).join("\n");
-            let marked: Vec<&str> = text.lines().filter(|line| line.contains('●')).collect();
+            let mark = Icon::InUse.glyph(IconSet::Nerd);
+            let marked: Vec<&str> = text.lines().filter(|line| line.contains(mark)).collect();
             assert_eq!(marked.len(), 1, "{}: {text}", preset.name());
             assert!(
                 marked[0].contains(preset.label()),
@@ -1147,9 +1153,10 @@ mod tests {
                 .expect("a row for the set");
             let (lines, _, _, _) = window(&groups, 98, 40, &theme(), set, None, 0);
             let text = text_of(&lines);
+            let mark = Icon::InUse.glyph(set);
             let marked: Vec<&str> = text
                 .lines()
-                .filter(|line| line.contains('●') && line.contains(says))
+                .filter(|line| line.contains(mark) && line.contains(says))
                 .collect();
             assert_eq!(marked.len(), 1, "{}: {text}", set.name());
             assert!(
@@ -1356,6 +1363,20 @@ mod tests {
         assert!(text.contains("theme (5 hidden)"), "{text}");
         assert!(text.contains("keys (21 hidden)"), "{text}");
         assert!(text.contains("sort (0 hidden)"), "{text}");
+    }
+
+    #[test]
+    fn the_value_in_use_is_marked_with_the_set_glyph() {
+        // The mark of a value in use is the icon table's `in_use` in the set
+        // in force: the nerd set draws its own glyph, not the unicode dot.
+        let groups = groups();
+        let (rows, _, _, _) = window(&groups, 98, 200, &theme(), IconSet::Nerd, None, 0);
+        let text = text_of(&rows);
+        assert!(text.contains(Icon::InUse.glyph(IconSet::Nerd)), "{text}");
+        assert!(
+            !text.contains(Icon::InUse.glyph(IconSet::Unicode)),
+            "{text}"
+        );
     }
 
     #[test]

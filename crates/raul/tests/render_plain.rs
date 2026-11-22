@@ -924,7 +924,8 @@ fn every_tab_renders_alike_in_every_preset_at_every_canonical_width() {
     // says the same words too. The Settings tab is the exception by design:
     // it marks the theme in use, so the mark is normalised and the rest of
     // the words still have to agree.
-    let without_mark = |text: &str| text.replace('●', " ");
+    let mark = Icon::InUse.glyph(IconSet::Nerd);
+    let without_mark = |text: &str| text.replace(mark, " ");
     for tab in TAB_NAMES {
         for width in [40u16, 60, 100] {
             let dark = render_tab_with("dark", tab, width);
@@ -1433,9 +1434,12 @@ fn detail_render(id: &str) -> String {
 fn the_note_constructs_render_in_the_detail_of_their_fixtures() {
     let diagram = detail_render("TSK20");
     assert!(diagram.contains("╭─ mermaid"), "{diagram}");
+    // The alerts draw the icon set in force: nerd by default.
     let alerts = detail_render("TSK19");
-    assert!(alerts.contains("ℹ Note"), "{alerts}");
-    assert!(alerts.contains("⚠ Warning"), "{alerts}");
+    let note = format!("{} Note", Icon::AlertNote.glyph(IconSet::Nerd));
+    assert!(alerts.contains(&note), "{alerts}");
+    let warning = format!("{} Warning", Icon::AlertWarning.glyph(IconSet::Nerd));
+    assert!(alerts.contains(&warning), "{alerts}");
 }
 
 #[test]

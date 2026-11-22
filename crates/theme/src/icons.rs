@@ -128,11 +128,35 @@ pub enum Icon {
     Stopped,
     /// hugo's configuration.
     Config,
+    /// The task that happens next: the Path's marker.
+    Next,
+    /// The selected row's bar.
+    CursorBar,
+    /// The value in use, in a settings group.
+    InUse,
+    /// An open task-list item.
+    TaskOpen,
+    /// A note alert.
+    AlertNote,
+    /// A tip alert.
+    AlertTip,
+    /// An important alert.
+    AlertImportant,
+    /// A warning alert.
+    AlertWarning,
+    /// A caution alert.
+    AlertCaution,
+    /// The mark before the active tab's label.
+    TabMarkerLeft,
+    /// The mark after the active tab's label.
+    TabMarkerRight,
+    /// The rule under the active tab's label.
+    TabUnderline,
 }
 
 impl Icon {
     /// Every icon, in the order of the spec's table.
-    pub const ALL: [Icon; 29] = [
+    pub const ALL: [Icon; 41] = [
         Icon::AppRaul,
         Icon::AppHugo,
         Icon::TabOverview,
@@ -162,6 +186,18 @@ impl Icon {
         Icon::Running,
         Icon::Stopped,
         Icon::Config,
+        Icon::Next,
+        Icon::CursorBar,
+        Icon::InUse,
+        Icon::TaskOpen,
+        Icon::AlertNote,
+        Icon::AlertTip,
+        Icon::AlertImportant,
+        Icon::AlertWarning,
+        Icon::AlertCaution,
+        Icon::TabMarkerLeft,
+        Icon::TabMarkerRight,
+        Icon::TabUnderline,
     ];
 
     /// The glyph of the icon in a set.
@@ -206,7 +242,7 @@ impl Icon {
 
 /// The icon table: each icon, its name in the spec, and its glyph in the
 /// nerd and unicode sets. Its order is the spec's.
-const TABLE: [(Icon, &str, &str, &str); 29] = [
+const TABLE: [(Icon, &str, &str, &str); 41] = [
     (Icon::AppRaul, "app_raul", "\u{F0645}", "◆"),
     (Icon::AppHugo, "app_hugo", "\u{F06A9}", "◇"),
     (Icon::TabOverview, "tab_overview", "\u{F056E}", "▦"),
@@ -251,6 +287,18 @@ const TABLE: [(Icon, &str, &str, &str); 29] = [
     (Icon::Running, "running", "\u{F046E}", "●"),
     (Icon::Stopped, "stopped", "\u{F03E4}", "■"),
     (Icon::Config, "config", "\u{F0493}", "⚙"),
+    (Icon::Next, "next", "\u{F044A}", "●"),
+    (Icon::CursorBar, "cursor_bar", "\u{258C}", "▌"),
+    (Icon::InUse, "in_use", "\u{F043E}", "●"),
+    (Icon::TaskOpen, "task_open", "\u{F0131}", "○"),
+    (Icon::AlertNote, "alert_note", "\u{F02FC}", "ℹ"),
+    (Icon::AlertTip, "alert_tip", "\u{F06E9}", "✦"),
+    (Icon::AlertImportant, "alert_important", "\u{F0362}", "!"),
+    (Icon::AlertWarning, "alert_warning", "\u{F0026}", "⚠"),
+    (Icon::AlertCaution, "alert_caution", "\u{F015C}", "✗"),
+    (Icon::TabMarkerLeft, "tab_marker_left", "\u{2039}", "‹"),
+    (Icon::TabMarkerRight, "tab_marker_right", "\u{203A}", "›"),
+    (Icon::TabUnderline, "tab_underline", "\u{2594}", "▔"),
 ];
 
 /// The table's row of an icon.
@@ -334,9 +382,13 @@ mod tests {
     #[test]
     fn the_nerd_glyphs_are_private_use() {
         // A nerd glyph sits in a private-use plane, where no font draws it
-        // without the patch; a unicode glyph never does.
+        // without the patch; a unicode glyph never does. A glyph both sets
+        // share, such as the cursor bar, needs no patch and is not nerd.
         for icon in Icon::ALL {
             let glyph = icon.glyph(IconSet::Nerd);
+            if glyph == icon.glyph(IconSet::Unicode) {
+                continue;
+            }
             let character = glyph.chars().next().expect("a glyph");
             let private = ('\u{E000}'..='\u{F8FF}').contains(&character)
                 || ('\u{F0000}'..='\u{FFFFD}').contains(&character);
