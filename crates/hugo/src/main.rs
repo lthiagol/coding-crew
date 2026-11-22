@@ -7,6 +7,7 @@ mod app;
 mod catalog;
 mod config;
 mod sidebar;
+mod skill;
 
 use std::io::{Stdout, Write};
 use std::path::{Path, PathBuf};
@@ -23,8 +24,9 @@ use coding_crew_core::screen::{plain_text, restore, setup};
 use coding_crew_core::store::RUNTIME_FILE;
 use coding_crew_core::{Store, StoreError};
 use coding_crew_theme::{IconSet, Preset, Theme};
+use skill::SkillRequest;
 
-const USAGE: &str = "usage: hugo [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N]]";
+const USAGE: &str = "usage: hugo [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N]] [--skill [orchestrator|runner|reviewer]]";
 /// The columns of a plain render when --width is not given.
 const DEFAULT_WIDTH: u16 = 100;
 /// The rows of a plain render when --height is not given.
@@ -67,11 +69,14 @@ fn someone_works(runtime: &RuntimeRead) -> bool {
 
 fn main() -> Result<()> {
     let options = parse_args(std::env::args().skip(1))?;
+    let home = config::user_home();
+    if let Some(request) = options.skill {
+        return print_skill(request, home.as_deref());
+    }
     // The configuration is the tool's, so it is read — and its defaults
     // written when it is absent — before the window is drawn, in render mode
     // too. A configuration that cannot be read is a state of the screen, not
     // a reason to fail. The home is kept: a pick is saved under it.
-    let home = config::user_home();
     let config = config::load(home.as_deref());
     let app = App::new(options.theme, options.icons, config, home);
 
@@ -98,16 +103,33 @@ struct Options {
     width: u16,
     /// The rows of a plain render.
     height: u16,
+    /// Print a skill as text and exit, instead of opening the window.
+    skill: Option<SkillRequest>,
+}
+
+/// Print a skill as text and exit: the list of roles, or one role's skill
+/// under the crew the configuration names. No window is set up.
+fn print_skill(request: SkillRequest, home: Option<&Path>) -> Result<()> {
+    let text = match request {
+        SkillRequest::List => skill::list(),
+        SkillRequest::Role(role) => skill::for_role(role, config::load(home)),
+    };
+    let mut stdout = std::io::stdout();
+    stdout.write_all(text.as_bytes())?;
+    stdout.flush()?;
+    Ok(())
 }
 
 /// The flags of the command line.
-fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
+fn parse_args(args: impl Iterator<Item = String>) -> Result<Options> {
+    let mut args = args.peekable();
     let mut preset = Preset::Dark;
     let mut icons: Option<String> = None;
     let mut render = false;
     let mut plain = false;
     let mut width = DEFAULT_WIDTH;
     let mut height = DEFAULT_HEIGHT;
+    let mut skill = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-h" | "--help" => {
@@ -152,11 +174,28 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
             other if other.starts_with("--height=") => {
                 height = dimension("--height", &other["--height=".len()..])?;
             }
+            // The role is the next word when it is not a flag: a bare
+            // `--skill` lists the roles.
+            "--skill" => {
+                skill = Some(match args.next_if(|next| !next.starts_with('-')) {
+                    Some(name) => SkillRequest::Role(skill::role_of(&name)?),
+                    None => SkillRequest::List,
+                });
+            }
+            other if other.starts_with("--skill=") => {
+                skill = Some(SkillRequest::Role(skill::role_of(
+                    &other["--skill=".len()..],
+                )?));
+            }
             other if other.starts_with('-') => bail!("unknown option {other}\n{USAGE}"),
             other => {
                 bail!("hugo takes no folder: it reads the runtime, not the work\n{other}\n{USAGE}")
             }
         }
+    }
+    // A skill is text for an agent, not a screen: it is not a render.
+    if skill.is_some() && (render || plain) {
+        bail!("--skill prints a skill and does not render\n{USAGE}");
     }
     // The two flags are one mode: one without the other would ask for a
     // render that is not plain, or a plain text that is not a render.
@@ -171,6 +210,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
         render,
         width,
         height,
+        skill,
     })
 }
 

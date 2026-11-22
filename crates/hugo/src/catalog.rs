@@ -155,6 +155,22 @@ pub fn base_of(model: &str) -> &str {
     model.split_once('#').map_or(model, |(base, _)| base)
 }
 
+/// The arguments that start a model in a harness, as `herdr agent start`
+/// takes them after `--`.
+///
+/// `claude` takes the base model and its variant as `--effort`. Every other
+/// tool is given the model string as it is configured, variant included.
+pub fn model_args(tool: &str, model: &str) -> Vec<String> {
+    if tool != "claude" {
+        return vec!["--model".to_string(), model.to_string()];
+    }
+    let mut args = vec!["--model".to_string(), base_of(model).to_string()];
+    if let Some((_, variant)) = model.split_once('#') {
+        args.extend(["--effort".to_string(), variant.to_string()]);
+    }
+    args
+}
+
 /// Read a pipe to its end on its own thread, so the wait on the tool is not
 /// the wait on its output. The bytes come back over a channel, so the read
 /// can give up on them at the bound.
@@ -203,6 +219,30 @@ pub(crate) fn scratch_tool(name: &str, script: &str) -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn claude_takes_the_variant_as_its_effort() {
+        assert_eq!(
+            model_args("claude", "anthropic/claude-opus#high"),
+            ["--model", "anthropic/claude-opus", "--effort", "high"]
+        );
+        assert_eq!(
+            model_args("claude", "anthropic/claude-opus"),
+            ["--model", "anthropic/claude-opus"]
+        );
+    }
+
+    #[test]
+    fn other_tools_take_the_model_as_it_is_configured() {
+        assert_eq!(
+            model_args("opencode", "opencode-go/glm-5.3#high"),
+            ["--model", "opencode-go/glm-5.3#high"]
+        );
+        assert_eq!(
+            model_args("aider", "ollama/llama3:8b"),
+            ["--model", "ollama/llama3:8b"]
+        );
+    }
 
     #[test]
     fn the_catalogue_is_the_lines_the_tool_printed() {

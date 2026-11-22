@@ -281,3 +281,18 @@ The pinned screens are `crates/hugo/tests/snapshots/screen-40.txt`,
 `screen-60.txt` and `screen-100.txt`. They are rendered from `mock-data/`,
 against a home whose configuration the tool wrote, so they carry the mock
 runtime record and the default configuration.
+
+## The skills
+
+```sh
+hugo --skill
+hugo --skill orchestrator|runner|reviewer
+```
+
+`--skill` prints text and exits; no window is set up. A bare `--skill` lists
+the three roles. A role prints that role's skill, opened by a **crew** section
+built from the configuration in force: the harness and how it is driven, each
+agent's role and model with the arguments that start it, and the review-round
+limit. A configuration that cannot be read prints the defaults and says so in
+one line. The texts live in `crates/hugo/skills/` and are embedded with
+`include_str!`. `--skill` does not combine with `--render`.
