@@ -101,7 +101,7 @@ span is.
 The detail pane draws with the vendored leaf engine. Its `MarkdownTheme` has
 47 colour fields and its own four palettes; raul uses none of them. Instead
 `Theme::markdown_theme()` paints every field from the **document's own
-palette**: eighteen roles, which are not the chrome's eighteen slots. The
+palette**: twenty-seven roles, which are not the chrome's eighteen slots. The
 roles are recorded in [palettes.md](palettes.md), role by role, with the
 value each preset gives them and the figures the tests recompute.
 
@@ -165,15 +165,15 @@ ruling stands.
 |---|---|---|---|
 | `search_highlight_bg` | `document.search` | hit | a hit takes the document's hit background; the engine keeps the span's own foreground, so the search is not offered |
 | `search_match_bg` | `document.search` | match | the current match takes the stronger background; the same limitation |
-| `code_gutter` | `document.text` | body | line numbers are words in the document, so they take the prose, never the chrome index; the numbers are dim (`Modifier::DIM`) |
-| `blockquote_marker` | `document.rule` | line | a quote's marker is a line |
+| `code_gutter` | `document.list.3` | — | the gutter is quiet: its numbers are words at the quietest grade, and the engine dims them (`Modifier::DIM`) |
+| `blockquote_marker` | `document.quote` | — | a quote's bar takes the quote's colour |
 | `list_level_1` | `document.list.1` | — | the first list depth is the first step of its own scale |
 | `list_level_2` | `document.list.2` | — | the second is a step dimmer |
 | `list_level_3` | `document.list.3` | — | the third is a step dimmer again |
 | `ordered_list` | `document.list.1` | — | an ordered marker ranks with the first list depth |
 | `table_border` | `document.rule` | line | a table's frame is a line |
 | `table_separator` | `document.rule` | header | the header rule is part of the header, so it takes the header's grade |
-| `table_header` | `document.text` | emphasis | a table header is strong prose |
+| `table_header` | `document.heading.item` | — | a table header is a chromatic heading, so it reads apart from the prose under it |
 | `table_cell` | `document.text` | body | a cell is ordinary prose |
 | `heading_1` | `document.heading.section` | — | the `#` line: a section |
 | `heading_2` | `document.heading.item` | — | the `##` line: an item under a section |
@@ -182,14 +182,14 @@ ruling stands.
 | `heading_other` | `document.heading.finding` | — | h5 and h6 join the deepest level |
 | `heading_underline` | `document.rule` | line | an underline is a line |
 | `code_frame` | `document.rule` | line | a code block's frame is a line |
-| `code_label` | `document.text` | body | the language label is a word |
+| `code_label` | `document.list.3` | — | the language label is a word at the quietest grade, quiet beside the frame |
 | `inline_code_fg` | `document.code` | text | inline code is the code's ink |
 | `inline_code_bg` | `document.code` | chip | the chip behind the ink |
 | `rule` | `document.rule` | line | a rule is a line |
 | `link_icon` | `document.link` | — | links are one role |
 | `link_text` | `document.link` | — | the text of a link |
 | `link_hover` | `document.link` | — | mapped for the 47; the vendored engine never reads it |
-| `blockquote_text` | `document.text` | body | quoted prose is prose |
+| `blockquote_text` | `document.quote` | — | quoted prose takes the quote's colour |
 | `text` | `document.text` | body | ordinary prose |
 | `strong_text` | `document.text` | emphasis | strong prose is the prose's emphasis |
 | `latex_inline_fg` | `document.code` | text | inline maths is the code family's ink |
@@ -214,7 +214,9 @@ ruling stands.
 The engine's own four markdown palettes — arctic, forest, ocean and
 solarized-dark — are never read. A family palette from
 [palettes.md](palettes.md) reaches `MarkdownTheme` through the document's own
-eighteen roles; syntect's code-token theme is the one part that does not.
+twenty-seven roles. The eight syntax roles are the code's tokens: the detail pane
+pairs each preset with a syntect theme that paints them, so they reach the
+engine through that theme and not through `MarkdownTheme`.
 
 ## The presets
 
@@ -238,7 +240,7 @@ values are recorded there too; the other three flavours wait with the light
 theme. The `dracula` preset is the family's Dracula Classic variant, and its
 values are recorded there too; alucard waits with the light theme.
 
-The four colour presets paint the document's eighteen roles from the same
+The four colour presets paint the document's twenty-seven roles from the same
 family palettes; the roles, their values and their figures are recorded in
 [palettes.md](palettes.md). The terminal preset paints every document role
 `Color::Reset`, the way it paints no slot's colour.

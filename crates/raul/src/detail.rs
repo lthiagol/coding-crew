@@ -47,10 +47,10 @@ static SYNTAX: OnceLock<SyntaxSet> = OnceLock::new();
 /// The syntax set and the syntect theme the document's code tokens pair
 /// with, for `theme`'s preset.
 ///
-/// Every field of `MarkdownTheme` is mapped onto the eighteen slots — one
-/// palette — and this is the one paint outside that promise, handled
-/// deliberately. The engine paints the tokens of a fenced code block with
-/// syntect's own theme, and no parameter of the vendored engine turns that
+/// Every field of `MarkdownTheme` is mapped onto the document's roles — one
+/// palette — and the code's tokens are the one paint outside that promise,
+/// handled deliberately. The engine paints the tokens of a fenced code block
+/// with syntect's own theme, and no parameter of the vendored engine turns that
 /// off: an empty scope-less syntect theme paints the tokens black, and an
 /// empty syntax set panics looking for plain text. So each preset pairs the
 /// code tokens with a theme derived from its own document palette — see
@@ -61,54 +61,90 @@ fn syntect(theme: &Theme) -> (&'static SyntaxSet, SyntectTheme) {
 
 /// The syntect theme for a preset, derived from its document palette.
 ///
-/// Each class of token takes one role, the family's own hue for it:
+/// Each class of token takes one of the eight syntax roles, and the scopes
+/// of a class are the ones the common languages name for it:
 ///
 /// - a token no scope names is the code's ink;
-/// - a comment is the dimmed grade, in italic;
-/// - a keyword is the link, the accent;
-/// - a string is the success hue;
-/// - a constant or a number is the warning hue;
-/// - a function is the second accent;
-/// - a type is the raised heading grade;
-/// - an operator or punctuation is the muted grade;
+/// - a comment is the muted grade, in italic;
+/// - a keyword, and a storage keyword, takes the keyword role;
+/// - a string, and a character escape, takes the string role;
+/// - a constant or a number takes the number role;
+/// - a function, a macro or a builtin function takes the function role;
+/// - a type, a class or a namespace takes the type role;
+/// - a storage keyword, such as `let` or `fn`, takes the keyword role, and so
+///   does a primitive type such as `u32`, which the grammars scope as storage;
+/// - a variable or a parameter takes the variable role;
+/// - a tag or an attribute name takes the tag role;
+/// - a markup heading is the section heading's colour, in bold, and a markup
+///   bold or italic is a modifier with no colour of its own;
+/// - an operator or punctuation is the document's prose, so it reads apart
+///   from a comment;
 /// - an invalid token is the error hue.
 ///
 /// The terminal preset paints no colour, so its theme names the terminal's
 /// own colour everywhere, and the tokens emit no RGB.
 fn code_theme(theme: &Theme) -> SyntectTheme {
     let doc = theme.document();
-    let item = |selector: &str, colour: Color, font_style: Option<FontStyle>| ThemeItem {
+    let item = |selector: &str, colour: Option<Color>, font_style: Option<FontStyle>| ThemeItem {
         scope: selector
             .parse()
             .expect("a scope selector the mapping names"),
         style: StyleModifier {
-            foreground: Some(syntect_colour(colour)),
+            foreground: colour.map(syntect_colour),
             background: None,
             font_style,
         },
     };
+    let syntax = doc.syntax;
     SyntectTheme {
         settings: ThemeSettings {
             foreground: Some(syntect_colour(doc.code.text)),
             ..ThemeSettings::default()
         },
         scopes: vec![
-            item("comment", doc.list_depth_3, Some(FontStyle::ITALIC)),
-            item("keyword, storage", doc.link, None),
-            item("string", doc.alert_tip, None),
-            item("constant", doc.alert_warning, None),
+            item("comment", Some(syntax.comment), Some(FontStyle::ITALIC)),
             item(
-                "entity.name.function, support.function",
-                doc.alert_important,
+                "punctuation.definition.comment",
+                Some(syntax.comment),
+                Some(FontStyle::ITALIC),
+            ),
+            item("keyword, storage", Some(syntax.keyword), None),
+            item(
+                "string, constant.character.escape",
+                Some(syntax.string),
                 None,
             ),
             item(
-                "entity.name.type, support.type, support.class",
-                doc.heading_item,
+                "constant.numeric, constant.language, support.constant",
+                Some(syntax.number),
                 None,
             ),
-            item("keyword.operator, punctuation", doc.list_depth_2, None),
-            item("invalid", doc.alert_caution, None),
+            item(
+                "entity.name.function, support.function, support.macro, meta.macro",
+                Some(syntax.function),
+                None,
+            ),
+            item(
+                "entity.name.type, entity.name.namespace, entity.name.struct, entity.name.enum, \
+                 entity.name.trait, support.type, support.class",
+                Some(syntax.type_name),
+                None,
+            ),
+            item("variable, variable.parameter", Some(syntax.variable), None),
+            item(
+                "entity.name.tag, entity.other.attribute-name",
+                Some(syntax.tag),
+                None,
+            ),
+            item(
+                "markup.heading",
+                Some(doc.heading_section),
+                Some(FontStyle::BOLD),
+            ),
+            item("markup.bold", None, Some(FontStyle::BOLD)),
+            item("markup.italic", None, Some(FontStyle::ITALIC)),
+            item("keyword.operator, punctuation", Some(doc.text.body), None),
+            item("invalid", Some(doc.alert_caution), None),
         ],
         ..SyntectTheme::default()
     }
@@ -419,7 +455,7 @@ mod tests {
     use super::*;
     use crate::app::App;
     use crate::data::Work;
-    use coding_crew_theme::{IconSet, Preset};
+    use coding_crew_theme::{IconSet, Preset, SyntaxPaint};
 
     /// The title fixture: one wide, one combining and one joined grapheme.
     const GRAPHEME_TITLE: &str = "界e\u{0301}👨‍👩‍👧x";
@@ -1261,14 +1297,20 @@ mod tests {
     /// It is computed from the pane's pairing, through a highlighter of its
     /// own, so a pane that paired another theme shows different colours here.
     fn syntect_paint(theme: &Theme, code: &str) -> Vec<(String, Color)> {
+        syntect_paint_as(theme, "rust", code)
+    }
+
+    /// The paint of `code` in the language `token` names, as
+    /// [`syntect_paint`] paints rust.
+    fn syntect_paint_as(theme: &Theme, token: &str, code: &str) -> Vec<(String, Color)> {
         use syntect::easy::HighlightLines;
         use syntect::util::LinesWithEndings;
 
         let (syntax, paired) = syntect(theme);
-        let rust = syntax
-            .find_syntax_by_token("rust")
-            .expect("the rust syntax");
-        let mut highlighter = HighlightLines::new(rust, &paired);
+        let language = syntax
+            .find_syntax_by_token(token)
+            .unwrap_or_else(|| panic!("the {token} syntax"));
+        let mut highlighter = HighlightLines::new(language, &paired);
         let mut paint = Vec::new();
         for line in LinesWithEndings::from(code) {
             for (style, text) in highlighter
@@ -1330,8 +1372,9 @@ mod tests {
         let dark = Theme::preset(Preset::Dark);
         let lines = document_lines(&work, &detail, 138, IconSet::Nerd, &dark);
         let (header, row, tokens) = code_block(&lines);
-        // The frame is the document's line and the label the document's
-        // prose: the block around the tokens is ours.
+        // The frame is the document's line, and the label is the quietest
+        // word grade: the block around the tokens stays quiet, and the tokens
+        // are the ones that stand out.
         assert_eq!(
             header.spans.first().and_then(|span| span.style.fg),
             Some(dark.document().rule.line),
@@ -1344,8 +1387,8 @@ mod tests {
             .expect("the block names its language");
         assert_eq!(
             label.style.fg,
-            Some(dark.document().text.body),
-            "the code label is not the document's prose"
+            Some(dark.document().list_depth_3),
+            "the code label is not the quietest word grade"
         );
         // The code row is numbered from one and says the fixture's code, and
         // it is painted.
@@ -1378,6 +1421,124 @@ mod tests {
             paint(&expected),
             "the code tokens are not painted by the dark preset's syntect theme"
         );
+    }
+
+    /// The colours a word is painted in, one per occurrence, in the order the
+    /// code gives them.
+    fn painted_as(paint: &[(String, Color)], word: &str) -> Vec<Color> {
+        paint
+            .iter()
+            .filter(|(text, _)| text == word)
+            .map(|(_, colour)| *colour)
+            .collect()
+    }
+
+    #[test]
+    fn the_tokens_of_four_languages_are_painted_by_their_roles() {
+        // Each word takes the role its token class names, in every colour
+        // preset. The check can fail: a scope the mapping misses leaves the
+        // word in the plain ink, and the word is then not its role's colour.
+        // TOML has no grammar in the bundled syntaxes, so the config fixture
+        // is YAML, the bundled one.
+        type Role = fn(&SyntaxPaint) -> Color;
+        let keyword: Role = |syntax| syntax.keyword;
+        let string: Role = |syntax| syntax.string;
+        let number: Role = |syntax| syntax.number;
+        let function: Role = |syntax| syntax.function;
+        let type_name: Role = |syntax| syntax.type_name;
+        let comment: Role = |syntax| syntax.comment;
+        let tag: Role = |syntax| syntax.tag;
+        type Fixture = (&'static str, &'static str, Vec<(&'static str, Role)>);
+        let fixtures: [Fixture; 4] = [
+            (
+                "rust",
+                "fn main() {\n    let answer = \"forty\"; // the answer\n    let n = 42;\n    println!(\"{}\", n);\n    let v = Vec::new();\n}\n",
+                vec![
+                    ("fn", keyword),
+                    ("main", function),
+                    ("let", keyword),
+                    ("forty", string),
+                    (" the answer", comment),
+                    ("42", number),
+                    ("println!", function),
+                    ("Vec", type_name),
+                ],
+            ),
+            (
+                "python",
+                "def main(count: int):\n    answer = \"forty\"  # the answer\n    if count > 0:\n        return 42\n    print(answer)\n",
+                vec![
+                    ("def", keyword),
+                    ("main", function),
+                    ("int", type_name),
+                    ("forty", string),
+                    (" the answer", comment),
+                    ("if", keyword),
+                    ("42", number),
+                    ("print", function),
+                ],
+            ),
+            (
+                "yaml",
+                "name: coding-crew\nversion: 3\n# a comment\n",
+                vec![
+                    ("name", tag),
+                    ("coding-crew", string),
+                    ("3", number),
+                    (" a comment", comment),
+                ],
+            ),
+            (
+                "bash",
+                "# a comment\nANSWER=\"forty\"\nfor f in *.md; do\n  echo \"$ANSWER\" $f\ndone\nif [ -f x ]; then exit 1; fi\n",
+                vec![
+                    ("for", keyword),
+                    ("do", keyword),
+                    ("done", keyword),
+                    ("echo", function),
+                    ("forty", string),
+                    (" a comment", comment),
+                ],
+            ),
+        ];
+        for preset in Preset::ALL {
+            let theme = Theme::preset(preset);
+            let syntax = theme.document().syntax;
+            for (token, code, expected) in &fixtures {
+                let paint = syntect_paint_as(&theme, token, code);
+                if preset == Preset::Terminal {
+                    assert!(
+                        paint.iter().all(|(_, colour)| *colour == Color::Reset),
+                        "the {} preset paints a {token} token",
+                        preset.name()
+                    );
+                    continue;
+                }
+                for (word, role) in expected {
+                    let painted = painted_as(&paint, word);
+                    assert!(
+                        !painted.is_empty(),
+                        "the {token} fixture has no {word:?} token: {paint:?}"
+                    );
+                    for colour in painted {
+                        assert_eq!(
+                            colour,
+                            role(&syntax),
+                            "{} paints {token}'s {word:?} from another role",
+                            preset.name()
+                        );
+                    }
+                }
+                let colours: std::collections::HashSet<Color> =
+                    paint.iter().map(|(_, colour)| *colour).collect();
+                assert!(
+                    colours.len() >= 5,
+                    "{} paints the {token} fixture in {} colours",
+                    preset.name(),
+                    colours.len()
+                );
+            }
+        }
     }
 
     #[test]

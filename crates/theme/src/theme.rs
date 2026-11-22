@@ -261,7 +261,7 @@ impl Theme {
     /// The document's palette in this theme's preset.
     ///
     /// The document — the markdown pane — has a palette of its own: the
-    /// eighteen [`DocRole`]s are not the chrome's [`Slot`]s. The two
+    /// twenty-seven [`DocRole`]s are not the chrome's [`Slot`]s. The two
     /// vocabularies sit side by side, and this theme's preset paints both from
     /// the same family palette.
     pub fn document(&self) -> DocPalette {
@@ -294,23 +294,25 @@ impl Theme {
             // offered.
             search_highlight_bg: at(DocRole::Search, DocSide::One),
             search_match_bg: at(DocRole::Search, DocSide::Two),
-            // The code's gutter and label are the document's words, so they
-            // take the prose; the frame is a line. Inline code and its chip
-            // are the code role.
-            code_gutter: at(DocRole::Text, DocSide::One),
+            // The code's frame is the document's line, so the block stays
+            // quiet around its tokens. Its label and its numbers are words, so
+            // they take the quietest word grade, not a line. Inline code and
+            // its chip are the code role.
+            code_gutter: at(DocRole::ListDepth3, DocSide::One),
             code_frame: at(DocRole::Rule, DocSide::One),
-            code_label: at(DocRole::Text, DocSide::One),
+            code_label: at(DocRole::ListDepth3, DocSide::One),
             inline_code_fg: at(DocRole::Code, DocSide::One),
             inline_code_bg: at(DocRole::Code, DocSide::Two),
-            // Quotes, rules and the table's frame are lines; the table's
-            // header rule is the header's own grade. A header and a cell are
-            // the prose at its two weights.
-            blockquote_marker: at(DocRole::Rule, DocSide::One),
-            blockquote_text: at(DocRole::Text, DocSide::One),
+            // A quote's bar and its text are the quote's colour. Rules and the
+            // table's frame are lines; the table's header rule is the header's
+            // own grade. A header is a chromatic heading, and a cell is the
+            // prose.
+            blockquote_marker: at(DocRole::Quote, DocSide::One),
+            blockquote_text: at(DocRole::Quote, DocSide::One),
             rule: at(DocRole::Rule, DocSide::One),
             table_border: at(DocRole::Rule, DocSide::One),
             table_separator: at(DocRole::Rule, DocSide::Two),
-            table_header: at(DocRole::Text, DocSide::Two),
+            table_header: at(DocRole::HeadingItem, DocSide::One),
             table_cell: at(DocRole::Text, DocSide::One),
             // Three list depths, a step apart each time; an ordered marker
             // ranks with the first.
@@ -369,7 +371,7 @@ impl Theme {
 /// A role the document paints with.
 ///
 /// The document — the markdown pane — has a palette of its own. These
-/// eighteen roles are not the chrome's [`Slot`]s: the two vocabularies sit
+/// twenty-seven roles are not the chrome's [`Slot`]s: the two vocabularies sit
 /// side by side, and nothing in `crates/core` names either one. A role is a
 /// job the document has, and each preset decides what that job looks like.
 ///
@@ -378,8 +380,9 @@ impl Theme {
 /// the code's ink and its chip, [`DocRole::Rule`] the document's line and the
 /// table's header rule, [`DocRole::Selection`] a mark's foreground and
 /// background, [`DocRole::Search`] a hit and the current match, and
-/// [`DocRole::Task`] a done box and an open one. The other twelve name one
-/// colour.
+/// [`DocRole::Task`] a done box and an open one. The other twenty-one name one
+/// colour. Eight of the twenty-one are syntax roles: the code's tokens, painted
+/// by the syntect theme the detail pane pairs with each preset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DocRole {
     /// The `#` line: one of the ten sections.
@@ -397,6 +400,8 @@ pub enum DocRole {
     ListDepth2,
     /// The third list depth.
     ListDepth3,
+    /// A block quote's bar and its text.
+    Quote,
     /// A `[!NOTE]` alert.
     AlertNote,
     /// A `[!TIP]` alert.
@@ -420,6 +425,22 @@ pub enum DocRole {
     Search,
     /// A task list's box: done and open.
     Task,
+    /// A keyword, and a storage keyword.
+    SyntaxKeyword,
+    /// A string, and a character escape inside one.
+    SyntaxString,
+    /// A number and a constant.
+    SyntaxNumber,
+    /// A function, a macro and a builtin function.
+    SyntaxFunction,
+    /// A type, a class and a namespace.
+    SyntaxType,
+    /// A comment, which is italic.
+    SyntaxComment,
+    /// A variable and a parameter: the code's plain ink, the document's prose.
+    SyntaxVariable,
+    /// A tag and an attribute name.
+    SyntaxTag,
 }
 
 /// One side of a role's pair.
@@ -433,7 +454,7 @@ pub enum DocSide {
 
 impl DocRole {
     /// Every document role, in the order of the palette doc.
-    pub const ALL: [DocRole; 18] = [
+    pub const ALL: [DocRole; 27] = [
         DocRole::HeadingSection,
         DocRole::HeadingItem,
         DocRole::HeadingFinding,
@@ -441,6 +462,7 @@ impl DocRole {
         DocRole::ListDepth1,
         DocRole::ListDepth2,
         DocRole::ListDepth3,
+        DocRole::Quote,
         DocRole::AlertNote,
         DocRole::AlertTip,
         DocRole::AlertImportant,
@@ -452,6 +474,14 @@ impl DocRole {
         DocRole::Selection,
         DocRole::Search,
         DocRole::Task,
+        DocRole::SyntaxKeyword,
+        DocRole::SyntaxString,
+        DocRole::SyntaxNumber,
+        DocRole::SyntaxFunction,
+        DocRole::SyntaxType,
+        DocRole::SyntaxComment,
+        DocRole::SyntaxVariable,
+        DocRole::SyntaxTag,
     ];
 
     /// The name of the role, as the palette doc writes it.
@@ -464,6 +494,7 @@ impl DocRole {
             DocRole::ListDepth1 => "document.list.1",
             DocRole::ListDepth2 => "document.list.2",
             DocRole::ListDepth3 => "document.list.3",
+            DocRole::Quote => "document.quote",
             DocRole::AlertNote => "document.alert.note",
             DocRole::AlertTip => "document.alert.tip",
             DocRole::AlertImportant => "document.alert.important",
@@ -475,6 +506,14 @@ impl DocRole {
             DocRole::Selection => "document.selection",
             DocRole::Search => "document.search",
             DocRole::Task => "document.task",
+            DocRole::SyntaxKeyword => "document.syntax.keyword",
+            DocRole::SyntaxString => "document.syntax.string",
+            DocRole::SyntaxNumber => "document.syntax.number",
+            DocRole::SyntaxFunction => "document.syntax.function",
+            DocRole::SyntaxType => "document.syntax.type",
+            DocRole::SyntaxComment => "document.syntax.comment",
+            DocRole::SyntaxVariable => "document.syntax.variable",
+            DocRole::SyntaxTag => "document.syntax.tag",
         }
     }
 
@@ -488,6 +527,22 @@ impl DocRole {
                 | DocRole::Selection
                 | DocRole::Search
                 | DocRole::Task
+        )
+    }
+
+    /// Whether the role paints a token of a code block. The engine never
+    /// reads these: the detail pane's syntect theme does.
+    pub fn is_syntax(&self) -> bool {
+        matches!(
+            self,
+            DocRole::SyntaxKeyword
+                | DocRole::SyntaxString
+                | DocRole::SyntaxNumber
+                | DocRole::SyntaxFunction
+                | DocRole::SyntaxType
+                | DocRole::SyntaxComment
+                | DocRole::SyntaxVariable
+                | DocRole::SyntaxTag
         )
     }
 
@@ -556,6 +611,19 @@ pub struct TaskPaint {
     pub open: Color,
 }
 
+/// The code's tokens, one colour per token class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SyntaxPaint {
+    pub keyword: Color,
+    pub string: Color,
+    pub number: Color,
+    pub function: Color,
+    pub type_name: Color,
+    pub comment: Color,
+    pub variable: Color,
+    pub tag: Color,
+}
+
 /// The document's palette: one paint per role.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DocPalette {
@@ -566,6 +634,7 @@ pub struct DocPalette {
     pub list_depth_1: Color,
     pub list_depth_2: Color,
     pub list_depth_3: Color,
+    pub quote: Color,
     pub alert_note: Color,
     pub alert_tip: Color,
     pub alert_important: Color,
@@ -577,6 +646,7 @@ pub struct DocPalette {
     pub selection: SelectionPaint,
     pub search: SearchPaint,
     pub task: TaskPaint,
+    pub syntax: SyntaxPaint,
 }
 
 impl DocPalette {
@@ -596,6 +666,7 @@ impl DocPalette {
             DocRole::ListDepth1 => self.list_depth_1,
             DocRole::ListDepth2 => self.list_depth_2,
             DocRole::ListDepth3 => self.list_depth_3,
+            DocRole::Quote => self.quote,
             DocRole::AlertNote => self.alert_note,
             DocRole::AlertTip => self.alert_tip,
             DocRole::AlertImportant => self.alert_important,
@@ -622,6 +693,14 @@ impl DocPalette {
                 DocSide::One => self.task.done,
                 DocSide::Two => self.task.open,
             },
+            DocRole::SyntaxKeyword => self.syntax.keyword,
+            DocRole::SyntaxString => self.syntax.string,
+            DocRole::SyntaxNumber => self.syntax.number,
+            DocRole::SyntaxFunction => self.syntax.function,
+            DocRole::SyntaxType => self.syntax.type_name,
+            DocRole::SyntaxComment => self.syntax.comment,
+            DocRole::SyntaxVariable => self.syntax.variable,
+            DocRole::SyntaxTag => self.syntax.tag,
         }
     }
 
@@ -638,6 +717,7 @@ impl DocPalette {
             list_depth_1: Color::Reset,
             list_depth_2: Color::Reset,
             list_depth_3: Color::Reset,
+            quote: Color::Reset,
             alert_note: Color::Reset,
             alert_tip: Color::Reset,
             alert_important: Color::Reset,
@@ -664,13 +744,23 @@ impl DocPalette {
                 done: Color::Reset,
                 open: Color::Reset,
             },
+            syntax: SyntaxPaint {
+                keyword: Color::Reset,
+                string: Color::Reset,
+                number: Color::Reset,
+                function: Color::Reset,
+                type_name: Color::Reset,
+                comment: Color::Reset,
+                variable: Color::Reset,
+                tag: Color::Reset,
+            },
         }
     }
 }
 
 /// The document's palette in a preset.
 ///
-/// The four colour presets paint the eighteen roles from the same family
+/// The four colour presets paint the twenty-seven roles from the same family
 /// palette the chrome draws from; the terminal preset paints none of them.
 pub fn document_palette(preset: Preset) -> DocPalette {
     match preset {
@@ -1020,35 +1110,44 @@ fn dark_style(slot: Slot) -> Style {
 
 /// The document's colours in the dark palette.
 ///
-/// The roles are painted from the values the chrome draws with: the headings
-/// from the three brightest foregrounds, the prose from the main one, the
-/// lists a step apart, the alerts one hue each, the mark from the selection's
-/// pair and the search from the line's grade and the accent.
+/// The three headings take three chromatic slots — the accent, the teal and
+/// the attention yellow — so no two levels share a hue. The first list depth
+/// takes the success green and the second the accent blue, which share a hue
+/// with an alert and a heading; the third stays the dimmed grey. The quote
+/// takes the second accent, as the link does. The link takes the second
+/// accent, apart from the accent the section heading takes. The alerts take
+/// the success, the pink, the warning and the error, and the note the neutral.
+/// The code's ink is the warning orange on the surface tint, the token classes
+/// take the chromatic slots, and the comment the muted grey.
 fn dark_document() -> DocPalette {
     use dark::{
-        ACCENT, BACKGROUND, BORDER, BRIGHTEST, DIMMED, ERROR, FOREGROUND, INFO, MUTED, OK, RAISED,
-        SECOND, SECOND_ACCENT, WARN,
+        ACCENT, ATTENTION, BACKGROUND, BORDER, DIMMED, ERROR, FOREGROUND, INFO, MUTED, OK, PINK,
+        RAISED, SECOND_ACCENT, TEAL, WARN,
     };
+    // The chip is the selected row's tint, the one faint background the
+    // palette paints.
+    let tint = selection_of(surface_of(BACKGROUND), ACCENT);
     DocPalette {
-        heading_section: BRIGHTEST,
-        heading_item: RAISED,
-        heading_finding: SECOND,
+        heading_section: ACCENT,
+        heading_item: TEAL,
+        heading_finding: ATTENTION,
         text: TextPaint {
             body: FOREGROUND,
             emphasis: RAISED,
         },
-        list_depth_1: FOREGROUND,
-        list_depth_2: MUTED,
+        list_depth_1: OK,
+        list_depth_2: ACCENT,
         list_depth_3: DIMMED,
+        quote: SECOND_ACCENT,
         alert_note: INFO,
         alert_tip: OK,
-        alert_important: SECOND_ACCENT,
+        alert_important: PINK,
         alert_warning: WARN,
         alert_caution: ERROR,
-        link: ACCENT,
+        link: SECOND_ACCENT,
         code: CodePaint {
-            text: RAISED,
-            chip: BORDER,
+            text: WARN,
+            chip: tint,
         },
         rule: RulePaint {
             line: BORDER,
@@ -1065,6 +1164,16 @@ fn dark_document() -> DocPalette {
         task: TaskPaint {
             done: OK,
             open: MUTED,
+        },
+        syntax: SyntaxPaint {
+            keyword: PINK,
+            string: TEAL,
+            number: ACCENT,
+            function: SECOND_ACCENT,
+            type_name: ATTENTION,
+            comment: MUTED,
+            variable: FOREGROUND,
+            tag: OK,
         },
     }
 }
@@ -1171,34 +1280,42 @@ fn nord_style(slot: Slot) -> Style {
 
 /// The document's colours in the Nord palette.
 ///
-/// Nord names four word grades — the three snow storm greys and the frost —
-/// and the document's eight word roles take them. The section heading is
-/// nord6, the item nord5, the prose nord4, and the finding the frost, a cool
-/// step below the prose. The lists take nord5, nord4 and nord9; the note
-/// takes the same nord5 the chrome's information does, because the family
-/// spends its neutral.
+/// The headings take three chromatic slots — the accent, the teal and the
+/// aurora's yellow — so no two levels share a hue, and the link takes the
+/// frost, apart from the accent. The first list depth takes the aurora's green
+/// and the second the accent blue, which may share a hue with an alert or a
+/// heading; the third stays the frost. The quote takes the aurora's purple, as
+/// the important alert does. The alerts take the snow storm's
+/// neutral, the aurora's green, purple, orange and red. The code's ink is the
+/// aurora's yellow on the surface tint, and the tokens take the frost, the
+/// aurora and the snow storm, with the comment the muted snow storm grey.
 fn nord_document() -> DocPalette {
-    use nord::{NORD0, NORD3, NORD4, NORD5, NORD6, NORD7, NORD8, NORD9, NORD11, NORD13, NORD14};
+    use nord::{
+        NORD0, NORD3, NORD4, NORD5, NORD6, NORD7, NORD8, NORD9, NORD11, NORD12, NORD13, NORD14,
+        NORD15,
+    };
+    let tint = selection_of(surface_of(NORD0), NORD8);
     DocPalette {
-        heading_section: NORD6,
-        heading_item: NORD5,
-        heading_finding: NORD9,
+        heading_section: NORD8,
+        heading_item: NORD7,
+        heading_finding: NORD13,
         text: TextPaint {
             body: NORD4,
             emphasis: NORD6,
         },
-        list_depth_1: NORD5,
-        list_depth_2: NORD4,
+        list_depth_1: NORD14,
+        list_depth_2: NORD8,
         list_depth_3: NORD9,
+        quote: NORD15,
         alert_note: NORD5,
         alert_tip: NORD14,
-        alert_important: NORD7,
-        alert_warning: NORD13,
+        alert_important: NORD15,
+        alert_warning: NORD12,
         alert_caution: NORD11,
-        link: NORD8,
+        link: NORD9,
         code: CodePaint {
-            text: NORD6,
-            chip: NORD3,
+            text: NORD13,
+            chip: tint,
         },
         rule: RulePaint {
             line: NORD3,
@@ -1215,6 +1332,16 @@ fn nord_document() -> DocPalette {
         task: TaskPaint {
             done: NORD14,
             open: NORD4,
+        },
+        syntax: SyntaxPaint {
+            keyword: NORD9,
+            string: NORD14,
+            number: NORD15,
+            function: NORD8,
+            type_name: NORD7,
+            comment: NORD4,
+            variable: NORD5,
+            tag: NORD12,
         },
     }
 }
@@ -1331,35 +1458,42 @@ fn catppuccin_style(slot: Slot) -> Style {
 
 /// The document's colours in the Catppuccin mocha palette.
 ///
-/// The three word greys above the muted one serve the heading levels: the
-/// section takes rosewater, the item text, and the prose subtext1, a step
-/// under the chrome's ordinary text. The finding takes overlay2, the cool
-/// grey the chrome gives the tabs that are not showing.
+/// The headings take three chromatic slots — mauve, teal and yellow — so no
+/// two levels share a hue, and the link takes the sapphire, apart from the
+/// accent. The first list depth takes the green and the second the sapphire,
+/// which may share a hue with the link; the third stays the subtext.
+/// The quote takes the lavender, as the reviewer's role and the important
+/// alert do. The alerts take the subtext, the green, the lavender, the peach
+/// and the red; the note takes the subtext one step above the third depth, so
+/// the two are apart. The code's ink is the peach on the surface tint, and the
+/// tokens take the family's chromatic slots, with the overlay for a comment.
 fn catppuccin_document() -> DocPalette {
     use catppuccin::{
-        BASE, GREEN, MAUVE, OVERLAY2, PEACH, RED, ROSEWATER, SUBTEXT0, SUBTEXT1, SURFACE1, TEAL,
-        TEXT,
+        BASE, GREEN, LAVENDER, MAUVE, OVERLAY2, PEACH, PINK, RED, ROSEWATER, SAPPHIRE, SUBTEXT0,
+        SUBTEXT1, SURFACE1, TEAL, TEXT, YELLOW,
     };
+    let tint = selection_of(surface_of(BASE), MAUVE);
     DocPalette {
-        heading_section: ROSEWATER,
-        heading_item: TEXT,
-        heading_finding: OVERLAY2,
+        heading_section: MAUVE,
+        heading_item: TEAL,
+        heading_finding: YELLOW,
         text: TextPaint {
             body: SUBTEXT1,
             emphasis: ROSEWATER,
         },
-        list_depth_1: TEXT,
-        list_depth_2: SUBTEXT1,
+        list_depth_1: GREEN,
+        list_depth_2: SAPPHIRE,
         list_depth_3: SUBTEXT0,
-        alert_note: SUBTEXT0,
+        quote: LAVENDER,
+        alert_note: SUBTEXT1,
         alert_tip: GREEN,
-        alert_important: TEAL,
+        alert_important: LAVENDER,
         alert_warning: PEACH,
         alert_caution: RED,
-        link: MAUVE,
+        link: SAPPHIRE,
         code: CodePaint {
-            text: ROSEWATER,
-            chip: SURFACE1,
+            text: PEACH,
+            chip: tint,
         },
         rule: RulePaint {
             line: SURFACE1,
@@ -1376,6 +1510,16 @@ fn catppuccin_document() -> DocPalette {
         task: TaskPaint {
             done: GREEN,
             open: SUBTEXT1,
+        },
+        syntax: SyntaxPaint {
+            keyword: MAUVE,
+            string: GREEN,
+            number: PINK,
+            function: SAPPHIRE,
+            type_name: YELLOW,
+            comment: OVERLAY2,
+            variable: TEXT,
+            tag: RED,
         },
     }
 }
@@ -1483,36 +1627,42 @@ fn dracula_style(slot: Slot) -> Style {
 
 /// The document's colours in the Dracula Classic palette.
 ///
-/// Dracula names two whites and one blue-grey. The section heading takes the
-/// bright white, the item and the prose the foreground (the weight is what
-/// separates them), and the finding the comment — a step well below the prose,
-/// so the level the report named is apart. The first list depth takes the
-/// bright white, so the three depths stay apart.
+/// Dracula names two whites and one blue-grey, and the chromatic colours are
+/// the spec's. The headings take the purple, the cyan and the yellow, so no
+/// two levels share a hue; the link takes the cyan, apart from the purple. The
+/// first list depth takes the green. The spec names no blue of its own, so the
+/// second takes the cyan, the nearest hue the spec has to one; both may share
+/// a hue with a heading. The third stays the blue-grey, and the quote takes
+/// the purple. The alerts take the foreground, the green, the pink, the orange
+/// and the red. The code's ink is the orange on the selection's tint, and the
+/// tokens are the spec's syntax colours, with the comment in its own blue-grey.
 fn dracula_document() -> DocPalette {
     use dracula::{
-        BACKGROUND, BRIGHT_WHITE, COMMENT, CURRENT_LINE, CYAN, FOREGROUND, GREEN, ORANGE, PURPLE,
-        RED,
+        BACKGROUND, BRIGHT_WHITE, COMMENT, CURRENT_LINE, CYAN, FOREGROUND, GREEN, ORANGE, PINK,
+        PURPLE, RED, YELLOW,
     };
+    let tint = selection_of(surface_of(BACKGROUND), PURPLE);
     DocPalette {
-        heading_section: BRIGHT_WHITE,
-        heading_item: FOREGROUND,
-        heading_finding: COMMENT,
+        heading_section: PURPLE,
+        heading_item: CYAN,
+        heading_finding: YELLOW,
         text: TextPaint {
             body: FOREGROUND,
             emphasis: BRIGHT_WHITE,
         },
-        list_depth_1: BRIGHT_WHITE,
-        list_depth_2: FOREGROUND,
+        list_depth_1: GREEN,
+        list_depth_2: CYAN,
         list_depth_3: COMMENT,
+        quote: PURPLE,
         alert_note: FOREGROUND,
         alert_tip: GREEN,
-        alert_important: CYAN,
+        alert_important: PINK,
         alert_warning: ORANGE,
         alert_caution: RED,
-        link: PURPLE,
+        link: CYAN,
         code: CodePaint {
-            text: BRIGHT_WHITE,
-            chip: CURRENT_LINE,
+            text: ORANGE,
+            chip: tint,
         },
         rule: RulePaint {
             line: CURRENT_LINE,
@@ -1529,6 +1679,16 @@ fn dracula_document() -> DocPalette {
         task: TaskPaint {
             done: GREEN,
             open: COMMENT,
+        },
+        syntax: SyntaxPaint {
+            keyword: PINK,
+            string: YELLOW,
+            number: PURPLE,
+            function: GREEN,
+            type_name: CYAN,
+            comment: COMMENT,
+            variable: FOREGROUND,
+            tag: RED,
         },
     }
 }
@@ -1705,15 +1865,15 @@ mod tests {
     const ENGINE_ROLES: [(&str, DocRole, DocSide, bool); 47] = [
         ("search_highlight_bg", DocRole::Search, DocSide::One, true),
         ("search_match_bg", DocRole::Search, DocSide::Two, true),
-        ("code_gutter", DocRole::Text, DocSide::One, false),
-        ("blockquote_marker", DocRole::Rule, DocSide::One, false),
+        ("code_gutter", DocRole::ListDepth3, DocSide::One, false),
+        ("blockquote_marker", DocRole::Quote, DocSide::One, false),
         ("list_level_1", DocRole::ListDepth1, DocSide::One, false),
         ("list_level_2", DocRole::ListDepth2, DocSide::One, false),
         ("list_level_3", DocRole::ListDepth3, DocSide::One, false),
         ("ordered_list", DocRole::ListDepth1, DocSide::One, false),
         ("table_border", DocRole::Rule, DocSide::One, false),
         ("table_separator", DocRole::Rule, DocSide::Two, false),
-        ("table_header", DocRole::Text, DocSide::Two, false),
+        ("table_header", DocRole::HeadingItem, DocSide::One, false),
         ("table_cell", DocRole::Text, DocSide::One, false),
         ("heading_1", DocRole::HeadingSection, DocSide::One, false),
         ("heading_2", DocRole::HeadingItem, DocSide::One, false),
@@ -1727,14 +1887,14 @@ mod tests {
         ),
         ("heading_underline", DocRole::Rule, DocSide::One, false),
         ("code_frame", DocRole::Rule, DocSide::One, false),
-        ("code_label", DocRole::Text, DocSide::One, false),
+        ("code_label", DocRole::ListDepth3, DocSide::One, false),
         ("inline_code_fg", DocRole::Code, DocSide::One, false),
         ("inline_code_bg", DocRole::Code, DocSide::Two, true),
         ("rule", DocRole::Rule, DocSide::One, false),
         ("link_icon", DocRole::Link, DocSide::One, false),
         ("link_text", DocRole::Link, DocSide::One, false),
         ("link_hover", DocRole::Link, DocSide::One, false),
-        ("blockquote_text", DocRole::Text, DocSide::One, false),
+        ("blockquote_text", DocRole::Quote, DocSide::One, false),
         ("text", DocRole::Text, DocSide::One, false),
         ("strong_text", DocRole::Text, DocSide::Two, false),
         ("latex_inline_fg", DocRole::Code, DocSide::One, false),
@@ -1971,7 +2131,7 @@ mod tests {
     #[test]
     fn every_slot_is_painted_in_every_colour_preset() {
         // The terminal preset paints by attribute, and its ordinary text is
-        // the terminal's own: only the colour presets paint all eighteen.
+        // the terminal's own: only the colour presets paint all of them.
         for preset in Preset::ALL {
             if preset == Preset::Terminal {
                 continue;
@@ -4235,7 +4395,7 @@ mod tests {
     }
 
     #[test]
-    fn the_document_has_eighteen_roles() {
+    fn the_document_has_twenty_seven_roles() {
         let names: Vec<&str> = DocRole::ALL.iter().map(|role| role.name()).collect();
         assert_eq!(
             names,
@@ -4247,6 +4407,7 @@ mod tests {
                 "document.list.1",
                 "document.list.2",
                 "document.list.3",
+                "document.quote",
                 "document.alert.note",
                 "document.alert.tip",
                 "document.alert.important",
@@ -4258,9 +4419,21 @@ mod tests {
                 "document.selection",
                 "document.search",
                 "document.task",
+                "document.syntax.keyword",
+                "document.syntax.string",
+                "document.syntax.number",
+                "document.syntax.function",
+                "document.syntax.type",
+                "document.syntax.comment",
+                "document.syntax.variable",
+                "document.syntax.tag",
             ]
         );
-        assert_eq!(DocRole::ALL.len(), 18, "the document has eighteen roles");
+        assert_eq!(
+            DocRole::ALL.len(),
+            27,
+            "the document has twenty-seven roles"
+        );
         let mut sorted = names.clone();
         sorted.sort_unstable();
         sorted.dedup();
@@ -4282,14 +4455,22 @@ mod tests {
         // it, and the doc's side column says the same either way.
         for (field, role, side, _) in ENGINE_ROLES {
             assert!(
+                !role.is_syntax(),
+                "{field} paints {}, which the engine never reads",
+                role.name()
+            );
+            assert!(
                 role.carries_a_pair() || side == DocSide::One,
                 "{field} takes the {side:?} side of {}, which names no pair",
                 role.name()
             );
         }
-        for role in DocRole::ALL {
+        // The syntax roles are the code's tokens, which the engine paints with
+        // syntect's theme: the detail pane pairs it, and no engine field names
+        // them.
+        for role in DocRole::ALL.iter().filter(|role| !role.is_syntax()) {
             assert!(
-                ENGINE_ROLES.iter().any(|(_, used, _, _)| *used == role),
+                ENGINE_ROLES.iter().any(|(_, used, _, _)| used == role),
                 "{} is a role no engine field uses",
                 role.name()
             );
@@ -4300,7 +4481,7 @@ mod tests {
                 assert!(
                     ENGINE_ROLES
                         .iter()
-                        .any(|(_, used, used_side, _)| *used == role && *used_side == side),
+                        .any(|(_, used, used_side, _)| used == role && *used_side == side),
                     "{}'s {} side is a colour no engine field uses",
                     role.name(),
                     role.side_name(side)
@@ -4466,8 +4647,128 @@ mod tests {
         }
     }
 
+    /// The least channel gap two chromatic document roles may have.
+    ///
+    /// The gap is the largest difference of the two colours' channels, in
+    /// channels of 255. The nearest pair the palette holds is Catppuccin's
+    /// section heading and its important alert, 24 apart.
+    const APART: u8 = 20;
+
+    /// The largest difference between two colours' channels.
+    fn channel_gap(one: Color, other: Color) -> u8 {
+        let (Color::Rgb(r, g, b), Color::Rgb(x, y, z)) = (one, other) else {
+            panic!("{one:?} or {other:?} is not an RGB colour");
+        };
+        r.abs_diff(x).max(g.abs_diff(y)).max(b.abs_diff(z))
+    }
+
+    #[test]
+    fn the_headings_and_the_alerts_are_apart() {
+        // A heading level and an alert severity are different jobs, so the
+        // palette paints them apart, and the section heading and the link are
+        // apart too: a link is not the heading it sits under.
+        for preset in colour_presets() {
+            let palette = document_palette(preset);
+            let headings = [
+                palette.heading_section,
+                palette.heading_item,
+                palette.heading_finding,
+            ];
+            let alerts = [
+                palette.alert_note,
+                palette.alert_tip,
+                palette.alert_important,
+                palette.alert_warning,
+                palette.alert_caution,
+            ];
+            for heading in headings {
+                for alert in alerts {
+                    assert!(
+                        channel_gap(heading, alert) >= APART,
+                        "{} paints a heading and an alert {} channels apart",
+                        preset.name(),
+                        channel_gap(heading, alert)
+                    );
+                }
+            }
+            assert!(
+                channel_gap(palette.link, palette.heading_section) >= APART,
+                "{} paints the link as the section heading",
+                preset.name()
+            );
+        }
+    }
+
+    #[test]
+    fn the_third_list_depth_is_apart_from_the_headings_and_the_alerts() {
+        // The no-shared-hue rule binds the headings, the alerts and the third
+        // list depth. The first and second depths are exempt, ruled on
+        // 2026-11-22: the list's markers are coloured, and they may share a
+        // hue with a heading or an alert.
+        for preset in colour_presets() {
+            let palette = document_palette(preset);
+            let headings = [
+                palette.heading_section,
+                palette.heading_item,
+                palette.heading_finding,
+            ];
+            let alerts = [
+                palette.alert_note,
+                palette.alert_tip,
+                palette.alert_important,
+                palette.alert_warning,
+                palette.alert_caution,
+            ];
+            for other in headings.into_iter().chain(alerts) {
+                assert!(
+                    channel_gap(palette.list_depth_3, other) >= APART,
+                    "{} paints the third list depth {} channels from a heading or an alert",
+                    preset.name(),
+                    channel_gap(palette.list_depth_3, other)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_syntax_roles_are_apart() {
+        // Eight token classes, eight colours: a fixture's keyword, string,
+        // number, function, type, comment, variable and tag never read alike.
+        // The plain ink of a code block is the code role's, and no token
+        // class takes it, so an unmatched scope is the only one that does.
+        for preset in colour_presets() {
+            let palette = document_palette(preset);
+            let syntax = [
+                palette.syntax.keyword,
+                palette.syntax.string,
+                palette.syntax.number,
+                palette.syntax.function,
+                palette.syntax.type_name,
+                palette.syntax.comment,
+                palette.syntax.variable,
+                palette.syntax.tag,
+            ];
+            for (index, one) in syntax.iter().enumerate() {
+                assert_ne!(
+                    *one,
+                    palette.code.text,
+                    "{} paints a token class as the plain code ink",
+                    preset.name()
+                );
+                for other in &syntax[index + 1..] {
+                    assert_ne!(
+                        one,
+                        other,
+                        "{} paints two token classes alike",
+                        preset.name()
+                    );
+                }
+            }
+        }
+    }
+
     /// The role sides that paint a word: the headings, the prose, the lists,
-    /// the alerts, the link, the code's ink and the task's boxes.
+    /// the alerts, the link, the code's ink, the task's boxes and the tokens.
     fn document_word_sides() -> Vec<(DocRole, DocSide)> {
         vec![
             (DocRole::HeadingSection, DocSide::One),
@@ -4478,6 +4779,7 @@ mod tests {
             (DocRole::ListDepth1, DocSide::One),
             (DocRole::ListDepth2, DocSide::One),
             (DocRole::ListDepth3, DocSide::One),
+            (DocRole::Quote, DocSide::One),
             (DocRole::AlertNote, DocSide::One),
             (DocRole::AlertTip, DocSide::One),
             (DocRole::AlertImportant, DocSide::One),
@@ -4487,18 +4789,31 @@ mod tests {
             (DocRole::Code, DocSide::One),
             (DocRole::Task, DocSide::One),
             (DocRole::Task, DocSide::Two),
+            (DocRole::SyntaxKeyword, DocSide::One),
+            (DocRole::SyntaxString, DocSide::One),
+            (DocRole::SyntaxNumber, DocSide::One),
+            (DocRole::SyntaxFunction, DocSide::One),
+            (DocRole::SyntaxType, DocSide::One),
+            (DocRole::SyntaxComment, DocSide::One),
+            (DocRole::SyntaxVariable, DocSide::One),
+            (DocRole::SyntaxTag, DocSide::One),
         ]
+    }
+
+    /// The contrast a document word needs on its background.
+    ///
+    /// Rule 3 of the palette doc, applied to the document's roles. The dark
+    /// palette is ours and holds its words to 4.5:1, the way it holds the
+    /// chrome's.
+    fn word_floor(preset: Preset) -> f64 {
+        if preset == Preset::Dark { 4.5 } else { 3.0 }
     }
 
     #[test]
     fn every_document_word_reads_on_its_background() {
-        // Rule 3 of the palette doc, applied to the document's roles: a word
-        // reads at 3:1 or better on the background it sits on. The dark
-        // palette is ours and holds its words to 4.5:1, the way it holds the
-        // chrome's.
         for preset in colour_presets() {
             let base = document_base(preset);
-            let floor = if preset == Preset::Dark { 4.5 } else { 3.0 };
+            let floor = word_floor(preset);
             for (role, side) in document_word_sides() {
                 let colour = document(preset, role, side);
                 let ratio = contrast(colour, base);
@@ -4508,6 +4823,28 @@ mod tests {
                     preset.name(),
                     role.name(),
                     role.side_name(side)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_code_label_and_gutter_read_as_words() {
+        // The label is the language's name and the gutter its numbers, so
+        // they are words, not the frame's line: each reads at the word floor.
+        for preset in colour_presets() {
+            let markdown = Theme::preset(preset).markdown_theme();
+            let base = document_base(preset);
+            let floor = word_floor(preset);
+            for (field, colour) in [
+                ("code_label", markdown.code_label),
+                ("code_gutter", markdown.code_gutter),
+            ] {
+                let ratio = contrast(colour, base);
+                assert!(
+                    ratio >= floor,
+                    "{}'s {field} reads at {ratio:.1}:1, and a word needs {floor}:1",
+                    preset.name()
                 );
             }
         }
@@ -5092,7 +5429,7 @@ mod tests {
         assert_eq!(
             number_words_in(sentence("is the human's number")),
             vec![DocRole::ALL.len()],
-            "the section no longer states the eighteen roles the code has"
+            "the section no longer states the twenty-seven roles the code has"
         );
         assert_eq!(
             number_words_in(sentence("are fixed by the constraints")),

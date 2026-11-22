@@ -641,7 +641,7 @@ for ours.
 
 ## The document palette
 
-The document — the markdown pane — has a palette of its own: **eighteen
+The document — the markdown pane — has a palette of its own: **twenty-seven
 roles**, which are not the chrome's eighteen slots. A role is a job the
 document has, and each preset paints it from the same family palette the
 chrome draws from, so the document and the chrome are one palette and not
@@ -657,25 +657,27 @@ and is never a heading.
 
 ### The roles
 
-Eighteen is the human's number. Eleven are fixed by the constraints: three
-heading levels, five alert severities and three list depths. Seven are the
-rest of the document's work: the prose, the links, the code, the lines, the
-mark, the search and the tasks. Six of those seven name a **pair**, because
-their job has two sides, and the unit says which: the prose at two weights,
-the code's ink and its chip, the document's line and the table's header rule,
-the mark's foreground and its background, the search's hit and its current
-match, and a task's done and open boxes. The other twelve roles name one
-colour.
+Twenty-seven is the human's number, ruled on 2026-11-22 with the quote role of
+the colourful design. Its last eight are the syntax roles, for the code's
+tokens. Eleven are fixed by the constraints: three heading levels, five alert
+severities and three list depths. Sixteen are the rest of the document's work:
+the prose, the links, the code, the lines, the quote, the mark, the search, the
+tasks and the syntax roles. Six of those sixteen name a **pair**, because their
+job has two sides, and the unit says which: the prose at two weights, the
+code's ink and its chip, the document's line and the table's header rule, the
+mark's foreground and its background, the search's hit and its current match,
+and a task's done and open boxes. The other twenty-one roles name one colour.
 
 | role | job | sides |
 |---|---|---|
 | `document.heading.section` | the `#` line: one of the ten sections | one colour |
-| `document.heading.item` | the `##` line: an item under a section | one colour |
+| `document.heading.item` | the `##` line: an item under a section; a table's header | one colour |
 | `document.heading.finding` | the `###` line: a finding under its round; `####` and deeper join it | one colour |
 | `document.text` | the document's words | `body`, `emphasis` |
 | `document.list.1` | the first list depth, and an ordered list's marker | one colour |
 | `document.list.2` | the second list depth | one colour |
-| `document.list.3` | the third list depth | one colour |
+| `document.list.3` | the third list depth, and the code's label and numbers | one colour |
+| `document.quote` | a block quote's bar and its text | one colour |
 | `document.alert.note` | a `[!NOTE]` alert | one colour |
 | `document.alert.tip` | a `[!TIP]` alert | one colour |
 | `document.alert.important` | a `[!IMPORTANT]` alert | one colour |
@@ -683,32 +685,40 @@ colour.
 | `document.alert.caution` | a `[!CAUTION]` alert | one colour |
 | `document.link` | a link's marker, its text, its hover state, and a footnote's reference | one colour |
 | `document.code` | code, maths and a diagram: the ink and the chip behind it | `text`, `chip` |
-| `document.rule` | the document's lines, and the table's header rule | `line`, `header` |
+| `document.rule` | the document's lines, the code's frame, and the table's header rule | `line`, `header` |
 | `document.selection` | a mark: the reader's highlight | `foreground`, `background` |
 | `document.search` | the search: a hit and the current match | `hit`, `match` |
 | `document.task` | a task list's box | `done`, `open` |
+| `document.syntax.keyword` | a keyword, and a storage keyword | one colour |
+| `document.syntax.string` | a string, and a character escape inside one | one colour |
+| `document.syntax.number` | a number and a constant | one colour |
+| `document.syntax.function` | a function, a macro and a builtin function | one colour |
+| `document.syntax.type` | a type, a class and a namespace | one colour |
+| `document.syntax.comment` | a comment, in italic | one colour |
+| `document.syntax.variable` | a variable and a parameter | one colour |
+| `document.syntax.tag` | a tag and an attribute name | one colour |
 
 The first list depth and an ordered list's marker share a role: an ordered
 marker is a list marker at the first depth. The palette tells the three depths
 apart; it does not tell a bullet from a number, because both are the marker of
 the same depth. A heading level, an alert severity and a list depth never
 share one: they are three kinds of job, and the palette keeps them apart in
-every preset.
+every preset. Ruled on 2026-11-22, the first and second list depths are the
+exception: they are coloured markers, so they may share a hue with a heading or
+an alert. The third depth keeps the rule, and the test holds it apart from
+every heading and every alert. Apart is a gap of at least 20 channels of 255 on the largest
+channel, which the test holds; the nearest pair the palette holds is Catppuccin's
+section heading and its important alert, 24 apart. The syntax roles are a
+fourth kind: a token is never a heading, an alert or a list marker, and a token
+may share a hue with one of them.
 
-The prose's emphasis takes the family's raised foreground, which is one of the
-heading grades in every palette — the section's in Nord, Catppuccin and
-Dracula, the item's in dark. A bold word and a heading share a colour, and the
-family has one raised foreground; the heading is on a line of its own and the
-word is inside a sentence, so the shape tells them apart.
-
-The link takes the family's accent, the hue the chrome gives the focused
-border and the human lane. The document is not a lane: a link is the one thing
-in it that leads somewhere, and the accent is the product's own "this leads
-somewhere" hue. It is apart from the five alerts in every preset.
+The link is apart from the section heading. A link is the one thing in the
+document that leads somewhere, so it takes a hue of the family's own that the
+section heading does not, and it is apart from the five alerts in every preset.
 
 ### The values
 
-Each preset paints the eighteen roles from its own family. Each cell states
+Each preset paints the twenty-seven roles from its own family. Each cell states
 the colour and the figure the palette's test recomputes; the figure is the
 one that decides whether the colour works:
 
@@ -724,26 +734,29 @@ The bases are the dark palette's `#0d1117`, Nord's nord0 `#2e3440`, Catppuccin
 mocha's base `#1e1e2e` and Dracula's `#282A36`. The dark palette is ours, and
 it holds its document words to 4.5:1 the way it holds the chrome's; the
 families hold theirs to the 3:1 floor the rules set — Nord's and Dracula's
-dimmest document word is at 3.0:1, Catppuccin's at 5.8:1.
+dimmest document word is at 3.0:1, Catppuccin's at 5.8:1. Every colour in the
+table is a slot of the same preset: the document paints nothing the chrome
+does not already paint.
 
 | role | side | dark | nord | catppuccin | dracula |
 |---|---|---|---|---|---|
-| `document.heading.section` | — | `#ffffff` 18.92:1 | `#eceff4` 10.84:1 | `#f5e0dc` 12.95:1 | `#ffffff` 14.24:1 |
-| `document.heading.item` | — | `#e6edf3` 16.02:1 | `#e5e9f0` 10.26:1 | `#cdd6f4` 11.34:1 | `#f8f8f2` 13.36:1 |
-| `document.heading.finding` | — | `#9aa5b1` 7.56:1 | `#81a1c1` 4.64:1 | `#9399b2` 5.81:1 | `#6272a4` 3.03:1 |
+| `document.heading.section` | — | `#79c0ff` 9.73:1 | `#88c0d0` 6.24:1 | `#cba6f7` 8.07:1 | `#bd93f9` 5.90:1 |
+| `document.heading.item` | — | `#56d4dd` 10.69:1 | `#8fbcbb` 5.99:1 | `#94e2d5` 11.01:1 | `#8be9fd` 10.29:1 |
+| `document.heading.finding` | — | `#ffd166` 13.12:1 | `#ebcb8b` 8.00:1 | `#f9e2af` 12.91:1 | `#f1fa8c` 12.74:1 |
 | `document.text` | body | `#c9d1d9` 12.26:1 | `#d8dee9` 9.25:1 | `#bac2de` 9.26:1 | `#f8f8f2` 13.36:1 |
 | `document.text` | emphasis | `#e6edf3` 16.02:1 | `#eceff4` 10.84:1 | `#f5e0dc` 12.95:1 | `#ffffff` 14.24:1 |
-| `document.list.1` | — | `#c9d1d9` 12.26:1 | `#e5e9f0` 10.26:1 | `#cdd6f4` 11.34:1 | `#ffffff` 14.24:1 |
-| `document.list.2` | — | `#8b949e` 6.15:1 | `#d8dee9` 9.25:1 | `#bac2de` 9.26:1 | `#f8f8f2` 13.36:1 |
+| `document.list.1` | — | `#7ec699` 9.39:1 | `#a3be8c` 6.13:1 | `#a6e3a1` 11.03:1 | `#50fa7b` 10.38:1 |
+| `document.list.2` | — | `#79c0ff` 9.73:1 | `#88c0d0` 6.24:1 | `#74c7ec` 8.69:1 | `#8be9fd` 10.29:1 |
 | `document.list.3` | — | `#7d8590` 5.07:1 | `#81a1c1` 4.64:1 | `#a6adc8` 7.37:1 | `#6272a4` 3.03:1 |
-| `document.alert.note` | — | `#b0b0b0` 8.73:1 | `#e5e9f0` 10.26:1 | `#a6adc8` 7.37:1 | `#f8f8f2` 13.36:1 |
+| `document.quote` | — | `#d2a8ff` 9.72:1 | `#b48ead` 4.41:1 | `#b4befe` 9.17:1 | `#bd93f9` 5.90:1 |
+| `document.alert.note` | — | `#b0b0b0` 8.73:1 | `#e5e9f0` 10.26:1 | `#bac2de` 9.26:1 | `#f8f8f2` 13.36:1 |
 | `document.alert.tip` | — | `#7ec699` 9.39:1 | `#a3be8c` 6.13:1 | `#a6e3a1` 11.03:1 | `#50fa7b` 10.38:1 |
-| `document.alert.important` | — | `#d2a8ff` 9.72:1 | `#8fbcbb` 5.99:1 | `#94e2d5` 11.01:1 | `#8be9fd` 10.29:1 |
-| `document.alert.warning` | — | `#ff9e64` 9.31:1 | `#ebcb8b` 8.00:1 | `#fab387` 9.27:1 | `#ffb86c` 8.36:1 |
+| `document.alert.important` | — | `#ff9bd2` 9.80:1 | `#b48ead` 4.41:1 | `#b4befe` 9.17:1 | `#ff79c6` 5.97:1 |
+| `document.alert.warning` | — | `#ff9e64` 9.31:1 | `#d08770` 4.39:1 | `#fab387` 9.27:1 | `#ffb86c` 8.36:1 |
 | `document.alert.caution` | — | `#e06c75` 5.92:1 | `#bf616a` 3.05:1 | `#f38ba8` 7.08:1 | `#ff5555` 4.53:1 |
-| `document.link` | — | `#79c0ff` 9.73:1 | `#88c0d0` 6.24:1 | `#cba6f7` 8.07:1 | `#bd93f9` 5.90:1 |
-| `document.code` | text | `#e6edf3` 8.33:1 | `#eceff4` 6.40:1 | `#f5e0dc` 7.20:1 | `#ffffff` 4.71:1 |
-| `document.code` | chip | `#3d444d` 1.92:1 | `#4c566a` 1.69:1 | `#45475a` 1.80:1 | `#6272a4` 3.03:1 |
+| `document.link` | — | `#d2a8ff` 9.72:1 | `#81a1c1` 4.64:1 | `#74c7ec` 8.69:1 | `#8be9fd` 10.29:1 |
+| `document.code` | text | `#ff9e64` 8.29:1 | `#ebcb8b` 8.12:1 | `#fab387` 8.52:1 | `#ffb86c` 8.29:1 |
+| `document.code` | chip | `#141e28` 1.12:1 | `#2a343d` 1.01:1 | `#272436` 1.09:1 | `#2c293b` 1.01:1 |
 | `document.rule` | line | `#3d444d` 1.92:1 | `#4c566a` 1.69:1 | `#45475a` 1.80:1 | `#6272a4` 3.03:1 |
 | `document.rule` | header | `#e6edf3` 16.02:1 | `#eceff4` 10.84:1 | `#f5e0dc` 12.95:1 | `#ffffff` 14.24:1 |
 | `document.selection` | foreground | `#0d1117` 9.73:1 | `#2e3440` 6.24:1 | `#1e1e2e` 8.07:1 | `#282a36` 5.90:1 |
@@ -752,65 +765,79 @@ dimmest document word is at 3.0:1, Catppuccin's at 5.8:1.
 | `document.search` | match | `#79c0ff` 1.26:1 | `#88c0d0` 1.48:1 | `#cba6f7` 1.15:1 | `#bd93f9` 2.26:1 |
 | `document.task` | done | `#7ec699` 9.39:1 | `#a3be8c` 6.13:1 | `#a6e3a1` 11.03:1 | `#50fa7b` 10.38:1 |
 | `document.task` | open | `#8b949e` 6.15:1 | `#d8dee9` 9.25:1 | `#bac2de` 9.26:1 | `#6272a4` 3.03:1 |
+| `document.syntax.keyword` | — | `#ff9bd2` 9.80:1 | `#81a1c1` 4.64:1 | `#cba6f7` 8.07:1 | `#ff79c6` 5.97:1 |
+| `document.syntax.string` | — | `#56d4dd` 10.69:1 | `#a3be8c` 6.13:1 | `#a6e3a1` 11.03:1 | `#f1fa8c` 12.74:1 |
+| `document.syntax.number` | — | `#79c0ff` 9.73:1 | `#b48ead` 4.41:1 | `#f5c2e7` 10.74:1 | `#bd93f9` 5.90:1 |
+| `document.syntax.function` | — | `#d2a8ff` 9.72:1 | `#88c0d0` 6.24:1 | `#74c7ec` 8.69:1 | `#50fa7b` 10.38:1 |
+| `document.syntax.type` | — | `#ffd166` 13.12:1 | `#8fbcbb` 5.99:1 | `#f9e2af` 12.91:1 | `#8be9fd` 10.29:1 |
+| `document.syntax.comment` | — | `#8b949e` 6.15:1 | `#d8dee9` 9.25:1 | `#9399b2` 5.81:1 | `#6272a4` 3.03:1 |
+| `document.syntax.variable` | — | `#c9d1d9` 12.26:1 | `#e5e9f0` 10.26:1 | `#cdd6f4` 11.34:1 | `#f8f8f2` 13.36:1 |
+| `document.syntax.tag` | — | `#7ec699` 9.39:1 | `#d08770` 4.39:1 | `#f38ba8` 7.08:1 | `#ff5555` 4.53:1 |
 
 ### The derivations
 
-**The dark palette.** The section heading takes the brightest foreground, the
-item the raised one, and the finding the second foreground, a cool step below
-the prose — the family names no third white. The prose is the main foreground
-and its emphasis the raised one; the three list depths are the main, the muted
-and the dimmed foreground. The five alerts are the neutral, the success, the
-second accent, the warning and the error; the link is the accent. The code's
-ink is the raised foreground on the border's chip; the table's line is the
-border and its header rule the header's own grade; the mark is the selection's
-pair; the search takes the border for a hit and the accent for the current
-match; a task's boxes are the success and the muted foreground.
+**The dark palette.** The three headings take the accent, the teal and the
+attention yellow, so no two levels share a hue. The prose is the main
+foreground and its emphasis the raised one; the first list depth is the
+success green, the second the accent blue, and the third the dimmed foreground.
+The quote is the second accent, the purple the link takes too. The alerts are
+the neutral, the success, the pink, the warning and the error. The link is the
+second accent, the purple, apart from the accent the section heading takes. The code's ink is
+the warning orange on the selection's tint, which is the chip. The table's
+header is the item's teal, and its rule the raised grey. The code's frame is
+the line; its label and gutter take the third list depth's grey, a word. The mark is the selection's pair, and the search
+takes the border for a hit and the accent for the current match. A task's
+boxes are the success and the muted foreground. The tokens are the pink
+keyword, the teal string, the accent number, the purple function, the yellow
+type, the muted comment in italic, the main foreground as the variable, and the
+success green as the tag. The syntax roles take the palette's own hues, so no
+colour is new.
 
 **Nord.** Nord names four word grades — the three snow storm greys and the
-frost — and the document's eight word roles take them. The section is nord6,
-the item nord5, the prose nord4 (still a word, at 9.2:1) and the finding the
-frost nord9, a cool shade below the prose. The list depths are nord5, nord4
-and nord9. The note is nord5, the grey the chrome's information takes,
-because Nord spends every neutral; the tip is nord14, importance nord7, the
-warning nord13 and the caution nord11. The link is the accent, nord8. With
-four words for eight roles, grades repeat: the section heading and the prose's
-emphasis share nord6; the item heading, the first list depth and the note share
-nord5; the prose and the second list depth share nord4; the finding and the
-third depth share nord9. The roles are apart; the family simply has four
-words, and no other grade is readable.
+frost — and the chromatic slots of the aurora and the frost. The section
+heading is the accent, nord8, the item the teal nord7 and the finding the
+aurora's yellow nord13, so the three headings are three hues. The prose is
+nord4, its emphasis nord6, and the lists are the aurora's green nord14, the
+accent nord8 and the frost nord9, the third depth's grey. The quote is the
+aurora's purple nord15, which the important alert takes too. The note is nord5, the grey the chrome's information takes, because Nord spends every
+neutral; the tip is nord14, importance nord15, the warning nord12 and the
+caution nord11. The link is the frost, nord9, apart from the section heading.
+The code's ink is nord13 on the selection's tint. The tokens are the frost
+keyword, the green string, the purple number, the accent function, the teal
+type, the muted snow storm grey as the comment in italic, nord5 as the
+variable, and the orange nord12 as the tag.
 
-**Catppuccin.** The section heading takes rosewater, the item text, and the
-prose subtext1, a step under the chrome's ordinary text; the finding takes
-overlay2, the cool grey the chrome gives the tabs that are not showing. The
-list depths are text, subtext1 and subtext0; the note takes subtext0. The
-family carries five word colours for eight word roles, so they repeat: the
-section heading and the prose's emphasis share rosewater; the item heading and
-the first list depth share text; the prose and the second list depth share
-subtext1; the note and the third depth share subtext0. The finding alone takes
-overlay2. The alerts, the link, the code and the mark take the same roles the
-other presets give them: the success, the second accent, the warning and the
-error for the alerts, mauve for the link, rosewater on surface1 for the code,
-surface1 with rosewater for the table, and the mark in mauve with the base on
-it.
+**Catppuccin.** The section heading is mauve, the accent; the item is the teal
+and the finding the yellow. The prose is subtext1, a step under the chrome's
+ordinary text, and its emphasis is rosewater. The lists are the green, the
+sapphire and subtext0; the second depth shares the link's sapphire, because the
+chrome spends no blue. The quote is the lavender, which the important alert
+takes too. The alerts are subtext1, green, lavender, peach and red, the note a
+step above the third depth's subtext0, and the link is sapphire, apart from
+mauve. The code's ink is peach on the selection's
+tint. The tokens are mauve for the keyword, green for the string, pink for the
+number, sapphire for the function, yellow for the type, overlay2 for the
+comment in italic, text for the variable, and red for the tag. The family's
+blue is kept for the record: no slot spends it.
 
-**Dracula.** Dracula names two whites and one blue-grey. The section heading
-takes the bright white; the item heading and the prose take the foreground,
-and the weight is what separates them — the family has no third white; the
-finding takes the comment, a step well below the prose, so the level the
-report named is apart. The list depths are the bright white, the foreground
-and the comment. The note takes the foreground, the way Dracula's information
-does; the tip is the green, importance the cyan, the warning the orange and
-the caution the red. The link is the purple; the code's ink is the bright
-white on the current line's chip; the table's line is the current line and
-its header rule the bright white; the mark is the purple with the background
-on it.
+**Dracula.** Dracula names two whites and one blue-grey, and its chromatic
+colours are the spec's. The section heading is the purple, the item the cyan,
+and the finding the yellow, so the three headings are three hues. The prose is
+the foreground and its emphasis the bright white. The lists are the green, the
+cyan and the comment's blue-grey. The spec's own blue is its purple, which the
+section heading and the quote take, so the cyan stands in for the second depth.
+The alerts are the foreground, the green, the pink, the orange and the red. The link is the cyan, apart from the
+purple. The code's ink is the orange on the selection's tint. The tokens are
+the spec's syntax colours — the pink keyword, the yellow string, the purple
+number, the green function, the cyan type — with the comment in its own
+blue-grey, the foreground as the variable, and the red as the tag.
 
 ### The pairs
 
 The mark is the chrome's own selection pair — the background colour on the
 accent — so the palette's second rule holds for the document too: the marked
 word reads at 9.7:1 in dark, 6.2:1 in nord, 8.1:1 in catppuccin and 5.9:1 in
-dracula. The code's ink reads on its chip at 8.3:1, 6.4:1, 7.2:1 and 4.7:1.
+dracula. The code's ink reads on its chip at 8.3:1, 8.1:1, 8.5:1 and 8.3:1.
 
 The table's two line grades are apart in every preset: the border is the
 faint line (1.9:1 in dark) and the header rule takes the header's own grade
@@ -829,7 +856,7 @@ made the hit readable and did not make the match readable. The ruling in
 
 ### The declared roles
 
-Some of the eighteen roles are lit by nothing the record carries today. The
+Some of the roles are lit by nothing the record carries today. The
 palette covers the **engine's vocabulary**, not only what the projection
 writes: the engine can paint an alert, a nested list or a search hit the
 moment the document holds one, and the palette has to say what those look
@@ -848,38 +875,48 @@ A declared role is not dead colour: dead colour would be a role the document
 
 ### The terminal preset
 
-The terminal preset paints none of the eighteen roles: every one resolves to
+The terminal preset paints none of the twenty-seven roles: every one resolves to
 `Color::Reset`, and what still tells one role from another is the engine's
 own modifiers. The document says the same thing in every preset; only the
 paint changes.
 
 ## The code's syntax
 
-The code tokens of a fenced block are the one paint outside the eighteen roles:
-the engine highlights them with a syntect theme. Each preset pairs its own,
-derived in `crates/raul/src/detail.rs` (`code_theme`) from the preset's
-document palette, so the tokens follow the preset and no bundled syntect theme
-is fetched at build time. Each token class takes one role:
+The code tokens of a fenced block are the eight syntax roles. The engine
+highlights them with a syntect theme, and the detail pane pairs each preset
+with its own, derived in `crates/raul/src/detail.rs` (`code_theme`) from the
+preset's document palette, so the tokens follow the preset and no bundled
+syntect theme is fetched at build time. Each token class takes one role:
 
-| token class | scopes | role | side |
-|---|---|---|---|
-| the default | a token no scope names | `document.code` | `text` |
-| comment | `comment` (italic) | `document.list.3` | — |
-| keyword | `keyword`, `storage` | `document.link` | — |
-| string | `string` | `document.alert.tip` | — |
-| constant, number | `constant` | `document.alert.warning` | — |
-| function | `entity.name.function`, `support.function` | `document.alert.important` | — |
-| type | `entity.name.type`, `support.type`, `support.class` | `document.heading.item` | — |
-| operator, punctuation | `keyword.operator`, `punctuation` | `document.list.2` | — |
-| invalid | `invalid` | `document.alert.caution` | — |
+| token class | scopes | role |
+|---|---|---|
+| the default | a token no scope names | `document.code`, the `text` side |
+| comment | `comment` (italic) | `document.syntax.comment` |
+| keyword | `keyword`, `storage` | `document.syntax.keyword` |
+| string | `string`, `constant.character.escape` | `document.syntax.string` |
+| number | `constant.numeric`, `constant.language`, `support.constant` | `document.syntax.number` |
+| function | `entity.name.function`, `support.function`, `meta.macro` | `document.syntax.function` |
+| type | `entity.name.type`, `entity.name.namespace`, `support.type`, `support.class` | `document.syntax.type` |
+| variable | `variable`, `variable.parameter` | `document.syntax.variable` |
+| tag | `entity.name.tag`, `entity.other.attribute-name` | `document.syntax.tag` |
+| markup | `markup.heading` (bold), `markup.bold` (bold), `markup.italic` (italic) | `document.heading.section` for the heading; the bold and the italic are modifiers, with no colour |
+| operator, punctuation | `keyword.operator`, `punctuation` | `document.text`, the body |
+| invalid | `invalid` | `document.alert.caution` |
 
 A colour the mapping names as the terminal's own is alpha 0 in syntect, which
 the engine reads as `Color::Reset`, so the terminal preset emits no RGB for its
 tokens. The engine's own four markdown presets are never read.
 
-The code's frame, label and numbers are the document's: the frame is the
-line, the label the prose, and the numbers the gutter's dim prose. Inline code
-is a chip, `document.code` with its ink on the chip, padded a space each side.
+A storage keyword takes the keyword role whole, so a primitive type such as
+`u32` paints as a keyword, as `let` does. The bundled grammars scope both as
+`storage`, and no selector separates them; the type role therefore takes no
+`storage.type`.
+
+The code's frame is the document's line, so the block stays quiet around its
+tokens. Its label and its numbers are words: they take the third list depth's
+grey, which reads at the word floor where the line does not. The engine dims
+the numbers on top of that grey. Inline code is a chip, `document.code` with its ink on
+the chip, padded a space each side.
 
 ## The theme file
 
@@ -961,7 +998,7 @@ The file format is later; the presets ship as code first.
     the same counts. This is checked by the render tests, which run against
     every preset, on every tab.
 11. **The document's roles are slots too.** A theme that paints the document
-    gives every one of its eighteen roles a value from the family's own
+    gives every one of its twenty-seven roles a value from the family's own
     palette; a role it leaves unset falls back to the default, and the
     document changes between presets — which breaks rule 10 the same way an
     unset chrome slot does. The roles are the theme crate's
@@ -976,6 +1013,9 @@ The file format is later; the presets ship as code first.
   `catppuccin`, Dracula Classic as `dracula`, and Nord ships as `nord`
 - the theme file on disk
 - a user theme that is not one of the built-ins
+- **TOML highlighting.** The bundled syntect set has no TOML grammar, so a
+  ```` ```toml ```` block paints in the code's plain ink. The paint test takes
+  YAML as the stand-in. A TOML grammar is a dependency change.
 
 **The other variants are deferred with the light theme**: Catppuccin Latte,
 Frappé and Macchiato, Dracula Alucard and Nord Light wait until that changes.

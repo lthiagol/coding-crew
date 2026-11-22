@@ -65,9 +65,19 @@ Queued in `docs/plan.md`, in order. Units 49–67 and 63b are closed; their reco
 
 ## DECISIONS OF RECORD
 
+- **27 roles, ruled by the human 2026-11-22.** The document's palette grows
+  from eighteen roles to twenty-seven: the eighteen, eight syntax roles for
+  the code's tokens — `document.syntax.keyword`, `.string`, `.number`,
+  `.function`, `.type`, `.comment`, `.variable` and `.tag` — and
+  `document.quote`, a block quote's bar and text, from the human's coloured
+  design of the same day. The count of 2026-11-21 is superseded. The
+  apartness rules hold for the new roles too, except that list depths 1 and 2
+  may share a hue with a heading or an alert (2026-11-22, amending the rule in
+  palettes.md); depth 3 keeps it.
 - **The document gets eighteen roles of its own** (2026-11-21). Not leaf's
   thirty-six — our chrome palette is deliberately quiet, and the document
-  should not fight it. Eighteen is the number the human chose.
+  should not fight it. Eighteen is the number the human chose; the syntax
+  roles and the quote role of 2026-11-22 make it twenty-seven.
 - **A row's second line** (2026-11-21): the review state on Needs you and Path,
   the item's own body on Backlog. Those are the facts a human decides on, and
   all of them are already in the model. **The mechanism is settled per tab:**
