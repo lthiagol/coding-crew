@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator.
+Updated 2026-11-22 by the orchestrator, after unit 63b.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,7 +56,7 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–63 are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–63 and 63b are closed; their record is in
 `DONE.md`.
 
 - 64 · The harness table, and a harness per role (M)
@@ -240,6 +240,9 @@ None blocking. Carried from the closed units.
 - **Quitting from Settings** (2026-11-22, unit 63). `q` and `esc` ask when there
   are unsaved changes. `ctrl-c` quits at once, and `r` drops unsaved changes
   without asking. Check both against `docs/tui/screens.md` § Settings.
+- **The debug-build numbers came from a wrapper** (2026-11-22, unit 63b).
+  `/usr/bin/time` is not installed here, so the before and after figures are
+  from a Python wrapper that reads `ru_maxrss`. Each figure is one run.
 
 ## WHAT WAITS ON THE FLOW
 

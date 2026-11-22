@@ -1194,6 +1194,13 @@ quit question said nothing; both fixed. Ruling, from review round two:
 inline tables and dotted keys are shown as text, not stops, until a design
 call is made. It is recorded in TODO.md. Commit `26fcd50`.
 
+Unit closed: lighter debug builds (plan 63b). One build round and one review
+round, the review clean. `[profile.dev]` keeps line tables only, and
+dependencies carry no debug info. From a clean `target/`, `make check` went
+from 138.1 s to 108.3 s, max RSS from 868 MiB to 774 MiB, and `target/` from
+3.0 G to 1.3 G. No test reads backtrace or location content. Commit
+`0790adb`.
+
 ---
 
 ## Lessons
