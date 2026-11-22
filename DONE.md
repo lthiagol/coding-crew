@@ -1298,6 +1298,17 @@ one. All four were fixed, with tests. Ruling: the orchestrator is always
 present. A file without one is unreadable, which the builder chose and the
 human has not confirmed. Commit `485d3f5`.
 
+Unit closed: hugo's crew size, and choices for this session only (plan 70b).
+One build round, one fix round; the second review clean. hugo never writes
+`config.toml`: its harness, model, effort and crew picks last the session,
+and the file's values are the defaults, edited in raul's Settings. `c` opens
+the crew-size selector with its hints; the sidebar tags a value that differs
+from the file with a dim `session`; `s` and `hugo --skill` start the session's
+crew. Round one found two tests that did not cover what the job named: crew
+sizes 2 and 3 were never checked for the roles shown and started, and the
+no-write test made no pick at all. Both were fixed with tests. Ruling
+(2026-11-22): hugo's picks are session-only. Commit `aa30ab4`.
+
 ---
 
 ## Lessons

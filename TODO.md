@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 70.
+Updated 2026-11-22 by the orchestrator, after unit 70b.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–70 and 63b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–70, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- 70b · hugo: the crew size, and choices for this session only (M)
 - 71 · Effort comes from the model, and raul picks from lists (M)
 - 72 · hugo shows where the flow is, and picks the tasks (L)
 - 73 · Mouse in both TUIs (M)
@@ -384,6 +383,24 @@ None blocking. Carried from the closed units.
 - **The debug-build numbers came from a wrapper** (2026-11-22, unit 63b).
   `/usr/bin/time` is not installed here, so the before and after figures are
   from a Python wrapper that reads `ru_maxrss`. Each figure is one run.
+- **`r` drops the session's picks** (2026-11-22, unit 70b). A reload starts the
+  session over from the file. The design record says "Not ruled". The human
+  decides whether picks survive `r`.
+- **The footer names `c crew size`** (2026-11-22, unit 70b). The pinned hugo
+  screens changed on the footer line only. The human confirms the footer.
+- **A crew of neither one, two nor three roles** (2026-11-22, unit 70b). Such a
+  file, orchestrator with a reviewer say, opens the selector on size one. A
+  size pick sets the crew to that size's roles. The human decides whether it
+  should be unreadable, as a file with no orchestrator is.
+- **The session tag sits on the agent's name row** (2026-11-22, unit 70b). A
+  tag on each field row does not fit the 30-column pane. Changed field keys
+  are strong. The human confirms the placement.
+- **`HUGO_SESSION` is a contract** (2026-11-22, unit 70b). `s` sets it as JSON
+  on the orchestrator's tab only, and `hugo --skill` reads it, else the file.
+  The name and shape are the builder's; the human confirms them.
+- **The flow suites did not run on unit 70b** (2026-11-22, unit 70b). The
+  `orchestration-flow` skill is not installed here, so `make check` skipped
+  them. The gate was green without them.
 
 ## WHAT WAITS ON THE FLOW
 
