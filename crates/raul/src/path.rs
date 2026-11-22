@@ -5,7 +5,9 @@
 //!
 //! The tree holds the live work: the tasks that are neither `draft` nor
 //! `done`. The status of a task is the colour of its row; the branch says
-//! who the next action belongs to.
+//! who the next action belongs to. The finished work is counted, not listed:
+//! a FINISHED branch closes the tree in one summary row. The Tasks tab holds
+//! the finished tasks themselves.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -143,12 +145,15 @@ pub struct Tree {
     pub spine: Vec<Entry>,
     /// The branches, in the order they are drawn.
     pub branches: Vec<BranchView>,
+    /// The done tasks: the FINISHED branch counts them. They are not rows, so
+    /// the cursor never reaches them.
+    pub finished: usize,
 }
 
 impl Tree {
     /// Whether the tree holds nothing.
     pub fn is_empty(&self) -> bool {
-        self.spine.is_empty() && self.branches.is_empty()
+        self.spine.is_empty() && self.branches.is_empty() && self.finished == 0
     }
 
     /// The ids of the tree's rows, in the order they are drawn: the spine,
@@ -197,7 +202,16 @@ pub fn tree(work: &Work, now: &str) -> Tree {
         .map(|branch| branch_view(work, *branch, now))
         .filter(|view| view.count > 0)
         .collect();
-    Tree { spine, branches }
+    let finished = work
+        .tasks
+        .iter()
+        .filter(|task| task.status == Status::Done)
+        .count();
+    Tree {
+        spine,
+        branches,
+        finished,
+    }
 }
 
 /// A task, as the tree holds it.
@@ -414,6 +428,14 @@ enum Piece {
     Head(HeadPiece),
     /// A branch: its header and its blocks.
     Branch(BranchPiece),
+    /// The FINISHED branch: one summary row, after every other branch.
+    Finished(FinishedPiece),
+}
+
+/// The FINISHED branch, ready to be drawn.
+struct FinishedPiece {
+    /// The summary row. `None` when the pane is too narrow for it.
+    line: Option<Line<'static>>,
 }
 
 /// The head of the tree: the heading and the spine.
@@ -531,6 +553,9 @@ fn window(
 ) -> (Lines, bool, Vec<usize>, bool) {
     let pieces = pieces(tree, width, theme, icons, selected);
     let all = tree.row_ids();
+    // FINISHED is cut only from a window that has to reach the end: the
+    // cursor on the last row. Any other cursor on screen needs no scroll.
+    let at_end = selected.is_some_and(|id| all.last().is_some_and(|last| last == id));
     // The tree that is shown is the one that still leaves room to say what
     // is not shown. The announcement comes first: a name that is cut is a
     // name the reader does not have. A layout that shows the cursor wins
@@ -541,16 +566,19 @@ fn window(
     let mut best: Option<Candidate> = None;
     for bars in [true, false] {
         for capacity in (0..=height).rev() {
-            let (shown, dropped, rows) = layout(&pieces, capacity, width, bars, theme, first);
+            let (shown, dropped, rows, finished_left_out) =
+                layout(&pieces, capacity, width, bars, theme, first);
             let has_cursor = selected.is_none_or(|id| {
                 rows.iter()
                     .any(|index| all.get(*index).is_some_and(|other| other == id))
             });
-            if dropped.is_empty() {
+            if dropped.is_empty() && has_cursor {
+                // Every live row fits and shows the cursor: nothing is named,
+                // and the window is whole only when FINISHED is drawn too.
+                return (shown, false, rows, !(finished_left_out && at_end));
+            }
+            if dropped.is_empty() && !finished_left_out {
                 // The whole tree fits: there is nothing to say.
-                if has_cursor {
-                    return (shown, false, rows, true);
-                }
                 continue;
             }
             let summary = summary(&dropped, width, theme);
@@ -560,7 +588,9 @@ fn window(
                 // tried next.
                 continue;
             }
-            let whole = summary.len() <= room;
+            // A tree that leaves FINISHED out is not whole when the cursor is
+            // on the last row: the window moves on until the row has room.
+            let whole = !(finished_left_out && at_end) && summary.len() <= room;
             let mut out = shown;
             let tree_rows = out.len();
             let mut summary_rows = summary.into_iter().take(room).collect::<Vec<_>>();
@@ -621,7 +651,8 @@ fn window(
 /// The tree, laid out in `capacity` rows.
 ///
 /// What does not fit is returned, so that it can be named: the branches that
-/// are not shown, and the trunk when the spine is cut.
+/// are not shown, and the trunk when the spine is cut. The flag says whether
+/// the whole tree is drawn but the FINISHED row has no room.
 fn layout(
     pieces: &[Piece],
     capacity: usize,
@@ -629,7 +660,7 @@ fn layout(
     bars: bool,
     theme: &Theme,
     first: usize,
-) -> (Lines, Vec<Dropped>, Vec<usize>) {
+) -> (Lines, Vec<Dropped>, Vec<usize>, bool) {
     let mut out = Lines::default();
     let mut dropped: Vec<Dropped> = Vec::new();
     let mut shown_rows: Vec<usize> = Vec::new();
@@ -644,8 +675,13 @@ fn layout(
         .collect();
 
     let Some(Piece::Head(head)) = pieces.first() else {
-        return (out, dropped, shown_rows);
+        return (out, dropped, shown_rows, false);
     };
+
+    let finished = pieces.iter().find_map(|piece| match piece {
+        Piece::Finished(finished) => Some(finished),
+        _ => None,
+    });
 
     if capacity == 0 {
         // Nothing fits: everything is named in the announcement.
@@ -659,7 +695,7 @@ fn layout(
             name: branch.name,
             count: branch.count,
         }));
-        return (out, dropped, shown_rows);
+        return (out, dropped, shown_rows, false);
     }
 
     // The head: the heading and the spine. The heading belongs to the top
@@ -668,6 +704,9 @@ fn layout(
         out.push(head.heading.clone(), None);
         used += 1;
     }
+    // Whether every branch the window reaches is drawn whole. The FINISHED row
+    // closes the tree, and it is shown only then.
+    let mut complete = true;
     let mut shown_tasks = 0usize;
     for chunk in &head.spine {
         if chunk.row < first {
@@ -679,7 +718,9 @@ fn layout(
             out.push(bar(theme), None);
             used += 1;
         } else if used + rows > capacity {
-            // The row does not fit: the spine is cut here.
+            // The row does not fit: the spine is cut here, and the tree is
+            // not closed under it.
+            complete = false;
             break;
         }
         out.append(chunk.drawn());
@@ -713,6 +754,7 @@ fn layout(
         let room = capacity.saturating_sub(used);
         let Some(header) = branch.header.clone() else {
             // The branch cannot be headed: it is not shown.
+            complete = false;
             dropped.extend(branches[index..].iter().map(|branch| Dropped {
                 name: branch.name,
                 count: branch.count,
@@ -759,6 +801,7 @@ fn layout(
         }
         // The branch is cut: it needs the header, some rows, and the
         // announcement of what is not shown.
+        complete = false;
         let (rows, shown, _, row_indices) = take(&branch.blocks, room.saturating_sub(2), skip);
         if room >= 3 && !rows.is_empty() {
             if !forked {
@@ -796,7 +839,35 @@ fn layout(
         }));
         break;
     }
-    (out, dropped, shown_rows)
+    // The FINISHED row is the last thing of the tree: it is drawn after the
+    // branches, and only when they were all drawn whole and it fits. It is
+    // not named in the announcement when it is left out: the announcement
+    // is for the live work, and a row too many would push a live branch's
+    // count out of it. Left out for want of room, it makes the window
+    // incomplete, so that the window moves on until it fits.
+    let mut finished_left_out = false;
+    if let Some(finished) = finished
+        && let Some(line) = &finished.line
+        && complete
+    {
+        let room = capacity.saturating_sub(used);
+        let fork_rows = if forked {
+            0
+        } else if room >= 3 {
+            2
+        } else {
+            1
+        };
+        if room > fork_rows {
+            if !forked {
+                fork(&mut out, fork_rows, theme);
+            }
+            out.push(line.clone(), None);
+        } else {
+            finished_left_out = true;
+        }
+    }
+    (out, dropped, shown_rows, finished_left_out)
 }
 
 /// The block of the tree that holds a row.
@@ -805,6 +876,7 @@ fn cursor_chunk(pieces: &[Piece], cursor: usize) -> Option<&Chunk> {
         let chunks = match piece {
             Piece::Head(head) => &head.spine,
             Piece::Branch(branch) => &branch.blocks,
+            Piece::Finished(_) => continue,
         };
         if let Some(chunk) = chunks.iter().find(|chunk| chunk.row == cursor) {
             return Some(chunk);
@@ -971,7 +1043,9 @@ fn pieces(
     let last = tree.branches.len().saturating_sub(1);
     let mut branch_base = tree.spine.len();
     for (index, view) in tree.branches.iter().enumerate() {
-        let is_last = index == last;
+        // The FINISHED row closes the tree: no branch is the last one while it
+        // is there.
+        let is_last = index == last && tree.finished == 0;
         // The branch hangs on the trunk: the trunk's column comes first.
         let branch_prefix = if is_last { "     " } else { " │   " };
         let mut blocks: Vec<Chunk> = Vec::new();
@@ -1074,7 +1148,67 @@ fn pieces(
             name: view.branch.label(),
         }));
     }
+
+    // The FINISHED row: the done tasks counted, and no row of the tree.
+    if tree.finished > 0 {
+        pieces.push(Piece::Finished(FinishedPiece {
+            line: finished_line(tree.finished, width, icons, theme),
+        }));
+    }
     pieces
+}
+
+/// The FINISHED row: its icon and name in the done phase's slot, and the
+/// done tasks it counts, dim.
+///
+/// It is a branch that is one summary row: the count is said in words, so
+/// the row reads as what it is. A row too narrow for the icon gives it up
+/// first; the count is cut last.
+fn finished_line(
+    count: usize,
+    width: usize,
+    icons: IconSet,
+    theme: &Theme,
+) -> Option<Line<'static>> {
+    let prefix = " └─ ";
+    let style = phase_style(theme, Status::Done);
+    let label = "FINISHED";
+    let separator = "  ";
+    let words = if count == 1 {
+        "1 task finished".to_string()
+    } else {
+        format!("{count} tasks finished")
+    };
+    let mark = Icon::for_status(Status::Done.as_str())
+        .map(|icon| format!("{} ", icon.glyph(icons)))
+        .unwrap_or_default();
+    let fixed = |mark: &str| {
+        prefix.chars().count()
+            + mark.chars().count()
+            + label.chars().count()
+            + separator.chars().count()
+    };
+    let (mark, room) = if fixed(&mark) + words.chars().count() <= width {
+        let room = width - fixed(&mark);
+        (mark, room)
+    } else {
+        (String::new(), width.saturating_sub(fixed("")))
+    };
+    if room == 0 {
+        return None;
+    }
+    let words = if words.chars().count() <= room {
+        words
+    } else {
+        cut_to(&words, room)
+    };
+    Some(Line::from(vec![
+        Span::styled(prefix.to_string(), theme.text.dim),
+        Span::styled(mark, style),
+        Span::styled(label.to_string(), style),
+        Span::raw(separator.to_string()),
+        Span::styled(words, theme.text.dim),
+    ]))
 }
 
 /// The connector of an item: the last of its siblings hangs on a `└─`, the
@@ -1424,6 +1558,18 @@ mod tests {
 
     /// Draw the tab at a given instant.
     fn draw_at(work: &Work, width: u16, height: u16, now: &str, view: &mut View) -> Vec<String> {
+        draw_with(work, width, height, now, None, view)
+    }
+
+    /// Draw the tab at a given instant, the cursor on the row `selected`.
+    fn draw_with(
+        work: &Work,
+        width: u16,
+        height: u16,
+        now: &str,
+        selected: Option<&str>,
+        view: &mut View,
+    ) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
             .draw(|frame| {
@@ -1433,7 +1579,7 @@ mod tests {
                     work,
                     &theme(),
                     IconSet::Nerd,
-                    None,
+                    selected,
                     view,
                     now,
                 );
@@ -1609,7 +1755,10 @@ mod tests {
                         // group's word about its hidden rows.
                         let inline = at > 0 && {
                             let branch = at - 1;
-                            let prefix = if branch == tree.branches.len() - 1 {
+                            // The FINISHED row closes the tree: no branch is
+                            // the last one while it is there.
+                            let prefix = if branch == tree.branches.len() - 1 && tree.finished == 0
+                            {
                                 "     "
                             } else {
                                 " │   "
@@ -1812,6 +1961,205 @@ mod tests {
                 assert!(!seen.contains(&task.id), "{} is history", task.id);
             }
         }
+    }
+
+    #[test]
+    fn the_finished_work_is_counted_and_is_no_row() {
+        let work = mock_work();
+        let tree = tree(&work, now());
+        // The mock data holds five done tasks, and the tree counts them.
+        assert_eq!(tree.finished, 5);
+        // The count is not a row: the cursor's rows are the live tasks only.
+        for task in work.tasks.iter().filter(|task| task.status == Status::Done) {
+            assert!(!tree.row_ids().contains(&task.id), "{} is a row", task.id);
+        }
+    }
+
+    #[test]
+    fn the_finished_branch_is_one_summary_row_at_the_end() {
+        // The five done tasks are one row after every branch: its icon and
+        // name in the done phase's slot, the count in words, and no task is
+        // drawn under it.
+        let icon = Icon::for_status("done")
+            .expect("the done icon")
+            .glyph(IconSet::Nerd);
+        for width in [40u16, 100] {
+            // Tall enough for the whole tree: at 40 columns the titles wrap.
+            let rows = inner(&draw(&mock_work(), width, 80));
+            let finished: Vec<&String> =
+                rows.iter().filter(|row| row.contains("FINISHED")).collect();
+            assert_eq!(finished.len(), 1, "{width}: {rows:?}");
+            let line = finished[0];
+            assert!(
+                line.starts_with(&format!(" └─ {icon} FINISHED")),
+                "{width}: {line:?}"
+            );
+            assert!(line.ends_with("5 tasks finished"), "{width}: {line:?}");
+            let last = rows
+                .iter()
+                .rposition(|row| !row.trim().is_empty())
+                .expect("the tree has rows");
+            assert_eq!(&rows[last], line, "{width}: the row is not the last");
+        }
+    }
+
+    #[test]
+    fn the_finished_count_says_one_task_or_many() {
+        let one = text_of_line(&finished_line(1, 60, IconSet::Nerd, &theme()).expect("a row"));
+        assert!(one.ends_with("1 task finished"), "{one:?}");
+        let many = text_of_line(&finished_line(12, 60, IconSet::Nerd, &theme()).expect("a row"));
+        assert!(many.ends_with("12 tasks finished"), "{many:?}");
+    }
+
+    #[test]
+    fn a_finished_row_keeps_its_count_when_the_pane_is_narrow() {
+        // The icon gives way first; the count is cut last, and the row never
+        // runs past the pane.
+        for width in 8..=40 {
+            let Some(line) = finished_line(5, width, IconSet::Nerd, &theme()) else {
+                continue;
+            };
+            let text = text_of_line(&line);
+            assert!(line.width() <= width, "{width}: {text:?}");
+            if width >= 30 {
+                assert!(text.contains("5 tasks"), "{width}: {text:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn no_finished_row_without_a_done_task() {
+        // With no done task the branch is skipped like any empty branch.
+        let mut work = mock_work();
+        work.tasks.retain(|task| task.status != Status::Done);
+        assert_eq!(tree(&work, now()).finished, 0);
+        let rows = inner(&draw(&work, 100, 40));
+        assert!(rows.iter().all(|row| !row.contains("FINISHED")), "{rows:?}");
+    }
+
+    #[test]
+    fn finished_is_on_screen_with_the_cursor_on_the_last_task() {
+        // The cursor on the last task scrolls the tree to its end, and the
+        // end keeps the room for the FINISHED row. Every pane tall enough to
+        // show the cursor's row shows FINISHED too.
+        let work = mock_work();
+        let last = tree(&work, now()).row_ids().last().cloned().expect("a row");
+        for width in [40u16, 100] {
+            for height in 10..=70u16 {
+                let rows = inner(&draw_with(
+                    &work,
+                    width,
+                    height,
+                    now(),
+                    Some(&last),
+                    &mut View::default(),
+                ));
+                if rows.iter().any(|row| row.contains(&last)) {
+                    assert!(
+                        rows.iter().any(|row| row.contains("FINISHED")),
+                        "{width}x{height}: {rows:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_live_rows_all_show_when_they_fit_with_the_cursor_on_the_first() {
+        // FINISHED may be left out for want of room, but it never costs a
+        // live row: at every height where the live rows fit, the cursor on
+        // the first row shows all of them.
+        let tree = tree(&mock_work(), now());
+        let ids = tree.row_ids();
+        let first = ids.first().cloned().expect("a row");
+        let live_only = Tree {
+            finished: 0,
+            ..tree.clone()
+        };
+        for width in [40usize, 100] {
+            for height in 4..=70usize {
+                let (_, _, live, _) = window(
+                    &live_only,
+                    width,
+                    height,
+                    &theme(),
+                    IconSet::Nerd,
+                    Some(&first),
+                    0,
+                );
+                if live.len() != ids.len() {
+                    continue;
+                }
+                let (_, _, shown, _) = window(
+                    &tree,
+                    width,
+                    height,
+                    &theme(),
+                    IconSet::Nerd,
+                    Some(&first),
+                    0,
+                );
+                assert_eq!(shown.len(), ids.len(), "{width}x{height}: {shown:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_window_stays_put_until_the_cursor_is_on_the_last_row() {
+        // The live rows fit at 100x30 with FINISHED left out. A cursor that
+        // is not on the last row is on screen already, so it must not scroll
+        // the tree: the first row stays up, whichever row the cursor is on.
+        let work = mock_work();
+        let ids = tree(&work, now()).row_ids();
+        let last = ids.len() - 1;
+        for (width, height) in [(100u16, 30u16), (40, 62)] {
+            for index in 0..last {
+                let rows = inner(&draw_with(
+                    &work,
+                    width,
+                    height,
+                    now(),
+                    Some(&ids[index]),
+                    &mut View::default(),
+                ));
+                assert!(
+                    rows.iter().any(|row| row.contains(&ids[0])),
+                    "cursor on row {index} of {width}x{height} scrolled off row 0: {rows:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_cut_spine_does_not_close_the_tree() {
+        // A spine taller than the pane, no live branch, one done task: the
+        // spine is cut and its trunk is named. The tree does not read as
+        // ended, so FINISHED is not drawn under the cut.
+        let mut work = mock_work();
+        let approved = work
+            .tasks
+            .iter()
+            .find(|task| task.status == Status::Approved)
+            .cloned()
+            .expect("an approved task");
+        let done = work
+            .tasks
+            .iter()
+            .find(|task| task.status == Status::Done)
+            .cloned()
+            .expect("a done task");
+        work.tasks = vec![done];
+        for index in 0..40 {
+            let mut task = approved.clone();
+            task.id = format!("SPN{index:02}");
+            task.depends_on.clear();
+            task.claim = None;
+            work.tasks.push(task);
+        }
+        let rows = inner(&draw(&work, 100, 17));
+        let text = text_of(&rows);
+        assert!(text.contains("EXECUTION ("), "{rows:?}");
+        assert!(rows.iter().all(|row| !row.contains("FINISHED")), "{rows:?}");
     }
 
     #[test]
@@ -2039,6 +2387,7 @@ mod tests {
                     }],
                 }],
             }],
+            finished: 0,
         };
         let rows: Vec<String> = lines(&tree, 60, 20, &theme, IconSet::Nerd, None)
             .iter()

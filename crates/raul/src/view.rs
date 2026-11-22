@@ -232,10 +232,11 @@ impl View {
             self.page = 0;
             return 0;
         }
-        // A pane that holds every row has nowhere to scroll, whatever the
-        // window was before.
-        let (all_rows, _) = shown(0);
-        if all_rows.len() == total {
+        // A pane that holds every row and is whole has nowhere to scroll,
+        // whatever the window was before. A pane that holds every row but not
+        // the tab's closing line still scrolls to make room for it.
+        let (all_rows, all_whole) = shown(0);
+        if all_rows.len() == total && all_whole {
             self.first = 0;
             self.page = all_rows.len();
             return 0;

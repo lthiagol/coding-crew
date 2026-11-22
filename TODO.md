@@ -99,12 +99,9 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
   file.
 - **raul draws task content; hugo draws tasks only as items of a queue.** The
   seam is the data.
-- **The Path tree holds the live work only.** Done tasks have no home of their
-  own, and that is accepted for now. **Open question for the human:** the
-  five done fixtures now carry a full history, and no tab shows them — the
-  Path tree hides them and no other view holds them, so a reader cannot reach
-  a finished task without knowing its id. Either the Path tab grows a
-  finished branch, or a Done view exists.
+- **Done tasks are counted on Path, listed on Tasks** (2026-11-22, the human's
+  ruling). Path ends with a FINISHED row that counts the done tasks; the Tasks
+  tab is their home. Closes the open question on done tasks. Unit 77.
 - **A round is numbered by the model, unpadded** (2026-11-21). The review
   heading reads `Round 1`, not `Round 01`. The self pre-screen is round 0, and
   padding it would render "Round 00"; the model's own number is what the

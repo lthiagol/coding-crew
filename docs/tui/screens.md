@@ -111,8 +111,9 @@ blocks it.
  │   └─ TSK10   Tempor incididunt ut labore
  ├─ REVIEW · 3
  │   └─ TSK13   Praesentium voluptatum deleniti
- └─ ESCALATED · 3
-     └─ TSK19   Quaerat voluptatem consequatur
+ ├─ ESCALATED · 3
+ │   └─ TSK19   Quaerat voluptatem consequatur
+ └─ ✓ FINISHED  5 tasks finished
 ```
 
 | part | rule |
@@ -123,13 +124,17 @@ blocks it.
 | RUNNING | `executing` and `remediating` |
 | REVIEW | `code-review` |
 | ESCALATED | `needs-human` — the review budget ran out |
-| order | spine, then the branches in the order above |
+| FINISHED | `done` — one summary row, `N tasks finished`, dim, on the done phase's colour, after every branch. It counts the done tasks; it lists none |
+| order | spine, then the branches in the order above, then FINISHED |
 
 Rules:
 
 - The tree holds the **live work**: the tasks that are neither `draft` nor
-  `done`. Drafts are the Backlog tab's, and done tasks are history.
-- An empty branch is skipped.
+  `done`. Drafts are the Backlog tab's.
+- The **finished work is counted, not listed**. FINISHED is one row, not a
+  task: the cursor does not reach it, and `enter` does nothing on it. The
+  Tasks tab holds the finished tasks themselves. Decided 2026-11-22.
+- An empty branch is skipped. With no done task, FINISHED is skipped too.
 - The status is not in the branch — it is the **colour** of the row, from the
   theme's phase mapping. The branch says who the next action belongs to.
 - A row names its dependencies: `waits on TSK05, TSK06`.
@@ -139,6 +144,8 @@ Rules:
   given up whole parts at a time, and the rounds are what a narrow row drops
   first.
 - The tree is drawn as styled lines with a spine, and it scrolls.
+- FINISHED closes the scroll and is not announced: while it is off screen,
+  the window has not reached the end of the tree.
 - The trunk is one column: the spine's marker and bar, the fork `╵` and the
   branch connectors `├` `└` all start in the column after the selection bar's.
   A task under a branch hangs from that branch, one column further in.
