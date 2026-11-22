@@ -31,10 +31,10 @@
 │ harness = "claude"                   │
 │ model = "claude-opus-5-5"            │
 │ effort = "medium"                    │
-│                                      │
-│ [[agents]]                           │
-│ name = "orchestrator"                │
-│ role = "orchestrator"                │
-│ agents 3,order 18,raul 2,raul.tasks 2│
+│ not shown: agents (5 hidden)         │
+│ order (18 hidden), raul (2 hidden)   │
+│ raul.tasks (2 hidden)                │
 ╰──────────────────────────────────────╯
- q  quit   1-6  tab   ←→  change
+────────────────────────────────────────
+       w save · u undo · r reload
+             ? help · q quit

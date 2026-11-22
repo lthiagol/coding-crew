@@ -424,7 +424,20 @@ impl App {
             }
             _ => Vec::new(),
         };
-        let screen = screen(frame.area(), self.note.is_some());
+        // The footer is one line, or two when its keys do not fit on one. A
+        // window too narrow for the sidebar draws no agent, so the choice is
+        // off before the footer is measured; a window wide enough holds the
+        // footer on one line whatever the choice is.
+        let area = frame.area();
+        if area.width < SIDEBAR_MIN_WIDTH {
+            self.agents_drawn = false;
+        }
+        let footer_rows = self.footer_lines(area.width, 2).len();
+        let screen = screen(
+            area,
+            self.note.is_some(),
+            u16::try_from(footer_rows).unwrap_or(2),
+        );
         frame.render_widget(self.title_line(screen.title.width, runtime), screen.title);
         if let Some(area) = screen.announcement {
             frame.render_widget(self.hidden_line(area.width), area);
@@ -440,7 +453,12 @@ impl App {
         if let Some(area) = screen.note {
             frame.render_widget(self.note_line(area.width), area);
         }
-        frame.render_widget(self.footer_line(screen.footer.width), screen.footer);
+        frame.render_widget(
+            Line::from(chrome::rule(screen.rule.width, &self.theme)),
+            screen.rule,
+        );
+        let lines = self.footer_lines(screen.footer.width, screen.footer.height);
+        frame.render_widget(Paragraph::new(lines), screen.footer);
         if self.help {
             self.help_pane(frame, frame.area());
         } else if self.choice.is_some() {
@@ -1826,106 +1844,42 @@ impl App {
         lines
     }
 
-    /// The footer: the keys that work. The window has `q quit`, and `ctrl-c`
-    /// quits as in raul; the footer names what a line can carry, and the
-    /// choice's keys while the choice is open.
-    fn footer_line(&self, width: u16) -> Line<'static> {
+    /// The footer at `width`, in `rows` rows: the keys that work, then the
+    /// closing keys, which answer wherever `?` opens the help. `ctrl-c` quits
+    /// as in raul, and the navigation keys are named in the help alone.
+    fn footer_lines(&self, width: u16, rows: u16) -> Vec<Line<'static>> {
         let part = |key: &str, says: &str| chrome::key_chip(key, says, &self.theme);
+        let closing = vec![part("?", "help"), part("q", "quit")];
         if self.help {
-            return footer(
-                vec![
-                    (0, part("q", "quit"), true),
-                    (1, part(CLOSE_KEY, "close help"), true),
-                    (2, part("?", "help"), false),
-                ],
-                width,
-            );
+            let actions = vec![part(CLOSE_KEY, "close help")];
+            return chrome::footer(&actions, &closing, width, rows, &self.theme);
         }
         if let Some(choice) = &self.choice {
             if choice.typing() {
                 // The id input takes the letters, so `q` and `?` are text here.
-                let mut parts = vec![
-                    (0, part(CLOSE_KEY, "back"), true),
-                    (2, part("ctrl-c", "quit"), false),
-                ];
+                let mut actions = vec![part(CLOSE_KEY, "back")];
                 if choice.pickable() {
-                    parts.push((1, part(CHOOSE_KEY, "pick"), true));
+                    actions.push(part(CHOOSE_KEY, "pick"));
                 }
-                return footer(parts, width);
+                actions.push(part("ctrl-c", "quit"));
+                return chrome::footer(&actions, &[], width, rows, &self.theme);
             }
-            let mut parts = vec![
-                (0, part(CLOSE_KEY, "close"), true),
-                (2, part("q", "quit"), false),
-                (4, part("?", "help"), false),
-            ];
+            let mut actions = vec![part(CLOSE_KEY, "close")];
             if choice.pickable() {
-                parts.push((1, part(CHOOSE_KEY, "pick"), true));
+                actions.push(part(CHOOSE_KEY, "pick"));
             }
-            if choice.moves() {
-                parts.push((3, part("↑↓ j/k", "move"), false));
-            }
-            return footer(parts, width);
+            return chrome::footer(&actions, &closing, width, rows, &self.theme);
         }
-        let mut parts = vec![
-            (0, part("q", "quit"), true),
-            (1, part(RELOAD_KEY, "reload"), false),
-            (3, part("?", "help"), true),
-        ];
-        if self.agents_drawn
-            && self
-                .loaded()
-                .is_some_and(|config| !config.agents.is_empty())
-        {
-            parts.push((2, part("↑↓ j/k", "move"), false));
-        }
+        let mut actions = Vec::new();
         if self.can_choose() {
-            parts.push((4, part(CHOOSE_KEY, "choose"), false));
+            actions.push(part(CHOOSE_KEY, "choose"));
         }
+        actions.push(part(RELOAD_KEY, "reload"));
         if self.can_start() {
-            parts.push((5, part(START_KEY, "start"), false));
+            actions.push(part(START_KEY, "start"));
         }
-        footer(parts, width)
+        chrome::footer(&actions, &closing, width, rows, &self.theme)
     }
-}
-
-/// The footer line: the parts that fit, the ones that matter most first.
-///
-/// Chips are parted from the chip before them by two spaces; the columns a
-/// chip takes after the first include those two.
-fn footer(parts: Vec<(u8, Vec<Span<'static>>, bool)>, width: u16) -> Line<'static> {
-    const PART: usize = 2;
-    let mut chosen = vec![false; parts.len()];
-    let mut used = 0usize;
-    let mut count = 0usize;
-    for matters in [true, false] {
-        for (index, (_, spans, needed)) in parts.iter().enumerate() {
-            if *needed != matters {
-                continue;
-            }
-            let columns = spans
-                .iter()
-                .map(|span| text_width(span.content.as_ref()))
-                .sum::<usize>()
-                + if count > 0 { PART } else { 0 };
-            if used + columns <= usize::from(width) {
-                chosen[index] = true;
-                used += columns;
-                count += 1;
-            }
-        }
-    }
-    let mut order: Vec<usize> = (0..parts.len()).collect();
-    order.sort_by_key(|index| parts[*index].0);
-    let mut spans = Vec::new();
-    for index in order {
-        if chosen[index] {
-            if !spans.is_empty() {
-                spans.push(Span::raw(" ".repeat(PART)));
-            }
-            spans.extend(parts[index].1.clone());
-        }
-    }
-    Line::from(spans)
 }
 
 /// The rows the choice's popup holds when the catalogue is longer.
@@ -2114,9 +2068,11 @@ pub struct Screen {
     pub sidebar: Option<Rect>,
     /// What is running.
     pub flow: Rect,
-    /// The note row, above the footer, when there is a note to say.
+    /// The note row, above the rule, when there is a note to say.
     pub note: Option<Rect>,
-    /// The footer.
+    /// The thin rule over the footer.
+    pub rule: Rect,
+    /// The footer: one row, or two when its keys do not fit on one.
     pub footer: Rect,
 }
 
@@ -2130,8 +2086,8 @@ pub struct Screen {
 /// The announcement of a dropped sidebar is charged to the body, not to the
 /// chrome: a screen too short for everything loses its title and its footer
 /// first, and the fact that the configuration is not shown is the last line
-/// to give way.
-pub fn screen(area: Rect, noted: bool) -> Screen {
+/// to give way. The footer takes `footer` rows, and its rule one more.
+pub fn screen(area: Rect, noted: bool, footer: u16) -> Screen {
     let sidebar_shown = area.width >= SIDEBAR_MIN_WIDTH;
     // The note row is there only while a start has something to say: a window
     // without one keeps the rows it always had.
@@ -2140,8 +2096,11 @@ pub fn screen(area: Rect, noted: bool) -> Screen {
         constraints.push(Constraint::Length(1));
     }
     constraints.push(Constraint::Length(1));
+    constraints.push(Constraint::Length(footer));
     let rows = Layout::vertical(constraints).split(area);
-    let footer = rows[rows.len() - 1];
+    let last = rows.len() - 1;
+    let footer = rows[last];
+    let rule = rows[last - 1];
     let note = noted.then(|| rows[2]);
     let (announcement, body) = if sidebar_shown {
         (None, rows[1])
@@ -2175,6 +2134,7 @@ pub fn screen(area: Rect, noted: bool) -> Screen {
         sidebar,
         flow,
         note,
+        rule,
         footer,
     }
 }
@@ -2441,7 +2401,7 @@ mod tests {
 
     #[test]
     fn the_sidebar_is_on_the_left_and_the_main_pane_takes_the_rest() {
-        let screen = screen(Rect::new(0, 0, 100, 40), false);
+        let screen = screen(Rect::new(0, 0, 100, 40), false, 1);
         let sidebar = screen.sidebar.expect("the sidebar");
         assert_eq!(sidebar.x, 0);
         assert_eq!(sidebar.width, SIDEBAR_WIDTH);
@@ -2457,12 +2417,12 @@ mod tests {
         // The sidebar is shown while the main pane keeps its own least
         // width: at the boundary both are there, one column narrower the
         // sidebar is gone and the main pane takes the window.
-        let both = screen(Rect::new(0, 0, SIDEBAR_MIN_WIDTH, 40), false);
+        let both = screen(Rect::new(0, 0, SIDEBAR_MIN_WIDTH, 40), false, 1);
         let sidebar = both.sidebar.expect("the sidebar at the boundary");
         assert_eq!(sidebar.width, SIDEBAR_WIDTH);
         assert_eq!(both.flow.width, MAIN_MIN_WIDTH);
 
-        let narrow = screen(Rect::new(0, 0, SIDEBAR_MIN_WIDTH - 1, 40), false);
+        let narrow = screen(Rect::new(0, 0, SIDEBAR_MIN_WIDTH - 1, 40), false, 1);
         assert_eq!(narrow.sidebar, None, "the sidebar is still drawn");
         assert_eq!(narrow.flow.width, SIDEBAR_MIN_WIDTH - 1);
         assert!(narrow.flow.width > both.flow.width, "the main pane shrank");
@@ -2475,7 +2435,7 @@ mod tests {
         // Narrowing past the boundary never squeezes the main pane: it grows
         // by the sidebar's width.
         for width in 1..SIDEBAR_MIN_WIDTH {
-            let screen = screen(Rect::new(0, 0, width, 40), false);
+            let screen = screen(Rect::new(0, 0, width, 40), false, 1);
             assert_eq!(screen.sidebar, None, "{width}");
             assert_eq!(screen.flow.width, width, "{width}");
             assert!(screen.announcement.is_some(), "{width}: silent drop");
@@ -2548,23 +2508,14 @@ mod tests {
     #[test]
     fn the_footer_names_the_keys_that_work_and_no_key_that_does_nothing() {
         // The cursor starts on the builder's harness row, where enter opens a
-        // choice: the footer names quit, reload, move, help and choose.
+        // choice: the footer names reload, choose, help and quit. The movement
+        // keys are the help's, not the footer's.
         let (rows, _) = render(100, 20);
         let footer = rows.last().expect("a footer row");
-        for works in [
-            "q",
-            "quit",
-            "r",
-            "reload",
-            "↑↓ j/k",
-            "move",
-            "?",
-            "help",
-            "choose",
-        ] {
+        for works in ["q", "quit", "r", "reload", "?", "help", "choose"] {
             assert!(footer.contains(works), "{footer}: {works}");
         }
-        for dead in ["open", "tab", "esc", "pick"] {
+        for dead in ["open", "tab", "esc", "pick", "↑↓", "move"] {
             assert!(!footer.contains(dead), "{footer}: {dead}");
         }
         // On the orchestrator's model row, enter has a choice to open.
@@ -2572,9 +2523,9 @@ mod tests {
         app.cursor = sidebar::cursor_of(2, Field::Model);
         app.agents_drawn = true;
         let line: String = app
-            .footer_line(100)
-            .spans
+            .footer_lines(100, 1)
             .iter()
+            .flat_map(|line| line.spans.iter())
             .map(|span| span.content.as_ref())
             .collect();
         assert!(line.contains("enter") && line.contains("choose"), "{line}");
@@ -2582,9 +2533,9 @@ mod tests {
         // not named.
         app.agents_drawn = false;
         let line: String = app
-            .footer_line(100)
-            .spans
+            .footer_lines(100, 1)
             .iter()
+            .flat_map(|line| line.spans.iter())
             .map(|span| span.content.as_ref())
             .collect();
         assert!(!line.contains("move"), "{line}");
@@ -4022,9 +3973,9 @@ mod tests {
             "enter picked while the catalogue was read"
         );
         let footer: String = window
-            .footer_line(100)
-            .spans
+            .footer_lines(100, 1)
             .iter()
+            .flat_map(|line| line.spans.iter())
             .map(|span| span.content.as_ref())
             .collect();
         assert!(
@@ -4131,22 +4082,24 @@ mod tests {
         let mut choosing = on_orchestrator(None);
         answer_choice(&mut choosing, Ok(Catalog::from_lines("a/b\nc/d\n")));
         let line: String = choosing
-            .footer_line(100)
-            .spans
+            .footer_lines(100, 1)
             .iter()
+            .flat_map(|line| line.spans.iter())
             .map(|span| span.content.as_ref())
             .collect();
         for works in [
-            CLOSE_KEY, "close", CHOOSE_KEY, "pick", "move", "q", "quit", "?", "help",
+            CLOSE_KEY, "close", CHOOSE_KEY, "pick", "q", "quit", "?", "help",
         ] {
             assert!(line.contains(works), "{line}: {works}");
         }
-        // A narrow footer gives the movement up before the keys that close
-        // and pick.
+        // The movement keys are the help's, not the footer's.
+        assert!(!line.contains("move"), "{line}");
+        // A narrow footer gives the second row to the closing keys, and the
+        // close and pick chips stay on the first.
         let narrow: String = choosing
-            .footer_line(25)
-            .spans
+            .footer_lines(25, 2)
             .iter()
+            .flat_map(|line| line.spans.iter())
             .map(|span| span.content.as_ref())
             .collect();
         assert!(
@@ -4486,9 +4439,9 @@ mod tests {
         window.on_key(press(KeyCode::Down));
         window.on_key(press(KeyCode::Down));
         let footer: String = window
-            .footer_line(100)
-            .spans
+            .footer_lines(100, 1)
             .iter()
+            .flat_map(|line| line.spans.iter())
             .map(|span| span.content.as_ref())
             .collect();
         assert!(!footer.contains("pick"), "{footer}");

@@ -10,6 +10,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType};
 
 use crate::icons::{Icon, IconSet};
+use crate::text::text_width;
 use crate::{Slot, Theme, block_title_style};
 
 /// The frames of the spinner: braille dots, in the order they turn.
@@ -39,16 +40,94 @@ pub fn pane(title: &str, icon: Icon, set: IconSet, focused: bool, theme: &Theme)
         .title(heading)
 }
 
-/// A key chip: the key reversed on `chrome.key`, with a space each side, then
-/// the action in `chrome.footer`.
+/// The separator between the chips of a footer.
+const DOT: &str = " · ";
+
+/// A key chip: the key bold on `chrome.key`, then its action on `text.dim`,
+/// one space apart. The key is foreground only: a chip is not filled.
 pub fn key_chip(key: &str, action: &str, theme: &Theme) -> Vec<Span<'static>> {
     vec![
         Span::styled(
-            format!(" {key} "),
-            theme.chrome.key.add_modifier(Modifier::REVERSED),
+            key.to_string(),
+            theme
+                .chrome
+                .key
+                .remove_modifier(Modifier::REVERSED)
+                .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(format!(" {action}"), theme.chrome.footer),
+        Span::styled(format!(" {action}"), theme.text.dim),
     ]
+}
+
+/// The footer: the context's chips, then the closing chips, centred.
+///
+/// One line when the whole fits. Otherwise, with two rows, the context's
+/// chips take the first line and the closing chips the second. With one row
+/// the closing chips stay and the context's chips give way from the right.
+/// A chip that does not fit ends its line, so only whole chips drop: a
+/// closing chip too wide for the pane drops too, rather than being cut.
+pub fn footer(
+    actions: &[Vec<Span<'static>>],
+    closing: &[Vec<Span<'static>>],
+    width: u16,
+    rows: u16,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
+    let width = usize::from(width);
+    let closing = prefix(closing, width, theme);
+    if closing.is_empty() {
+        return vec![Line::from(prefix(actions, width, theme)).centered()];
+    }
+    let dot = if actions.is_empty() {
+        0
+    } else {
+        text_width(DOT)
+    };
+    let room = width.saturating_sub(columns(&closing) + dot);
+    let whole = join(actions, theme);
+    if rows < 2 || columns(&whole) + dot + columns(&closing) <= width {
+        let mut spans = prefix(actions, room, theme);
+        if !spans.is_empty() {
+            spans.push(Span::styled(DOT, theme.chrome.border));
+        }
+        spans.extend(closing);
+        return vec![Line::from(spans).centered()];
+    }
+    vec![
+        Line::from(prefix(actions, width, theme)).centered(),
+        Line::from(closing).centered(),
+    ]
+}
+
+/// The thin rule over the footer: `─` across the width, in `chrome.border`.
+pub fn rule(width: u16, theme: &Theme) -> Span<'static> {
+    Span::styled("─".repeat(usize::from(width)), theme.chrome.border)
+}
+
+/// The chips joined by the separator.
+fn join(chips: &[Vec<Span<'static>>], theme: &Theme) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    for chip in chips {
+        if !spans.is_empty() {
+            spans.push(Span::styled(DOT, theme.chrome.border));
+        }
+        spans.extend(chip.iter().cloned());
+    }
+    spans
+}
+
+/// The longest run of chips, from the first, that fits in `room` columns.
+fn prefix(chips: &[Vec<Span<'static>>], room: usize, theme: &Theme) -> Vec<Span<'static>> {
+    (0..=chips.len())
+        .rev()
+        .map(|count| join(&chips[..count], theme))
+        .find(|spans| columns(spans) <= room)
+        .unwrap_or_default()
+}
+
+/// The columns the spans take.
+fn columns(spans: &[Span]) -> usize {
+    spans.iter().map(|span| text_width(&span.content)).sum()
 }
 
 /// A status pill: the text with a space each side, reversed on the slot's
@@ -155,17 +234,103 @@ mod tests {
     }
 
     #[test]
-    fn a_key_chip_is_the_key_reversed_then_the_action() {
+    fn a_key_chip_is_the_key_bold_then_the_action_dim() {
         let theme = theme();
         let spans = key_chip("q", "quit", &theme);
         assert_eq!(spans.len(), 2);
-        assert_eq!(spans[0].content, " q ");
-        assert_eq!(
-            spans[0].style,
-            theme.chrome.key.add_modifier(Modifier::REVERSED)
-        );
+        assert_eq!(spans[0].content, "q");
+        assert_eq!(spans[0].style.fg, theme.chrome.key.fg);
+        assert!(spans[0].style.add_modifier.contains(Modifier::BOLD));
+        assert!(!spans[0].style.add_modifier.contains(Modifier::REVERSED));
         assert_eq!(spans[1].content, " quit");
-        assert_eq!(spans[1].style, theme.chrome.footer);
+        assert_eq!(spans[1].style, theme.text.dim);
+    }
+
+    /// The footer's lines as text.
+    fn footer_text(
+        actions: &[Vec<Span<'static>>],
+        closing: &[Vec<Span<'static>>],
+        width: u16,
+        rows: u16,
+    ) -> Vec<String> {
+        footer(actions, closing, width, rows, &theme())
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// The chips of a footer, in the order given.
+    fn chips(keys: &[(&str, &str)]) -> Vec<Vec<Span<'static>>> {
+        keys.iter()
+            .map(|(key, action)| key_chip(key, action, &theme()))
+            .collect()
+    }
+
+    #[test]
+    fn a_footer_is_one_centred_line_when_it_fits() {
+        let actions = chips(&[("enter", "open"), ("o/O", "sort")]);
+        let closing = chips(&[("?", "help"), ("q", "quit")]);
+        let lines = footer(&actions, &closing, 60, 2, &theme());
+        assert_eq!(lines.len(), 1);
+        assert_eq!(
+            footer_text(&actions, &closing, 60, 2),
+            ["enter open · o/O sort · ? help · q quit"]
+        );
+        assert_eq!(lines[0].alignment, Some(ratatui::layout::Alignment::Center));
+    }
+
+    #[test]
+    fn a_footer_takes_a_second_line_for_the_closing_chips_when_two_rows_allow() {
+        let actions = chips(&[("enter", "open"), ("o/O", "sort"), ("/", "filter")]);
+        let closing = chips(&[("?", "help"), ("q", "quit")]);
+        assert_eq!(
+            footer_text(&actions, &closing, 24, 2),
+            ["enter open · o/O sort", "? help · q quit"]
+        );
+        assert_eq!(footer(&actions, &closing, 24, 2, &theme()).len(), 2);
+    }
+
+    #[test]
+    fn a_footer_with_one_row_drops_whole_chips_from_the_right_and_keeps_the_closing() {
+        let actions = chips(&[("enter", "open"), ("o/O", "sort"), ("/", "filter")]);
+        let closing = chips(&[("?", "help"), ("q", "quit")]);
+        assert_eq!(
+            footer_text(&actions, &closing, 30, 1),
+            ["enter open · ? help · q quit"]
+        );
+        assert_eq!(
+            footer_text(&actions, &closing, 19, 1),
+            ["? help · q quit"],
+            "the closing chips stay when no action fits"
+        );
+    }
+
+    #[test]
+    fn a_closing_chip_too_wide_drops_whole_and_is_never_cut() {
+        let actions = chips(&[("enter", "open")]);
+        let closing = chips(&[("?", "help"), ("q", "quit")]);
+        assert_eq!(footer_text(&actions, &closing, 10, 1), ["? help"]);
+        assert_eq!(footer_text(&actions, &closing, 4, 2), [""]);
+    }
+
+    #[test]
+    fn a_footer_with_no_closing_chips_is_the_actions_alone() {
+        let actions = chips(&[("enter", "open")]);
+        assert_eq!(footer_text(&actions, &[], 40, 2), ["enter open"]);
+        assert_eq!(footer_text(&[], &[], 40, 2), [""]);
+    }
+
+    #[test]
+    fn the_rule_is_one_thin_line_across_the_width() {
+        let theme = theme();
+        let rule = rule(7, &theme);
+        assert_eq!(rule.content, "───────");
+        assert_eq!(rule.style, theme.chrome.border);
     }
 
     #[test]

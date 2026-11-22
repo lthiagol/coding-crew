@@ -36,5 +36,5 @@
 activity not shown: 158 events
 
 
-
- q  quit   1-6  tab   ←→  switch tab   ?  help
+────────────────────────────────────────────────────────────
+                       ? help · q quit

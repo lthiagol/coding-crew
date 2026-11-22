@@ -802,12 +802,12 @@ fn the_settings_tab_is_reachable_in_render_mode_at_every_canonical_width() {
             !text.contains("nothing to set yet"),
             "width {width}: {text}"
         );
-        // The footer names what the tab does: it quits, and it has no open
-        // key, since enter edits here.
+        // The footer names what changes the file: it quits, saves and reloads.
+        // The keys that edit, change and move are the help's.
         let footer = text.lines().last().expect("a footer row").trim_end();
         assert!(footer.contains("quit"), "width {width}: {footer}");
         if width == 100 {
-            for words in ["edit", "change", "save", "top/bottom", "move"] {
+            for words in ["save", "undo", "reload", "help"] {
                 assert!(footer.contains(words), "width {width}: {footer}");
             }
         }

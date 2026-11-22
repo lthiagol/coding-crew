@@ -34,7 +34,7 @@
 │                                                                                                  │
 │ [[agents]]                                                                                       │
 │ name = "orchestrator"                                                                            │
-│ role = "orchestrator"                                                                            │
-│ not shown: agents (3 hidden), order (18 hidden), raul (2 hidden), raul.tasks (2 hidden)          │
+│ not shown: agents (4 hidden), order (18 hidden), raul (2 hidden), raul.tasks (2 hidden)          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
- q  quit   1-6  tab   ←→  change   enter  edit   w  save   g/G  top/bottom   ↑↓ j/k  move   ?  help
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                            w save · u undo · r reload · ? help · q quit

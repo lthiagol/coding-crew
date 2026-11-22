@@ -79,7 +79,7 @@ the tolerance. A word grey the theme spends on another slot is not a
 candidate: the main text colour is `text.normal` and the tab that is showing,
 the muted one is `text.dim`, the raised one is `text.strong`, the title one is
 `chrome.title`, the tabs that are not showing are `chrome.tab_inactive`, the
-footer's labels are `chrome.footer` and the index is `chrome.tab_index`. A
+filter note above the footer is `chrome.footer` and the index is `chrome.tab_index`. A
 chrome grade stays a chrome grade: a family that borrows one for a word does
 not make it a candidate. Where the family leaves no such foreground, or spends
 every one of them on another role, the main foreground is the neutral — the

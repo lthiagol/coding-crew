@@ -18,7 +18,7 @@ differently.
 | `chrome.tab_index` | the `3/6` index |
 | `chrome.border` | a block's border |
 | `chrome.border_focus` | the border of the focused block |
-| `chrome.footer` | the footer's text |
+| `chrome.footer` | the filter note's count, `2 of 5 · 3 filtered out`, above the footer |
 | `chrome.key` | a key label in the footer and in the help overlay |
 | `text.normal` | ordinary text |
 | `text.dim` | secondary text: the empty state, a marker, a hint under a line, a separator, a path, a tab that is not built yet |

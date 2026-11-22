@@ -91,10 +91,17 @@ take the slot of the word they sit beside.
   below the tabs is a thin rule `─` in `chrome.border`, broken by the
   active tab's `▔`). A tab whose count matters carries a badge: `Needs you 8`,
   `Backlog 11`, the count in `text.strong`.
-- **The footer** is key chips: the key in `chrome.key` between `‹ ›`-free
-  padding — ` q ` reversed on the key slot — then the action in
-  `chrome.footer`. Chips are separated by two spaces. What does not fit is
-  dropped from the right, the hidden count kept, as today.
+- **The footer** is centred and names only the keys that matter. A key is
+  bold in `chrome.key`, its action is in `text.dim`, and chips are joined by
+  ` · ` in `chrome.border`. The context's own keys come first (`enter open ·
+  o/O sort · / filter`); `? help · q quit` always ends it. Navigation keys are
+  not in the footer: the `?` overlay names them. A thin rule `─` in
+  `chrome.border` sits on the row above it. A notice, such as a filter line or
+  a refused save, keeps its own row above the rule.
+- **Overflow:** one line when the whole fits. Otherwise the context's keys take
+  a line and `? help · q quit` a second, which costs the body one row. Below
+  that, whole keys drop from the right of the context's keys, the hidden count
+  kept, and the closing keys are never the ones cut.
 - **A progress bar** is `█` filled and `░` empty in the value's slot and
   `text.dim`, followed by the numbers in words: `██████░░░░ 18 of 45`.
 - **A spinner** (hugo only, for `working` agents) cycles `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` on the

@@ -30,7 +30,6 @@ use syntect::parsing::SyntaxSet;
 use coding_crew_core::escape_literal;
 use coding_crew_engine::{MarkdownTheme, parse_markdown_with_width, syntax_set};
 
-use crate::app::footer_line;
 use crate::data::Work;
 use crate::tabs::Tab;
 use coding_crew_theme::chrome;
@@ -187,7 +186,8 @@ fn clamp_scroll(offset: isize) -> u16 {
     offset.clamp(0, u16::MAX as isize) as u16
 }
 
-/// Draw the pane over the whole window.
+/// Draw the pane over the whole window. `help` says the help is open over it,
+/// which the footer names.
 pub fn render(
     frame: &mut Frame,
     area: Rect,
@@ -195,8 +195,16 @@ pub fn render(
     detail: &mut Detail,
     icons: IconSet,
     theme: &Theme,
+    help: bool,
 ) {
-    let rows = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(area);
+    let (actions, closing) = footer_chips(help, theme);
+    let footer_rows = chrome::footer(&actions, &closing, area.width, 2, theme).len();
+    let rows = Layout::vertical([
+        Constraint::Min(1),
+        Constraint::Length(1),
+        Constraint::Length(u16::try_from(footer_rows).unwrap_or(2)),
+    ])
+    .split(area);
     let width = usize::from(rows[0].width).saturating_sub(2);
     // The pane covers the whole window: what is under it is not on
     // display, and nothing of it shows through.
@@ -220,7 +228,9 @@ pub fn render(
             .scroll((u16::try_from(scroll).unwrap_or(u16::MAX), 0)),
         rows[0],
     );
-    frame.render_widget(footer(rows[1].width, theme), rows[1]);
+    frame.render_widget(Line::from(chrome::rule(rows[1].width, theme)), rows[1]);
+    let lines = footer(rows[2].width, rows[2].height, help, theme);
+    frame.render_widget(Paragraph::new(lines), rows[2]);
 }
 
 /// The document the pane shows: the record projected to markdown, rendered
@@ -381,25 +391,21 @@ fn cut_labels(labels: Vec<Span<'static>>, width: usize) -> Line<'static> {
 
 /// The footer of the pane: the keys that do something while it is open.
 ///
-/// Every other key is left alone while the pane is open, so none of them
-/// is named: not the tabs, not help, and not enter — it opens, and it has
-/// opened. The scroll keys are named; `footer_line` first-fits the
-/// optional parts in index order — pgup/pgdn, then g/G, then `↑↓` — so a
-/// narrowing footer gives up the single rows first, then the ends, the
-/// page keys last.
-fn footer(width: u16, theme: &Theme) -> Line<'static> {
-    // A key chip, parted from the chip before it by two spaces.
-    let chip = |key: &str, action: &str| {
-        [vec![Span::raw("  ")], chrome::key_chip(key, action, theme)].concat()
-    };
-    let parts = vec![
-        (0, chrome::key_chip("q", "quit", theme), true),
-        (1, chip("esc", "close"), true),
-        (2, chip("pgup/pgdn", "page"), false),
-        (3, chip("g/G", "top/bottom"), false),
-        (4, chip("↑↓", "scroll"), false),
-    ];
-    footer_line(parts, width)
+/// `esc` closes the pane, or the help over it. The scroll keys are not named:
+/// the help over the pane lists them, as the window's help lists its own.
+/// Every other key is left alone while the pane is open, so none of them is
+/// named: not the tabs, and not enter — it opens, and it has opened.
+fn footer_chips(help: bool, theme: &Theme) -> (Vec<Vec<Span<'static>>>, Vec<Vec<Span<'static>>>) {
+    let chip = |key: &str, action: &str| chrome::key_chip(key, action, theme);
+    let actions = vec![chip("esc", if help { "close help" } else { "close" })];
+    let closing = vec![chip("?", "help"), chip("q", "quit")];
+    (actions, closing)
+}
+
+/// The footer's lines at `width`, in `rows` rows.
+fn footer(width: u16, rows: u16, help: bool, theme: &Theme) -> Vec<Line<'static>> {
+    let (actions, closing) = footer_chips(help, theme);
+    chrome::footer(&actions, &closing, width, rows, theme)
 }
 
 #[cfg(test)]
@@ -887,8 +893,8 @@ mod tests {
         let (top, _, app) = drawn_after(&work, "TSK13", 100, 20, &[]);
         let page = app.detail.as_ref().expect("open").page;
         assert_eq!(
-            page, 17,
-            "the page is not the pane's rows: the height minus the footer and the two borders"
+            page, 16,
+            "the page is not the pane's rows: the height minus the rule, the footer and the two borders"
         );
         // pgdn moves by that page.
         let (_, paged, app) = drawn_after(&work, "TSK13", 100, 20, &[KeyCode::PageDown]);
@@ -939,7 +945,7 @@ mod tests {
         );
         let detail = app.detail.as_ref().expect("open");
         let lines = document_lines(&work, detail, 98, IconSet::Nerd, &theme());
-        let visible = 17usize;
+        let visible = 16usize;
         let max = lines.len().saturating_sub(visible);
         assert!(
             usize::from(detail.scroll) <= max,
@@ -1556,27 +1562,16 @@ mod tests {
     fn the_footer_names_only_keys_that_do_something() {
         let work = mock_work();
         let (rows, _) = draw(&work, &pane("TSK13"), 100, 40);
-        let footer = rows.last().expect("a footer row").trim_end().to_string();
-        assert!(footer.contains("quit"), "{footer}");
-        assert!(
-            footer.contains("esc") && footer.contains("close"),
-            "{footer}"
-        );
-        // The scroll keys work in the pane: they are named.
-        assert!(
-            footer.contains("pgup/pgdn") && footer.contains("page"),
-            "{footer}"
-        );
-        assert!(footer.contains("g/G"), "{footer}");
-        assert!(
-            footer.contains("↑↓") && footer.contains("scroll"),
-            "{footer}"
-        );
-        // Enter has opened, the tabs are left alone, and help is not
-        // offered over the pane: none of them is named.
+        let footer = rows.last().expect("a footer row").trim().to_string();
+        assert_eq!(footer, "esc close · ? help · q quit");
+        // The scroll keys work in the pane, and the help over it names them:
+        // the footer does not.
+        for key in ["pgup/pgdn", "g/G", "↑↓", "scroll", "page"] {
+            assert!(!footer.contains(key), "{footer}");
+        }
+        // Enter has opened, and the tabs are left alone: none of them is named.
         assert!(!footer.contains("open"), "{footer}");
         assert!(!footer.contains("tab"), "{footer}");
-        assert!(!footer.contains("help"), "{footer}");
         assert!(!footer.contains("1-5"), "{footer}");
     }
 
@@ -1631,45 +1626,44 @@ mod tests {
 
     #[test]
     fn the_footer_degrades_in_the_built_order() {
-        // `footer_line` first-fits the optional parts in index order —
-        // pgup/pgdn, then g/G, then `↑↓` — so the single rows are the
-        // first to go in a narrowing footer, then the ends, the page keys
-        // last. The widths are the ones the review rendered.
+        // The pane's own chip gives way first, whole, and the closing chips
+        // hold longest: `q quit` is the last one dropped, and never cut.
         let text = |width: u16| {
-            footer(width, &theme())
-                .spans
+            footer(width, 1, false, &theme())
                 .iter()
+                .flat_map(|line| line.spans.iter())
                 .map(|span| span.content.as_ref())
                 .collect::<String>()
         };
-        // At 68 the single rows are gone; the ends and the page keys hold.
-        let at_68 = text(68);
-        assert!(at_68.contains("pgup/pgdn"), "{at_68}");
-        assert!(at_68.contains("g/G"), "{at_68}");
-        assert!(!at_68.contains("↑↓"), "{at_68}");
-        // At 55 the ends are gone too.
-        let at_55 = text(55);
-        assert!(at_55.contains("pgup/pgdn"), "{at_55}");
-        assert!(!at_55.contains("g/G"), "{at_55}");
-        // At 38 the page keys are gone last: q, esc and the page keys need
-        // 39 columns, so nothing optional wider than the single rows fits.
-        let at_38 = text(38);
-        assert!(!at_38.contains("pgup/pgdn"), "{at_38}");
-        assert!(!at_38.contains("g/G"), "{at_38}");
+        // The whole footer is 27 columns.
+        assert_eq!(text(27), "esc close · ? help · q quit");
+        assert_eq!(text(20), "? help · q quit", "esc gives way first");
+        assert_eq!(text(12), "? help", "q quit is dropped whole, not cut");
+    }
+
+    #[test]
+    fn the_footer_says_close_help_while_the_help_is_open() {
+        // With the help over the pane, esc closes the help, as it does over
+        // the window: the footer says so, and the closing chips stay.
+        let text: String = footer(100, 1, true, &theme())
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert_eq!(text, "esc close help · ? help · q quit");
     }
 
     #[test]
     fn the_footer_chips_are_the_shared_key_chips() {
-        // The keys are reversed, and the chips are parted by two spaces, as
-        // the tabs' footer draws them.
-        let line = footer(100, &theme());
+        // The key is bold and not reversed, and the chips are parted by the
+        // separator, as every footer draws them.
+        let line = footer(100, 1, false, &theme()).remove(0);
         let spans = &line.spans;
-        assert_eq!(spans[0].content, " q ");
-        assert!(spans[0].style.add_modifier.contains(Modifier::REVERSED));
-        assert_eq!(spans[1].content, " quit");
-        assert_eq!(spans[2].content, "  ");
-        assert_eq!(spans[3].content, " esc ");
-        assert!(spans[3].style.add_modifier.contains(Modifier::REVERSED));
+        assert_eq!(spans[0].content, "esc");
+        assert!(spans[0].style.add_modifier.contains(Modifier::BOLD));
+        assert!(!spans[0].style.add_modifier.contains(Modifier::REVERSED));
+        assert_eq!(spans[1].content, " close");
+        assert_eq!(spans[2].content, " · ");
     }
 
     #[test]

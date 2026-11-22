@@ -123,6 +123,19 @@ impl App {
                 _ => Action::Redraw,
             };
         }
+        if self.help {
+            // The help is a dismissal: any key closes it, over the window or
+            // over the detail pane. The key that returns from the pane closes
+            // the help and stays in the pane, and the keys that quit still
+            // leave raul.
+            self.help = false;
+            let overlay = keys::leaves_overlay(&key);
+            return match keys::binding(Scope::Window, &key).map(|binding| binding.act) {
+                Some(Act::Quit) if !overlay => self.quit(),
+                Some(Act::Exit) => Action::Quit,
+                _ => Action::Redraw,
+            };
+        }
         if let Some(detail) = self.detail.as_mut() {
             // The pane is modal: the keys its footer names are the only
             // ones that do something, and every other key is left alone.
@@ -131,6 +144,10 @@ impl App {
                 Some(Act::Exit) => Action::Quit,
                 Some(Act::Back) => {
                     self.close_detail();
+                    Action::Redraw
+                }
+                Some(Act::Help) => {
+                    self.help = true;
                     Action::Redraw
                 }
                 Some(Act::Move(rows)) => {
@@ -149,18 +166,6 @@ impl App {
                     detail.scroll_to_bottom();
                     Action::Redraw
                 }
-                _ => Action::Redraw,
-            };
-        }
-        if self.help {
-            // The help is a dismissal: any key closes it. The key that
-            // returns from the detail pane closes it too — the footer says
-            // so — and the keys that quit still leave raul.
-            self.help = false;
-            let overlay = keys::leaves_overlay(&key);
-            return match keys::binding(Scope::Window, &key).map(|binding| binding.act) {
-                Some(Act::Quit) if !overlay => self.quit(),
-                Some(Act::Exit) => Action::Quit,
                 _ => Action::Redraw,
             };
         }
@@ -458,14 +463,20 @@ impl App {
     pub fn draw(&mut self, frame: &mut Frame, work: &Work, now: &str) {
         let area = frame.area();
         // The notice row is there only while a notice is: a window without one
-        // keeps the layout it always had.
+        // keeps the layout it always had. The footer is a rule and one line,
+        // or two when the keys do not fit on one. The body takes what the
+        // rest leaves, so a short window keeps its footer before its rows.
+        let note = self.note(area.width, work);
+        let footer_rows = self.footer(area.width, 2, work, now, None).len();
         let rows = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Length(u16::from(self.notice.is_some())),
-            Constraint::Min(3),
+            Constraint::Min(0),
+            Constraint::Length(u16::from(note.is_some())),
             Constraint::Length(1),
+            Constraint::Length(u16::try_from(footer_rows).unwrap_or(2)),
         ])
         .split(area);
         let (tabs, rule) = self.tab_bar(rows[1].width, work, now);
@@ -539,24 +550,58 @@ impl App {
         };
         if let Some(detail) = self.detail.as_mut() {
             // The pane covers the whole window: its own footer is the one
-            // on display, and the help overlay waits behind it. The pane
-            // takes the mutable detail: the draw clamps its scroll to the
-            // document and measures the page the next keys move by.
-            detail::render(frame, area, work, detail, self.icons, &self.theme);
+            // on display, and the help overlay, when it is open, is drawn
+            // over the pane. The pane takes the mutable detail: the draw
+            // clamps its scroll to the document and measures the page the
+            // next keys move by.
+            detail::render(
+                frame,
+                area,
+                work,
+                detail,
+                self.icons,
+                &self.theme,
+                self.help,
+            );
+            if self.help {
+                render_help(frame, area, &self.theme, detail_help_lines(&self.theme));
+            }
             // A question about unsaved changes is asked over the pane's footer.
             if self.settings.asking() {
-                frame.render_widget(self.footer(rows[5].width, work, now, None), rows[5]);
+                self.draw_footer(frame, &rows, work, now, None);
             }
             return;
         }
-        frame.render_widget(self.footer(rows[5].width, work, now, hidden), rows[5]);
+        if let Some(note) = note {
+            frame.render_widget(note, rows[5]);
+        }
+        self.draw_footer(frame, &rows, work, now, hidden);
 
         if self.help {
             let has_rows = self.ids(work, now).is_some_and(|ids| !ids.is_empty());
+            let opens = self.tab.opens();
             let tasks = self.tab == Tab::Tasks;
             let settings = self.tab == Tab::Settings;
-            render_help(frame, area, &self.theme, has_rows, tasks, tasks, settings);
+            let lines = help_lines(&self.theme, has_rows, opens, tasks, settings);
+            render_help(frame, area, &self.theme, lines);
         }
+    }
+
+    /// Draw the footer's rule, then the footer, which are the last two areas
+    /// of the layout.
+    fn draw_footer(
+        &self,
+        frame: &mut Frame,
+        rows: &[Rect],
+        work: &Work,
+        now: &str,
+        hidden: Option<usize>,
+    ) {
+        let footer = rows[rows.len() - 1];
+        let rule = chrome::rule(footer.width, &self.theme);
+        frame.render_widget(Line::from(rule), rows[rows.len() - 2]);
+        let lines = self.footer(footer.width, footer.height, work, now, hidden);
+        frame.render_widget(Paragraph::new(lines), footer);
     }
 
     /// The title line: the app's icon and name, a dim `·`, and the folder it
@@ -769,185 +814,112 @@ impl App {
         }
     }
 
-    /// The footer: the keys that do something on this tab.
+    /// The footer's chips: the keys that do something on this screen, and
+    /// the closing keys, `? help · q quit`, which answer wherever `?` opens
+    /// the help. Navigation keys are not here: the help names them.
     ///
-    /// While the filter line is open, the footer is the line: its keys do not
-    /// answer, so the footer names none. A filter in force puts its text, the
-    /// count it leaves and the token it cannot read in the footer beside the
-    /// keys.
-    ///
-    /// A terminal too narrow for every key keeps the keys that matter most,
-    /// and no key is ever cut in half. Enter is named only where it opens:
-    /// a tab without rows never offers it, and the Settings tab reads even
-    /// though it lists rows. When the content pane had no room to say what
-    /// it hides, `hidden` is that count: the footer carries it beside the
-    /// keys, and the content pane says nothing about it — the same fact is
-    /// never painted twice.
-    fn footer(&self, width: u16, work: &Work, now: &str, hidden: Option<usize>) -> Line<'static> {
+    /// The hidden count of a pane that cannot say what it hides leads the
+    /// actions, so it is the last to give way. The content pane says nothing
+    /// about it: the same fact is never painted twice.
+    fn footer_chips(
+        &self,
+        work: &Work,
+        now: &str,
+        hidden: Option<usize>,
+    ) -> (Vec<Vec<Span<'static>>>, Vec<Vec<Span<'static>>>) {
+        let chip = |key: &str, action: &str| chrome::key_chip(key, action, &self.theme);
         if self.settings.asking() {
             // Quit is waiting for an answer: the footer is the question.
-            let parts = vec![
-                self.part(0, "w", "save", true),
-                self.part(1, "q", "quit", true),
-                self.part(2, "esc", "stay", true),
-            ];
-            return footer_line(parts, width);
+            let actions = vec![chip("w", "save"), chip("q", "quit"), chip("esc", "stay")];
+            return (actions, Vec::new());
         }
         if self.typing {
-            return footer_line(self.filter_parts(work, usize::from(width)), width);
+            // The filter line takes the keys as its text: no closing key works.
+            return (
+                vec![chip("enter", "keep"), chip("esc", "clear")],
+                Vec::new(),
+            );
         }
         if self.settings.editing() {
-            let parts = vec![
-                self.part(0, "enter", "keep", true),
-                self.part(1, "esc", "drop", true),
-            ];
-            return footer_line(parts, width);
+            return (vec![chip("enter", "keep"), chip("esc", "drop")], Vec::new());
+        }
+        let closing = vec![chip("?", "help"), chip("q", "quit")];
+        if self.help {
+            return (vec![chip("esc", "close help")], closing);
+        }
+        let mut actions = Vec::new();
+        if let Some(hidden) = hidden {
+            actions.push(hidden_chip(hidden, &self.theme));
         }
         if self.tab == Tab::Settings {
-            return self.settings_footer(width, hidden);
+            // Enter edits and the arrows change a choice: both are named in
+            // the help, and the footer names what changes the file. A file
+            // that changed on disk under the draft is reloaded first.
+            let reload = chip("r", "reload");
+            if self.settings.stale() {
+                actions.push(reload.clone());
+            }
+            if !self.settings.read_only() {
+                actions.push(chip("w", "save"));
+                actions.push(chip("u", "undo"));
+            }
+            if !self.settings.stale() {
+                actions.push(reload);
+            }
+            return (actions, closing);
         }
-        // A key chip, parted from the chip before it by two spaces.
-        let chip = |key: &str, action: &str| {
-            [
-                vec![Span::raw("  ")],
-                chrome::key_chip(key, action, &self.theme),
-            ]
-            .concat()
-        };
-        // (where it sits in the line, its spans, whether it matters most)
-        let mut parts: Vec<(usize, Vec<Span<'static>>, bool)> =
-            vec![(0, chrome::key_chip("q", "quit", &self.theme), true)];
-        if let Some(hidden) = hidden {
-            parts.push((
-                1,
-                vec![
-                    Span::raw("  "),
-                    Span::styled(hidden.to_string(), self.theme.text.strong),
-                    Span::styled(" hidden", self.theme.chrome.footer),
-                ],
-                true,
-            ));
-        }
-        // The filter parts go here, once the room they take is known.
-        let filter_at = parts.len();
-        parts.push((1, chip("1-6", "tab"), true));
-        let mut next = 3;
         let has_rows = rows_of(work, self.tab, now, self.order, &self.filter)
             .is_some_and(|ids| !ids.is_empty());
         // Enter is named only where it opens: the Settings tab is a list
         // whose rows are facts, and the tab reads.
         if has_rows && self.tab.opens() {
-            parts.push((next, chip("enter", "open"), true));
-            next += 1;
-        }
-        if has_rows {
-            // The movement keys work on every tab with rows: the single
-            // rows, the ends and a page. `footer_line` first-fits the
-            // optional parts in index order — g/G, then ↑↓ j/k, then
-            // pgup/pgdn, then the tab pair — so a narrowing footer gives the
-            // pair up first, the page keys next, the ends next, and the
-            // single rows last.
-            parts.push((next, chip("g/G", "top/bottom"), false));
-            next += 1;
-            parts.push((next, chip("↑↓ j/k", "move"), false));
-            next += 1;
-            parts.push((next, chip("pgup/pgdn", "page"), false));
-            next += 1;
-        }
-        if has_rows && self.tab == Tab::Tasks {
-            parts.push((next, chip("o/O", "sort"), false));
-            next += 1;
+            actions.push(chip("enter", "open"));
         }
         if self.tab == Tab::Tasks {
-            parts.push((next, chip("/", "filter"), false));
-            next += 1;
-        }
-        parts.push((next, chip("?", "help"), true));
-        if self.help {
-            parts.push((next + 1, chip("esc", "close help"), true));
-        }
-        // The filter parts take the room the needed parts before them leave;
-        // the keys after them give way first in a narrow footer.
-        let before: usize = parts[..filter_at]
-            .iter()
-            .filter(|(_, _, needed)| *needed)
-            .map(|(_, spans, _)| columns(spans))
-            .sum();
-        let room = usize::from(width).saturating_sub(before);
-        parts.splice(filter_at..filter_at, self.filter_parts(work, room));
-        // The tab pair is the last optional part: a pane too narrow for
-        // everything gives it up before a key that works on the tab.
-        parts.push((2, chip("←→", "switch tab"), false));
-        footer_line(parts, width)
-    }
-
-    /// A key chip as a footer part, parted from the chip before it by two
-    /// spaces unless it is the first.
-    fn part(
-        &self,
-        at: usize,
-        key: &str,
-        action: &str,
-        needed: bool,
-    ) -> (usize, Vec<Span<'static>>, bool) {
-        let mut spans = Vec::new();
-        if at > 0 {
-            spans.push(Span::raw("  "));
-        }
-        spans.extend(chrome::key_chip(key, action, &self.theme));
-        (at, spans, needed)
-    }
-
-    /// The Settings tab's footer: the keys that change the file, the hidden
-    /// count, and the notice of the last refused change or save. A file that
-    /// cannot be used offers no change, and says the reload is what it can do.
-    fn settings_footer(&self, width: u16, hidden: Option<usize>) -> Line<'static> {
-        let mut parts = vec![self.part(0, "q", "quit", true)];
-        if let Some(hidden) = hidden {
-            parts.push((
-                1,
-                vec![
-                    Span::raw("  "),
-                    Span::styled(hidden.to_string(), self.theme.text.strong),
-                    Span::styled(" hidden", self.theme.chrome.footer),
-                ],
-                true,
-            ));
-        }
-        if let Some(notice) = self.settings.notice() {
-            // A refused save or change says why, and the reload is offered
-            // when the file changed on disk under the draft.
-            let mut spans = vec![
-                Span::raw("  "),
-                Span::styled(notice.to_string(), self.theme.semantic.warn),
-            ];
-            if self.settings.stale() {
-                spans.extend(self.part(0, "r", "reload", true).1);
+            if has_rows {
+                actions.push(chip("o/O", "sort"));
             }
-            parts.push((1, spans, true));
+            actions.push(chip("/", "filter"));
         }
-        parts.push(self.part(2, "1-6", "tab", true));
-        if !self.settings.read_only() {
-            parts.push(self.part(3, "←→", "change", true));
-            parts.push(self.part(4, "enter", "edit", true));
-            parts.push(self.part(5, "w", "save", true));
+        (actions, closing)
+    }
+
+    /// The footer at `width`, in `rows` rows: see `chrome::footer`.
+    fn footer(
+        &self,
+        width: u16,
+        rows: u16,
+        work: &Work,
+        now: &str,
+        hidden: Option<usize>,
+    ) -> Vec<Line<'static>> {
+        let (actions, closing) = self.footer_chips(work, now, hidden);
+        chrome::footer(&actions, &closing, width, rows, &self.theme)
+    }
+
+    /// The note above the footer's rule: the filter line while it is typed
+    /// or in force, or the Settings tab's refusal or save. None when there
+    /// is nothing to say.
+    fn note(&self, width: u16, work: &Work) -> Option<Line<'static>> {
+        if self.settings.asking() || self.settings.editing() {
+            return None;
         }
-        // The movement keys come before the keys that change the file again:
-        // a narrow footer gives up the rarer keys first.
-        parts.push(self.part(6, "g/G", "top/bottom", false));
-        parts.push(self.part(7, "↑↓ j/k", "move", false));
-        parts.push(self.part(8, "pgup/pgdn", "page", false));
-        if !self.settings.read_only() {
-            parts.push(self.part(9, "u", "undo", false));
+        if self.typing || (self.tab != Tab::Settings && self.filter_in_force()) {
+            let spans = self
+                .filter_parts(work, usize::from(width))
+                .into_iter()
+                .flat_map(|(_, spans, _)| spans)
+                .collect::<Vec<_>>();
+            return Some(Line::from(spans));
         }
-        if !self.settings.stale() {
-            parts.push(self.part(10, "r", "reload", false));
-        }
-        parts.push(self.part(11, "?", "help", true));
-        if self.help {
-            parts.push(self.part(12, "esc", "close help", true));
-        }
-        footer_line(parts, width)
+        let notice = self
+            .settings
+            .notice()
+            .filter(|_| self.tab == Tab::Settings)?;
+        Some(Line::from(Span::styled(
+            notice.to_string(),
+            self.theme.semantic.warn,
+        )))
     }
 
     /// The footer's parts for the filter: the line, with a cursor while it is
@@ -1063,40 +1035,18 @@ fn tail(text: &str, room: usize) -> String {
     format!("…{}", kept.into_iter().rev().collect::<String>())
 }
 
+/// The chip of a pane's hidden count: the number in `text.strong`, then the
+/// word in `text.dim`.
+fn hidden_chip(hidden: usize, theme: &Theme) -> Vec<Span<'static>> {
+    vec![
+        Span::styled(hidden.to_string(), theme.text.strong),
+        Span::styled(" hidden", theme.text.dim),
+    ]
+}
+
 /// The columns the spans take in the footer.
 fn columns(spans: &[Span]) -> usize {
     spans.iter().map(|span| span.content.chars().count()).sum()
-}
-
-/// The footer line: the parts that fit, the ones that matter most first.
-pub(crate) fn footer_line(
-    parts: Vec<(usize, Vec<Span<'static>>, bool)>,
-    width: u16,
-) -> Line<'static> {
-    // The keys that matter most are kept; the rest only if they fit.
-    let mut chosen = vec![false; parts.len()];
-    let mut used = 0usize;
-    for matters in [true, false] {
-        for (index, (_, spans, needed)) in parts.iter().enumerate() {
-            if *needed != matters {
-                continue;
-            }
-            let width_of_part = columns(spans);
-            if used + width_of_part <= usize::from(width) {
-                chosen[index] = true;
-                used += width_of_part;
-            }
-        }
-    }
-    let mut order: Vec<usize> = (0..parts.len()).collect();
-    order.sort_by_key(|index| parts[*index].0);
-    let mut spans = Vec::new();
-    for index in order {
-        if chosen[index] {
-            spans.extend(parts[index].1.clone());
-        }
-    }
-    Line::from(spans)
 }
 
 /// The rows a tab holds, when it holds rows the cursor moves through.
@@ -1132,21 +1082,17 @@ fn help_popup(area: Rect) -> Rect {
 /// lines give way from the least to the most useful: `shift-tab`, then
 /// `h l`, then `tab`, then `← →` (each has a twin that remains), then
 /// `g/G`, `o O` and the filter's keys, then `pgup`/`pgdn` (the arrows still
-/// move), then `↑↓`/`j`/`k`, then `1-6`. `q` and `?` are dropped last: a
-/// human who is stuck needs to leave and to ask what the keys are.
+/// move) and `enter` open, then `↑↓`/`j`/`k`, then `1-6`. `q` and `?` are
+/// dropped last: a human who is stuck needs to leave and to ask what the
+/// keys are.
 fn help_lines(
     theme: &Theme,
     has_rows: bool,
-    sorts: bool,
-    filter: bool,
+    opens: bool,
+    tasks: bool,
     settings: bool,
 ) -> Vec<(u8, Line<'static>)> {
-    let line = |key: &str, says: &str| {
-        Line::from(vec![
-            Span::styled(format!(" {key} "), theme.chrome.key),
-            Span::styled(format!(" {says}"), theme.text.normal),
-        ])
-    };
+    let line = |key: &str, says: &str| help_line(key, says, theme);
     let mut lines = vec![(7, line("1-6", "jump to a tab"))];
     // On the Settings tab the arrows and h l change a choice, so they do not
     // switch tabs there.
@@ -1168,11 +1114,12 @@ fn help_lines(
         lines.push((6, line("↑↓ j/k", "move")));
         lines.push((5, line("pgup/pgdn", "page")));
         lines.push((4, line("g/G", "top/bottom")));
+        if opens {
+            lines.push((5, line("enter", "open")));
+        }
     }
-    if sorts {
+    if tasks {
         lines.push((4, line("o O", "sort")));
-    }
-    if filter {
         lines.push((4, line("/", "filter")));
         lines.push((4, line("enter", "keep the filter")));
         lines.push((4, line("esc", "clear the filter")));
@@ -1180,6 +1127,29 @@ fn help_lines(
     lines.push((u8::MAX, line("q", "quit")));
     lines.push((u8::MAX, line("?", "this help")));
     lines
+}
+
+/// The help lines of the detail pane: every key the pane answers, with the
+/// rank that decides which one is dropped first. The footer names `esc` and
+/// `? help · q quit`; the scroll keys are named here alone.
+fn detail_help_lines(theme: &Theme) -> Vec<(u8, Line<'static>)> {
+    let line = |key: &str, says: &str| help_line(key, says, theme);
+    vec![
+        (7, line("esc", "close")),
+        (6, line("↑↓ j/k", "scroll")),
+        (5, line("pgup/pgdn", "page")),
+        (4, line("g/G", "top/bottom")),
+        (u8::MAX, line("q", "quit")),
+        (u8::MAX, line("?", "this help")),
+    ]
+}
+
+/// One help line: the key in `chrome.key`, then what it does.
+fn help_line(key: &str, says: &str, theme: &Theme) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(format!(" {key} "), theme.chrome.key),
+        Span::styled(format!(" {says}"), theme.text.normal),
+    ])
 }
 
 /// The rows a help line takes in an `inner`-column popup.
@@ -1199,21 +1169,12 @@ fn help_rows(line: &Line<'_>, inner: usize) -> usize {
         .max(1)
 }
 
-/// The help overlay.
-fn render_help(
-    frame: &mut Frame,
-    area: Rect,
-    theme: &Theme,
-    has_rows: bool,
-    sorts: bool,
-    filter: bool,
-    settings: bool,
-) {
+/// The help overlay, of the lines the window or the detail pane names.
+fn render_help(frame: &mut Frame, area: Rect, theme: &Theme, lines: Vec<(u8, Line<'static>)>) {
     let popup = help_popup(area);
     // The border takes one row at the top and one at the bottom.
     let inner_width = usize::from(popup.width).saturating_sub(2);
     let room = usize::from(popup.height).saturating_sub(2);
-    let lines = help_lines(theme, has_rows, sorts, filter, settings);
     let lines: Vec<Line<'static>> = if inner_width == 0 {
         Vec::new()
     } else {
@@ -1549,10 +1510,12 @@ mod tests {
         let rows = draw(24, 8);
         let footer = rows.last().expect("a footer row").trim_end().to_string();
         // Every key shown is whole: nothing is cut in the middle of a word.
-        assert!(footer.contains("quit"), "{footer}");
-        assert!(!footer.contains("hel"), "{footer}");
-        let line = app().footer(24, &mock_work(), now(), None);
-        assert!(line.width() <= 30, "{line:?}");
+        assert!(
+            footer.contains("? help") && footer.contains("q quit"),
+            "{footer}"
+        );
+        let lines = app().footer(24, 2, &mock_work(), now(), None);
+        assert!(lines.iter().all(|line| line.width() <= 24), "{lines:?}");
     }
 
     #[test]
@@ -1562,7 +1525,6 @@ mod tests {
         for tab in Tab::ALL {
             assert!(text.contains(tab.label()), "{tab:?} is missing");
         }
-        assert!(text.contains("switch tab"), "{text}");
     }
 
     #[test]
@@ -1650,7 +1612,9 @@ mod tests {
             for help in [false, true] {
                 let rows = render(&mut window(&theme, tab, help), 100, 20).0;
                 let text = rows.join("\n");
-                assert!(text.contains("1-6"), "{tab:?} help={help}: {text}");
+                if help {
+                    assert!(text.contains("1-6"), "{tab:?}: the help omits 1-6: {text}");
+                }
                 assert!(
                     !text.contains("1-7"),
                     "{tab:?} help={help}: the footer names a dead key: {text}"
@@ -1729,23 +1693,20 @@ mod tests {
             .expect("a footer row")
             .trim_end()
             .to_string();
-        for works in [
-            "quit",
-            "1-6",
-            "change",
-            "edit",
-            "save",
-            "undo",
-            "reload",
-            "move",
-            "page",
-            "top/bottom",
-            "help",
-        ] {
+        for works in ["quit", "save", "undo", "reload", "help"] {
             assert!(footer.contains(works), "{footer}: {works} is missing");
         }
-        // The arrows change a choice here, so they do not switch tabs.
+        // The arrows change a choice here, so they do not switch tabs; the
+        // help names what a choice and the rows take.
         assert!(!footer.contains("switch tab"), "{footer}");
+        app.help = true;
+        let help = render(&mut app, 160, 40).0.join("\n");
+        for works in ["change", "edit", "move", "page", "top/bottom", "1-6"] {
+            assert!(
+                help.contains(works),
+                "{works} is missing from the help: {help}"
+            );
+        }
         // A file that cannot be used offers no change: the reload is left.
         let mut read_only = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         let footer = render(&mut read_only, 160, 20)
@@ -1797,6 +1758,24 @@ mod tests {
             .expect("a footer row")
             .trim_end()
             .to_string()
+    }
+
+    /// The row above the footer's rule: where the filter line and the notice
+    /// are drawn, so the footer itself names only keys.
+    fn note_row(rows: &[String]) -> String {
+        let rule = rows
+            .iter()
+            .rposition(|row| {
+                let row = row.trim();
+                !row.is_empty() && row.chars().all(|c| c == '─')
+            })
+            .expect("the footer's rule");
+        rows[rule - 1].trim_end().to_string()
+    }
+
+    /// The note of the window at 120 columns, as text.
+    fn note_of(app: &mut App) -> String {
+        note_row(&render(app, 120, 20).0)
     }
 
     #[test]
@@ -1880,13 +1859,17 @@ mod tests {
         )
         .expect("someone else's edit");
         app.on_key(key(KeyCode::Char('w')), &work, now());
-        let footer = footer_of(&mut app);
-        assert!(footer.contains("the file changed on disk"), "{footer}");
-        assert!(footer.contains("reload"), "{footer}");
+        let note = note_of(&mut app);
+        assert!(note.contains("the file changed on disk"), "{note}");
+        assert!(
+            footer_of(&mut app).contains("r reload"),
+            "{}",
+            footer_of(&mut app)
+        );
         // The reload takes the file, and the notice goes with the refusal.
         app.on_key(key(KeyCode::Char('r')), &work, now());
         assert!(!app.settings.unsaved());
-        assert!(!footer_of(&mut app).contains("the file changed on disk"));
+        assert!(!note_of(&mut app).contains("the file changed on disk"));
     }
 
     #[test]
@@ -1914,9 +1897,9 @@ mod tests {
         );
         assert_eq!(app.tab, Tab::Settings, "the refusal stayed on Tasks");
         assert!(!app.settings.asking());
-        let footer = footer_of(&mut app);
-        assert!(footer.contains("the file changed on disk"), "{footer}");
-        assert!(footer.contains("reload"), "{footer}");
+        let note = note_of(&mut app);
+        assert!(note.contains("the file changed on disk"), "{note}");
+        assert!(footer_of(&mut app).contains("r reload"));
     }
 
     #[test]
@@ -2275,6 +2258,83 @@ mod tests {
     }
 
     #[test]
+    fn the_detail_pane_lists_its_keys_on_question_mark() {
+        // `?` opens the keys of the pane over it, as it opens the window's
+        // help, and the pane stays open beneath.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Path, false);
+        app.detail = Some(Detail::opened("TSK13".to_string(), Tab::Path, None));
+        app.on_key(key(KeyCode::Char('?')), &work, now());
+        assert!(app.help, "? did not open the help over the pane");
+        assert!(app.detail.is_some(), "? closed the pane");
+        let help = help_text(&render(&mut app, 100, 24).0, 100, 24);
+        for named in [
+            "esc  close",
+            "↑↓ j/k",
+            "pgup/pgdn",
+            "g/G",
+            "q  quit",
+            "?  this help",
+        ] {
+            assert!(
+                help.contains(named),
+                "the pane's help omits {named}: {help}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_detail_pane_footer_and_help_name_the_keys_it_answers() {
+        // Every key the footer names is handled by the pane, and every key the
+        // pane handles is named in its help: a key on one and not the other
+        // is a gap.
+        let theme = Theme::preset(Preset::Dark);
+        for code in [KeyCode::Esc, KeyCode::Char('?'), KeyCode::Char('q')] {
+            assert!(
+                keys::binding(Scope::Detail, &key(code)).is_some(),
+                "{code:?} is in the pane's footer and does nothing there"
+            );
+        }
+        let mut app = window(&theme, Tab::Path, true);
+        app.detail = Some(Detail::opened("TSK13".to_string(), Tab::Path, None));
+        let help = help_text(&render(&mut app, 100, 24).0, 100, 24);
+        for binding in keys::BINDINGS
+            .iter()
+            .filter(|b| b.applies_to(Scope::Detail))
+        {
+            let named_as = match binding.act {
+                Act::Back => "esc  close",
+                Act::Move(_) => "↑↓ j/k",
+                Act::Page(_) => "pgup/pgdn",
+                Act::Top | Act::Bottom => "g/G",
+                Act::Quit => "q  quit",
+                Act::Help => "?  this help",
+                // ctrl-c leaves raul, and the window's help does not name it
+                // either.
+                Act::Exit => continue,
+                other => panic!("the pane handles {other:?}, and its help does not name it"),
+            };
+            assert!(help.contains(named_as), "{}: {help}", named(binding));
+        }
+    }
+
+    #[test]
+    fn esc_closes_the_help_over_the_pane_and_keeps_the_pane() {
+        // The footer over the help says `esc close help`: esc closes the help,
+        // and the pane stays open beneath it.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Path, false);
+        app.detail = Some(Detail::opened("TSK13".to_string(), Tab::Path, None));
+        app.help = true;
+        assert!(footer_of(&mut app).contains("esc close help"));
+        assert_eq!(app.on_key(key(KeyCode::Esc), &work, now()), Action::Redraw);
+        assert!(!app.help, "esc did not close the help");
+        assert!(app.detail.is_some(), "esc closed the pane with the help");
+    }
+
+    #[test]
     fn the_settings_cursor_scrolls_and_stays_drawn() {
         // The Settings tab keeps the row tabs' rule: the cursor is never on
         // a row the pane does not draw, and its line is painted.
@@ -2284,7 +2344,7 @@ mod tests {
         let mut app = window(&theme, Tab::Settings, false);
         app.settings = settings_panel("scrolls");
         let ids = app.settings.ids();
-        for height in [12u16, 8, 6] {
+        for height in [13u16, 9, 8] {
             render(&mut app, 100, height);
             for _ in 0..ids.len() + 2 {
                 app.on_key(key(KeyCode::Down), &work, now());
@@ -2576,7 +2636,7 @@ mod tests {
         let rows = render(
             &mut window(&Theme::preset(Preset::Dark), Tab::Path, false),
             20,
-            6,
+            9,
         )
         .0;
         let text = rows.join("\n");
@@ -2634,14 +2694,15 @@ mod tests {
                 "{height}: ? is not in the popup: {text}"
             );
         }
-        // The drop order the comment states: at 14 the ends survive; at 10
-        // they are gone before q and ?.
+        // The drop order the comment states: at 14 the primary action stays
+        // and g/G goes first; at 10 the ends are gone before q and ?.
         let at_14 = help_text(
             &render(&mut window(&theme, Tab::NeedsYou, true), 100, 14).0,
             100,
             14,
         );
-        assert!(at_14.contains("g/G"), "{at_14}");
+        assert!(at_14.contains("enter  open"), "{at_14}");
+        assert!(!at_14.contains("g/G"), "{at_14}");
         let at_10 = help_text(
             &render(&mut window(&theme, Tab::NeedsYou, true), 100, 10).0,
             100,
@@ -2752,7 +2813,7 @@ mod tests {
         for tab in list_tabs() {
             let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a list tab");
             let mut app = window(&theme, tab, false);
-            render(&mut app, 100, 15);
+            render(&mut app, 100, 16);
             let page = app.view.page();
             assert!(page > 1, "{tab:?}: the pane shows {page} rows");
             // One page down moves the cursor by exactly the rows on
@@ -2813,18 +2874,16 @@ mod tests {
             let mut app = window(&theme, tab, false);
             let rows = render(&mut app, 100, 20).0;
             let footer = rows.last().expect("a footer row").trim_end().to_string();
-            for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
-                assert!(footer.contains(key), "{tab:?}: {key} is missing: {footer}");
-            }
-            for words in ["move", "page", "top/bottom"] {
+            for key in ["↑↓", "j/k", "pgup/pgdn", "g/G", "1-6"] {
                 assert!(
-                    footer.contains(words),
-                    "{tab:?}: {words} is missing: {footer}"
+                    !footer.contains(key),
+                    "{tab:?}: {key} is in the footer: {footer}"
                 );
             }
-            // The help overlay names the same keys.
+            // The help overlay names the movement keys. Tasks lists more lines
+            // than a 20-row popup holds, so this reads a 24-row window.
             app.help = true;
-            let help = render(&mut app, 100, 20).0.join("\n");
+            let help = render(&mut app, 100, 24).0.join("\n");
             for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
                 assert!(help.contains(key), "{tab:?}: help omits {key}: {help}");
             }
@@ -2847,6 +2906,28 @@ mod tests {
                     "{tab:?}: help names {key}, which does nothing here: {help}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn the_help_names_enter_open_on_every_row_tab_that_opens() {
+        // The footer names `enter open` on these tabs, so the help must name
+        // it too: a key the footer shows and the help omits is a gap.
+        let theme = Theme::preset(Preset::Dark);
+        for tab in list_tabs().into_iter().filter(Tab::opens) {
+            let help = render(&mut window(&theme, tab, true), 100, 20).0.join("\n");
+            let line = help
+                .lines()
+                .find(|line| line.contains("open"))
+                .unwrap_or_default();
+            assert!(
+                line.contains("enter"),
+                "{tab:?}: help omits enter open: {help}"
+            );
+        }
+        for tab in [Tab::Overview, Tab::Settings] {
+            let help = render(&mut window(&theme, tab, true), 100, 20).0.join("\n");
+            assert!(!help.contains("open"), "{tab:?}: help names open: {help}");
         }
     }
 
@@ -2897,50 +2978,26 @@ mod tests {
     }
 
     #[test]
-    fn the_row_tab_footer_degrades_in_the_built_order() {
-        // `footer_line` first-fits the optional parts in index order — g/G,
-        // then ↑↓ j/k, then pgup/pgdn, then the tab pair — so the pair is the
-        // first to go in a narrowing footer, the page keys next, the ends
-        // next, and the single rows last. The widths are the ones the review
-        // rendered.
+    fn the_row_tab_footer_gives_up_open_before_the_closing_keys() {
+        // A row tab's footer is `enter open`, then `? help · q quit`: a footer
+        // too narrow for both gives up open, and the closing keys stay.
         let work = mock_work();
         let app = window(&Theme::preset(Preset::Dark), Tab::Path, false);
         let text = |width: u16| {
-            app.footer(width, &work, now(), None)
-                .spans
+            app.footer(width, 1, &work, now(), None)
                 .iter()
+                .flat_map(|line| line.spans.iter())
                 .map(|span| span.content.as_ref())
                 .collect::<String>()
         };
-        // At 68 the open key and the ends hold; the single rows, the page
-        // keys and the tab pair are gone.
-        let at_68 = text(68);
-        assert!(at_68.contains("enter"), "{at_68}");
-        assert!(at_68.contains("open"), "{at_68}");
-        assert!(at_68.contains("g/G"), "{at_68}");
-        assert!(at_68.contains("top/bottom"), "{at_68}");
-        assert!(!at_68.contains("↑↓") && !at_68.contains("j/k"), "{at_68}");
-        assert!(!at_68.contains("pgup/pgdn"), "{at_68}");
-        assert!(!at_68.contains("switch tab"), "{at_68}");
-        // At 56 the ends are gone too; help still fits.
-        let at_56 = text(56);
-        assert!(at_56.contains("enter") && at_56.contains("open"), "{at_56}");
-        assert!(at_56.contains(" help"), "{at_56}");
-        assert!(!at_56.contains("g/G"), "{at_56}");
-        assert!(!at_56.contains("↑↓") && !at_56.contains("j/k"), "{at_56}");
-        assert!(!at_56.contains("pgup/pgdn"), "{at_56}");
-        assert!(!at_56.contains("switch tab"), "{at_56}");
-        // At 40 help gives way too; the keys that matter most hold, and no
-        // movement key is named.
-        let at_40 = text(40);
-        assert!(at_40.contains(" q ") && at_40.contains("quit"), "{at_40}");
-        assert!(at_40.contains("1-6") && at_40.contains(" tab"), "{at_40}");
-        assert!(at_40.contains("enter") && at_40.contains("open"), "{at_40}");
-        assert!(!at_40.contains("help"), "{at_40}");
-        assert!(!at_40.contains("g/G"), "{at_40}");
-        assert!(!at_40.contains("↑↓") && !at_40.contains("j/k"), "{at_40}");
-        assert!(!at_40.contains("pgup/pgdn"), "{at_40}");
-        assert!(!at_40.contains("switch tab"), "{at_40}");
+        let whole = text(28);
+        assert_eq!(whole.trim(), "enter open · ? help · q quit");
+        let narrow = text(27);
+        assert!(!narrow.contains("open"), "{narrow}");
+        assert!(
+            narrow.contains("? help") && narrow.contains("q quit"),
+            "{narrow}"
+        );
     }
 
     #[test]
@@ -2952,9 +3009,9 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         for tab in row_tabs() {
             let mut app = window(&theme, tab, false);
-            render(&mut app, 100, 12);
+            render(&mut app, 100, 13);
             app.on_key(key(KeyCode::Char('G')), &work, now());
-            let (rows, _) = render(&mut app, 100, 12);
+            let (rows, _) = render(&mut app, 100, 13);
             let text = rows.join("\n");
             // Each line of the announcement is checked on its own: a long one
             // wraps onto the next row of the pane.
@@ -3015,7 +3072,7 @@ mod tests {
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
             let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
-            for height in [7u16, 8, 10] {
+            for height in [8u16, 9, 11] {
                 let mut app = window(&theme, tab, false);
                 render(&mut app, 100, height);
                 for code in [KeyCode::Down, KeyCode::Up] {
@@ -3512,8 +3569,7 @@ mod tests {
         let shown = rows_of(&work, Tab::Tasks, now(), Order::default(), &app.filter)
             .expect("rows")
             .len();
-        let footer = render_work(&mut app, &work, 100, 20, now()).0;
-        let footer = footer.last().expect("a footer row").trim_end().to_string();
+        let footer = note_row(&render_work(&mut app, &work, 100, 20, now()).0);
         assert!(
             footer.contains(&format!(
                 "{shown} of {total} · {} filtered out",
@@ -3532,8 +3588,7 @@ mod tests {
         let work = mock_work();
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
         app.filter = "colour:red".to_string();
-        let footer = render_work(&mut app, &work, 100, 20, now()).0;
-        let footer = footer.last().expect("a footer row").trim_end().to_string();
+        let footer = note_row(&render_work(&mut app, &work, 100, 20, now()).0);
         assert!(footer.contains("unknown key: colour"), "{footer}");
         assert!(footer.contains("0 of"), "{footer}");
     }
@@ -3550,8 +3605,7 @@ mod tests {
             &work,
             "status:review status:remediating priority:high",
         );
-        let footer = render_work(&mut app, &work, 40, 20, now()).0;
-        let footer = footer.last().expect("a footer row").to_string();
+        let footer = note_row(&render_work(&mut app, &work, 40, 20, now()).0);
         assert!(footer.contains("…"), "the line is not cut: {footer}");
         assert!(footer.contains("…rity:high "), "tail or cursor: {footer}");
         assert!(footer.contains(" of "), "the count is dropped: {footer}");
@@ -3565,8 +3619,7 @@ mod tests {
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
         app.on_key(key(KeyCode::Char('/')), &work, now());
         type_text(&mut app, &work, "colour:red");
-        let footer = render_work(&mut app, &work, 40, 20, now()).0;
-        let footer = footer.last().expect("a footer row").trim_end().to_string();
+        let footer = note_row(&render_work(&mut app, &work, 40, 20, now()).0);
         assert!(footer.contains("unknown key: colour"), "{footer}");
         assert!(footer.contains("colour:red"), "{footer}");
     }
@@ -3582,8 +3635,7 @@ mod tests {
             "status:review status:remediating priority:high",
         );
         app.on_key(key(KeyCode::Enter), &work, now());
-        let footer = render_work(&mut app, &work, 40, 20, now()).0;
-        let footer = footer.last().expect("a footer row").trim_end().to_string();
+        let footer = note_row(&render_work(&mut app, &work, 40, 20, now()).0);
         assert!(footer.contains("/ …"), "the line is not cut: {footer}");
         assert!(footer.contains(" of "), "the count is dropped: {footer}");
     }
@@ -3616,9 +3668,12 @@ mod tests {
         app.on_key(key(KeyCode::Char('/')), &work, now());
         type_text(&mut app, &work, "TSK1");
         for width in [40u16, 100] {
-            let footer = render_work(&mut app, &work, width, 20, now()).0;
-            let footer = footer.last().expect("a footer row").trim_end().to_string();
-            assert!(footer.starts_with("/ TSK1"), "{width}: {footer}");
+            let rows = render_work(&mut app, &work, width, 20, now()).0;
+            let note = note_row(&rows);
+            assert!(note.starts_with("/ TSK1"), "{width}: {note}");
+            // The footer names the keys the line answers, and no other.
+            let footer = rows.last().expect("a footer row").trim_end().to_string();
+            assert!(footer.contains("enter keep"), "{width}: {footer}");
             assert!(
                 !footer.contains("quit"),
                 "{width}: the keys show while typing: {footer}"

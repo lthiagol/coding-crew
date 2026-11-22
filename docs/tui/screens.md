@@ -18,7 +18,7 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 │  content pane — rows of the active tab                             │
 │                                                                    │
 ├────────────────────────────────────────────────────────────────────┤
-│ q  quit   1-6  tab   enter  open   ?  help                         │
+│         enter open · o/O sort · / filter · ? help · q quit         │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -28,7 +28,7 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 | tab bar | the six tabs, each its icon and name; `Needs you` and `Backlog` carry their counts as badges; the active tab is bold and underlined by a `▔` on the rule under the bar; `1`–`6`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` |
 | content pane | the active tab's rows; `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` |
 | detail pane | `enter` on a row opens the task as a full-screen overlay; `esc` returns to the tab and the selection it came from, and `enter` again reopens |
-| footer | contextual keys for the active tab, as key chips — never a key that does nothing. When the content pane has no room for the hidden-rows announcement, the footer carries that count beside the keys, and the content pane says nothing about it — the same fact is never painted twice |
+| footer | the active tab's own keys, centred under a thin rule, then `? help · q quit` — never a key that does nothing. Navigation keys are in the `?` overlay, not the footer. When the content pane has no room for the hidden-rows announcement, the footer carries that count first, and the content pane says nothing about it — the same fact is never painted twice |
 | quit | `q` quits, and `esc` quits too — in the window. `esc` in the detail pane returns to the tab instead |
 
 The detail pane is not a tab: it is the same task seen close up, and it opens
@@ -167,8 +167,8 @@ under group headers in the Backlog's style, the count a badge: `DONE  5`; a
 sort by id or a date is flat. The Settings tab's sort group names the order in
 force on its Tasks row.
 
-**The filter** is one line of text, not a form. `/` opens it in the footer
-and every key narrows the rows as it is typed; `enter` keeps it and returns
+**The filter** is one line of text, not a form. `/` opens it on the row above
+the footer and every key narrows the rows as it is typed; `enter` keeps it and returns
 to the rows, `esc` clears it. The text is words and `key:value` tokens:
 
 | token | matches |
@@ -184,11 +184,11 @@ to the rows, `esc` clears it. The text is words and `key:value` tokens:
 
 Different keys combine with AND; the same key repeated combines with OR —
 `status:review status:remediating priority:high`. A token with an unknown key
-or value is named in the footer (`unknown key: colour`) and matches nothing,
+or value is named on that row (`unknown key: colour`) and matches nothing,
 rather than being ignored silently.
 
-**A filtered list says so.** The footer reads `12 of 30 · 18 filtered out`
-while a filter is in force, and the filter text stays visible; the window's
+**A filtered list says so.** The row above the footer reads `12 of 30 · 18
+filtered out` while a filter is in force, and the filter text stays visible; the window's
 own announcement of rows scrolled out of view is unchanged and separate. A
 filter that matches nothing is a named empty state — `no task matches` and the
 filter — never a blank pane.
@@ -320,9 +320,9 @@ be interpreted.
 Nothing in the detail pane is editable in v1. raul reads.
 
 The pane scrolls: `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` move through a
-document taller than the pane, and the footer names the keys that work
-while it is open. Scrolling back to the top shows the document as the
-unscrolled view shows it.
+document taller than the pane. The footer is `esc close · ? help · q quit`;
+`?` lists the pane's keys over it, scroll keys included. Scrolling back to the
+top shows the document as the unscrolled view shows it.
 
 ## Derived, never stored
 

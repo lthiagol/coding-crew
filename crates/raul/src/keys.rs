@@ -173,7 +173,8 @@ pub const BINDINGS: [Binding; 47] = [
         act: Act::Quit,
     },
     Binding {
-        scopes: &[Scope::Window],
+        // In the detail pane `?` lists the pane's keys, as it lists the window's.
+        scopes: &[Scope::Window, Scope::Detail],
         chords: &[Chord::Key(KeyCode::Char('?'), false)],
         act: Act::Help,
     },
@@ -428,8 +429,9 @@ pub fn binding(scope: Scope, key: &KeyEvent) -> Option<&'static Binding> {
 
 /// Whether the key leaves an overlay.
 ///
-/// The help overlay closes on any key; the key that returns from the detail
-/// pane closes it too, so `esc` in the help does not leave raul.
+/// The help overlay closes on any key. `esc`, the key that returns from the
+/// detail pane, closes the help alone, so `esc` in the help does not leave
+/// raul or the pane.
 pub fn leaves_overlay(key: &KeyEvent) -> bool {
     binding(Scope::Detail, key).is_some_and(|binding| binding.act == Act::Back)
 }

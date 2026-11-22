@@ -309,22 +309,22 @@ fn the_window_has_a_title_line_a_footer_and_no_tabs() {
 #[test]
 fn the_footer_names_the_keys_that_work_and_no_key_that_does_nothing() {
     // The render starts with the cursor on the builder's harness row, where
-    // enter opens its choice: the footer names quit, reload, help and choose.
+    // enter opens its choice: the footer names choose, reload, help and quit,
+    // in that order, centred under a rule.
     let text = screen(100, 40);
     let footer = text.lines().last().expect("a footer").trim();
     assert_eq!(
-        footer, "q  quit   r  reload   ↑↓ j/k  move   ?  help   enter  choose",
+        footer, "enter choose · r reload · ? help · q quit",
         "{footer}"
     );
-    for dead in ["open", "tab", "esc", "pick"] {
+    for dead in ["open", "tab", "esc", "pick", "↑↓", "move"] {
         assert!(!footer.contains(dead), "{footer}: {dead}");
     }
-    // The sidebar is shown, so the move keys work; a window that drops it
-    // does not name them.
+    // The movement keys are the help's, at every width the sidebar is shown
+    // or dropped.
     let narrow = screen(60, 40);
     let narrow_footer = narrow.lines().last().expect("a footer").trim();
     assert!(!narrow_footer.contains("move"), "{narrow_footer}");
-    // The same keys are in the help.
     assert!(text.contains("reload"), "{text}");
 }
 
