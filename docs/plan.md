@@ -87,6 +87,15 @@ A unit without one is not ready, and belongs under **Grooming** instead.
 | 66 | **The footer: centred, dotted, only what matters** ✓ | done | both TUIs draw one footer pattern from the theme crate — keys bold on the key slot, actions dim, ` · ` separators, centred, a thin rule above; only the context's actions plus `? help · q quit`, navigation keys in the `?` overlay; two centred lines when one does not fit |
 | 67 | **hugo has depth, and selection is soft** ✓ | done | hugo's sidebar sits on a surface a step darker, recessed, its group labels are accent headers with a rule, roles have colours of their own in the sidebar and the crew, keys dim and values strong; the budget bar colours by what is spent; selection in both TUIs is the focus bar on a subtle tint |
 | 68 | **The document in colour** ✓ | done | the document's headings, lists, quotes, table headers and inline code take hues from each family's palette, and eight syntax roles colour code by keyword, string, number, function, type, comment, variable and tag — the palette is 27 roles, every value derived and recorded |
+| 69 | **raul: Settings picks, the Path spine, no freeze** | M | `←→` always switch tabs; Settings values open a picker (theme included, live preview); the Path spine is aligned; a detail pane redraw reuses its rendered document, so a fast scroll and `esc` never freeze |
+| 70 | **One table per role, and the builder is the builder** | M | `config.toml` has `[agents.orchestrator]`, `[agents.builder]`, `[agents.reviewer]` with harness, model, effort; the crew is the roles present (3, 2, 1); an old file loads; the UI says builder and lists roles orchestrator, builder, reviewer |
+| 70b | **hugo: the crew size, and choices for this session only** | M | hugo never writes the file — its picks are the session's; `c` opens a crew-size range selector with icons and hints; the sidebar marks session values; `s` and `--skill` use the session crew |
+| 71 | **Effort comes from the model, and raul picks from lists** | M | each model's effort levels come from its harness's own listing (claude curated); the catalogue lives in core; raul's Settings picks harness, model and effort from the same lists as hugo |
+| 72 | **hugo shows where the flow is, and picks the tasks** | L | captions on every block; a rounds timeline for the task in flight; a pickable queue (`space`, `a`, `s` with the marked); a mock runtime telling one coherent story: 5 tasks, 2 done, 1 in flight in round 2, 2 waiting |
+| 73 | **Mouse in both TUIs** | M | the wheel scrolls what is under the pointer, coalesced; clicks pick tabs, rows, sidebar entries and picker entries, hit-tested against the drawn layout |
+| 74 | **The review reads in layers** | M | each round a heading, its findings grouped by severity, details and comments nested beneath, spaced apart; TSK19 reads cleanly at 60 and 100 |
+| 75 | **Backlog items have documents** | S | an item opens a detail pane from its own projection, instead of "no document yet" |
+| 76 | **Settings in colour** | S | the Settings TOML is painted by the syntax roles: headers, keys, strings, numbers, booleans, comments |
 
 ## Grooming
 
