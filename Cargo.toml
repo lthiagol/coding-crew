@@ -29,6 +29,12 @@ unicode-width = "0.2"
 unicode-segmentation = "1"
 unicodeit = "0.2"
 
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
