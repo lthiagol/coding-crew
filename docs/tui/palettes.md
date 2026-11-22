@@ -771,6 +771,34 @@ The terminal preset paints none of the eighteen roles: every one resolves to
 own modifiers. The document says the same thing in every preset; only the
 paint changes.
 
+## The code's syntax
+
+The code tokens of a fenced block are the one paint outside the eighteen roles:
+the engine highlights them with a syntect theme. Each preset pairs its own,
+derived in `crates/raul/src/detail.rs` (`code_theme`) from the preset's
+document palette, so the tokens follow the preset and no bundled syntect theme
+is fetched at build time. Each token class takes one role:
+
+| token class | scopes | role | side |
+|---|---|---|---|
+| the default | a token no scope names | `document.code` | `text` |
+| comment | `comment` (italic) | `document.list.3` | — |
+| keyword | `keyword`, `storage` | `document.link` | — |
+| string | `string` | `document.alert.tip` | — |
+| constant, number | `constant` | `document.alert.warning` | — |
+| function | `entity.name.function`, `support.function` | `document.alert.important` | — |
+| type | `entity.name.type`, `support.type`, `support.class` | `document.heading.item` | — |
+| operator, punctuation | `keyword.operator`, `punctuation` | `document.list.2` | — |
+| invalid | `invalid` | `document.alert.caution` | — |
+
+A colour the mapping names as the terminal's own is alpha 0 in syntect, which
+the engine reads as `Color::Reset`, so the terminal preset emits no RGB for its
+tokens. The engine's own four markdown presets are never read.
+
+The code's frame, label and numbers are the document's: the frame is the
+line, the label the prose, and the numbers the gutter's dim prose. Inline code
+is a chip, `document.code` with its ink on the chip, padded a space each side.
+
 ## The theme file
 
 A theme is a TOML file with the slots under a section. The format is leaf's,

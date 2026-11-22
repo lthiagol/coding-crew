@@ -10,8 +10,14 @@ use unicode_width::UnicodeWidthStr;
 use super::width::{display_width, expand_tabs};
 use ratatui::style::Color;
 
+/// A syntect colour as a terminal colour. Alpha 0 is the terminal's own
+/// colour, so a theme that paints no colour emits no RGB.
 pub(super) fn syntect_to_color(c: syntect::highlighting::Color) -> Color {
-    Color::Rgb(c.r, c.g, c.b)
+    if c.a == 0 {
+        Color::Reset
+    } else {
+        Color::Rgb(c.r, c.g, c.b)
+    }
 }
 
 pub fn resolve_syntax<'a>(lang: &str, ss: &'a SyntaxSet) -> &'a syntect::parsing::SyntaxReference {

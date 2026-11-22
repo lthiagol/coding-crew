@@ -137,9 +137,9 @@
 │The first criterion is proven and the second follows the same command.                            │
 │                                                                                                  │
 │The  key finding  is marked for the next round.                                                   │
-│┌─ rust ─────────────────────────────────────┐                                                    │
-││ let answer = 42;                           │                                                    │
-│└────────────────────────────────────────────┘                                                    │
+│╭─ rust ─────────────────────────────────────╮                                                    │
+││1│ let answer = 42;                         │                                                    │
+│╰─┴──────────────────────────────────────────╯                                                    │
 │                                                                                                  │
 │▍ Dependencies ───────────────────────────────────────────────────────────────────────────────────│
 │Waits on                                                                                          │

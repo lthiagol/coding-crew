@@ -15,7 +15,7 @@ fn code_block_after_blockquote_in_list_item_has_no_blank_gap_before() {
         .expect("missing blockquote line");
     let header_idx = rendered
         .iter()
-        .position(|l| l.contains("┌─"))
+        .position(|l| l.contains("╭─"))
         .expect("missing code block header");
     assert_eq!(
         header_idx,

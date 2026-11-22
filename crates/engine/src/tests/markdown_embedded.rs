@@ -40,7 +40,7 @@ fn display_latex_renders_in_framed_block() {
     let rendered = rendered_non_empty_lines(&lines);
 
     assert!(
-        rendered.iter().any(|line| line.contains("┌─ latex")),
+        rendered.iter().any(|line| line.contains("╭─ latex")),
         "expected latex block header"
     );
     assert!(
@@ -48,7 +48,7 @@ fn display_latex_renders_in_framed_block() {
         "expected latex content"
     );
     assert!(
-        rendered.iter().any(|line| line.contains("└")),
+        rendered.iter().any(|line| line.contains("╰")),
         "expected latex block footer"
     );
 }
@@ -166,7 +166,7 @@ fn display_latex_in_blockquote_has_quote_prefix() {
 
     let header = rendered
         .iter()
-        .find(|line| line.contains("┌─ latex"))
+        .find(|line| line.contains("╭─ latex"))
         .expect("expected latex block header in blockquote");
     assert!(
         header.starts_with('▎'),
@@ -189,7 +189,7 @@ fn mermaid_block_renders_in_framed_block() {
     let rendered = rendered_non_empty_lines(&lines);
 
     assert!(
-        rendered.iter().any(|line| line.contains("┌─ mermaid")),
+        rendered.iter().any(|line| line.contains("╭─ mermaid")),
         "expected mermaid block header"
     );
     assert!(
@@ -201,7 +201,7 @@ fn mermaid_block_renders_in_framed_block() {
         "expected node B in rendered content"
     );
     assert!(
-        rendered.iter().any(|line| line.contains("└")),
+        rendered.iter().any(|line| line.contains("╰")),
         "expected mermaid block footer"
     );
 }
@@ -256,7 +256,7 @@ fn mermaid_header(src: &str, width: usize) -> String {
         parse_markdown_with_width(src, &ss, &theme, width, &test_md_theme(), false, true).into();
     rendered_non_empty_lines(&lines)
         .into_iter()
-        .find(|line| line.contains("┌─ mermaid"))
+        .find(|line| line.contains("╭─ mermaid"))
         .expect("expected mermaid block header")
 }
 
@@ -357,7 +357,7 @@ fn mermaid_block_in_blockquote_has_quote_prefix() {
 
     let header = rendered
         .iter()
-        .find(|line| line.contains("┌─ mermaid"))
+        .find(|line| line.contains("╭─ mermaid"))
         .expect("expected mermaid block header in blockquote");
     assert!(
         header.starts_with('▎'),
@@ -404,7 +404,7 @@ fn mermaid_rendered_block_has_no_gutter() {
     let rendered = rendered_non_empty_lines(&lines);
     let content_lines: Vec<_> = rendered
         .iter()
-        .filter(|l| !l.contains('┌') && !l.contains('└'))
+        .filter(|l| !l.contains(['┌', '└', '╭', '╰']))
         .collect();
 
     assert!(
@@ -434,7 +434,7 @@ fn mermaid_pie_renders_bar_chart() {
     let rendered = rendered_non_empty_lines(&lines);
 
     assert!(
-        rendered.iter().any(|line| line.contains("┌─ mermaid")),
+        rendered.iter().any(|line| line.contains("╭─ mermaid")),
         "expected mermaid block header for pie"
     );
     assert!(
@@ -463,7 +463,7 @@ fn mermaid_unsupported_type_falls_back_to_colored_source() {
     let rendered = rendered_non_empty_lines(&lines);
 
     assert!(
-        rendered.iter().any(|line| line.contains("┌─ mermaid")),
+        rendered.iter().any(|line| line.contains("╭─ mermaid")),
         "expected mermaid block header"
     );
     assert!(
@@ -487,11 +487,11 @@ fn mermaid_empty_block_renders_without_crash() {
     let rendered = rendered_non_empty_lines(&lines);
 
     assert!(
-        rendered.iter().any(|line| line.contains("┌─ mermaid")),
+        rendered.iter().any(|line| line.contains("╭─ mermaid")),
         "expected mermaid block header for empty block"
     );
     assert!(
-        rendered.iter().any(|line| line.contains("└")),
+        rendered.iter().any(|line| line.contains("╰")),
         "expected mermaid block footer for empty block"
     );
 }

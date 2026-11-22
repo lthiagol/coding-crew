@@ -298,7 +298,7 @@ pub(super) fn push_code_block_lines(
     let mut header = prefix.clone();
     header.extend([
         Span::styled(
-            "┌─ ".to_string(),
+            "╭─ ".to_string(),
             Style::default().fg(ctx.theme_colors.code_frame),
         ),
         Span::styled(
@@ -306,7 +306,7 @@ pub(super) fn push_code_block_lines(
             Style::default().fg(ctx.theme_colors.code_label),
         ),
         Span::styled(
-            format!("{top_bar}┐"),
+            format!("{top_bar}╮"),
             Style::default().fg(ctx.theme_colors.code_frame),
         ),
     ]);
@@ -314,14 +314,15 @@ pub(super) fn push_code_block_lines(
 
     let plain_first_gutter = Span::styled(CODE_BLOCK_GUTTER, gutter_style);
     let plain_cont_gutter = Span::styled(CODE_BLOCK_GUTTER_WRAP, gutter_style);
+    let number_style = gutter_style.add_modifier(Modifier::DIM);
 
     let mut code_rows = Vec::new();
     for (i, code_line) in code_lines.into_iter().enumerate() {
         let (first_gutter, cont_gutter) = if show_line_numbers {
             let line_num = i + 1;
             (
-                Span::styled(format!("│{:>w$}│", line_num, w = digit_width), gutter_style),
-                Span::styled(format!("│{:>w$}│", "", w = digit_width), gutter_style),
+                Span::styled(format!("│{:>w$}│", line_num, w = digit_width), number_style),
+                Span::styled(format!("│{:>w$}│", "", w = digit_width), number_style),
             )
         } else {
             (plain_first_gutter.clone(), plain_cont_gutter.clone())
@@ -355,12 +356,12 @@ pub(super) fn push_code_block_lines(
     let mut footer = prefix;
     let footer_text = if show_line_numbers {
         format!(
-            "└{}┴{}┘",
+            "╰{}┴{}╯",
             "─".repeat(gutter_width - 2),
             "─".repeat(inner_width.saturating_sub(gutter_width - 1))
         )
     } else {
-        format!("└{}┘", "─".repeat(inner_width))
+        format!("╰{}╯", "─".repeat(inner_width))
     };
     footer.push(Span::styled(
         footer_text,
@@ -451,9 +452,9 @@ fn push_special_block_lines_with_prefix<F: Fn(&str) -> Vec<Span<'static>>>(
     let top_bar = "─".repeat(inner_width.saturating_sub(header_width));
     let mut header = prefix.clone();
     header.extend([
-        Span::styled("┌─ ".to_string(), frame_style),
+        Span::styled("╭─ ".to_string(), frame_style),
         Span::styled(format!("{label} "), label_style),
-        Span::styled(format!("{top_bar}┐"), frame_style),
+        Span::styled(format!("{top_bar}╮"), frame_style),
     ]);
     lines.push(Line::from(header));
 
@@ -502,7 +503,7 @@ fn push_special_block_lines_with_prefix<F: Fn(&str) -> Vec<Span<'static>>>(
     if show_line_numbers {
         footer.push(Span::styled(
             format!(
-                "└{}┴{}┘",
+                "╰{}┴{}╯",
                 "─".repeat(gutter_width - 2),
                 "─".repeat(inner_width.saturating_sub(gutter_width - 1))
             ),
@@ -510,7 +511,7 @@ fn push_special_block_lines_with_prefix<F: Fn(&str) -> Vec<Span<'static>>>(
         ));
     } else {
         footer.push(Span::styled(
-            format!("└{}┘", "─".repeat(inner_width)),
+            format!("╰{}╯", "─".repeat(inner_width)),
             frame_style,
         ));
     }

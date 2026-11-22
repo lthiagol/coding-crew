@@ -1012,6 +1012,8 @@ impl LineMapState {
                     let c = s.content.as_ref();
                     c.starts_with('┌')
                         || c.starts_with('└')
+                        || c.starts_with('╭')
+                        || c.starts_with('╰')
                         || c.starts_with('╔')
                         || c.starts_with('╚')
                         || (c.starts_with('│')

@@ -96,19 +96,16 @@ in the theme crate is the mapping; the test below holds this table and the
 code together.
 
 That promise stops at `MarkdownTheme`. The engine paints the **tokens of a
-code block** with syntect's own theme: the default preset pairs with
-`base16-ocean.dark`, and each of the engine's four presets has its own
-syntect theme. Raul does not reach those colours. A detail pane
-with fenced code therefore shows syntect's palette alongside ours, and the
-detail-pane unit must either avoid syntax highlighting or handle syntect's
-theme deliberately.
+code block** with syntect's own theme. Raul does not reach the engine's
+themes. A detail pane with fenced code therefore shows syntect's palette
+alongside ours, and the detail-pane unit must either avoid syntax highlighting
+or handle syntect's theme deliberately.
 
-The detail pane handles it deliberately: the code tokens pair with the
-pairing that sentence names — the engine's own default, `base16-ocean.dark`
-— and the pairing is the same in every one of raul's presets. There is no
-avoiding it: an empty syntax set panics, and a scope-less syntect theme
-paints the tokens black. The engine's code tokens are the one paint the
-presets do not change.
+The detail pane handles it deliberately: each preset pairs the code tokens
+with a syntect theme derived from its own document palette, so the tokens
+follow the preset. The mapping is in [palettes.md](palettes.md#the-codes-syntax).
+There is no avoiding it: an empty syntax set panics, and a scope-less syntect
+theme paints the tokens black.
 
 `MarkdownTheme` carries colours only: no role and no attributes reach it. In
 the terminal preset every role resolves to `Color::Reset`, so the engine
@@ -146,7 +143,7 @@ ruling stands.
 |---|---|---|---|
 | `search_highlight_bg` | `document.search` | hit | a hit takes the document's hit background; the engine keeps the span's own foreground, so the search is not offered |
 | `search_match_bg` | `document.search` | match | the current match takes the stronger background; the same limitation |
-| `code_gutter` | `document.text` | body | line numbers are words in the document, so they take the prose, never the chrome index |
+| `code_gutter` | `document.text` | body | line numbers are words in the document, so they take the prose, never the chrome index; the numbers are dim (`Modifier::DIM`) |
 | `blockquote_marker` | `document.rule` | line | a quote's marker is a line |
 | `list_level_1` | `document.list.1` | — | the first list depth is the first step of its own scale |
 | `list_level_2` | `document.list.2` | — | the second is a step dimmer |

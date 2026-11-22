@@ -27,7 +27,7 @@ fn paragraph_and_following_code_block_have_no_blank_gap() {
         .position(|line| line == "Intro paragraph")
         .unwrap();
 
-    assert!(rendered[intro_idx + 1].starts_with("┌─ rs "));
+    assert!(rendered[intro_idx + 1].starts_with("╭─ rs "));
 }
 
 #[test]

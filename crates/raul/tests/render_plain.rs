@@ -1432,7 +1432,7 @@ fn detail_render(id: &str) -> String {
 #[test]
 fn the_note_constructs_render_in_the_detail_of_their_fixtures() {
     let diagram = detail_render("TSK20");
-    assert!(diagram.contains("┌─ mermaid"), "{diagram}");
+    assert!(diagram.contains("╭─ mermaid"), "{diagram}");
     let alerts = detail_render("TSK19");
     assert!(alerts.contains("ℹ Note"), "{alerts}");
     assert!(alerts.contains("⚠ Warning"), "{alerts}");

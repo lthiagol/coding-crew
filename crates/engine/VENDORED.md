@@ -30,7 +30,7 @@ bytes cannot drift apart silently.
 
 | upstream file | upstream sha256 | vendored file | vendored sha256 | deviation |
 |---|---|---|---|---|
-| `src/markdown/blocks.rs` | `8c4e53212383b794247b2e7502a6d6b74e01266a322ad42c787b98c0524360f7` | `crates/engine/src/markdown/blocks.rs` | `7483f87907fd665b49f581741e2c3da773b18651118446cf6804f142979c15a5` | 1, 6, 11, 16, 17 |
+| `src/markdown/blocks.rs` | `8c4e53212383b794247b2e7502a6d6b74e01266a322ad42c787b98c0524360f7` | `crates/engine/src/markdown/blocks.rs` | `c25b4be50e8786fdbf6ae1b6a09008ca9f50938d2c97a2cc78b177432aeb08ba` | 1, 6, 11, 16, 17, 22 |
 | `src/markdown/fences.rs` | `e5810317dd42f09780ddbd800d6ef7d81e213461181f38096cc0821d554d6ce0` | `crates/engine/src/markdown/fences.rs` | `99cc29ba50ee9b591dded59ef745d03dbd6cc82ec5c910268246e81400242487` | 11, 12 |
 | `src/markdown/footnotes.rs` | `40a60dbff36117b6e4a6803bca6ba43b4b5965c523285d2d8471e89f9014ee76` | `crates/engine/src/markdown/footnotes.rs` | `0c4a012058588f9b34c6bfcef85382296a077fdb3c836e512a58636d32ca01aa` | 1, 4, 11 |
 | `src/markdown/frontmatter.rs` | `de8dd7ae2337ab6a2c7837e98826280f4e0374fa809c3cfbaf6af7f0918d1e8c` | `crates/engine/src/markdown/frontmatter.rs` | `de8dd7ae2337ab6a2c7837e98826280f4e0374fa809c3cfbaf6af7f0918d1e8c` | identical |
@@ -40,9 +40,9 @@ bytes cannot drift apart silently.
 | `src/markdown/lists.rs` | `dd16f32b5fbb766560e7c0e8395d00813496ba4ade00bb07bf330e1bff127f75` | `crates/engine/src/markdown/lists.rs` | `a3b96e07fa0b01dc5aed15cef9326700382c4e154fd4fc9840b7dfc17b6cba70` | 1, 4, 6, 11, 18 |
 | `src/markdown/markers.rs` | `2e9f315bad630b9c651d79bc1118e9ba5bcded9cebc81fd37e15472bfaf841ca` | `crates/engine/src/markdown/markers.rs` | `f07514a3ecb6d37ae767c49ec860986bda079e56e79d3b96e53b93491f8eaa79` | 1, 3, 10, 11 |
 | `src/markdown/mermaid.rs` | `dc2b217974a36dcd06dc0a5c199bdc7cadef743ec7719279f304e01a677df9da` | `crates/engine/src/markdown/mermaid.rs` | `f1aeaebd7a4ce303098046cffa017fdb0ab27939f594efed2f14f5c112b10274` | 1, 11, 12 |
-| `src/markdown/mod.rs` | `53177c3e6b309cdca9c9af0e9ef511e7bb7581c29248a4c489fa76b63bfbcebb` | `crates/engine/src/markdown/mod.rs` | `75d3725ebc77ea36867474038f22e98209776deac8f48e1e4df3f9df26fa58d4` | 1, 4, 5, 6, 7, 9, 11, 18, 19, 20, 21 |
+| `src/markdown/mod.rs` | `53177c3e6b309cdca9c9af0e9ef511e7bb7581c29248a4c489fa76b63bfbcebb` | `crates/engine/src/markdown/mod.rs` | `5844f1572212cc9a40d5ef71d3796d8be2264fdbd5ad45372c9e8329778dcc1c` | 1, 4, 5, 6, 7, 9, 11, 18, 19, 20, 21, 22 |
 | `src/markdown/spans.rs` | `51f40f57a3fbea5638ee3d74b157122c7616b3c480721b7888e6fedd3e2e3be6` | `crates/engine/src/markdown/spans.rs` | `91626cb0a60a71cd699568ea36826e265b9146db2a8f20762f8d608d20c105ca` | 11, 21 |
-| `src/markdown/syntax.rs` | `b46409c050d4c9fc859be1acf958859958f000c77217cec453caff49b81e1403` | `crates/engine/src/markdown/syntax.rs` | `d212bd5b3a97ec44e7b69f88d080954830c3f21eb53a9939ccfb74877b5807ce` | 1, 6, 11, 12 |
+| `src/markdown/syntax.rs` | `b46409c050d4c9fc859be1acf958859958f000c77217cec453caff49b81e1403` | `crates/engine/src/markdown/syntax.rs` | `6c60870f950e420442734ce06fe612dcbd7813ba41a45443e3f85a11c72bfbf3` | 1, 6, 11, 12, 23 |
 | `src/markdown/table_layout.rs` | `05e2d328a05ae048f2d52c4f72eb365414e21fe621ac62e67f04f8b9f03703a7` | `crates/engine/src/markdown/table_layout.rs` | `d4aa956ce413798b643d89aa0e1ab60297397024a3c21c35c0c08d6c79059bbc` | 11, 12, 15, 21 |
 | `src/markdown/tables.rs` | `b824647992b0bb665f516e95b8537594ceba3b6846f2d845d66695febfa66a10` | `crates/engine/src/markdown/tables.rs` | `8fb79da01181d2b25824644d67978f06b46aca589cd56cae0558a4ae8ca4f5cd` | 2, 3, 5, 11, 15, 20, 21 |
 | `src/markdown/toc.rs` | `68ae47f2387f7cb66ae50929d6554684a25312eb1a5323bbefdf5b82aadca0bd` | `crates/engine/src/markdown/toc.rs` | `9640a529ae05aff4ca96cdde1ff72772bceb7ca336294a81bf79722beec873e8` | 1, 4, 6, 9, 11 |
@@ -316,3 +316,19 @@ shows once. A link inside `<mark>` or `<code>` flushes its buffered text first,
 so the URL follows the label; `handle_inline_style_event` takes the HTML buffer
 for that. `CellInlineStyle` gains `dim`, which `align_cell` applies. The link
 marker is unchanged.
+
+### 22. Fenced code and diagrams round their frames, and dim their numbers
+
+`push_code_block_lines` and `push_special_block_lines_with_prefix` in
+`blocks.rs` draw the frame's corners round, `╭ ╮ ╰ ╯` in place of `┌ ┐ └ ┘`,
+as the tables do (deviation 20). Fenced code and the diagram and maths blocks
+share the frame. A numbered gutter is dim: its span takes `Modifier::DIM`.
+`mark_wrapped` in `mod.rs` finds a block's rows by the round corners as well
+as the square ones.
+
+### 23. Syntect's alpha 0 is the terminal's own colour
+
+`syntect_to_color` in `syntax.rs` reads a syntect colour with alpha 0 as
+`Color::Reset`, and any other alpha as RGB, as before. A theme names the
+terminal's own colour that way, so a preset that paints no colour emits no RGB
+for its code tokens. raul's derived code themes are the only ones that do.

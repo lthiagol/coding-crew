@@ -8,8 +8,8 @@ fn code_block_box_renders_right_border_in_one_column() {
     let (lines, _, _, _) = parse_markdown(md, &ss, &theme, &test_md_theme(), false, true).into();
     let buffer = render_buffer(&lines);
 
-    let (right_x, start_y) = find_symbol(&buffer, "┐").unwrap();
-    let (_, end_y) = find_symbol(&buffer, "┘").unwrap();
+    let (right_x, start_y) = find_symbol(&buffer, "╮").unwrap();
+    let (_, end_y) = find_symbol(&buffer, "╯").unwrap();
 
     for y in start_y + 1..end_y {
         assert_eq!(
@@ -37,8 +37,8 @@ fn file_mode_code_block_fills_full_render_width() {
     .into();
     let buffer = render_buffer(&lines);
 
-    assert!(find_symbol(&buffer, "┐").is_some());
-    assert!(find_symbol(&buffer, "┘").is_some());
+    assert!(find_symbol(&buffer, "╮").is_some());
+    assert!(find_symbol(&buffer, "╯").is_some());
     for line in lines.iter().filter(|line| line.width() > 0) {
         assert_eq!(
             line.width(),

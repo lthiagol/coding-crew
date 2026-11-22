@@ -274,7 +274,7 @@ fn code_block_inside_list_item_is_indented_and_has_no_blank_gap_before() {
         .expect("missing list item line");
     let header_idx = rendered
         .iter()
-        .position(|line| line.contains("┌─ text"))
+        .position(|line| line.contains("╭─ text"))
         .expect("missing code block header");
     let code_idx = rendered
         .iter()
