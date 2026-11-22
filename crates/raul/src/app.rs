@@ -19,6 +19,7 @@ use crate::path;
 use crate::settings;
 use crate::tabs::Tab;
 use crate::view::View;
+use coding_crew_theme::text::text_width;
 use coding_crew_theme::{Theme, block_title_style};
 
 /// What a key asks the window to do.
@@ -301,32 +302,46 @@ impl App {
         const NAME: &str = " coding-crew ";
         let name = Span::styled(NAME, self.theme.chrome.title);
         let folder = self.theme.text.dim;
-        let name_width = NAME.chars().count() as u16;
+        let name_width = text_width(NAME) as u16;
         if width < name_width {
             // The name does not fit: the folder it reads takes its place.
             let path = self.path_tail(usize::from(width));
-            let padding = " ".repeat(usize::from(width).saturating_sub(path.chars().count()));
+            let padding = " ".repeat(usize::from(width).saturating_sub(text_width(&path)));
             return Line::from(vec![Span::raw(padding), Span::styled(path, folder)]);
         }
         let columns = usize::from(width - name_width);
         let path = self.path_tail(columns);
-        let padding = " ".repeat(columns.saturating_sub(path.chars().count()));
+        let padding = " ".repeat(columns.saturating_sub(text_width(&path)));
         Line::from(vec![name, Span::raw(padding), Span::styled(path, folder)])
     }
 
     /// The path, in the columns it has: the tail, which names the folder,
-    /// is what is kept.
+    /// is what is kept. The cut is on grapheme boundaries, and the columns
+    /// are display columns, so a wide character takes two.
     fn path_tail(&self, columns: usize) -> String {
         let path = self.root.display().to_string();
-        let length = path.chars().count();
-        if length <= columns {
+        if text_width(&path) <= columns {
             return path;
         }
         if columns == 0 {
             return String::new();
         }
-        let tail: String = path.chars().skip(length - (columns - 1)).collect();
-        format!("…{tail}")
+        let span = Span::raw(path.as_str());
+        let graphemes: Vec<&str> = span
+            .styled_graphemes(Style::default())
+            .map(|grapheme| grapheme.symbol)
+            .collect();
+        let mut used = 0;
+        let mut kept: Vec<&str> = Vec::new();
+        for grapheme in graphemes.iter().rev() {
+            let width = text_width(grapheme);
+            if used + width > columns - 1 {
+                break;
+            }
+            used += width;
+            kept.push(grapheme);
+        }
+        format!("…{}", kept.iter().rev().copied().collect::<String>())
     }
 
     /// The tab bar, with the active tab marked.
@@ -785,12 +800,37 @@ mod tests {
                 .iter()
                 .map(|span| span.content.to_string())
                 .collect::<String>();
-            assert!(text.chars().count() <= width as usize, "{width}: {text}");
+            assert!(title.width() <= width as usize, "{width}: {text}");
             // The name is whole, or the folder is: a cut of the name never
             // stands alone. Any line that holds the start of the name must
             // hold all of it.
             if text.contains("coding") {
                 assert!(text.contains("coding-crew"), "{width}: {text}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_title_fits_and_keeps_the_folder_in_columns() {
+        // Each of the four wide characters takes two columns: the path is 28
+        // characters but 32 columns, so a count of characters lets the whole
+        // path through at a width of 41, four columns past the edge.
+        let app = App::new(
+            PathBuf::from("/home/用户/项目/coding-crew/work"),
+            Theme::preset(Preset::Dark),
+        );
+        for width in 0..=60u16 {
+            let title = app.title_line(width);
+            let text = title
+                .spans
+                .iter()
+                .map(|span| span.content.to_string())
+                .collect::<String>();
+            assert!(title.width() <= usize::from(width), "{width}: {text:?}");
+            // Once the folder's name fits in the columns it has, the tail is
+            // kept whole.
+            if usize::from(width) >= 13 + 18 {
+                assert!(text.contains("coding-crew/work"), "{width}: {text:?}");
             }
         }
     }
@@ -832,7 +872,8 @@ mod tests {
         // Every key shown is whole: nothing is cut in the middle of a word.
         assert!(footer.contains("quit"), "{footer}");
         assert!(!footer.contains("hel"), "{footer}");
-        assert!(footer.chars().count() <= 30, "{footer}");
+        let line = app().footer(30, &mock_work(), now(), None);
+        assert!(line.width() <= 30, "{line:?}");
     }
 
     #[test]

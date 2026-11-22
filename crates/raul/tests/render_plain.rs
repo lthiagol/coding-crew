@@ -118,6 +118,10 @@ fn column_table() -> &'static ColumnTable {
     })
 }
 
+/// The columns a cluster takes once the table's presentation selector follows
+/// it: an emoji presentation is two columns wide.
+const PRESENTATION_COLUMNS: usize = 2;
+
 /// The columns a range of codepoints takes, the cell that advances to the
 /// next tab stop, or a codepoint that joins the cluster before it.
 #[derive(Clone, Copy)]
@@ -142,6 +146,7 @@ struct ColumnCase {
 struct ColumnTable {
     tab_stop: usize,
     join_after: char,
+    presentation: char,
     ranges: Vec<ColumnRange>,
     cases: Vec<ColumnCase>,
 }
@@ -151,6 +156,7 @@ impl ColumnTable {
         let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
         let mut tab_stop = None;
         let mut join_after = None;
+        let mut presentation = None;
         let mut ranges: Vec<ColumnRange> = Vec::new();
         let mut cases = Vec::new();
         for (index, raw) in text.lines().enumerate() {
@@ -165,7 +171,8 @@ impl ColumnTable {
                 "rule" => {
                     if fields.len() < 3 {
                         return Err(error(
-                            "want: rule tab-stop N or rule join-after CP".to_string(),
+                            "want: rule tab-stop N, rule join-after CP or rule presentation-selector CP"
+                                .to_string(),
                         ));
                     }
                     match fields[1] {
@@ -192,9 +199,22 @@ impl ColumnTable {
                                 .ok_or_else(|| error(format!("not a character: {}", fields[2])))?;
                             join_after = Some(character);
                         }
+                        "presentation-selector" => {
+                            if fields.len() != 3 {
+                                return Err(error(
+                                    "want: rule presentation-selector CP".to_string(),
+                                ));
+                            }
+                            let value = u32::from_str_radix(fields[2], 16).map_err(|_| {
+                                error(format!("not a hex codepoint: {}", fields[2]))
+                            })?;
+                            let character = char::from_u32(value)
+                                .ok_or_else(|| error(format!("not a character: {}", fields[2])))?;
+                            presentation = Some(character);
+                        }
                         // The other rule lines derive the ranges; the
                         // generator reads them, so this reader only needs
-                        // the two above.
+                        // the three above.
                         _ => {}
                     }
                 }
@@ -259,6 +279,8 @@ impl ColumnTable {
         let tab_stop = tab_stop.ok_or_else(|| format!("{}: no tab-stop rule", path.display()))?;
         let join_after =
             join_after.ok_or_else(|| format!("{}: no join-after rule", path.display()))?;
+        let presentation = presentation
+            .ok_or_else(|| format!("{}: no presentation-selector rule", path.display()))?;
         if ranges.is_empty() {
             return Err(format!("{}: no ranges", path.display()));
         }
@@ -268,6 +290,7 @@ impl ColumnTable {
         Ok(Self {
             tab_stop,
             join_after,
+            presentation,
             ranges,
             cases,
         })
@@ -314,14 +337,19 @@ impl ColumnTable {
     ///
     /// A cluster takes the columns of its first codepoint, and the codepoints
     /// that join it take none. A codepoint joins when the table says `join`,
-    /// or when the one before it is the table's joiner.
+    /// or when the one before it is the table's joiner. The table's
+    /// presentation selector gives the cluster before it two columns, when
+    /// that is more than the cluster already takes.
     fn width_of(&self, text: &str) -> usize {
         let mut column = 0;
+        let mut cluster_start = 0;
         let mut open_cluster = false;
         let mut previous_was_joiner = false;
         for character in text.chars() {
-            let joins = self.joins(character) || (open_cluster && previous_was_joiner);
-            if !joins {
+            if open_cluster && character == self.presentation {
+                column = column.max(cluster_start + PRESENTATION_COLUMNS);
+            } else if !(self.joins(character) || (open_cluster && previous_was_joiner)) {
+                cluster_start = column;
                 column += self.advance(character, column);
                 open_cluster = true;
             }
@@ -998,6 +1026,9 @@ fn the_terminal_column_table_pins_the_cases_the_measures_used_to_disagree_about(
         "conjoining-hangul-leading",
         "conjoining-hangul-medial",
         "conjoining-hangul-final",
+        "conjoining-hangul-syllable",
+        "emoji-presentation",
+        "emoji-keycap",
     ] {
         let case = table
             .case(name)
@@ -1038,17 +1069,50 @@ fn a_joined_cluster_counts_its_first_codepoint_once() {
 }
 
 #[test]
-fn a_conjoining_hangul_jamo_takes_one_column() {
-    // The table names the conjoining jamo and says one column; the leading
-    // consonants are East Asian wide, so the old table gave them two.
+fn the_conjoining_jamo_take_the_columns_they_draw() {
+    // A leading consonant is East Asian wide and draws two columns; a vowel
+    // or trailing jamo draws nothing alone and joins the syllable before it.
     let table = column_table();
-    for jamo in ['\u{1100}', '\u{1161}', '\u{11a8}', '\u{a960}', '\u{d7b0}'] {
+    for leading in ['\u{1100}', '\u{a960}'] {
         assert_eq!(
-            table.width_of(&jamo.to_string()),
-            1,
-            "the conjoining jamo {jamo:?} is not one column"
+            table.width_of(&leading.to_string()),
+            2,
+            "the leading jamo {leading:?} is two columns"
         );
     }
+    for vowel_or_trailing in ['\u{1161}', '\u{11a8}', '\u{d7b0}'] {
+        assert_eq!(
+            table.width_of(&vowel_or_trailing.to_string()),
+            0,
+            "the jamo {vowel_or_trailing:?} joins and takes no column"
+        );
+    }
+}
+
+#[test]
+fn the_table_measures_what_ratatui_draws() {
+    // The table is the rule both measures share; it is right only if it says
+    // what the terminal paints. ratatui is the paint: its buffer takes each
+    // grapheme's cells, so the columns it fills are the columns drawn.
+    for text in [
+        "\u{26a0}\u{fe0f}",
+        "\u{2714}\u{fe0f}",
+        "\u{2764}\u{fe0f}",
+        "1\u{fe0f}\u{20e3}",
+        "\u{1100}",
+        "\u{1100}\u{1161}\u{11a8}",
+        "\u{1161}",
+        "a\u{1161}",
+    ] {
+        assert_eq!(display_width(text), drawn_width(text), "{text:?}");
+    }
+}
+
+/// The columns ratatui paints a text in, from column zero.
+fn drawn_width(text: &str) -> usize {
+    let mut buffer = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, 20, 1));
+    let (column, _) = buffer.set_stringn(0, 0, text, 20, ratatui::style::Style::default());
+    usize::from(column)
 }
 
 #[test]

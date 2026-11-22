@@ -790,7 +790,7 @@ fn theme_line(row: &Row, width: usize, metrics: Metrics, theme: &Theme) -> Line<
     let mark = if in_use { "●" } else { " " };
     let indent = " ".repeat(ROW_INDENT);
     let name = pad(&row.label, metrics.theme);
-    let head = ROW_INDENT + 1 + 1 + text_width(&row.label);
+    let head = ROW_INDENT + 1 + 1 + metrics.theme;
     let full = head + GAP + text_width(&row.says);
     let name_style = if in_use {
         theme.text.strong
@@ -1052,14 +1052,7 @@ mod tests {
     #[test]
     fn the_tab_renders_at_40_60_and_100_columns() {
         for width in [40u16, 60, 100] {
-            let rows = draw(&theme(), width, 40);
-            for row in &rows {
-                assert!(
-                    row.chars().count() <= usize::from(width),
-                    "{width}: {row:?}"
-                );
-            }
-            let text = inner(&rows).join("\n");
+            let text = inner(&draw(&theme(), width, 40)).join("\n");
             assert!(text.contains("theme · 5"), "{width}: {text}");
             assert!(text.contains("keys · 23"), "{width}: {text}");
             assert!(text.contains("sort · 5"), "{width}: {text}");
@@ -1072,6 +1065,67 @@ mod tests {
             // The whole order is named where the columns are there for it.
             if width >= 60 {
                 assert!(text.contains("ids ascending"), "{width}: {text}");
+            }
+        }
+    }
+
+    #[test]
+    fn every_line_fits_the_pane_and_is_drawn_as_one_line() {
+        // A line wider than the pane wraps, and the rows below it move: the
+        // layout counts one line per row, so each line must be drawn as one.
+        let groups = groups();
+        let theme = theme();
+        for width in 10..=40usize {
+            for height in [2usize, 5, 8, 12, 30] {
+                for first in [0usize, 3, 10, 26, 32] {
+                    let (lines, _, _, _) = window(&groups, width, height, &theme, None, first);
+                    let texts: Vec<String> = lines
+                        .iter()
+                        .map(|line| {
+                            line.spans
+                                .iter()
+                                .map(|span| span.content.as_ref())
+                                .collect::<String>()
+                        })
+                        .collect();
+                    for (line, text) in lines.iter().zip(&texts) {
+                        assert!(
+                            line.width() <= width,
+                            "{width}x{height} from {first}: {text:?} is wider than the pane"
+                        );
+                    }
+                    let mut terminal =
+                        Terminal::new(TestBackend::new(width as u16, lines.len() as u16 + 4))
+                            .expect("a test terminal");
+                    terminal
+                        .draw(|frame| {
+                            let paragraph =
+                                Paragraph::new(lines.clone()).wrap(Wrap { trim: false });
+                            frame.render_widget(paragraph, frame.area());
+                        })
+                        .expect("drawing the lines");
+                    let buffer = terminal.backend().buffer();
+                    let drawn: Vec<String> = (0..buffer.area().height)
+                        .map(|y| {
+                            (0..buffer.area().width)
+                                .map(|x| buffer.cell((x, y)).map_or(" ", |cell| cell.symbol()))
+                                .collect::<String>()
+                                .trim_end()
+                                .to_string()
+                        })
+                        .collect();
+                    for (index, text) in texts.iter().enumerate() {
+                        assert_eq!(
+                            drawn[index],
+                            text.trim_end(),
+                            "{width}x{height} from {first}: line {index} wraps"
+                        );
+                    }
+                    assert!(
+                        drawn[lines.len()..].iter().all(|row| row.is_empty()),
+                        "{width}x{height} from {first}: lines past the layout"
+                    );
+                }
             }
         }
     }
