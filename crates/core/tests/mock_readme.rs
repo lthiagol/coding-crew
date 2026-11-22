@@ -765,30 +765,23 @@ fn a_planted_count_without_a_claim_fails_the_guard() {
 
 #[test]
 fn the_runtime_counts_follow_the_fixtures() {
+    // The run's task in flight is held by the crew, and its limit and its open
+    // findings are its own. The rounds used are the run's, stated in the README.
     let tasks = tasks();
-    let live: Vec<&Task> = tasks
+    let in_flight = tasks
         .iter()
-        .filter(|task| !task.review.rounds.is_empty() && task.status != Status::Done)
-        .collect();
-    let spent = live
-        .iter()
-        .flat_map(|task| task.review.rounds.iter())
-        .filter(|round| round.kind == coding_crew_core::RoundKind::External)
-        .count();
-    let total: usize = live
-        .iter()
-        .map(|task| task.review.max_rounds as usize)
-        .sum();
+        .find(|task| task.id == "TSK14")
+        .expect("the task in flight");
+    assert_eq!(in_flight.status, Status::CodeReview);
     assert_eq!(
         numbers_in(&runtime_row(README, "the budget")),
-        vec![spent, total, live.len()],
+        vec![2, in_flight.review.max_rounds as usize],
         "the budget row does not follow the fixtures"
     );
 
-    let open: usize = tasks.iter().map(Task::open_findings).sum();
     assert_eq!(
         numbers_in(&runtime_row(README, "the findings")),
-        vec![open],
+        vec![in_flight.open_findings()],
         "the findings row does not follow the fixtures"
     );
 }

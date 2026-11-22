@@ -201,9 +201,17 @@ fn the_crew_leads_the_main_pane_the_shell_has_content() {
         "builder".to_string(),
         "reviewer".to_string(),
         "one per role · the reviewer reviews".to_string(),
-        "external rounds".to_string(),
+        "rounds ".to_string(),
         format!("{} of {}", runtime.budget.spent, runtime.budget.total),
-        format!("{} open findings", runtime.findings),
+        format!(
+            "{} open {}",
+            runtime.findings,
+            if runtime.findings == 1 {
+                "finding"
+            } else {
+                "findings"
+            }
+        ),
         "running since".to_string(),
     ];
     for member in &runtime.crew {
@@ -310,14 +318,14 @@ fn the_window_has_a_title_line_a_footer_and_no_tabs() {
 fn the_footer_names_the_keys_that_work_and_no_key_that_does_nothing() {
     // The render starts with the cursor on the builder's harness row, where
     // enter opens its choice: the footer names choose, reload, the crew size
-    // selector, help and quit, in that order, centred under a rule.
+    // selector, the queue, help and quit, in that order, centred under a rule.
     let text = screen(100, 40);
     let footer = text.lines().last().expect("a footer").trim();
     assert_eq!(
-        footer, "enter choose · r reload · c crew size · ? help · q quit",
+        footer, "enter choose · r reload · c crew size · tab queue · ? help · q quit",
         "{footer}"
     );
-    for dead in ["open", "tab", "esc", "pick", "↑↓", "move"] {
+    for dead in ["open", "esc", "pick", "↑↓", "move", "mark"] {
         assert!(!footer.contains(dead), "{footer}: {dead}");
     }
     // The movement keys are the help's, at every width the sidebar is shown

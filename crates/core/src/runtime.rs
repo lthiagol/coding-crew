@@ -6,8 +6,8 @@
 //! reason: the work folder holds one file per work unit.
 //!
 //! What it holds is settled in `docs/tasks/task-model.md` § 11.2: the run's
-//! start, the crew, the unclaimed queue, the review in flight, the round
-//! budget, the open findings and the stamp.
+//! start, the crew, the run's queue, the task in flight and its rounds, the
+//! round budget, the open findings and the stamp.
 
 use std::fs;
 use std::path::Path;
@@ -27,18 +27,23 @@ pub struct Runtime {
     /// One entry per agent of the flow.
     #[serde(default)]
     pub crew: Vec<CrewMember>,
-    /// The unclaimed work: an id and a status, never the task's content.
+    /// The run's tasks, in queue order: an id and a status, never the task's
+    /// content. A held task is in the queue too; [`Runtime::waiting`] is the
+    /// part the pane offers.
     #[serde(default)]
     pub queue: Vec<QueueItem>,
-    /// The review in flight, when there is one.
+    /// The review in flight, when there is one: the task in flight and its
+    /// rounds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub round: Option<RuntimeRound>,
+    /// The rounds the task in flight has used, of its own limit.
     #[serde(default)]
     pub budget: Budget,
-    /// The open findings, as a count.
+    /// The task in flight's open findings, as a count.
     #[serde(default)]
     pub findings: u32,
-    /// The open findings by severity, when the record holds them.
+    /// The task in flight's open findings by severity, when the record holds
+    /// them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub severities: Option<Severities>,
     /// Whether the automation runs, and why when it does not.
@@ -62,9 +67,12 @@ impl Runtime {
             .any(|member| member.holds.as_deref() == Some(id))
     }
 
-    /// The queue as the pane paints it: the unclaimed work.
-    pub fn unheld_queue(&self) -> impl Iterator<Item = &QueueItem> {
-        self.queue.iter().filter(|item| !self.is_held(&item.id))
+    /// The work waiting in the queue, in order: neither held by the crew nor
+    /// done. This is what the pane draws and the orchestrator is handed.
+    pub fn waiting(&self) -> impl Iterator<Item = &QueueItem> {
+        self.queue
+            .iter()
+            .filter(|item| !self.is_held(&item.id) && item.status != Status::Done)
     }
 
     /// How the crew's size composes into who reviews.
@@ -122,7 +130,7 @@ pub struct QueueItem {
     pub status: Status,
 }
 
-/// The review in flight.
+/// The review in flight: the task in flight, its stage and its round.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeRound {
     /// The task under review.
@@ -131,16 +139,30 @@ pub struct RuntimeRound {
     pub stage: RoundKind,
     /// The round's number.
     pub number: u32,
+    /// The rounds before this one, on the same task, oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub earlier: Vec<EarlierRound>,
 }
 
-/// The external rounds spent of the round budget.
+/// A round the task in flight has finished: its build and its review, and the
+/// findings the review raised.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EarlierRound {
+    /// The round's number.
+    pub number: u32,
+    /// The findings the review raised, open or since resolved.
+    pub raised: u32,
+}
+
+/// The rounds the task in flight has used, of its round limit.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Budget {
     pub spent: u32,
     pub total: u32,
 }
 
-/// The open findings by severity. The total is the record's `findings`.
+/// The task in flight's open findings by severity. The total is the record's
+/// `findings`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Severities {
     pub high: u32,
@@ -309,9 +331,10 @@ mod tests {
     }
 
     #[test]
-    fn a_held_task_is_not_in_the_queue() {
+    fn a_held_or_done_task_is_not_waiting() {
         // A held task belongs to the crew, not the queue, even when a writer
-        // left it in both: the pane paints it once.
+        // left it in both: the pane paints it once. A done task is in the
+        // run's queue, and is not waiting either.
         let runtime = record(
             vec![member(
                 FlowRole::Builder,
@@ -319,6 +342,10 @@ mod tests {
                 AgentState::Executing,
             )],
             vec![
+                QueueItem {
+                    id: "TSK22".to_string(),
+                    status: Status::Done,
+                },
                 QueueItem {
                     id: "TSK10".to_string(),
                     status: Status::Approved,
@@ -330,11 +357,36 @@ mod tests {
             ],
         );
         assert!(runtime.is_held("TSK10"));
-        let queue: Vec<&str> = runtime
-            .unheld_queue()
-            .map(|item| item.id.as_str())
-            .collect();
-        assert_eq!(queue, ["TSK29"]);
+        let waiting: Vec<&str> = runtime.waiting().map(|item| item.id.as_str()).collect();
+        assert_eq!(waiting, ["TSK29"]);
+    }
+
+    #[test]
+    fn a_round_names_the_rounds_before_it_when_it_has_them() {
+        let text = r#"{
+          "started_at": "2026-11-16T12:00Z",
+          "round": {
+            "task": "TSK14", "stage": "external", "number": 2,
+            "earlier": [{"number": 1, "raised": 3}]
+          },
+          "stamp": {"runs": true}
+        }"#;
+        let runtime: Runtime = serde_json::from_str(text).expect("a runtime record");
+        let round = runtime.round.expect("a round");
+        assert_eq!(
+            round.earlier,
+            [EarlierRound {
+                number: 1,
+                raised: 3,
+            }]
+        );
+        // A first round has no earlier rounds, and the record leaves them out.
+        let first = RuntimeRound {
+            earlier: Vec::new(),
+            ..round
+        };
+        let json = serde_json::to_string(&first).expect("a round");
+        assert!(!json.contains("earlier"), "{json}");
     }
 
     #[test]

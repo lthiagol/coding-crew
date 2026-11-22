@@ -2,8 +2,9 @@
 //!
 //! The sidebar is the configuration and the main pane is what is running.
 //! There is no tab and no tab bar. The main pane leads with the crew — the
-//! reading the human picked — then the unclaimed queue, the round, the budget
-//! and the findings, with the stamp at its foot.
+//! reading the human picked — then the queue, the round, the budget and the
+//! findings, with the stamp at its foot. `tab` moves the keys to the queue,
+//! where a task is marked for the next start.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,10 +19,12 @@ use ratatui::widgets::{Block, Clear, Paragraph};
 
 use coding_crew_core::config::{Agent, Config};
 use coding_crew_core::harness::{self, HARNESSES, Harness};
-use coding_crew_core::runtime::{CrewMember, Runtime};
-use coding_crew_core::{FlowRole, age_text, parse_rfc3339};
-use coding_crew_theme::text::{cut_to, tail_to, text_width};
-use coding_crew_theme::{Icon, IconSet, Slot, Theme, chrome, phase_style, picker, role_style};
+use coding_crew_core::runtime::{CrewMember, QueueItem, Runtime};
+use coding_crew_core::{FlowRole, Status, age_text, parse_rfc3339};
+use coding_crew_theme::text::{cut_to, head_to, tail_to, text_width};
+use coding_crew_theme::{
+    Icon, IconSet, Slot, Theme, chrome, phase_style, picker, role_style, selected_line,
+};
 
 use crate::catalog::Catalog;
 use crate::config::{self, ConfigRead, ConfigState};
@@ -112,6 +115,22 @@ pub const FLOW_TITLE: &str = "flow";
 pub const FLOW_EMPTY: &str = "nothing is running";
 /// The main pane's state when the record is there but cannot be read.
 pub const FLOW_UNREADABLE: &str = "the runtime record cannot be read";
+/// The key that moves the keys between the configuration and the queue.
+pub const FOCUS_KEY: &str = "tab";
+/// The key that marks the queue's task under the cursor.
+pub const MARK_KEY: &str = "space";
+/// The key that marks every waiting task, or unmarks them.
+pub const MARK_ALL_KEY: &str = "a";
+/// The captions the main pane's blocks open with: one dim line each, saying
+/// what the block counts.
+pub const CREW_CAPTION: &str = "the session's crew, and what each agent holds";
+pub const QUEUE_CAPTION: &str = "tasks waiting, in order";
+pub const ROUND_CAPTION: &str = "where the task in flight is in its build/review loop";
+pub const BUDGET_CAPTION: &str = "build/review rounds used of the limit";
+pub const FINDINGS_CAPTION: &str = "the task in flight's open findings, by severity";
+/// The queue's marks: a marked task and an unmarked one.
+const MARKED: &str = "[x]";
+const UNMARKED: &str = "[ ]";
 
 /// What hugo found when it looked for the runtime record.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -266,6 +285,14 @@ enum Note {
     Failed(String),
 }
 
+/// The pane the keys go to: the configuration in the sidebar, or the queue in
+/// the main pane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Focus {
+    Configuration,
+    Queue,
+}
+
 /// The roles a crew of `size` agents has: the first `size` of the crew's order.
 fn crew_roles(size: usize) -> &'static [FlowRole] {
     &CREW_ORDER[..size.clamp(1, CREW_ORDER.len())]
@@ -342,9 +369,16 @@ pub struct App {
     /// The orchestrator's start in flight. It runs off the window's thread,
     /// as the catalogue read does, so no key handling waits on herdr.
     starting: Option<JoinHandle<Result<Start, String>>>,
-    /// The unheld queue's task ids, as the last frame drew them: the work
-    /// `s` hands the orchestrator, in order.
+    /// The waiting tasks' ids, as the last frame drew them: the work `s`
+    /// hands the orchestrator, in queue order.
     queued: Vec<String>,
+    /// The pane the keys go to.
+    focus: Focus,
+    /// The queue row the cursor is on, as the waiting tasks number them.
+    queue_cursor: usize,
+    /// The waiting tasks marked with `space`, in the order they were marked.
+    /// Session-only: a reload or a restart drops them.
+    marked: Vec<String>,
     /// The line the start last said, on the note row.
     note: Option<Note>,
     /// The project's folder as the title line names it, when one is found.
@@ -392,6 +426,9 @@ impl App {
             launch: None,
             starting: None,
             queued: Vec::new(),
+            focus: Focus::Configuration,
+            queue_cursor: 0,
+            marked: Vec::new(),
             note: None,
             project: None,
             root: None,
@@ -450,6 +487,10 @@ impl App {
             self.crew_key(key);
             return Action::Redraw;
         }
+        if self.focus == Focus::Queue {
+            self.queue_key(key);
+            return Action::Redraw;
+        }
         match key.code {
             KeyCode::Char('?') => self.help = true,
             KeyCode::Char('r') => self.reload(),
@@ -457,10 +498,83 @@ impl App {
             KeyCode::Up | KeyCode::Char('k') => self.move_cursor(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_cursor(1),
             KeyCode::Enter => self.open_choice(),
+            KeyCode::Tab => self.focus_queue(),
             KeyCode::Char('s') => self.start_orchestrator(),
             _ => {}
         }
         Action::Redraw
+    }
+
+    /// Handle a key while the queue has focus: the cursor moves over the
+    /// waiting tasks, `space` marks the one under it, `a` marks them all, `s`
+    /// starts the orchestrator over the marked, and `tab` gives the keys back
+    /// to the configuration. The configuration's keys do nothing here.
+    fn queue_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('?') => self.help = true,
+            KeyCode::Tab => self.focus = Focus::Configuration,
+            KeyCode::Up | KeyCode::Char('k') => self.move_queue(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_queue(1),
+            KeyCode::Char(' ') => self.mark_cursor(),
+            KeyCode::Char('a') => self.mark_all(),
+            KeyCode::Char('s') => self.start_orchestrator(),
+            _ => {}
+        }
+    }
+
+    /// Move the keys to the queue, when it has a waiting task to pick.
+    fn focus_queue(&mut self) {
+        if !self.queued.is_empty() {
+            self.focus = Focus::Queue;
+        }
+    }
+
+    /// Move the queue's cursor over the waiting tasks, and no further.
+    fn move_queue(&mut self, delta: isize) {
+        let last = self.queued.len().saturating_sub(1);
+        self.queue_cursor = self.queue_cursor.saturating_add_signed(delta).min(last);
+    }
+
+    /// Mark the waiting task under the cursor, or unmark it when it is marked.
+    fn mark_cursor(&mut self) {
+        let Some(id) = self.queued.get(self.queue_cursor).cloned() else {
+            return;
+        };
+        match self.marked.iter().position(|marked| *marked == id) {
+            Some(at) => {
+                self.marked.remove(at);
+            }
+            None => self.marked.push(id),
+        }
+    }
+
+    /// Mark every waiting task, or unmark them all when they are all marked.
+    fn mark_all(&mut self) {
+        if self.queued.iter().all(|id| self.marked.contains(id)) {
+            self.marked.retain(|id| !self.queued.contains(id));
+        } else {
+            for id in &self.queued {
+                if !self.marked.contains(id) {
+                    self.marked.push(id.clone());
+                }
+            }
+        }
+    }
+
+    /// The tasks `s` hands the orchestrator, in queue order: the marked ones,
+    /// or the whole queue when none is marked.
+    fn starting_tasks(&self) -> Vec<String> {
+        let marked: Vec<String> = self
+            .queued
+            .iter()
+            .filter(|id| self.marked.contains(id))
+            .cloned()
+            .collect();
+        if marked.is_empty() {
+            self.queued.clone()
+        } else {
+            marked
+        }
     }
 
     /// Handle a key while the crew-size selector is open: the cursor moves
@@ -535,13 +649,17 @@ impl App {
     /// is the frame the spinner shows.
     pub fn draw(&mut self, frame: &mut Frame, runtime: &RuntimeRead, now: &str, tick: usize) {
         // The queue `s` starts the orchestrator over is the one drawn: the
-        // unclaimed work, in order. Held tasks are the crew's, not the queue's.
+        // waiting work, in order. Held and done tasks are not in it.
         self.queued = match runtime {
-            RuntimeRead::Record(runtime) => {
-                runtime.unheld_queue().map(|item| item.id.clone()).collect()
-            }
+            RuntimeRead::Record(runtime) => runtime.waiting().map(|item| item.id.clone()).collect(),
             _ => Vec::new(),
         };
+        // The queue keeps the keys only while it has a task to pick, and its
+        // cursor stays on a row it has.
+        if self.queued.is_empty() {
+            self.focus = Focus::Configuration;
+        }
+        self.queue_cursor = self.queue_cursor.min(self.queued.len().saturating_sub(1));
         // The footer is one line, or two when its keys do not fit on one. A
         // window too narrow for the sidebar draws no agent, so the choice is
         // off before the footer is measured; a window wide enough holds the
@@ -604,7 +722,7 @@ impl App {
         } else {
             (area, area.width, area.height)
         };
-        let cursor = if self.session().is_some() {
+        let cursor = if self.session().is_some() && self.focus == Focus::Configuration {
             self.cursor
         } else {
             usize::MAX
@@ -670,6 +788,7 @@ impl App {
         self.config = config::load(self.home.as_deref());
         self.session = session_of(&self.config.state);
         self.parked.clear();
+        self.marked.clear();
         self.cursor = match self.session() {
             Some(config) => self
                 .cursor
@@ -1269,7 +1388,7 @@ impl App {
             args: start.args,
             env,
             project,
-            tasks: self.queued.clone(),
+            tasks: self.starting_tasks(),
         })
     }
 
@@ -1605,29 +1724,46 @@ impl App {
             Section {
                 title: CREW_TITLE,
                 icon: Icon::RoleOrchestrator,
-                lines: self.crew_lines(runtime, width, now, tick),
+                lines: self.captioned(
+                    CREW_CAPTION,
+                    self.crew_lines(runtime, width, now, tick),
+                    width,
+                ),
             },
             Section {
                 title: QUEUE_TITLE,
                 icon: Icon::TabBacklog,
-                lines: self.queue_lines(runtime, width),
+                lines: self.captioned(QUEUE_CAPTION, self.queue_lines(runtime, width), width),
             },
             Section {
                 title: ROUND_TITLE,
                 icon: Icon::RoleReviewer,
-                lines: vec![self.round_line(runtime, width)],
+                lines: self.captioned(ROUND_CAPTION, self.round_lines(runtime, width, tick), width),
             },
             Section {
                 title: BUDGET_TITLE,
                 icon: Icon::Clock,
-                lines: self.budget_lines(runtime, width),
+                lines: self.captioned(BUDGET_CAPTION, self.budget_lines(runtime, width), width),
             },
             Section {
                 title: FINDINGS_TITLE,
                 icon: Icon::Finding,
-                lines: self.findings_lines(runtime, width),
+                lines: self.captioned(FINDINGS_CAPTION, self.findings_lines(runtime, width), width),
             },
         ]
+    }
+
+    /// A block's lines under its caption: the one dim line that says what the
+    /// block counts.
+    fn captioned(
+        &self,
+        caption: &str,
+        lines: Vec<Line<'static>>,
+        width: usize,
+    ) -> Vec<Line<'static>> {
+        let mut out = vec![self.fit(vec![(caption.to_string(), self.theme.text.dim)], width)];
+        out.extend(lines);
+        out
     }
 
     /// The crew: a table with one row per agent, and the composition that says
@@ -1758,23 +1894,48 @@ impl App {
             .collect()
     }
 
-    /// The queue: the unclaimed work, an id and a status, and the count with
-    /// the set it counts.
+    /// The queue: the waiting work, in order, with an id and a status, and the
+    /// count with the set it counts. The task under the cursor is marked with
+    /// the cursor's bar while the queue has focus; a task that is marked
+    /// carries `[x]`.
     fn queue_lines(&self, runtime: &Runtime, width: usize) -> Vec<Line<'static>> {
-        let items: Vec<&coding_crew_core::runtime::QueueItem> = runtime.unheld_queue().collect();
-        let count = items.len();
-        let noun = if count == 1 { "task" } else { "tasks" };
-        let mut lines = vec![self.fit(
-            vec![
-                ("the automation's queue · ".to_string(), self.theme.text.dim),
-                (count.to_string(), self.theme.text.strong),
-                (format!(" {noun}"), self.theme.text.dim),
-            ],
-            width,
-        )];
-        for item in items {
-            lines.push(self.fit(
+        let items: Vec<&QueueItem> = runtime.waiting().collect();
+        let done = runtime
+            .queue
+            .iter()
+            .filter(|item| item.status == Status::Done)
+            .count();
+        let mut count = vec![
+            ("the automation's queue · ".to_string(), self.theme.text.dim),
+            (items.len().to_string(), self.theme.text.strong),
+            (" waiting".to_string(), self.theme.text.dim),
+        ];
+        if done > 0 {
+            count.push((" · ".to_string(), self.theme.text.dim));
+            count.push((done.to_string(), self.theme.text.strong));
+            count.push((" done".to_string(), self.theme.text.dim));
+        }
+        let mut lines = vec![self.fit(count, width)];
+        let focused = self.focus == Focus::Queue;
+        for (index, item) in items.into_iter().enumerate() {
+            let selected = focused && index == self.queue_cursor;
+            let (bar, bar_style) = if selected {
+                (
+                    Icon::CursorBar.glyph(self.icons).to_string(),
+                    self.theme.chrome.border_focus,
+                )
+            } else {
+                (" ".to_string(), Style::default())
+            };
+            let (mark, mark_style) = if self.marked.contains(&item.id) {
+                (MARKED, self.theme.text.strong)
+            } else {
+                (UNMARKED, self.theme.text.dim)
+            };
+            let row = self.fit(
                 vec![
+                    (bar, bar_style),
+                    (format!("{mark} "), mark_style),
                     (item.id.clone(), self.theme.text.normal),
                     ("  ".to_string(), Style::default()),
                     (
@@ -1783,29 +1944,135 @@ impl App {
                     ),
                 ],
                 width,
-            ));
+            );
+            lines.push(if selected {
+                selected_line(row, width, &self.theme)
+            } else {
+                row
+            });
         }
         lines
     }
 
-    /// The review in flight: the task, the stage and the number.
-    fn round_line(&self, runtime: &Runtime, width: usize) -> Line<'static> {
-        match &runtime.round {
-            Some(round) => self.fit(
-                vec![
-                    (round.task.clone(), self.theme.text.normal),
-                    (
-                        format!(" · {} · round {}", stage_word(round.stage), round.number),
-                        self.theme.text.dim,
-                    ),
-                ],
-                width,
-            ),
-            None => self.fit(
+    /// The review in flight, as a timeline of the task in flight: the task and
+    /// its stage, then each round's build and review, and the findings each
+    /// review raised. The review under way carries the spinner. A timeline too
+    /// wide for one line gives each round a line of its own.
+    fn round_lines(&self, runtime: &Runtime, width: usize, tick: usize) -> Vec<Line<'static>> {
+        let Some(round) = &runtime.round else {
+            return vec![self.fit(
                 vec![("no review in flight".to_string(), self.theme.text.dim)],
                 width,
+            )];
+        };
+        let reviewing = runtime
+            .crew
+            .iter()
+            .any(|member| member.role == FlowRole::Reviewer && member.state.is_working());
+        let head = vec![
+            (round.task.clone(), self.theme.text.normal),
+            (
+                format!(" · {}", stage_word(round.stage)),
+                self.theme.text.dim,
             ),
+        ];
+        let mut rounds: Vec<Vec<(String, Style)>> = round
+            .earlier
+            .iter()
+            .map(|earlier| self.finished_round(earlier.number, earlier.raised))
+            .collect();
+        rounds.push(self.current_round(round.number, reviewing, tick));
+        self.timeline(head, &rounds, width)
+    }
+
+    /// A round that is finished: its build and review, and the findings the
+    /// review raised.
+    fn finished_round(&self, number: u32, raised: u32) -> Vec<(String, Style)> {
+        let (verdict, style) = match raised {
+            0 => ("clean".to_string(), self.theme.text.dim),
+            1 => ("1 finding".to_string(), self.theme.semantic.warn),
+            _ => (format!("{raised} findings"), self.theme.semantic.warn),
+        };
+        vec![
+            (format!("round {number} "), self.theme.text.dim),
+            (
+                Icon::StatusDone.glyph(self.icons).to_string(),
+                self.theme.semantic.ok,
+            ),
+            (" build".to_string(), self.theme.text.normal),
+            (" · ".to_string(), self.theme.text.dim),
+            (
+                Icon::StatusDone.glyph(self.icons).to_string(),
+                self.theme.semantic.ok,
+            ),
+            (" review ".to_string(), self.theme.text.normal),
+            (verdict, style),
+        ]
+    }
+
+    /// The round in flight: its build is done, and its review is under way
+    /// when the reviewer works, else it waits.
+    fn current_round(&self, number: u32, reviewing: bool, tick: usize) -> Vec<(String, Style)> {
+        let (review, review_style, word_style) = if reviewing {
+            (
+                chrome::spinner_frame(tick).to_string(),
+                self.theme.semantic.agent,
+                self.theme.text.normal,
+            )
+        } else {
+            (
+                Icon::TaskOpen.glyph(self.icons).to_string(),
+                self.theme.text.dim,
+                self.theme.text.dim,
+            )
+        };
+        vec![
+            (format!("round {number} "), self.theme.text.dim),
+            (
+                Icon::StatusDone.glyph(self.icons).to_string(),
+                self.theme.semantic.ok,
+            ),
+            (" build".to_string(), self.theme.text.normal),
+            (" · ".to_string(), self.theme.text.dim),
+            (review, review_style),
+            (" review".to_string(), word_style),
+        ]
+    }
+
+    /// The timeline: the head, then the rounds in order, on one line while
+    /// they fit and one round to a line once they do not. A round that starts
+    /// a line after the first is led by the arrow.
+    fn timeline(
+        &self,
+        head: Vec<(String, Style)>,
+        rounds: &[Vec<(String, Style)>],
+        width: usize,
+    ) -> Vec<Line<'static>> {
+        let arrow = Icon::TabMarkerRight.glyph(self.icons);
+        let mut lines = Vec::new();
+        let mut line = head;
+        for (index, round) in rounds.iter().enumerate() {
+            let sep = if index == 0 {
+                "  ".to_string()
+            } else {
+                format!(" {arrow} ")
+            };
+            if spans_width(&line) + text_width(&sep) + spans_width(round) <= width {
+                line.push((sep, self.theme.text.dim));
+                line.extend(round.iter().cloned());
+            } else {
+                lines.push(self.fit(line, width));
+                line = if index == 0 {
+                    round.clone()
+                } else {
+                    let mut next = vec![(format!("{arrow} "), self.theme.text.dim)];
+                    next.extend(round.iter().cloned());
+                    next
+                };
+            }
         }
+        lines.push(self.fit(line, width));
+        lines
     }
 
     /// The external rounds spent of their budget, as a bar and the numbers in
@@ -1828,7 +2095,7 @@ impl App {
             (" of ".to_string(), self.theme.text.dim),
             (total.to_string(), self.theme.text.strong),
         ];
-        let label = ("external rounds ".to_string(), self.theme.text.dim);
+        let label = ("rounds ".to_string(), self.theme.text.dim);
         let bar_and_numbers: Vec<(String, Style)> = bar.chain(numbers).collect();
         let mut one = vec![label.clone()];
         one.extend(bar_and_numbers.iter().cloned());
@@ -1851,9 +2118,14 @@ impl App {
                 width,
             )];
         }
+        let noun = if runtime.findings == 1 {
+            " open finding"
+        } else {
+            " open findings"
+        };
         let count = vec![
             (runtime.findings.to_string(), self.theme.text.strong),
-            (" open findings".to_string(), self.theme.text.normal),
+            (noun.to_string(), self.theme.text.normal),
         ];
         let Some(severities) = runtime.severities else {
             return vec![self.fit(count, width)];
@@ -1905,19 +2177,31 @@ impl App {
         self.fit(vec![(says, style)], usize::from(width))
     }
 
-    /// A line of spans, cut to the width with the cut marked.
+    /// A line of spans, cut to the width with the cut marked. A line that
+    /// fits is kept whole. One that does not keeps the spans that fit beside
+    /// the marker, and the span that runs out is cut with it: a span that
+    /// fills the width exactly is never the end of a line that had more.
     fn fit(&self, spans: Vec<(String, Style)>, width: usize) -> Line<'static> {
+        if width == 0 {
+            return Line::from(Vec::<Span<'static>>::new());
+        }
+        let total: usize = spans.iter().map(|(text, _)| text_width(text)).sum();
+        if total <= width {
+            let out: Vec<Span<'static>> = spans
+                .into_iter()
+                .map(|(text, style)| Span::styled(text, style))
+                .collect();
+            return Line::from(out);
+        }
+        let mut room = width - 1;
         let mut out = Vec::new();
-        let mut used = 0;
         for (text, style) in spans {
-            if used >= width {
-                break;
-            }
-            let piece = cut_to(&text, width - used);
-            used += text_width(&piece);
-            let cut = piece != text;
-            out.push(Span::styled(piece, style));
-            if cut {
+            let used = text_width(&text);
+            if used <= room {
+                room -= used;
+                out.push(Span::styled(text, style));
+            } else {
+                out.push(Span::styled(format!("{}…", head_to(&text, room)), style));
                 break;
             }
         }
@@ -2157,6 +2441,24 @@ impl App {
                 (u8::MAX, line("?", "this help")),
             ];
         }
+        if self.focus == Focus::Queue {
+            return vec![
+                (0, line("↑↓ j/k", "move")),
+                (1, line("ctrl-c", "quit")),
+                (2, line(MARK_KEY, "mark the task under the cursor")),
+                (
+                    2,
+                    line(MARK_ALL_KEY, "mark every waiting task, or unmark them"),
+                ),
+                (
+                    3,
+                    line(START_KEY, "start the orchestrator over the marked tasks"),
+                ),
+                (3, line(FOCUS_KEY, "back to the configuration")),
+                (u8::MAX, line("q", "quit")),
+                (u8::MAX, line("?", "this help")),
+            ];
+        }
         let mut lines = Vec::new();
         if self.agents_drawn
             && self
@@ -2172,6 +2474,9 @@ impl App {
         }
         if self.session().is_some() {
             lines.push((3, line(CREW_KEY, "crew size")));
+        }
+        if !self.queued.is_empty() {
+            lines.push((3, line(FOCUS_KEY, "the queue")));
         }
         lines.push((3, line(START_KEY, "start the orchestrator")));
         lines.push((u8::MAX, line("q", "quit")));
@@ -2210,12 +2515,24 @@ impl App {
             return chrome::footer(&actions, &closing, width, rows, &self.theme);
         }
         let mut actions = Vec::new();
+        if self.focus == Focus::Queue {
+            actions.push(part(MARK_KEY, "mark"));
+            actions.push(part(MARK_ALL_KEY, "mark all"));
+            if self.can_start() {
+                actions.push(part(START_KEY, "start"));
+            }
+            actions.push(part(FOCUS_KEY, "configuration"));
+            return chrome::footer(&actions, &closing, width, rows, &self.theme);
+        }
         if self.can_choose() {
             actions.push(part(CHOOSE_KEY, "choose"));
         }
         actions.push(part(RELOAD_KEY, "reload"));
         if self.session().is_some() {
             actions.push(part(CREW_KEY, "crew size"));
+        }
+        if !self.queued.is_empty() {
+            actions.push(part(FOCUS_KEY, "queue"));
         }
         if self.can_start() {
             actions.push(part(START_KEY, "start"));
@@ -2485,7 +2802,7 @@ mod tests {
     use coding_crew_core::config::LEGACY_CONFIG_FILE;
     use coding_crew_core::runtime::AgentState;
     use coding_crew_core::runtime::{
-        Budget, Composition, CrewMember, QueueItem, RuntimeRound, Severities, Stamp,
+        Budget, Composition, CrewMember, EarlierRound, QueueItem, RuntimeRound, Severities, Stamp,
     };
     use coding_crew_core::{FlowRole, Status};
     use coding_crew_theme::Preset;
@@ -2566,6 +2883,10 @@ mod tests {
                 task: "TSK13".to_string(),
                 stage: RoundKind::External,
                 number: 2,
+                earlier: vec![EarlierRound {
+                    number: 1,
+                    raised: 3,
+                }],
             }),
             budget: Budget {
                 spent: 18,
@@ -3049,11 +3370,13 @@ mod tests {
     fn the_crew_leads_the_main_pane_and_the_stamp_is_at_the_foot() {
         let runtime = runtime();
         let (rows, _) = render_runtime(100, 40, &runtime);
-        let crew = row_of(&rows, "crew");
-        let queue = row_of(&rows, "queue");
-        let round = row_of(&rows, "round");
-        let budget = row_of(&rows, "budget");
-        let findings = row_of(&rows, "findings");
+        // The block titles, on their borders: a bare word also matches the
+        // sidebar's text on the same row.
+        let crew = row_of(&rows, "crew ─");
+        let queue = row_of(&rows, "queue ─");
+        let round = row_of(&rows, "round ─");
+        let budget = row_of(&rows, "budget ─");
+        let findings = row_of(&rows, "findings ─");
         let stamp = row_of(&rows, "running since");
         assert!(crew < queue, "{crew} {queue}");
         assert!(queue < round, "{queue} {round}");
@@ -3164,7 +3487,10 @@ mod tests {
         let text = rows.join("\n");
         assert_eq!(text.matches("TSK29").count(), 1, "{text}");
         // The queue's count is the unheld set, and it is said once.
-        assert!(text.contains("the automation's queue · 0 tasks"), "{text}");
+        assert!(
+            text.contains("the automation's queue · 0 waiting"),
+            "{text}"
+        );
     }
 
     #[test]
@@ -3172,7 +3498,10 @@ mod tests {
         let runtime = runtime();
         let (rows, _) = render_runtime(100, 40, &runtime);
         let text = rows.join("\n");
-        assert!(text.contains("the automation's queue · 1 task"), "{text}");
+        assert!(
+            text.contains("the automation's queue · 1 waiting"),
+            "{text}"
+        );
         let queue_row = row_of(&rows, "automation's queue");
         let item_row = row_of(&rows, "TSK29");
         assert!(queue_row < item_row, "{queue_row} {item_row}");
@@ -3184,11 +3513,21 @@ mod tests {
         let runtime = runtime();
         let (rows, _) = render_runtime(100, 40, &runtime);
         let text = rows.join("\n");
-        assert!(text.contains("TSK13 · external · round 2"), "{text}");
+        // The timeline: the task and its stage, then each round's build and
+        // review, the review under way with the spinner. Too wide for one line
+        // at 100 columns, so the second round leads its own line.
+        let done = Icon::StatusDone.glyph(IconSet::Nerd);
+        let spinner = coding_crew_theme::chrome::spinner_frame(0);
+        assert!(text.contains("TSK13 · external"), "{text}");
         assert!(
-            text.contains("external rounds ████░░░░░░ 18 of 45"),
+            text.contains(&format!("round 1 {done} build · {done} review 3 findings")),
             "{text}"
         );
+        assert!(
+            text.contains(&format!("› round 2 {done} build · {spinner} review")),
+            "{text}"
+        );
+        assert!(text.contains("rounds ████░░░░░░ 18 of 45"), "{text}");
         assert!(
             text.contains("17 open findings · 8 high · 8 medium · 1 low"),
             "{text}"
@@ -3463,7 +3802,13 @@ mod tests {
         let text = rows.join("\n");
         assert!(text.contains("17 open findings"), "{text}");
         assert!(text.contains("8 high · 8 medium · 1 low"), "{text}");
-        assert!(!text.contains("…"), "{text}");
+        // No line that names a severity is cut.
+        assert!(
+            rows.iter()
+                .filter(|row| row.contains("high") || row.contains("low"))
+                .all(|row| !row.contains("…")),
+            "{text}"
+        );
     }
 
     #[test]
@@ -3633,11 +3978,11 @@ mod tests {
                 );
             }
         }
-        // The crew's seven lines go with the crew, and the announcement says so:
-        // three agents of two lines each, and the composition.
+        // The crew's eight lines go with the crew, and the announcement says so:
+        // its caption, three agents of two lines each, and the composition.
         let (rows, _) = render_runtime(60, 8, &runtime());
         let text = rows.join("\n");
-        assert!(text.contains("crew (7 hidden)"), "{text}");
+        assert!(text.contains("crew (8 hidden)"), "{text}");
         // The stamp survives the short pane: whether it runs is the last
         // fact to give way.
         let (rows, _) = render_runtime(60, 8, &runtime());
@@ -5133,6 +5478,315 @@ mod tests {
         wait_for_start(&mut window);
         assert_eq!(window.note, Some(Note::Notice(ALREADY_RUNNING.to_string())));
         assert!(fake.requests.lock().expect("the requests").is_empty());
+    }
+
+    /// The runtime with three waiting tasks behind the one in flight and the
+    /// one done, in queue order: the queue the picks are tested on.
+    fn queued_runtime() -> Runtime {
+        let mut runtime = runtime();
+        runtime.queue = vec![
+            queue_item("TSK22", Status::Done),
+            queue_item("TSK29", Status::Approved),
+            queue_item("TSK07", Status::Approved),
+            queue_item("TSK08", Status::Approved),
+        ];
+        runtime
+    }
+
+    /// The window's text, as its rows read at a width and height.
+    fn screen_of(window: &mut App, runtime: &Runtime) -> Vec<String> {
+        render_app(window, 100, 40, &RuntimeRead::Record(runtime.clone())).0
+    }
+
+    #[test]
+    fn every_block_opens_with_a_dim_caption_that_says_what_it_counts() {
+        let runtime = runtime();
+        let (rows, paint) = render_runtime(100, 40, &runtime);
+        for (title, caption) in [
+            ("crew ─", CREW_CAPTION),
+            ("queue ─", QUEUE_CAPTION),
+            ("round ─", ROUND_CAPTION),
+            ("budget ─", BUDGET_CAPTION),
+            ("findings ─", FINDINGS_CAPTION),
+        ] {
+            let title_row = row_of(&rows, title);
+            assert_eq!(
+                row_of(&rows, caption),
+                title_row + 1,
+                "{caption} does not open its block: {}",
+                rows.join("\n")
+            );
+            assert_eq!(
+                colour_of(&rows, &paint, caption),
+                theme().text.dim.fg.expect("the dim colour"),
+                "{caption} is not dim"
+            );
+        }
+    }
+
+    #[test]
+    fn the_round_is_a_timeline_of_the_task_in_flight() {
+        let runtime = runtime();
+        let done = Icon::StatusDone.glyph(IconSet::Nerd);
+        let spinner = coding_crew_theme::chrome::spinner_frame(0);
+        // At 100 columns the timeline's second round does not share the line
+        // with the first: it leads the line under it.
+        let (rows, _) = render_runtime(100, 40, &runtime);
+        let first = row_of(&rows, "TSK13 · external");
+        assert!(
+            rows[first].contains(&format!("round 1 {done} build · {done} review 3 findings")),
+            "{}",
+            rows[first]
+        );
+        assert!(
+            rows[first + 1].contains(&format!("› round 2 {done} build · {spinner} review")),
+            "{}",
+            rows[first + 1]
+        );
+        // At 40 columns each round has a line of its own, the head too.
+        let (rows, _) = render_runtime(40, 40, &runtime);
+        let head = row_of(&rows, "TSK13 · external");
+        assert!(rows[head + 1].contains("round 1"), "{}", rows[head + 1]);
+        assert!(rows[head + 2].contains("› round 2"), "{}", rows[head + 2]);
+    }
+
+    #[test]
+    fn a_review_that_waits_is_drawn_open_and_a_first_round_has_no_arrow() {
+        let mut runtime = runtime();
+        runtime.crew[2].state = AgentState::Idle;
+        if let Some(round) = runtime.round.as_mut() {
+            round.earlier.clear();
+        }
+        let open = Icon::TaskOpen.glyph(IconSet::Nerd);
+        let (rows, _) = render_runtime(100, 40, &runtime);
+        let text = rows.join("\n");
+        assert!(
+            text.contains(&format!(
+                "round 2 {}",
+                Icon::StatusDone.glyph(IconSet::Nerd)
+            )),
+            "{text}"
+        );
+        assert!(text.contains(&format!("{open} review")), "{text}");
+        assert!(
+            !text.contains("›"),
+            "a first round leads with the arrow: {text}"
+        );
+    }
+
+    #[test]
+    fn tab_moves_the_keys_to_the_queue_and_the_cursor_moves_over_the_waiting_tasks() {
+        let mut window = app();
+        let runtime = RuntimeRead::Record(queued_runtime());
+        let rows = screen_of(&mut window, &queued_runtime());
+        assert!(
+            rows.iter().any(|row| row.contains("▌  harness")),
+            "{rows:?}"
+        );
+        assert!(rows.last().expect("a footer").contains("tab queue"));
+        window.on_key(press(KeyCode::Tab));
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        let text = text_of(&rows);
+        // The sidebar's cursor is not drawn while the queue has the keys.
+        assert!(!rows.iter().any(|row| row.contains("▌  harness")), "{text}");
+        assert!(
+            rows[row_of(&rows, "TSK29")].contains("▌[ ] TSK29"),
+            "{text}"
+        );
+        let footer = rows.last().expect("a footer");
+        for key in ["space mark", "a mark all", "tab configuration"] {
+            assert!(footer.contains(key), "{footer}");
+        }
+        assert!(!footer.contains("reload"), "{footer}");
+        assert!(!footer.contains("choose"), "{footer}");
+        // The cursor stops at the last waiting task.
+        for _ in 0..5 {
+            window.on_key(press(KeyCode::Down));
+        }
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(
+            rows[row_of(&rows, "TSK08")].contains("▌[ ] TSK08"),
+            "{}",
+            text_of(&rows)
+        );
+        // The configuration's keys do nothing while the queue has the keys.
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_none());
+        window.on_key(press(KeyCode::Char('c')));
+        assert!(window.crew_cursor.is_none());
+        // tab gives the keys back.
+        window.on_key(press(KeyCode::Tab));
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(
+            rows.iter().any(|row| row.contains("▌  harness")),
+            "{}",
+            text_of(&rows)
+        );
+    }
+
+    #[test]
+    fn space_marks_the_task_under_the_cursor_and_a_marks_or_unmarks_them_all() {
+        let mut window = app();
+        let runtime = RuntimeRead::Record(queued_runtime());
+        screen_of(&mut window, &queued_runtime());
+        window.on_key(press(KeyCode::Tab));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Char(' ')));
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(
+            rows[row_of(&rows, "TSK07")].contains("[x] TSK07"),
+            "{}",
+            text_of(&rows)
+        );
+        assert!(
+            rows[row_of(&rows, "TSK29")].contains("[ ] TSK29"),
+            "{}",
+            text_of(&rows)
+        );
+        // space again unmarks it.
+        window.on_key(press(KeyCode::Char(' ')));
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(
+            rows[row_of(&rows, "TSK07")].contains("[ ] TSK07"),
+            "{}",
+            text_of(&rows)
+        );
+        // a marks every waiting task; a again unmarks them all.
+        window.on_key(press(KeyCode::Char('a')));
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        for id in ["TSK29", "TSK07", "TSK08"] {
+            assert!(
+                rows[row_of(&rows, id)].contains(&format!("[x] {id}")),
+                "{}",
+                text_of(&rows)
+            );
+        }
+        assert!(
+            !text_of(&rows).contains("[x] TSK22"),
+            "a done task is not markable"
+        );
+        window.on_key(press(KeyCode::Char('a')));
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(!text_of(&rows).contains("[x]"), "{}", text_of(&rows));
+    }
+
+    #[test]
+    fn the_marks_are_the_session_s_and_a_reload_drops_them() {
+        let mut window = app();
+        screen_of(&mut window, &queued_runtime());
+        window.on_key(press(KeyCode::Tab));
+        window.on_key(press(KeyCode::Char(' ')));
+        assert_eq!(window.marked, ["TSK29"]);
+        // The configuration reloads with r, and the marks go with the session.
+        window.on_key(press(KeyCode::Tab));
+        window.on_key(press(KeyCode::Char('r')));
+        assert!(window.marked.is_empty());
+    }
+
+    #[test]
+    fn the_queue_footer_names_its_keys_and_the_configuration_names_the_queue_only_with_work() {
+        let mut window = app();
+        let mut empty = queued_runtime();
+        empty.queue.clear();
+        let rows = screen_of(&mut window, &empty);
+        assert!(!rows.last().expect("a footer").contains("tab queue"));
+        window.on_key(press(KeyCode::Tab));
+        assert_eq!(
+            window.focus,
+            Focus::Configuration,
+            "a queue with no task takes no focus"
+        );
+
+        let rows = screen_of(&mut window, &queued_runtime());
+        assert!(rows.last().expect("a footer").contains("tab queue"));
+    }
+
+    #[test]
+    fn the_queue_count_names_the_waiting_tasks_and_the_done_ones() {
+        let mut window = app();
+        let rows = screen_of(&mut window, &queued_runtime());
+        let text = text_of(&rows);
+        assert!(
+            text.contains("the automation's queue · 3 waiting · 1 done"),
+            "{text}"
+        );
+        // At 40 columns the count is cut, and the cut says so.
+        let (rows, _) = render_runtime(40, 40, &queued_runtime());
+        let count = rows[row_of(&rows, "automation's queue")].clone();
+        assert!(count.contains("…"), "{count}");
+    }
+
+    /// A window in herdr whose queue is the three waiting tasks of
+    /// [`queued_runtime`], with the fake launcher standing in for herdr.
+    fn picking_window(fake: &Arc<FakeLauncher>) -> App {
+        let mut window = in_herdr(fake);
+        screen_of(&mut window, &queued_runtime());
+        window
+    }
+
+    /// The tasks the fake launcher was asked to start, once a start is done.
+    fn started_tasks(window: &mut App, fake: &FakeLauncher) -> Vec<String> {
+        window.on_key(press(KeyCode::Char('s')));
+        wait_for_start(window);
+        let requests = fake.requests.lock().expect("the requests");
+        assert_eq!(requests.len(), 1, "one start was asked: {requests:?}");
+        requests[0].tasks.clone()
+    }
+
+    #[test]
+    fn with_no_mark_s_starts_the_whole_queue_in_queue_order() {
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = picking_window(&fake);
+        assert_eq!(
+            started_tasks(&mut window, &fake),
+            ["TSK29", "TSK07", "TSK08"]
+        );
+    }
+
+    #[test]
+    fn marks_drive_what_s_starts_and_keep_the_queue_order() {
+        // One marked task: that one.
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = picking_window(&fake);
+        window.on_key(press(KeyCode::Tab));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Char(' ')));
+        assert_eq!(started_tasks(&mut window, &fake), ["TSK07"]);
+
+        // Marked out of order: started in queue order, not mark order.
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = picking_window(&fake);
+        window.on_key(press(KeyCode::Tab));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Char(' ')));
+        window.on_key(press(KeyCode::Up));
+        window.on_key(press(KeyCode::Up));
+        window.on_key(press(KeyCode::Char(' ')));
+        assert_eq!(started_tasks(&mut window, &fake), ["TSK29", "TSK08"]);
+
+        // a marks them all, a again unmarks them: the whole queue again.
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = picking_window(&fake);
+        window.on_key(press(KeyCode::Tab));
+        window.on_key(press(KeyCode::Char('a')));
+        window.on_key(press(KeyCode::Char('a')));
+        assert_eq!(
+            started_tasks(&mut window, &fake),
+            ["TSK29", "TSK07", "TSK08"]
+        );
+    }
+
+    #[test]
+    fn s_works_from_the_queue_and_from_the_configuration_alike() {
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = picking_window(&fake);
+        window.on_key(press(KeyCode::Tab));
+        window.on_key(press(KeyCode::Char('s')));
+        wait_for_start(&mut window);
+        let requests = fake.requests.lock().expect("the requests");
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].tasks, ["TSK29", "TSK07", "TSK08"]);
     }
 
     /// The harnesses the test machine has: every one but cursor-agent.

@@ -1,20 +1,22 @@
-//! The committed runtime record is computable from the fixtures, in their time.
+//! The committed runtime record tells a run the fixtures can hold.
 //!
 //! The record is provisional, but the mock must still tell the fixtures'
-//! history: every held task exists, the queue is the claimable work nobody
-//! holds, the round is the review in flight, and the counts are the
-//! fixtures' own.
+//! history: the queue is the run's tasks in order, with the statuses the
+//! fixtures hold; the crew holds the task in flight, which is the one the
+//! round is on; and the budget and the findings are that task's own.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use coding_crew_core::runtime::{AgentState, Composition, Severities};
 use coding_crew_core::{
-    Activity, FindingStatus, FlowRole, Runtime, Severity, Status, Store, Task, parse_rfc3339,
+    Activity, FindingStatus, FlowRole, RoundKind, Runtime, Severity, Status, Store, Task,
+    parse_rfc3339,
 };
 
-/// The instant the fixtures are read with, as in `mock_data.rs`.
-const NOW: &str = "2026-11-19T08:00:00Z";
+/// The task the run has in flight, and the run's queue in order.
+const IN_FLIGHT: &str = "TSK14";
+const RUN_QUEUE: [&str; 5] = ["TSK22", "TSK25", "TSK14", "TSK29", "TSK07"];
 
 fn project() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -43,22 +45,6 @@ fn moment(text: &str) -> i64 {
     parse_rfc3339(text).unwrap_or_else(|| panic!("unreadable stamp {text}"))
 }
 
-/// Whether an agent could claim the task at the fixtures' clock.
-fn claimable(task: &Task, tasks: &HashMap<String, Task>) -> bool {
-    task.status == Status::Approved
-        && task.overlays.blocked.is_none()
-        && task.overlays.deferred.is_none()
-        && task.overlays.cancelled.is_none()
-        && task
-            .depends_on
-            .iter()
-            .all(|id| tasks[id].status == Status::Done)
-        && !task
-            .claim
-            .as_ref()
-            .is_some_and(|claim| !claim.lease_expired(NOW))
-}
-
 #[test]
 fn the_record_sits_beside_the_journal_and_is_not_a_task() {
     let path = project().join("runtime.json");
@@ -79,51 +65,47 @@ fn the_record_sits_beside_the_journal_and_is_not_a_task() {
 }
 
 #[test]
-fn every_held_task_exists_and_is_the_live_work_the_agent_owns() {
+fn the_crew_holds_the_task_in_flight_and_each_hold_is_the_moment_its_task_names() {
     let runtime = runtime();
     let tasks = tasks();
-    for member in &runtime.crew {
-        let Some(id) = &member.holds else {
-            assert_eq!(member.state, AgentState::Idle, "{member:?}");
-            assert!(member.since.is_none(), "{member:?}");
-            continue;
-        };
-        let task = tasks
-            .get(id)
-            .unwrap_or_else(|| panic!("{} holds unknown task {id}", member.role.as_str()));
-        match member.role {
-            FlowRole::Builder => {
-                assert_eq!(task.status, Status::Executing, "{id}");
-                let claim = task.claim.as_ref().expect("the runner's claim");
-                assert!(claim.by.starts_with("runner-"), "{id}: {}", claim.by);
-                assert_eq!(member.since.as_deref(), Some(claim.at.as_str()), "{id}");
-                assert_eq!(member.state, AgentState::Executing, "{id}");
-            }
-            FlowRole::Reviewer => {
-                assert_eq!(task.status, Status::CodeReview, "{id}");
-                assert_eq!(
-                    member.since.as_deref(),
-                    Some(task.status_since.as_str()),
-                    "{id}: the reviewer took the review when it was requested"
-                );
-                assert_eq!(member.state, AgentState::Reviewing, "{id}");
-            }
-            other => panic!("the crew holds a task under {other:?}"),
-        }
-    }
-    // No task is held twice.
-    let held: Vec<&str> = runtime
+    let task = &tasks[IN_FLIGHT];
+    assert_eq!(task.status, Status::CodeReview, "{IN_FLIGHT}");
+
+    // The flow is sequential: the builder and the reviewer both hold the task
+    // in flight. The builder waits between its rounds, and the reviewer works.
+    let builder = runtime
         .crew
         .iter()
-        .filter_map(|member| member.holds.as_deref())
-        .collect();
-    let unique: std::collections::HashSet<&str> = held.iter().copied().collect();
-    assert_eq!(held.len(), unique.len(), "{held:?}");
-}
+        .find(|member| member.role == FlowRole::Builder)
+        .expect("the builder");
+    assert_eq!(builder.holds.as_deref(), Some(IN_FLIGHT));
+    assert_eq!(builder.state, AgentState::Idle);
+    let claim = task.claim.as_ref().expect("the builder's claim");
+    assert!(claim.by.starts_with("runner-"), "{}", claim.by);
+    assert_eq!(builder.since.as_deref(), Some(claim.at.as_str()));
 
-#[test]
-fn the_crew_is_one_per_role_and_the_reviewer_reviews() {
-    let runtime = runtime();
+    let reviewer = runtime
+        .crew
+        .iter()
+        .find(|member| member.role == FlowRole::Reviewer)
+        .expect("the reviewer");
+    assert_eq!(reviewer.holds.as_deref(), Some(IN_FLIGHT));
+    assert_eq!(reviewer.state, AgentState::Reviewing);
+    assert_eq!(
+        reviewer.since.as_deref(),
+        Some(task.status_since.as_str()),
+        "the reviewer took the review when it was requested"
+    );
+
+    let orchestrator = runtime
+        .crew
+        .iter()
+        .find(|member| member.role == FlowRole::Orchestrator)
+        .expect("the orchestrator");
+    assert_eq!(orchestrator.holds, None);
+    assert_eq!(orchestrator.state, AgentState::Idle);
+
+    // Nothing else is held, and the crew is one per role.
     let roles: Vec<FlowRole> = runtime.crew.iter().map(|member| member.role).collect();
     assert_eq!(
         roles,
@@ -139,8 +121,64 @@ fn the_crew_is_one_per_role_and_the_reviewer_reviews() {
         Composition::OnePerRole.says(),
         "one per role · the reviewer reviews"
     );
-    // The one reviewing holds the round's task.
+}
+
+#[test]
+fn the_queue_is_the_run_in_order_with_the_fixtures_statuses() {
+    let runtime = runtime();
+    let tasks = tasks();
+    let queued: Vec<&str> = runtime.queue.iter().map(|item| item.id.as_str()).collect();
+    assert_eq!(queued, RUN_QUEUE, "the run's queue, in order");
+    for item in &runtime.queue {
+        let task = tasks
+            .get(&item.id)
+            .unwrap_or_else(|| panic!("{} names no task", item.id));
+        assert_eq!(item.status, task.status, "{} status", item.id);
+    }
+
+    // Two are done, one is held by the crew, and two wait.
+    let done: Vec<&str> = runtime
+        .queue
+        .iter()
+        .filter(|item| item.status == Status::Done)
+        .map(|item| item.id.as_str())
+        .collect();
+    assert_eq!(done, ["TSK22", "TSK25"]);
+    let waiting: Vec<&str> = runtime.waiting().map(|item| item.id.as_str()).collect();
+    assert_eq!(waiting, ["TSK29", "TSK07"]);
+    for id in &waiting {
+        let task = &tasks[*id];
+        assert_eq!(task.status, Status::Approved, "{id}");
+        assert!(task.overlays.blocked.is_none(), "{id} is blocked");
+        assert!(!runtime.is_held(id), "{id} is held");
+    }
+    assert!(runtime.is_held(IN_FLIGHT));
+    assert!(
+        !runtime.waiting().any(|item| item.id == IN_FLIGHT),
+        "a held task is in the crew, not the queue"
+    );
+}
+
+#[test]
+fn the_round_is_the_task_in_flights_next_review_after_the_rounds_before_it() {
+    let runtime = runtime();
     let round = runtime.round.as_ref().expect("a review in flight");
+    assert_eq!(round.task, IN_FLIGHT);
+    assert_eq!(round.stage, RoundKind::External);
+    assert_eq!(round.number, 2, "the second round");
+    assert_eq!(
+        round.earlier.len() as u32 + 1,
+        round.number,
+        "the rounds before it are named"
+    );
+    assert_eq!(
+        round.earlier,
+        [coding_crew_core::runtime::EarlierRound {
+            number: 1,
+            raised: 3,
+        }],
+        "round 1 raised three findings"
+    );
     let reviewer = runtime
         .crew
         .iter()
@@ -150,95 +188,34 @@ fn the_crew_is_one_per_role_and_the_reviewer_reviews() {
 }
 
 #[test]
-fn the_queue_is_the_claimable_work_nobody_holds() {
+fn the_budget_is_the_rounds_the_task_in_flight_has_used_of_its_limit() {
     let runtime = runtime();
     let tasks = tasks();
-    assert!(!runtime.queue.is_empty(), "the queue is empty");
-    for item in &runtime.queue {
-        let task = tasks
-            .get(&item.id)
-            .unwrap_or_else(|| panic!("{} names no task", item.id));
-        assert_eq!(item.status, task.status, "{} status", item.id);
-        assert!(claimable(task, &tasks), "{} is not claimable", item.id);
-        assert!(!runtime.is_held(&item.id), "{} is held", item.id);
-    }
-    // A held task belongs to the crew, never to the queue.
-    for member in &runtime.crew {
-        if let Some(id) = &member.holds {
-            assert!(
-                !runtime.queue.iter().any(|item| &item.id == id),
-                "{id} is in both the crew and the queue"
-            );
-        }
-    }
-    // The mock holds the one claimable task the fixtures have, so the
-    // queue's count is a fact of the set rather than of the record.
-    let claimable_ids: Vec<String> = tasks
-        .values()
-        .filter(|task| claimable(task, &tasks))
-        .map(|task| task.id.clone())
-        .collect();
-    let queued: Vec<String> = runtime.queue.iter().map(|item| item.id.clone()).collect();
-    assert_eq!(queued, claimable_ids);
-    assert_eq!(queued, ["TSK29"]);
-}
-
-#[test]
-fn the_round_is_the_review_in_flight() {
-    let runtime = runtime();
-    let tasks = tasks();
-    let round = runtime.round.as_ref().expect("a review in flight");
-    let task = &tasks[&round.task];
-    assert_eq!(task.status, Status::CodeReview, "{}", round.task);
-    let external = task
-        .review
-        .rounds
-        .iter()
-        .filter(|round| round.kind == coding_crew_core::RoundKind::External)
-        .count();
-    assert_eq!(round.number, external as u32 + 1, "the next round");
-    assert_eq!(round.stage, coding_crew_core::RoundKind::External);
+    let task = &tasks[IN_FLIGHT];
     assert_eq!(
-        round.number, 1,
-        "the fixture has a self pre-screen and no external round yet"
+        runtime.budget.spent,
+        runtime.round.as_ref().expect("a round").number
     );
-}
-
-#[test]
-fn the_budget_and_the_findings_are_the_fixtures_own_counts() {
-    let runtime = runtime();
-    let tasks = tasks();
-    let live: Vec<&Task> = tasks
-        .values()
-        .filter(|task| !task.review.rounds.is_empty() && task.status != Status::Done)
-        .collect();
-
-    let spent: u32 = live
-        .iter()
-        .flat_map(|task| task.review.rounds.iter())
-        .filter(|round| round.kind == coding_crew_core::RoundKind::External)
-        .count() as u32;
-    let total: u32 = live.iter().map(|task| task.review.max_rounds).sum();
-    assert_eq!(runtime.budget.spent, spent);
-    assert_eq!(runtime.budget.total, total);
+    assert_eq!(runtime.budget.total, task.review.max_rounds);
     assert!(runtime.budget.spent < runtime.budget.total);
-
-    let open: u32 = tasks.values().map(|task| task.open_findings() as u32).sum();
-    assert_eq!(runtime.findings, open);
-    assert!(runtime.findings > 0, "no fixture carries an open finding");
 }
 
 #[test]
-fn the_severities_break_the_open_findings_down_by_their_own_severity() {
+fn the_findings_are_the_task_in_flights_open_findings_by_their_own_severity() {
     let runtime = runtime();
     let tasks = tasks();
-    let severities = runtime
-        .severities
-        .expect("the mock holds the severity breakdown");
+    let task = &tasks[IN_FLIGHT];
+    assert_eq!(runtime.findings, task.open_findings() as u32);
+    assert!(
+        runtime.findings > 0,
+        "the task in flight has an open finding"
+    );
+
     let mut counted = Severities::default();
-    for finding in tasks
-        .values()
-        .flat_map(|task| task.review.findings.iter())
+    for finding in task
+        .review
+        .findings
+        .iter()
         .filter(|finding| finding.status == FindingStatus::Open)
     {
         match finding.severity {
@@ -247,6 +224,9 @@ fn the_severities_break_the_open_findings_down_by_their_own_severity() {
             Severity::Low => counted.low += 1,
         }
     }
+    let severities = runtime
+        .severities
+        .expect("the mock holds the severity breakdown");
     assert_eq!(severities, counted);
     assert_eq!(
         severities.high + severities.medium + severities.low,
@@ -255,7 +235,7 @@ fn the_severities_break_the_open_findings_down_by_their_own_severity() {
 }
 
 #[test]
-fn the_run_began_before_the_first_hold_and_after_the_event_before_it() {
+fn the_run_began_before_its_first_claim_and_no_event_falls_between() {
     let runtime = runtime();
     let tasks = tasks();
     let started = moment(&runtime.started_at);
@@ -266,32 +246,30 @@ fn the_run_began_before_the_first_hold_and_after_the_event_before_it() {
         .map(moment)
         .collect();
     assert!(!holds.is_empty(), "no agent holds a task");
-    let earliest = *holds.iter().min().expect("a hold");
-    assert!(started < earliest, "{}", runtime.started_at);
+    assert!(
+        holds.iter().all(|at| started < *at),
+        "{}",
+        runtime.started_at
+    );
 
-    // Every hold is the moment its task names: the claim for the runner,
-    // the review request for the reviewer.
-    for member in &runtime.crew {
-        if let (Some(id), Some(since)) = (&member.holds, &member.since) {
-            let task = &tasks[id];
-            let named = match member.role {
-                FlowRole::Builder => task.claim.as_ref().expect("a claim").at.clone(),
-                _ => task.status_since.clone(),
-            };
-            assert_eq!(*since, named, "{id}");
-        }
-    }
+    // The run starts half an hour before the first task it claims.
+    let first = tasks[RUN_QUEUE[0]]
+        .claim
+        .as_ref()
+        .expect("the first task's claim")
+        .at
+        .clone();
+    assert_eq!(moment(&runtime.started_at) + 30 * 60, moment(&first));
 
-    // No fixture event falls between the run's start and the first hold: the
+    // No fixture event falls between the run's start and its first claim: the
     // run begins after the events that came before it, as the journal does.
     let journal = Activity::read(&project().join("activity.json")).expect("the journal");
     for event in journal.events {
         let at = moment(&event.at);
         assert!(
-            at <= started || at >= earliest,
-            "{} happens between the run's start and the first hold",
+            at <= started || at >= moment(&first),
+            "{} happens between the run's start and its first claim",
             event.at
         );
     }
-    assert_eq!(moment(&runtime.started_at), moment("2026-11-09T08:30Z"));
 }

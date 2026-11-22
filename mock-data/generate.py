@@ -1484,38 +1484,32 @@ def claimable(item, by_id):
     return not lease_is_live(item.get("claim"))
 
 
-def open_findings(tasks):
-    """Every open finding of the fixtures, in the order the tasks hold them."""
-    return [
-        finding
-        for item in tasks
-        for finding in item["review"]["findings"]
-        if finding["status"] == "open"
-    ]
+# The run the runtime record tells: a queue of five tasks, in order. Two are
+# done, one is in flight and two wait. The flow runs one task at a time, so
+# the builder and the reviewer both hold the task in flight: the reviewer is
+# on its second external round, and the builder waits for the verdict.
+RUN_QUEUE = ["TSK22", "TSK25", "TSK14", "TSK29", "TSK07"]
+IN_FLIGHT = "TSK14"
+# Round 1 of the task in flight raised three findings, one high and two
+# medium. Two are resolved, so the one high is still open: the task's own
+# fixture holds that open finding, and the record's count is checked against it.
+FIRST_ROUND_RAISED = 3
+OPEN_SEVERITIES = {"high": 1, "medium": 0, "low": 0}
 
 
 def runtime_record(tasks):
-    """The flow's runtime, from the fixtures' own state.
+    """The flow's runtime, told as one run over the fixtures' own tasks.
 
-    The crew holds the live work: the runner the first executing task it
-    claimed, the reviewer the first task waiting for its external round.
-    The queue is every claimable task nobody holds. The round is the review
-    the reviewer is on. The budget counts the external rounds of the live
-    tasks that have rounds; the findings count the open ones, and the
-    severities break the same count down.
+    The queue is the run's tasks in order, each with the status its fixture
+    holds. The crew holds the task in flight. The round is the reviewer's
+    second external round, after one round that raised findings. The budget
+    is the rounds the task in flight has used of its own limit, and the
+    findings are its open ones.
     """
     by_id = {item["id"]: item for item in tasks}
-    runner_task = next(item for item in tasks if item["status"] == "executing")
-    reviewer_task = next(item for item in tasks if item["status"] == "code-review")
-    queue = [item for item in tasks if claimable(item, by_id)]
-    earliest = min(runner_task["claim"]["at"], reviewer_task["status_since"])
-    live = [
-        item
-        for item in tasks
-        if item["review"]["rounds"] and item["status"] != "done"
-    ]
+    flight = by_id[IN_FLIGHT]
     return {
-        "started_at": minutes_before(earliest, 30),
+        "started_at": minutes_before(by_id[RUN_QUEUE[0]]["claim"]["at"], 30),
         "crew": [
             {
                 "role": "orchestrator",
@@ -1525,64 +1519,62 @@ def runtime_record(tasks):
             {
                 "role": "builder",
                 "model": RUNNER_MODEL,
-                "holds": runner_task["id"],
-                "since": runner_task["claim"]["at"],
-                "state": "executing",
+                "holds": IN_FLIGHT,
+                "since": flight["claim"]["at"],
+                "state": "idle",
             },
             {
                 "role": "reviewer",
                 "model": REVIEWER_MODEL,
-                "holds": reviewer_task["id"],
-                "since": reviewer_task["status_since"],
+                "holds": IN_FLIGHT,
+                "since": flight["status_since"],
                 "state": "reviewing",
             },
         ],
-        "queue": [{"id": item["id"], "status": item["status"]} for item in queue],
+        "queue": [
+            {"id": task_id, "status": by_id[task_id]["status"]}
+            for task_id in RUN_QUEUE
+        ],
         "round": {
-            "task": reviewer_task["id"],
+            "task": IN_FLIGHT,
             "stage": "external",
-            # The round number is what the budget counts: the external
-            # rounds spent, plus the one in flight.
-            "number": sum(
-                1
-                for round in reviewer_task["review"]["rounds"]
-                if round["kind"] == "external"
-            )
-            + 1,
+            "number": 2,
+            "earlier": [{"number": 1, "raised": FIRST_ROUND_RAISED}],
         },
         "budget": {
-            "spent": sum(
-                1
-                for item in live
-                for round in item["review"]["rounds"]
-                if round["kind"] == "external"
-            ),
-            "total": sum(item["review"]["max_rounds"] for item in live),
+            "spent": 2,
+            "total": flight["review"]["max_rounds"],
         },
-        "findings": len(open_findings(tasks)),
-        "severities": {
-            severity: sum(
-                1
-                for finding in open_findings(tasks)
-                if finding["severity"] == severity
-            )
-            for severity in ("high", "medium", "low")
-        },
+        "findings": sum(OPEN_SEVERITIES.values()),
+        "severities": dict(OPEN_SEVERITIES),
         "stamp": {"runs": True},
     }
 
 
-def check_runtime(record, tasks, events):
-    """The runtime record is computable from the fixtures, in their time."""
+def check_runtime(record, tasks):
+    """The runtime record tells the run the fixtures can hold."""
     by_id = {item["id"]: item for item in tasks}
-    held = [member["holds"] for member in record["crew"] if member.get("holds")]
-    assert len(held) == len(set(held)), held
-    for task_id in held:
-        assert task_id in by_id, task_id
+
+    # The queue is the run, in order, with the statuses the fixtures hold.
     queued = [item["id"] for item in record["queue"]]
-    assert not set(queued) & set(held), (queued, held)
-    for task_id in queued:
-        assert claimable(by_id[task_id], by_id), task_id
+    assert queued == RUN_QUEUE, queued
+    for item in record["queue"]:
+        assert item["status"] == by_id[item["id"]]["status"], item
+
+    # Two done, one in flight and held by the crew, two approved and waiting.
+    done = [item["id"] for item in record["queue"] if item["status"] == "done"]
+    assert len(done) == 2, done
+    held = [member["holds"] for member in record["crew"] if member.get("holds")]
+    assert held == [IN_FLIGHT, IN_FLIGHT], held
+    waiting = [
+        item["id"]
+        for item in record["queue"]
+        if item["id"] not in held and item["status"] != "done"
+    ]
+    assert len(waiting) == 2, waiting
+    for task_id in waiting:
+        item = by_id[task_id]
+        assert item["status"] == "approved" and not item["overlays"], item["id"]
 
     # The stamp runs, and a record that stops says why.
     if record["stamp"]["runs"]:
@@ -1590,60 +1582,41 @@ def check_runtime(record, tasks, events):
     else:
         assert record["stamp"].get("why"), record["stamp"]
 
-    # The numbers are the fixtures' own.
-    live = [
-        item
-        for item in tasks
-        if item["review"]["rounds"] and item["status"] != "done"
-    ]
-    assert record["budget"] == {
-        "spent": sum(
-            1
-            for item in live
-            for round in item["review"]["rounds"]
-            if round["kind"] == "external"
-        ),
-        "total": sum(item["review"]["max_rounds"] for item in live),
-    }, record["budget"]
-    assert record["findings"] == len(open_findings(tasks)), record["findings"]
-    # The severities break the open findings down, and nothing else.
-    assert sum(record["severities"].values()) == record["findings"], record
-    assert set(record["severities"]) == {"high", "medium", "low"}, record
-
-    # The round in flight is the reviewer's task, at the next external round.
+    # The round is the task in flight's: the next external round, after the
+    # rounds it has had. The budget counts those rounds of its own limit.
     round_ = record["round"]
-    task = by_id[round_["task"]]
-    assert task["status"] == "code-review", task["id"]
-    external_spent = sum(
-        1 for r in task["review"]["rounds"] if r["kind"] == "external"
-    )
-    assert round_["number"] == external_spent + 1
-    reviewer = next(
-        member for member in record["crew"] if member["role"] == "reviewer"
-    )
-    assert reviewer["holds"] == task["id"], reviewer
-    assert reviewer["since"] == task["status_since"], reviewer
+    assert round_["task"] == IN_FLIGHT, round_
+    assert by_id[IN_FLIGHT]["status"] == "code-review", IN_FLIGHT
+    assert round_["number"] == len(round_["earlier"]) + 1, round_
+    assert record["budget"] == {
+        "spent": round_["number"],
+        "total": by_id[IN_FLIGHT]["review"]["max_rounds"],
+    }, record["budget"]
+    reviewer = next(m for m in record["crew"] if m["role"] == "reviewer")
+    assert reviewer["state"] == "reviewing", reviewer
 
-    # The crew is one per role, each entry naming the live work it holds.
+    # The findings are the open ones of the task in flight, by severity.
+    assert record["findings"] == sum(record["severities"].values()), record
+    assert set(record["severities"]) == {"high", "medium", "low"}, record
+    assert record["severities"] == OPEN_SEVERITIES, record["severities"]
+    open_here = [f for f in by_id[IN_FLIGHT]["review"]["findings"] if f["status"] == "open"]
+    assert record["findings"] == len(open_here), (record["findings"], open_here)
+    for severity in ("high", "medium", "low"):
+        assert record["severities"][severity] == sum(
+            1 for f in open_here if f["severity"] == severity
+        ), severity
+
+    # The crew is one per role, the builder and reviewer on the task in flight.
     roles = [member["role"] for member in record["crew"]]
     assert sorted(roles) == ["builder", "orchestrator", "reviewer"], roles
-    runner = next(member for member in record["crew"] if member["role"] == "builder")
-    runner_task = by_id[runner["holds"]]
-    assert runner_task["status"] == "executing", runner_task["id"]
-    assert runner["since"] == runner_task["claim"]["at"], runner
-    assert runner_task["claim"]["by"].startswith("runner-"), runner_task["claim"]
+    builder = next(m for m in record["crew"] if m["role"] == "builder")
+    assert builder["since"] == by_id[IN_FLIGHT]["claim"]["at"], builder
 
-    # The run began before the first hold, and after every event before it.
+    # The run began before the first hold.
     started = stamp(record["started_at"])
-    earliest = min(stamp(member["since"]) for member in record["crew"] if member.get("since"))
-    assert started < earliest, (record["started_at"], earliest)
-    for event_ in events:
-        assert (
-            event_["at"] <= record["started_at"] or stamp(event_["at"]) >= earliest
-        ), event_
     for member in record["crew"]:
         if member.get("since"):
-            assert stamp(member["since"]) >= started, member
+            assert started < stamp(member["since"]), member
 
 
 def build():
@@ -2891,7 +2864,7 @@ def main():
     )
     print(ACTIVITY.relative_to(ROOT))
     runtime = runtime_record(tasks)
-    check_runtime(runtime, tasks, events)
+    check_runtime(runtime, tasks)
     RUNTIME.write_text(json.dumps(runtime, indent=2, ensure_ascii=False) + "\n")
     print(RUNTIME.relative_to(ROOT))
 

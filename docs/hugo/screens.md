@@ -18,32 +18,32 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
  󰚩 hugo · mock-data                                                                       󰑮 running
 ╭─ 󰒓 configuration ────────────╮╭─ 󰑮 flow ─────────────────────────────────────────────────────────╮
 │ AGENTS ──────────────────────││╭─ 󰚩 crew ───────────────────────────────────────────────────────╮│
-│ 󰚩 orchestrator               │││role           model            task  held  state               ││
-│   harness claude             │││󰚩 orchestrator claude-opus-5-5  —     —     idle                ││
-│   model   claude-opus-5-5    │││󰖷 builder      claude-haiku-5-5 TSK10 󰥔 10d ⠋ executing         ││
-│   effort  medium             │││󰈈 reviewer     claude-opus-5-5  TSK13 󰥔 8d  ⠋ reviewing         ││
-│ 󰖷 builder                    │││one per role · the reviewer reviews                             ││
-│▌  harness claude             ││╰────────────────────────────────────────────────────────────────╯│
-│   model   claude-haiku-5-5   ││╭─ 󰚇 queue ──────────────────────────────────────────────────────╮│
-│   effort  high               │││the automation's queue · 1 task                                 ││
-│ 󰈈 reviewer                   │││TSK29  approved                                                 ││
-│   harness claude             ││╰────────────────────────────────────────────────────────────────╯│
-│   model   claude-opus-5-5    ││╭─ 󰈈 round ──────────────────────────────────────────────────────╮│
-│   effort  medium             │││TSK13 · external · round 1                                      ││
+│ 󰚩 orchestrator               │││the session's crew, and what each agent holds                   ││
+│   harness claude             │││role           model            task  held state                ││
+│   model   claude-opus-5-5    │││󰚩 orchestrator claude-opus-5-5  —     —    idle                 ││
+│   effort  medium             │││󰖷 builder      claude-haiku-5-5 TSK14 󰥔 8d idle                 ││
+│ 󰖷 builder                    │││󰈈 reviewer     claude-opus-5-5  TSK14 󰥔 7d ⠋ reviewing          ││
+│▌  harness claude             │││one per role · the reviewer reviews                             ││
+│   model   claude-haiku-5-5   ││╰────────────────────────────────────────────────────────────────╯│
+│   effort  high               ││╭─ 󰚇 queue ──────────────────────────────────────────────────────╮│
+│ 󰈈 reviewer                   │││tasks waiting, in order                                         ││
+│   harness claude             │││the automation's queue · 2 waiting · 2 done                     ││
+│   model   claude-opus-5-5    │││ [ ] TSK29  approved                                            ││
+│   effort  medium             │││ [ ] TSK07  approved                                            ││
 │ ROUNDS ──────────────────────││╰────────────────────────────────────────────────────────────────╯│
-│ 5 build-and-fix rounds       ││╭─ 󰥔 budget ─────────────────────────────────────────────────────╮│
-│ ORDER ───────────────────────│││external rounds ████░░░░░░ 18 of 45                             ││
-│ 1 groom · creator            ││╰────────────────────────────────────────────────────────────────╯│
-│   groomed → approved         ││╭─ 󰅚 findings ───────────────────────────────────────────────────╮│
-│ 2 build · builder            │││17 open findings · 8 high · 8 medium · 1 low                    ││
-│   approved → executing       ││╰────────────────────────────────────────────────────────────────╯│
-│ 3 self-review · builder      ││                                                                  │
-│   executing → code-review    ││                                                                  │
-│ 4 review · reviewer          ││                                                                  │
-│   code-review → done         ││                                                                  │
-│   code-review → remediating  ││                                                                  │
-│   code-review → needs-human  ││                                                                  │
-│ 5 remediate · builder        ││                                                                  │
+│ 5 build-and-fix rounds       ││╭─ 󰈈 round ──────────────────────────────────────────────────────╮│
+│ ORDER ───────────────────────│││where the task in flight is in its build/review loop            ││
+│ 1 groom · creator            │││TSK14 · external  round 1 󰄬 build · 󰄬 review 3 findings         ││
+│   groomed → approved         │││› round 2 󰄬 build · ⠋ review                                    ││
+│ 2 build · builder            ││╰────────────────────────────────────────────────────────────────╯│
+│   approved → executing       ││╭─ 󰥔 budget ─────────────────────────────────────────────────────╮│
+│ 3 self-review · builder      │││build/review rounds used of the limit                           ││
+│   executing → code-review    │││rounds ████░░░░░░ 2 of 5                                        ││
+│ 4 review · reviewer          ││╰────────────────────────────────────────────────────────────────╯│
+│   code-review → done         ││╭─ 󰅚 findings ───────────────────────────────────────────────────╮│
+│   code-review → remediating  │││the task in flight's open findings, by severity                 ││
+│   code-review → needs-human  │││1 open finding · 1 high · 0 medium · 0 low                      ││
+│ 5 remediate · builder        ││╰────────────────────────────────────────────────────────────────╯│
 │   remediating → code-review  ││                                                                  │
 │ 6 re-review · reviewer       ││                                                                  │
 │   code-review → done         ││                                                                  │
@@ -51,10 +51,10 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 │                              ││                                                                  │
 │                              ││                                                                  │
 │                              ││                                                                  │
-│                              ││󰑮 running since 2026-11-09T08:30Z                                 │
+│                              ││󰑮 running since 2026-11-05T14:30Z                                 │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-                       enter choose · r reload · c crew size · ? help · q quit
+                 enter choose · r reload · c crew size · tab queue · ? help · q quit
 ```
 
 | part | behaviour |
@@ -62,7 +62,7 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 | title line | the tool's icon and name, `hugo`, then a dim `·` and the project's folder when one is found; a window too narrow for the name shows no title rather than a cut of the name |
 | sidebar | the configuration, on the left: each agent with its harness, model and effort, the review-round limit and the order, in that order. The agents group has a cursor on each agent's harness, model and effort: `↑ k` and `↓ j` move it, and `enter` on one of those rows opens its choice. An agent is named by its role, its table's name: a name or role is read-only, and nothing in the sidebar edits it. The sidebar shows the session's crew, and marks what the session changed from the file — see [the configuration](#the-configuration). `r` reads the file again and starts the session over from it |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
-| footer | the keys that work, centred under a thin rule — never a key that does nothing. The window's keys are `enter choose` (on an agent's row), `r reload`, `c crew size` and `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)), then `? help · q quit`; `ctrl-c quit` works too, unnamed. While a choice is open its keys are `esc close`, `enter pick` (when the cursor's row can be picked), then `? help · q quit`; while the id input is open its keys are `esc back`, `enter pick` and `ctrl-c quit`, and every other key types; while the crew-size selector is open its keys are `esc close`, `enter pick`, then `? help · q quit`. The movement keys are in the help, not the footer |
+| footer | the keys that work, centred under a thin rule — never a key that does nothing. The window's keys are `enter choose` (on an agent's row), `r reload`, `c crew size`, `tab queue` (when a task waits) and `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)), then `? help · q quit`; `ctrl-c quit` works too, unnamed. While the queue has the keys its keys are `space mark`, `a mark all`, `s start` (when it can act) and `tab configuration`, then `? help · q quit`. [Picking the queue](#picking-the-queue) says what they do. While a choice is open its keys are `esc close`, `enter pick` (when the cursor's row can be picked), then `? help · q quit`; while the id input is open its keys are `esc back`, `enter pick` and `ctrl-c quit`, and every other key types; while the crew-size selector is open its keys are `esc close`, `enter pick`, then `? help · q quit`. The movement keys are in the help, not the footer |
 | choice | the choice of the row under the cursor, titled with the agent and the field (`builder model`): a small list with a cursor of its own. A harness lists the table's three; a model lists the harness's models, with `type an id…` last; an effort lists the harness's levels. `enter` picks it for the session, `esc` closes without picking |
 | crew-size selector | `c` opens the three crew sizes, over the window. See [the crew size](#the-configuration) |
 | help | `?` opens the keys, in the sidebar, over the choice and over the selector; any key closes it and gives the choice back |
@@ -80,10 +80,10 @@ The blocks are read in this order; the crew leads.
 | order | block | shows |
 |---|---|---|
 | 1 | `crew` | a table under a header, one row per agent: its role's icon and role, the model it runs, the task it holds (or `—`), the hold, and its state; then the composition, in words. Drawn alone, a row says `holds …` in words instead |
-| 2 | `queue` | **the automation's queue**: the unclaimed work, an id and a status — never a title, a note or an intent |
-| 3 | `round` | the review in flight: the task, the stage and the round's number; `no review in flight` when there is none |
-| 4 | `budget` | the external rounds spent of the total, as a bar and the numbers |
-| 5 | `findings` | the open findings, as a count, and by severity when the record holds them |
+| 2 | `queue` | **the automation's queue**: the tasks waiting, in order, an id and a status each — never a title, a note or an intent. A task the crew holds is not a row; a done one is counted, not drawn |
+| 3 | `round` | **a timeline** of the task in flight: each round's build and review, and the findings each review raised; `no review in flight` when there is none |
+| 4 | `budget` | the rounds the task in flight has used, of its limit, as a bar and the numbers |
+| 5 | `findings` | the task in flight's open findings, as a count, and by severity when the record holds them |
 | 6 | stamp | at the foot: whether the automation runs, **and why** when it does not |
 
 **The crew's size is a composition, not a number.** The crew is the roles
@@ -100,17 +100,45 @@ claiming a rule the crew does not follow.
 **A held task belongs to the crew, not the queue.** It appears in its agent's
 row and never in the queue, even when a writer left it in both.
 
+**Every block opens with a caption.** Each block's first line is a dim line
+that says what the block counts, and it is the block's own words, not a
+count:
+
+| block | caption |
+|---|---|
+| `crew` | the session's crew, and what each agent holds |
+| `queue` | tasks waiting, in order |
+| `round` | where the task in flight is in its build/review loop |
+| `budget` | build/review rounds used of the limit |
+| `findings` | the task in flight's open findings, by severity |
+
+**The round is a timeline.** It names the task in flight and its stage, then
+each round in order: `✓ build` and `✓ review` with the findings the review
+raised, the review still under way as the spinner (`⠋ review`) or waiting as
+`○ review`. The icons are the theme's table. The timeline is one line while it
+fits, and one round to a line once it does not, a round after the first led by
+`›`:
+
+```text
+TSK14 · external
+round 1 ✓ build · ✓ review 3 findings
+› round 2 ✓ build · ⠋ review
+```
+
 **The same fact is painted once.** A count appears once, the queue's count is
-the unclaimed work, and the round's task is named as the review, not counted
+the waiting tasks, and the round's task is named as the review, not counted
 again.
 
 The queue's row is an id and a status. Its count names its set: `the
-automation's queue · 1 task`. The budget's count names its set: `external
-rounds ████░░░░░░ 18 of 45`. The findings' count names its set: `17 open
-findings`. When the record holds the breakdown, it follows on the same count:
-`· 8 high · 8 medium · 1 low`, each count in its severity's slot — `high` on
-`semantic.error`, `medium` on `semantic.warn`, `low` on `semantic.info`. A
-narrow pane wraps the breakdown under the count rather than cutting it.
+automation's queue · 2 waiting · 2 done`, the done tasks counted after the
+waiting ones when there are any. The budget's count names its set:
+`rounds ████░░░░░░ 2 of 5`, the rounds the task in flight has used of its own
+limit. The findings' count names the task in flight's set: `1 open finding`, or
+`17 open findings` for more. When the record holds the breakdown, it follows
+on the same count: `· 1 high · 0 medium · 0 low`, each count in its
+severity's slot — `high` on `semantic.error`, `medium` on `semantic.warn`,
+`low` on `semantic.info`. A narrow pane wraps the breakdown under the count
+rather than cutting it.
 
 The stamp is a line: `󰑮 running since 2026-11-09T08:30Z` on `semantic.ok` when
 the automation runs, `󰏤 not running: <why>` on `semantic.warn` when it does
@@ -275,6 +303,25 @@ named by `using the defaults:`, so the human sees both what is wrong and what
 the tool would use. hugo only writes the defaults over an absent file, never
 over one a human has edited.
 
+## Picking the queue
+
+The queue is pickable. `tab` moves the keys from the configuration to the
+queue, and back: it moves only when the queue has a waiting task. While the
+queue has the keys:
+
+| key | does |
+|---|---|
+| `↑ k` and `↓ j` | move the queue's cursor over the waiting tasks, and no further |
+| `space` | marks the task under the cursor, or unmarks it |
+| `a` | marks every waiting task, or unmarks them all when they are all marked |
+| `s` | starts the orchestrator over the marked tasks, or over the whole queue when none is marked — see [starting the orchestrator](#starting-the-orchestrator) |
+| `tab` | gives the keys back to the configuration |
+
+The cursor's row carries the cursor bar and a marked task carries `[x]`; the
+sidebar's cursor is not drawn while the queue has the keys. The configuration's
+keys do nothing while the queue has them. The marks are the session's: a
+reload with `r` drops them, and nothing is written to the record or the file.
+
 ## The runtime record
 
 hugo reads the nearest project's `coding-crew/runtime.json`, discovered from
@@ -282,7 +329,10 @@ the current directory by the store's own project boundary. The record sits
 beside the journal; its shape and its provisional state are in
 [tasks/task-model.md § 11.2](../tasks/task-model.md#112-the-runtime-record-provisional).
 
-The record is the flow's: hugo reads it, and writes nothing. A project
+The record's queue is the run's tasks in queue order, each with its status:
+the done ones and the held one are in it, and the pane draws the waiting ones.
+The round, the budget and the findings are the task in flight's. The record is
+the flow's: hugo reads it, and writes nothing. A project
 without a record shows the named empty state `nothing is running`. A record
 that cannot be read is not that state: the pane says
 `the runtime record cannot be read`, names the file and the error, and paints
@@ -297,8 +347,10 @@ order. The tab's environment carries the session's crew, in `HUGO_SESSION`, so
 the skill prints the crew the session runs. The loop is the orchestrator's:
 hugo starts it and does not run it.
 
-The queue is the unclaimed work the main pane draws. A task an agent holds is
-that agent's, so no second orchestrator is given it. The footer names `s start`
+The queue `s` starts is the waiting work the main pane draws, in queue order.
+When some of it is marked, `s` hands over the marked tasks alone, still in queue
+order; otherwise the whole queue. A task an agent holds is that agent's, so no
+second orchestrator is given it. The footer names `s start`
 only when it can act: herdr hosts hugo, the queue has work, every agent has its
 harness, model and effort, and no start is in flight.
 
@@ -373,7 +425,11 @@ never the words.
 The pinned screens are `crates/hugo/tests/snapshots/screen-40.txt`,
 `screen-60.txt` and `screen-100.txt`. They are rendered from `mock-data/`,
 against a home whose configuration the tool wrote, so they carry the mock
-runtime record and the default configuration.
+runtime record and the default configuration. The mock run is a queue of five
+tasks: two done, one in flight in round 2 with the reviewer working and the
+builder holding it too, and two waiting. Round 1 of the task in flight raised
+three findings, one high and two medium; two are resolved, so the one high is
+still open — the task's own fixture holds that finding.
 
 ## The skills
 

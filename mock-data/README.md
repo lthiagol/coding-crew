@@ -92,22 +92,24 @@ real. The kinds are provisional; nothing writes the journal yet.
 It is provisional: nothing writes it yet, and the shape is in
 [task-model.md § 11.2](../docs/tasks/task-model.md#112-the-runtime-record-provisional).
 
-Every value is computed from the fixtures:
+The record tells a run, and the generator states it: `RUN_QUEUE` and
+`IN_FLIGHT` in `generate.py`. The run's queue, in order:
 
 | what | how |
 |---|---|
-| the crew | one per role: the orchestrator idle, the runner on the first `executing` task it claimed, the reviewer on the first `code-review` task |
-| the holds | each agent's `since` is its task's own stamp — the claim for the runner, the review request for the reviewer |
-| the run | `started_at` is before the first hold and after the last journal event before it |
-| the queue | every `approved` task whose dependencies are done, with no overlay and no live claim held elsewhere: `TSK29` |
-| the round | the reviewer's task, at the next round after its last one |
-| the budget | 18 external rounds of 45, over the nine live tasks that have rounds |
-| the findings | 17 open findings |
-| the severities | the open findings by severity: 8 high, 8 medium, 1 low |
+| the queue | `TSK22` and `TSK25` done, `TSK14` in flight, `TSK29` and `TSK07` approved and waiting |
+| the crew | one per role: the orchestrator idle; the builder and the reviewer both hold `TSK14`, the builder idle and the reviewer reviewing |
+| the run | `started_at` is before the first claim the run holds |
+| the round | `TSK14`, its second external round, after a first round that raised findings |
+| the budget | 2 rounds used of the task's limit of 5 |
+| the findings | 1 open: the task's own open high finding; the first round's other findings are resolved |
 | the stamp | the flow runs |
 
-The record's tasks are the fixtures' tasks: a held task is never in the queue,
-and the counts are the fixtures' own.
+The fixtures are checked against the run: each queued task's status is the
+fixture's own, the waiting ones are approved with no overlay, the held task is
+in `code-review`, and the findings and the limit are the held task's own. The
+first round's findings are not in any fixture: the run's story is the
+generator's, and the task's own review rounds are not rewritten to match it.
 
 ## Not included
 

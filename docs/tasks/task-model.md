@@ -577,12 +577,17 @@ The file is one object.
 |---|---|
 | `started_at` | when this run began, RFC 3339 |
 | `crew` | one entry per agent of the flow |
-| `queue` | the unclaimed work: an `id` and a `status`, never a task's title, note or intent |
-| `round` | the review in flight: the `task`, the `stage` (`self` or `external`) and the round's `number` |
-| `budget` | the external rounds `spent` of the `total` |
-| `findings` | the open findings, as a count |
-| `severities` | the open findings by `high`, `medium` and `low`, when the writer holds them; they sum to `findings` |
+| `queue` | the run's tasks in queue order: an `id` and a `status` each, never a task's title, note or intent. A held task and a done one are in it; the pane offers the waiting ones |
+| `round` | the task in flight: the `task`, the `stage` (`self` or `external`), the round's `number`, and `earlier`, the rounds before it on the same task, oldest first |
+| `earlier` | each finished round: its `number` and the `raised` findings its review raised, open or since resolved |
+| `budget` | the rounds the task in flight has used, as `spent` (the round in flight counts), of its round limit `total` |
+| `findings` | the task in flight's open findings, as a count |
+| `severities` | the task in flight's open findings by `high`, `medium` and `low`, when the writer holds them; they sum to `findings` |
 | `stamp` | whether the automation `runs`, and `why` when it does not |
+
+The flow is sequential: while a task is in flight the builder and the reviewer
+both hold it. The builder is `idle` between its rounds, and the reviewer is
+`reviewing` while its review runs.
 
 A crew entry:
 
@@ -604,6 +609,10 @@ crew, since the orchestrator is always present. The rule is
 words. A crew with more than one agent in a
 role has no rule that says who reviews; it is named as what it is, never as
 one per role. A held task belongs to the crew, not the queue.
+
+The queue is the run's, not the unclaimed work's alone: a writer lists the
+tasks in the order the run takes them, so the pane can show what waits and how
+much is done. A mark in hugo lasts the session only; nothing about it reaches the record.
 
 The record is optional like the journal: a project without one has no runtime,
 not a broken one.

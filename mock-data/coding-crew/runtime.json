@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-11-09T08:30Z",
+  "started_at": "2026-11-05T14:30Z",
   "crew": [
     {
       "role": "orchestrator",
@@ -9,38 +9,60 @@
     {
       "role": "builder",
       "model": "claude-haiku-5-5",
-      "holds": "TSK10",
-      "since": "2026-11-09T09:00Z",
-      "state": "executing"
+      "holds": "TSK14",
+      "since": "2026-11-11T09:00Z",
+      "state": "idle"
     },
     {
       "role": "reviewer",
       "model": "claude-opus-5-5",
-      "holds": "TSK13",
-      "since": "2026-11-10T16:00Z",
+      "holds": "TSK14",
+      "since": "2026-11-11T16:00Z",
       "state": "reviewing"
     }
   ],
   "queue": [
     {
+      "id": "TSK22",
+      "status": "done"
+    },
+    {
+      "id": "TSK25",
+      "status": "done"
+    },
+    {
+      "id": "TSK14",
+      "status": "code-review"
+    },
+    {
       "id": "TSK29",
+      "status": "approved"
+    },
+    {
+      "id": "TSK07",
       "status": "approved"
     }
   ],
   "round": {
-    "task": "TSK13",
+    "task": "TSK14",
     "stage": "external",
-    "number": 1
+    "number": 2,
+    "earlier": [
+      {
+        "number": 1,
+        "raised": 3
+      }
+    ]
   },
   "budget": {
-    "spent": 18,
-    "total": 45
+    "spent": 2,
+    "total": 5
   },
-  "findings": 17,
+  "findings": 1,
   "severities": {
-    "high": 8,
-    "medium": 8,
-    "low": 1
+    "high": 1,
+    "medium": 0,
+    "low": 0
   },
   "stamp": {
     "runs": true
