@@ -64,14 +64,17 @@ pub struct Drawn {
 
 /// The sidebar's lines, at a width and a height, cut to fit.
 ///
-/// `cursor` is the agents group's row the cursor is on; `usize::MAX` draws no
-/// cursor. A group that does not fit the height is left out whole; one line
-/// under the groups says `not shown:` with each group's name and how much it
-/// held, the way the main pane names the blocks it leaves out. An unreadable
-/// configuration names the file and the error, then shows the defaults beside
-/// them. An old `config.json` is named at the top: it is never read silently.
+/// `notice` is a pick that could not be saved: it is drawn first, as the
+/// sidebar's leading rows, so the fit counts it. `cursor` is the agents
+/// group's row the cursor is on; `usize::MAX` draws no cursor. A group that
+/// does not fit the height is left out whole; one line under the groups says
+/// `not shown:` with each group's name and how much it held, the way the main
+/// pane names the blocks it leaves out. An unreadable configuration names the
+/// file and the error, then shows the defaults beside them. An old
+/// `config.json` is named at the top: it is never read silently.
 pub fn lines(
     state: &ConfigRead,
+    notice: Option<&crate::app::ReadError>,
     theme: &Theme,
     width: usize,
     height: usize,
@@ -84,20 +87,34 @@ pub fn lines(
         };
     }
     // Each prefix row carries the short name a marker uses for it when the
-    // row does not fit. The error comes before the old file's notice: what
-    // is wrong outranks what is merely ignored.
+    // row does not fit. The pick's notice comes first: it says what the
+    // screen just failed to do. The error comes before the old file's
+    // notice: what is wrong outranks what is merely ignored.
     let mut prefix: Vec<(String, Line<'static>)> = Vec::new();
+    if let Some(error) = notice {
+        prefix.push((
+            NOT_SAVED.to_string(),
+            line(NOT_SAVED, theme.text.normal, width),
+        ));
+        prefix.push((
+            format!("{} error", error.file),
+            line(
+                &format!("{}: {}", error.file, error.error),
+                theme.semantic.error,
+                width,
+            ),
+        ));
+    }
     match &state.state {
         ConfigState::Absent => prefix.push((EMPTY.to_string(), line(EMPTY, theme.text.dim, width))),
         ConfigState::Config(config) => {
-            let mut drawn = prefix;
             if let Some(file) = &state.legacy {
-                drawn.push((
+                prefix.push((
                     legacy_notice(file),
                     line(&legacy_notice(file), theme.text.dim, width),
                 ));
             }
-            return fits(drawn, groups(config, theme, cursor), theme, width, height);
+            return fits(prefix, groups(config, theme, cursor), theme, width, height);
         }
         ConfigState::Unreadable(error) => {
             prefix.push((
@@ -146,23 +163,6 @@ pub fn lines(
 /// The notice that an old configuration is beside the new one.
 fn legacy_notice(file: &str) -> String {
     format!("{file} is not read")
-}
-
-/// The lines that name a pick that could not be saved: what failed, then the
-/// file and the error on the failure slot.
-pub fn notice_lines(
-    error: &crate::app::ReadError,
-    theme: &Theme,
-    width: usize,
-) -> Vec<Line<'static>> {
-    vec![
-        line(NOT_SAVED, theme.text.normal, width),
-        line(
-            &format!("{}: {}", error.file, error.error),
-            theme.semantic.error,
-            width,
-        ),
-    ]
 }
 
 /// The configuration's groups, in the order they are read.
@@ -418,7 +418,7 @@ mod tests {
         height: usize,
         cursor: usize,
     ) -> Vec<String> {
-        text(&lines(state, &theme(), width, height, cursor).lines)
+        text(&lines(state, None, &theme(), width, height, cursor).lines)
     }
 
     #[test]
@@ -582,6 +582,7 @@ mod tests {
     fn the_empty_state_is_the_named_one_and_on_the_dim_slot() {
         let drawn = lines(
             &ConfigRead::of(ConfigState::Absent),
+            None,
             &theme(),
             30,
             40,
@@ -595,7 +596,7 @@ mod tests {
     #[test]
     fn a_configuration_that_cannot_be_read_is_named_not_called_empty() {
         let state = unreadable();
-        let drawn = lines(&state, &theme(), 40, 40, usize::MAX);
+        let drawn = lines(&state, None, &theme(), 40, 40, usize::MAX);
         let rows = text(&drawn.lines);
         assert_eq!(rows[0], UNREADABLE);
         assert!(rows[1].contains("config.toml"), "{rows:#?}");
@@ -683,7 +684,7 @@ mod tests {
             "{rows:#?}"
         );
         // The notice is secondary text, not the failure slot.
-        let drawn = lines(&state, &theme(), 30, 40, usize::MAX);
+        let drawn = lines(&state, None, &theme(), 30, 40, usize::MAX);
         assert_eq!(drawn.lines[0].spans[0].style, theme().text.dim);
     }
 
@@ -762,8 +763,37 @@ mod tests {
     }
 
     #[test]
+    fn a_pick_notice_is_budgeted_with_the_groups_and_nothing_is_cut_silently() {
+        // The notice is two rows drawn inside the fit: the groups it pushes
+        // out are named, and the pane never holds more rows than it has.
+        let notice = crate::app::ReadError {
+            file: CONFIG_FILE.to_string(),
+            error: "denied".to_string(),
+        };
+        let full = rendered(&configured(), 30, 1000).len() + 2;
+        for height in 3..=40usize {
+            let drawn = lines(
+                &configured(),
+                Some(&notice),
+                &theme(),
+                30,
+                height,
+                usize::MAX,
+            );
+            let rows = text(&drawn.lines);
+            assert!(rows.len() <= height, "{height}: {rows:#?}");
+            assert_eq!(rows[0], NOT_SAVED, "{height}: {rows:#?}");
+            let named = rows.iter().any(|row| row.starts_with("not shown:"));
+            assert!(
+                named || rows.len() == full,
+                "{height}: a group is gone without a word: {rows:#?}"
+            );
+        }
+    }
+
+    #[test]
     fn the_cursor_is_on_an_agents_head_row_and_the_bar_reaches_the_edge() {
-        let drawn = lines(&configured(), &theme(), 30, 40, 2);
+        let drawn = lines(&configured(), None, &theme(), 30, 40, 2);
         let selected: Vec<&Line<'static>> = drawn
             .lines
             .iter()
@@ -790,7 +820,7 @@ mod tests {
 
     #[test]
     fn no_cursor_paints_no_row() {
-        let drawn = lines(&configured(), &theme(), 30, 40, usize::MAX);
+        let drawn = lines(&configured(), None, &theme(), 30, 40, usize::MAX);
         assert!(
             !drawn.lines.iter().any(|line| {
                 line.spans
@@ -805,7 +835,7 @@ mod tests {
     fn a_short_pane_that_leaves_the_agents_out_says_the_cursor_has_nowhere_to_be() {
         // The agents group is left out whole, and the announcement says so:
         // the cursor must not act on a row the pane does not draw.
-        let drawn = lines(&configured(), &theme(), 30, 5, 0);
+        let drawn = lines(&configured(), None, &theme(), 30, 5, 0);
         assert!(!drawn.agents, "{:#?}", text(&drawn.lines));
         assert!(
             drawn

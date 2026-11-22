@@ -133,8 +133,10 @@ impl Catalog {
 /// Whether a line is a model id: a provider, a slash, and a model.
 ///
 /// The harness tool prints a list of models, but a banner or a header can
-/// sit among them. Only a model id is pickable: no whitespace, both sides of
-/// the slash present, and nothing else acting as a separator.
+/// sit among them. Only a model id is pickable: no whitespace, and a non-empty
+/// provider and model. The model may route through more providers
+/// (`openrouter/anthropic/claude-sonnet-4`), and may carry a tag
+/// (`ollama/llama3:8b`), so it may hold slashes and colons.
 fn is_model_id(line: &str) -> bool {
     if line.is_empty() || line.chars().any(char::is_whitespace) {
         return false;
@@ -142,12 +144,12 @@ fn is_model_id(line: &str) -> bool {
     let Some((provider, model)) = line.split_once('/') else {
         return false;
     };
-    !provider.is_empty() && !model.is_empty() && !model.contains('/')
+    !provider.is_empty() && !model.is_empty()
 }
 
 /// A model's name without its variant: `provider/model#high` is the model
 /// `provider/model`.
-fn base_of(model: &str) -> &str {
+pub fn base_of(model: &str) -> &str {
     model.split_once('#').map_or(model, |(base, _)| base)
 }
 
@@ -229,11 +231,33 @@ mod tests {
         // The tool's banner and separators are not models: a pick must be a
         // model id, with a provider and a model name.
         let catalog = Catalog::from_lines(
-            "Available models:\n---\nopencode-go/glm-5.3\nTotal: 1 model\nnot/a/model/here\n",
+            "Available models:\n---\nopencode-go/glm-5.3\nTotal: 1 model\n/glm\nopencode-go/\n",
         );
         assert_eq!(catalog.models(), ["opencode-go/glm-5.3"]);
         assert!(!catalog.knows("Available models:"));
-        assert!(!catalog.knows("not/a/model/here"));
+    }
+
+    #[test]
+    fn a_model_with_a_tag_is_a_pick() {
+        // A tag or a suffix after a colon is part of the model's id, so the
+        // catalogue keeps it, and a variant still resolves to it.
+        let catalog = Catalog::from_lines("ollama/llama3:8b\nopenrouter/x/y:free\n");
+        assert_eq!(
+            catalog.models(),
+            ["ollama/llama3:8b", "openrouter/x/y:free"]
+        );
+        assert!(catalog.knows("ollama/llama3:8b#high"));
+        assert!(catalog.knows("openrouter/x/y:free"));
+    }
+
+    #[test]
+    fn a_model_routed_through_more_providers_is_a_pick() {
+        // `opencode models` prints routed ids such as
+        // `openrouter/anthropic/claude-sonnet-4`: the rest of the id is the
+        // model, slashes and all.
+        let catalog = Catalog::from_lines("openrouter/anthropic/claude-sonnet-4\n");
+        assert_eq!(catalog.models(), ["openrouter/anthropic/claude-sonnet-4"]);
+        assert!(catalog.knows("openrouter/anthropic/claude-sonnet-4#high"));
     }
 
     #[test]

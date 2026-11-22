@@ -39,6 +39,17 @@ const MAX_DIMENSION: u16 = 1000;
 /// a few frames, not its keys.
 const CATALOG_POLL: Duration = Duration::from_millis(50);
 
+/// How long the loop waits for a key when nothing is being read. The runtime
+/// record and the hold lengths change without a key, so the window redraws at
+/// this tick rather than only when a key or a resize arrives.
+const TICK: Duration = Duration::from_secs(1);
+
+/// How long the loop waits for an event before it redraws: a short look while
+/// a catalogue is being read, otherwise the tick.
+fn next_wait(catalog_pending: bool) -> Duration {
+    if catalog_pending { CATALOG_POLL } else { TICK }
+}
+
 fn main() -> Result<()> {
     let options = parse_args(std::env::args().skip(1))?;
     // The configuration is the tool's, so it is read — and its defaults
@@ -149,7 +160,8 @@ fn preset_of(name: &str) -> Result<Preset> {
     })
 }
 
-/// The window loop. The runtime is read again on every redraw.
+/// The window loop. The runtime is read again on every redraw, and every
+/// redraw happens at least once a tick, so the screen keeps up without a key.
 fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Result<()> {
     let located = locate_runtime();
     loop {
@@ -162,13 +174,12 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Resul
         // The catalogue is a harness's, so it is read beside the window: while
         // a read is in flight the loop polls for the answer as well as for a
         // key, so a slow tool never leaves raw mode without a reader.
-        if app.catalog_pending() {
-            if app.poll_choice() {
-                continue;
-            }
-            if !event::poll(CATALOG_POLL)? {
-                continue;
-            }
+        if app.catalog_pending() && app.poll_choice() {
+            continue;
+        }
+        // A wait that ends with no event redraws: the record is read again.
+        if !event::poll(next_wait(app.catalog_pending()))? {
+            continue;
         }
         if let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
@@ -458,6 +469,14 @@ mod tests {
             other => panic!("{other:?}"),
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_loop_redraws_on_a_tick_when_no_catalogue_is_read() {
+        // Without a tick the window waits on a key, and the record and the
+        // holds it shows go stale. A catalogue read is polled faster.
+        assert_eq!(next_wait(false), TICK);
+        assert!(next_wait(true) < next_wait(false));
     }
 
     #[test]

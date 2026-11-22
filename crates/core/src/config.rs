@@ -97,27 +97,26 @@ impl Config {
     /// table or no `model` line in it.
     pub fn with_orchestrator_model(text: &str, model: &str) -> Option<String> {
         let lines: Vec<&str> = text.split_inclusive('\n').collect();
-        let mut block: Option<usize> = None;
-        let mut at: Option<usize> = None;
+        // Each `[[agents]]` table runs from its header to the next table's
+        // header, or to the end of the file. The model line is searched for
+        // inside the orchestrator's own table only, never past it.
+        let mut tables: Vec<(usize, usize)> = Vec::new();
+        let mut open: Option<usize> = None;
         for (index, line) in lines.iter().enumerate() {
-            let head = line.trim_start();
-            if head.starts_with('[') {
-                if let Some(start) = block
-                    && is_orchestrator(&lines[start..index])
-                {
-                    at = model_line(&lines[start..index]).map(|line| start + line);
-                    break;
+            if line.trim_start().starts_with('[') {
+                if let Some(start) = open.take() {
+                    tables.push((start, index));
                 }
-                block = head.starts_with("[[agents]]").then_some(index);
+                open = line.trim_start().starts_with("[[agents]]").then_some(index);
             }
         }
-        if at.is_none() {
-            let start = block?;
-            if is_orchestrator(&lines[start..]) {
-                at = model_line(&lines[start..]).map(|line| start + line);
-            }
+        if let Some(start) = open {
+            tables.push((start, lines.len()));
         }
-        let at = at?;
+        let (start, end) = tables
+            .into_iter()
+            .find(|(start, end)| is_orchestrator(&lines[*start..*end]))?;
+        let at = model_line(&lines[start..end]).map(|line| start + line)?;
         let line = lines[at];
         let indent = &line[..line.len() - line.trim_start().len()];
         let comment = comment_of(line);
@@ -293,7 +292,9 @@ fn pair(line: &str) -> Option<(&str, &str)> {
         None => body,
     };
     let (key, value) = body.split_once('=')?;
-    Some((key.trim(), value.trim()))
+    // A quoted key is the same key: `"model" = ...` is valid TOML.
+    let key = key.trim();
+    Some((unquote(key).unwrap_or(key), value.trim()))
 }
 
 /// The comment beside a line, with the space before it, when it has one.
@@ -862,6 +863,54 @@ gates = [{ from = 'groomed', to = 'approved' }]
         );
         assert_eq!(
             Config::with_orchestrator_model("round_limit = 5\n", "opencode-go/kimi-k3"),
+            None
+        );
+    }
+
+    #[test]
+    fn a_pick_reads_a_quoted_model_key_as_the_model_key() {
+        // `"model" = ...` is valid TOML. The orchestrator is first, so the
+        // reviewer's table follows it: the pick must change the orchestrator's
+        // line and no other.
+        let text = "\
+[[agents]]
+name = \"orchestrator\"
+role = \"orchestrator\"
+\"model\" = \"opencode-go/glm-5.3#high\"
+[[agents]]
+name = \"reviewer\"
+role = \"reviewer\"
+model = \"opencode-go/glm-5.3#high\"
+";
+        let picked = Config::with_orchestrator_model(text, "opencode-go/kimi-k3")
+            .expect("the orchestrator's model line");
+        assert!(
+            picked.contains("model = \"opencode-go/kimi-k3\""),
+            "{picked}"
+        );
+        assert!(
+            picked.ends_with(
+                "[[agents]]\nname = \"reviewer\"\nrole = \"reviewer\"\nmodel = \"opencode-go/glm-5.3#high\"\n"
+            ),
+            "{picked}"
+        );
+    }
+
+    #[test]
+    fn an_orchestrator_with_no_model_line_is_not_given_another_agents() {
+        // The orchestrator has no model line, and the reviewer after it does.
+        // The search stays in the orchestrator's table: no pick is made.
+        let text = "\
+[[agents]]
+name = \"orchestrator\"
+role = \"orchestrator\"
+[[agents]]
+name = \"reviewer\"
+role = \"reviewer\"
+model = \"opencode-go/glm-5.3#high\"
+";
+        assert_eq!(
+            Config::with_orchestrator_model(text, "opencode-go/kimi-k3"),
             None
         );
     }

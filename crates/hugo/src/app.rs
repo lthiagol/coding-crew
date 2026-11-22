@@ -21,7 +21,7 @@ use coding_crew_core::{Role, age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, text_width};
 use coding_crew_theme::{Theme, block_title_style, phase_style, selected_line};
 
-use crate::catalog::Catalog;
+use crate::catalog::{Catalog, base_of};
 use crate::config::{self, ConfigRead, ConfigState};
 use crate::sidebar;
 
@@ -221,7 +221,16 @@ impl App {
                     choice.cursor += 1;
                 }
             }
-            KeyCode::Enter => self.pick(),
+            // Only a listed catalogue has a model to pick: while it is read,
+            // or when it failed or is empty, enter does nothing.
+            KeyCode::Enter
+                if self
+                    .choice
+                    .as_ref()
+                    .is_some_and(|choice| choice.state == ChoiceState::Listed) =>
+            {
+                self.pick()
+            }
             _ => {}
         }
     }
@@ -274,22 +283,17 @@ impl App {
         } else {
             usize::MAX
         };
-        let mut drawn = sidebar::lines(
+        // A pick that could not be saved is named, never swallowed: the
+        // configuration on screen is the one still in force. It is drawn
+        // inside the sidebar's rows, so the fit budgets for it.
+        let drawn = sidebar::lines(
             &self.config,
+            self.notice.as_ref(),
             &self.theme,
             usize::from(width),
             usize::from(height),
             cursor,
         );
-        if let Some(error) = &self.notice {
-            // A pick that could not be saved is named, never swallowed: the
-            // configuration on screen is the one still in force.
-            let notice = sidebar::notice_lines(error, &self.theme, usize::from(width));
-            for (offset, line) in notice.into_iter().enumerate() {
-                drawn.lines.insert(offset, line);
-            }
-            drawn.lines.truncate(usize::from(height));
-        }
         frame.render_widget(Paragraph::new(drawn.lines), inner);
         drawn.agents
     }
@@ -457,6 +461,12 @@ impl App {
             self.close_choice();
             return;
         }
+        // The catalogue lists base ids. A pick of the model in force keeps its
+        // variant, so `#high` is not lost by picking what already runs.
+        let model = match self.orchestrator_model() {
+            Some(current) if base_of(current) == model.as_str() => current.to_string(),
+            _ => model,
+        };
         let Some(mut config) = self.loaded().cloned() else {
             self.close_choice();
             return;
@@ -1069,7 +1079,9 @@ impl App {
             }
             lines.push((1, line("ctrl-c", "quit")));
             lines.push((2, line(CLOSE_KEY, "close")));
-            lines.push((3, line(CHOOSE_KEY, "pick")));
+            if choice.state == ChoiceState::Listed {
+                lines.push((3, line(CHOOSE_KEY, "pick")));
+            }
             lines.push((u8::MAX, line("q", "quit")));
             lines.push((u8::MAX, line("?", "this help")));
             return lines;
@@ -1115,10 +1127,12 @@ impl App {
         if let Some(choice) = &self.choice {
             let mut parts = vec![
                 (0, part(CLOSE_KEY, "close"), true),
-                (1, part(CHOOSE_KEY, "pick"), true),
                 (2, part("q", "quit"), false),
                 (4, part("?", "help"), false),
             ];
+            if choice.state == ChoiceState::Listed {
+                parts.push((1, part(CHOOSE_KEY, "pick"), true));
+            }
             if choice.catalog.models().len() > 1 {
                 parts.push((3, part("↑↓ j/k", "move"), false));
             }
@@ -2501,8 +2515,11 @@ mod tests {
             colour_of(&rows, &paint, "models f"),
             theme().semantic.error.fg.expect("the error colour")
         );
-        // Nothing is picked from a catalogue that could not be read.
+        // Nothing is picked from a catalogue that could not be read: enter does
+        // nothing, and esc is the way out.
         window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_some(), "enter closed the failed choice");
+        window.on_key(press(KeyCode::Esc));
         assert!(window.choice.is_none());
         let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
     }
@@ -2697,6 +2714,85 @@ mod tests {
     }
 
     #[test]
+    fn picking_the_model_in_force_keeps_its_variant() {
+        // The catalogue lists base ids. The orchestrator runs glm-5.3#high:
+        // enter on that model in force must not save it without its variant.
+        let home = scratch("pick-in-force");
+        let mut app = on_orchestrator(Some(home.clone()));
+        app.fill_choice(Ok(Catalog::from_lines(
+            "opencode-go/glm-5.3\nopencode-go/kimi-k3\n",
+        )));
+        assert_eq!(app.choice.as_ref().expect("the choice").cursor, 0);
+        app.on_key(press(KeyCode::Enter));
+        assert_eq!(
+            app.orchestrator_model(),
+            Some("opencode-go/glm-5.3#high"),
+            "the pick dropped the variant in force"
+        );
+        let text = fs::read_to_string(config::config_path(&home)).expect("the saved file");
+        assert!(
+            text.contains("model = \"opencode-go/glm-5.3#high\""),
+            "{text}"
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn enter_picks_nothing_while_the_catalogue_is_read() {
+        // The choice opens on a read that has not answered. Enter does nothing
+        // then: the read is not abandoned and no model is saved. Once the list
+        // is in, enter picks.
+        let home = scratch("choice-enter-reading");
+        let tool =
+            crate::catalog::scratch_tool("app-enter-reading", "#!/bin/sh\nsleep 0.5\necho p/m0\n");
+        let mut window = App::new(theme(), config_with_tool(&tool), Some(home.clone()));
+        window.agents_drawn = true;
+        window.cursor = 2;
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(
+            window.choice.as_ref().expect("the choice").state,
+            ChoiceState::Reading
+        );
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(
+            window
+                .choice
+                .as_ref()
+                .expect("enter closed the choice")
+                .state,
+            ChoiceState::Reading
+        );
+        assert!(window.catalog_pending(), "enter abandoned the read");
+        assert!(
+            !config::config_path(&home).exists(),
+            "enter picked while the catalogue was read"
+        );
+        let footer: String = window
+            .footer_line(100)
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(
+            !footer.contains("pick"),
+            "the footer offers a dead key: {footer}"
+        );
+        wait_for_catalog(&mut window);
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(text_of(&rows).contains("pick"), "{}", text_of(&rows));
+        window.on_key(press(KeyCode::Enter));
+        assert!(
+            window.choice.is_none(),
+            "enter did not pick the listed model"
+        );
+        assert!(
+            config::config_path(&home).exists(),
+            "the pick was not saved"
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
     fn esc_closes_the_choice_and_saves_nothing() {
         let home = scratch("choice-esc");
         let mut app = on_orchestrator(Some(home.clone()));
@@ -2728,11 +2824,13 @@ mod tests {
         assert!(text.contains(CATALOG_UNREADABLE), "{text}");
         assert!(text.contains("not found"), "{text}");
         app.on_key(press(KeyCode::Enter));
-        assert!(app.choice.is_none());
+        assert!(app.choice.is_some(), "enter closed the failed choice");
         assert!(
             !config::config_path(&home).exists(),
             "a pick was saved from an empty catalogue"
         );
+        app.on_key(press(KeyCode::Esc));
+        assert!(app.choice.is_none());
         let _ = fs::remove_dir_all(&home);
 
         // A catalogue that lists nothing says so, rather than opening blank.
