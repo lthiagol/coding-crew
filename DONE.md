@@ -1258,6 +1258,21 @@ said "about 25%"; 25% could not meet both the floor and the step. The
 `palettes.md` rules 2 and 9 were amended to allow this. The unit ran on the
 herdr-crew skill. Commit `9f60719`.
 
+Unit closed: the document in colour (plan 68). Five build and review rounds.
+The document's headings take three hues, list depths 1 and 2 take green and
+blue, the quote has a bar and text of its own, and the table header and inline
+code are chromatic. Code takes eight syntax roles, so the palette is 27 roles.
+Every value is a slot of its preset and derived in `palettes.md`, and every
+value keeps at least 3:1 on the base. The build and the first three fix rounds
+left list depths and the quote undone: the rule against shared hues and the
+eighteen-role count both forbade them, and the builder would not overrule a
+decision of record.
+The human ruled on 2026-11-22: list depths 1 and 2 may share a hue with a
+heading or an alert, depth 3 stays grey, and `document.quote` is role 27,
+carrying out the approved coloured design. The ruling went in as the fourth
+fix round. The unit ran on the herdr-crew skill, which stopped it with
+NO_PROGRESS when the ruling was needed. Commit `82cfe86`.
+
 ---
 
 ## Lessons

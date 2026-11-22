@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 67.
+Updated 2026-11-22 by the orchestrator, after unit 68.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,11 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–67 and 63b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–68 and 63b are closed; their record is in
 `DONE.md`.
 
-- 68 · The document in colour (L)
+None. Every unit in `docs/plan.md` is ✓. What remains there is grooming (G1–G4)
+and question Q5, which wait on decisions or the flow.
 
 ---
 
@@ -197,6 +198,32 @@ None blocking. Carried from the closed units.
 - **The derivation shares are the builder's** (2026-11-22, unit 67). The brief
   said "about 25%"; the build uses 30% for the surface and 10% for the tint,
   because 25% met neither the floor nor the step. The human confirms the figures.
+- **The engine dims the code's line numbers** (2026-11-22, unit 68).
+  `crates/engine/src/markdown/blocks.rs:317` adds `Modifier::DIM` to the
+  gutter, so a terminal paints the numbers dimmer than the grey the word-floor
+  pin checks (`document.list.3`, 5.07:1 in dark). Changing it is an engine
+  change and a ledger entry in `crates/engine/VENDORED.md`; left alone. The
+  human decides whether the numbers keep the dim.
+- **Plain identifiers take the code's ink** (2026-11-22, unit 68). A token no
+  scope names — a plain identifier, a generic parameter in `Vec<u8>` — paints
+  `document.code`, warm orange in dark, not the variable role. `palettes.md`
+  records that default. The human decides whether it should be the variable
+  colour.
+- **`let` and `u32` share one colour** (2026-11-22, unit 68). The bundled
+  grammars scope a primitive type as `storage`, as they scope `let`, so both
+  paint as keywords, and the type role takes no `storage.type`. `palettes.md`
+  records the trade. The human confirms it.
+- **TOML has no highlighting** (2026-11-22, unit 68). The bundled syntect set
+  has no TOML grammar, so a ```` ```toml ```` block paints in plain ink, and the
+  paint test uses YAML. A grammar is a dependency change; the human takes it or
+  leaves it. `palettes.md` § Not yet has the entry.
+- **The Catppuccin heading and important alert are close** (2026-11-22, unit
+  68). `#cba6f7` and `#b4befe` clear the 20-channel apartness floor by a gap of
+  24, but read as one hue family. Not changed; the human decides whether the
+  pair moves.
+- **The apartness check has no near-duplicate case** (2026-11-22, unit 68).
+  `the_headings_and_the_alerts_are_apart` has a 20-channel floor, but no
+  fixture feeds it a near-duplicate pair, so the floor is proven by reading.
 - **Dracula's selected tint clears 3:1 by a hair** (2026-11-22, unit 67). The
   comment grey reads 3.00004:1 on the tint. The words test pins it, so a palette
   change that drifts it will fail the gate.
