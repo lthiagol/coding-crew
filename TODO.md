@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 74.
+Updated 2026-11-22 by the orchestrator, after unit 75.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–74, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–75, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- 75 · Backlog items have documents (S)
 - 76 · Settings in colour (S)
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
@@ -478,6 +477,10 @@ None blocking. Carried from the closed units.
 - **The round heading wraps at 40 columns** (2026-11-22, unit 74). Four parts
   (kind, number, verdict, reviewer) run over two lines at 40. The render test
   allows it. The human confirms it is acceptable.
+- **Item document choices to confirm** (2026-11-22, unit 75). The item header
+  omits tags, which the task header shows, and the History section is always
+  present, with `_none_` for an empty time. The brief said history "when the
+  model has them". The human confirms both.
 
 ## WHAT WAITS ON THE FLOW
 

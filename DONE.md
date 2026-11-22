@@ -1359,6 +1359,15 @@ depth, so the width floor moved to 16, and the known-issue line in TODO.md was
 corrected to match. No ruling was made. The comment depth and the floor are
 open (see THE FOLLOW-UPS). Commit `d17eb39`.
 
+Unit closed: backlog items have documents (plan 75). One clean build and
+review round. An item opens the detail pane from its own projection,
+`item_to_markdown`: a header card with id, kind, status and scope, then the
+body and the history. The "has no document yet" notice is gone; the notice for
+an id outside the work folder stays. Eight tests pin the projection, the
+injection rule and a snapshot, and a render at 40 and 100 columns checks the
+pane. No ruling was made. The header's omitted tags and the always-present
+history are the builder's choices (see THE FOLLOW-UPS). Commit `85c5757`.
+
 ---
 
 ## Lessons
