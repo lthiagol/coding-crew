@@ -1230,6 +1230,19 @@ human ruled that an absent effort is a gap, shown as `pick an effort` on the
 warning slot. The other two were fixed. Ruled on the way, in the design record:
 every agent is configured from hugo. Commit `27cd7df`.
 
+Unit closed: the footer: centred, dotted, only what matters (plan 66). Three
+build and review rounds: the build, then two fix rounds, the last review
+clean. One footer pattern in `crates/theme/src/chrome.rs`, used by raul and
+hugo: keys bold, actions dim, ` · ` between them, centred, with a thin rule
+above. Each context shows its own actions and ends `? help · q quit`;
+navigation keys live in the `?` overlay. Two centred lines when one does not
+fit. Round one found raul's `?` overlay did not name `enter open`, and two
+doc mockups still showed the old footer; both fixed. Round two found the
+detail pane kept its scroll keys in the footer. Ruling: the detail pane
+follows item 2 of the job, so its footer is `esc close · ? help · q quit` and
+`?` opens an overlay that lists the scroll keys. No one was there to ask, so
+the build took it; TODO.md asks the human to confirm. Commit `52f6d33`.
+
 ---
 
 ## Lessons

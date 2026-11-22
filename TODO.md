@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 65.
+Updated 2026-11-22 by the orchestrator, after unit 66.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–65 and 63b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–66 and 63b are closed; their record is in
 `DONE.md`.
 
-- 66 · The footer: centred, dotted, only what matters (M)
 - 67 · hugo has depth, and selection is soft (M)
 - 68 · The document in colour (L)
 
@@ -166,6 +165,19 @@ None blocking. Carried from the closed units.
 - **The effort ruling is not in the design record** (2026-11-22, unit 65).
   `docs/hugo/design-record.md` has the harness and model rule but not the
   effort gap. Add it there at the next edit to the design record.
+- **The detail pane's scroll keys are in a `?` overlay** (2026-11-22, unit 66).
+  The footer is `esc close · ? help · q quit`, as the unit's item 2 says, and
+  the scroll keys moved to the overlay. The build took this without asking.
+  The human confirms it, or puts the scroll keys back in the footer.
+- **Settings' footer lacks `enter edit` and `←→ change`** (2026-11-22, unit
+  66). The footer reads `w save · u undo · r reload`, as the brief's example
+  does. Both keys are in the `?` overlay. The human decides whether they join
+  the footer.
+- **The `?` popup is twenty rows** (2026-11-22, unit 66). `enter open` takes a
+  line, so at twenty rows the Tasks help drops `g/G`. The human decides whether
+  the popup should be taller.
+- **hugo has no width sweep** (2026-11-22, unit 66). The footer sweep covers
+  raul at 40–120 columns. hugo's footer is pinned at 40, 60 and 100 only.
 
 - **The document overflows below 14 columns** (2026-11-22). The header table
   is 11 columns wide, so an inner width of 10 (a 12-column pane) overflows; a
