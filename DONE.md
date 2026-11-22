@@ -1285,6 +1285,19 @@ Left in TODO.md: the fork's column, which the spec sketch had one column
 right, and the freeze, measured but not reproduced in a terminal. Commit
 `54b325f`.
 
+Unit closed: one table per role, and the builder is the builder (plan 70). One
+build round, one fix round; the second review clean. The configuration is
+`[agents.orchestrator]`, `[agents.builder]` and `[agents.reviewer]`, and the
+crew is the roles present: three agents, two with the orchestrator reviewing,
+one with the orchestrator building and reviewing, `/clear` before its own
+review. Round one found four: a save dropped the comment above a migrated
+entry's first key; the docs still said a crew of one leaves the review to the
+human and that the runtime role is `runner`; the orchestrator skill forbade
+building and reviewing; and the cursor opened past the agents with a crew of
+one. All four were fixed, with tests. Ruling: the orchestrator is always
+present. A file without one is unreadable, which the builder chose and the
+human has not confirmed. Commit `485d3f5`.
+
 ---
 
 ## Lessons

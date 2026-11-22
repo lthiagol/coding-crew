@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 69.
+Updated 2026-11-22 by the orchestrator, after unit 70.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–69 and 63b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–70 and 63b are closed; their record is in
 `DONE.md`.
 
-- 70 · One table per role, and the builder is the builder (M)
 - 70b · hugo: the crew size, and choices for this session only (M)
 - 71 · Effort comes from the model, and raul picks from lists (M)
 - 72 · hugo shows where the flow is, and picks the tasks (L)
@@ -74,6 +73,10 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 ## DECISIONS OF RECORD
 
+- **The crew is the roles present** (2026-11-22, unit 70). Three agents are one
+  per role; two are the orchestrator and the builder, and the orchestrator
+  reviews; one is the orchestrator alone, which builds and reviews. The
+  orchestrator is always present.
 - **27 roles, ruled by the human 2026-11-22.** The document's palette grows
   from eighteen roles to twenty-seven: the eighteen, eight syntax roles for
   the code's tokens — `document.syntax.keyword`, `.string`, `.number`,
@@ -130,6 +133,18 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
+- **The design record still says one agent means the human reviews** (2026-11-22,
+  unit 70). `docs/hugo/design-record.md:27` predates the 3/2/1 rule. Left for
+  the human, since the design record holds rulings.
+- **An unknown `[agents.<name>]` table is ignored without a message** (2026-11-22,
+  unit 70). `[agents.creator]`, say, loads silently. The human decides whether
+  it warns.
+- **A config with no orchestrator is unreadable** (2026-11-22, unit 70). The
+  defaults show and the file is left alone; the old shape loaded. The builder
+  chose this and the human has not confirmed it.
+- **Settings' step-role picker lists `creator`** (2026-11-22, unit 70). It sits
+  beside orchestrator, builder and reviewer. The human confirms whether the
+  picker should offer it.
 - **Store discovery accepts any folder named `coding-crew`** (2026-11-22,
   review F4). A checkout of this repository is itself discovered as a
   project, because ADR 0010 says the nearest `coding-crew/` owns the result
@@ -379,9 +394,9 @@ None blocking. Carried from the closed units.
 - **The orchestrator's job:** the orchestrator role has no job yet. hugo picks
   the model for the agent it will start; opening the herdr tab and starting it
   is its own unit, and it is the first step towards hugo driving the loop
-  rather than only showing it. The crew's rules are already in place: three
-  agents means one per role, two means the orchestrator reviews, one means the
-  human reviews.
+  rather than only showing it. The crew is the roles present: three agents
+  means one per role, two means the orchestrator reviews, one means the
+  orchestrator builds and reviews.
 
 **Where the flow's files live** is settled, decided 2026-11-21 and recorded in
 `docs/decisions/0011-flow-files.md`: the project's role configs move to
