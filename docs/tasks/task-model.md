@@ -748,11 +748,12 @@ in the `claude` harness; five build-and-fix cycles; and the order
 [roles.md](../roles/roles.md#the-order) records. A test reads that table and
 the two role configs, so the defaults and the flow cannot drift.
 
-**The orchestrator's model is the one hugo writes.** The orchestrator is the
-agent hugo starts, so its model is picked in hugo's sidebar and saved into this
-file, where hugo can use it. The models offered are the ones the orchestrator's
-harness lists, so the file cannot hold a model that does not exist. The builder's and the reviewer's models are the flow's: hugo reads them
-and writes none of them.
+**hugo's picks are the session's.** hugo picks each agent's harness, model and
+effort in its sidebar, and its crew-size selector picks which roles the crew
+runs. The picks last the session and are never written to this file: the file's
+values are the defaults, and raul's Settings edits them. The models offered are
+the ones the agent's harness lists, so no pick can name a model that does not
+exist. See [hugo's design record](../hugo/design-record.md#ruling-2026-11-22-hugos-picks-are-session-only).
 
 ## 12. Derived, never stored
 

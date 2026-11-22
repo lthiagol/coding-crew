@@ -124,6 +124,8 @@ pub enum Icon {
     RoleReviewer,
     /// The human role.
     RoleHuman,
+    /// A role the crew leaves out: an empty circle in the crew-size range.
+    RoleAbsent,
     /// Blocked, or waiting on another task.
     Blocked,
     /// An open finding.
@@ -168,7 +170,7 @@ pub enum Icon {
 
 impl Icon {
     /// Every icon, in the order of the spec's table.
-    pub const ALL: [Icon; 43] = [
+    pub const ALL: [Icon; 44] = [
         Icon::AppRaul,
         Icon::AppHugo,
         Icon::TabOverview,
@@ -192,6 +194,7 @@ impl Icon {
         Icon::RoleRunner,
         Icon::RoleReviewer,
         Icon::RoleHuman,
+        Icon::RoleAbsent,
         Icon::Blocked,
         Icon::Finding,
         Icon::Link,
@@ -256,7 +259,7 @@ impl Icon {
 
 /// The icon table: each icon, its name in the spec, and its glyph in the
 /// nerd and unicode sets. Its order is the spec's.
-const TABLE: [(Icon, &str, &str, &str); 43] = [
+const TABLE: [(Icon, &str, &str, &str); 44] = [
     (Icon::AppRaul, "app_raul", "\u{F0645}", "◆"),
     (Icon::AppHugo, "app_hugo", "\u{F06A9}", "◇"),
     (Icon::TabOverview, "tab_overview", "\u{F056E}", "▦"),
@@ -295,6 +298,7 @@ const TABLE: [(Icon, &str, &str, &str); 43] = [
     (Icon::RoleRunner, "role_runner", "\u{F05B7}", "▸"),
     (Icon::RoleReviewer, "role_reviewer", "\u{F0208}", "◎"),
     (Icon::RoleHuman, "role_human", "\u{F0004}", "☺"),
+    (Icon::RoleAbsent, "role_absent", "○", "○"),
     (Icon::Blocked, "blocked", "\u{F033E}", "⊘"),
     (Icon::Finding, "finding", "\u{F015A}", "✗"),
     (Icon::Link, "link", "\u{F0337}", "→"),

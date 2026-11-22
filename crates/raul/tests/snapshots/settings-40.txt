@@ -7,10 +7,10 @@
 │ # This is the one file a human edits…│
 │ # comments. The format is provisiona…│
 │ # writes one itself. hugo reads this…│
-│ # defaults only when it is absent, s…│
-│ # and effort in place, and never wri…│
-│ # The machine-written records - the …│
-│ # stay JSON.                         │
+│ # defaults only when it is absent; i…│
+│ # never written here, and it never w…│
+│ # raul's Settings edits these values…│
+│ # journal and the runtime record - s…│
 │                                      │
 │ # The build-and-fix cycles a task ge…│
 │▌round_limit = 5                      │

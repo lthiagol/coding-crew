@@ -309,12 +309,12 @@ fn the_window_has_a_title_line_a_footer_and_no_tabs() {
 #[test]
 fn the_footer_names_the_keys_that_work_and_no_key_that_does_nothing() {
     // The render starts with the cursor on the builder's harness row, where
-    // enter opens its choice: the footer names choose, reload, help and quit,
-    // in that order, centred under a rule.
+    // enter opens its choice: the footer names choose, reload, the crew size
+    // selector, help and quit, in that order, centred under a rule.
     let text = screen(100, 40);
     let footer = text.lines().last().expect("a footer").trim();
     assert_eq!(
-        footer, "enter choose · r reload · ? help · q quit",
+        footer, "enter choose · r reload · c crew size · ? help · q quit",
         "{footer}"
     );
     for dead in ["open", "tab", "esc", "pick", "↑↓", "move"] {

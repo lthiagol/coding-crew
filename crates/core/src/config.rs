@@ -130,11 +130,11 @@ impl Config {
              #\n\
              # This is the one file a human edits, so it is TOML and can carry\n\
              # comments. The format is provisional: it may change when the flow\n\
-             # writes one itself. hugo reads this file at startup, writes the\n\
-             # defaults only when it is absent, saves each agent's harness, model\n\
-             # and effort in place, and never writes over a file it cannot read.\n\
-             # The machine-written records - the journal and the runtime record -\n\
-             # stay JSON.\n\
+             # writes one itself. hugo reads this file at startup and writes the\n\
+             # defaults only when it is absent; its picks last the session and are\n\
+             # never written here, and it never writes over a file it cannot read.\n\
+             # raul's Settings edits these values. The machine-written records - the\n\
+             # journal and the runtime record - stay JSON.\n\
              \n",
         );
         out.push_str("# The build-and-fix cycles a task gets.\n");
@@ -1343,10 +1343,14 @@ gates = []
     }
 
     #[test]
-    fn the_written_defaults_say_that_a_pick_is_saved_in_place() {
+    fn the_written_defaults_say_that_a_pick_lasts_the_session() {
         let text = Config::default().to_toml();
-        assert!(text.contains("saves each agent's harness, model"), "{text}");
-        assert!(text.contains("and effort in place"), "{text}");
+        assert!(text.contains("its picks last the session"), "{text}");
+        assert!(text.contains("never written here"), "{text}");
+        assert!(
+            text.contains("raul's Settings edits these values"),
+            "{text}"
+        );
     }
 
     /// A scratch folder holding one configuration file. The folder is removed

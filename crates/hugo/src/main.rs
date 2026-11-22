@@ -115,11 +115,12 @@ struct Options {
 }
 
 /// Print a skill as text and exit: the list of roles, or one role's skill
-/// under the crew the configuration names. No window is set up.
+/// under the crew in force — the session's, when the orchestrator's tab runs
+/// it, else the configuration's. No window is set up.
 fn print_skill(request: SkillRequest, home: Option<&Path>) -> Result<()> {
     let text = match request {
         SkillRequest::List => skill::list(),
-        SkillRequest::Role(role) => skill::for_role(role, config::load(home)),
+        SkillRequest::Role(role) => skill::for_role(role, config::session_or_load(home)),
     };
     let mut stdout = std::io::stdout();
     stdout.write_all(text.as_bytes())?;

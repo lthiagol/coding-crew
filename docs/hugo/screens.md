@@ -54,17 +54,18 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 │                              ││󰑮 running since 2026-11-09T08:30Z                                 │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-                              enter choose · r reload · ? help · q quit
+                       enter choose · r reload · c crew size · ? help · q quit
 ```
 
 | part | behaviour |
 |---|---|
 | title line | the tool's icon and name, `hugo`, then a dim `·` and the project's folder when one is found; a window too narrow for the name shows no title rather than a cut of the name |
-| sidebar | the configuration, on the left: each agent with its harness, model and effort, the review-round limit and the order, in that order. The agents group has a cursor on each agent's harness, model and effort: `↑ k` and `↓ j` move it, and `enter` on one of those rows opens its choice. An agent is named by its role, its table's name: a name or role is read-only, and nothing in the sidebar edits it. `r` reloads the configuration from the file |
+| sidebar | the configuration, on the left: each agent with its harness, model and effort, the review-round limit and the order, in that order. The agents group has a cursor on each agent's harness, model and effort: `↑ k` and `↓ j` move it, and `enter` on one of those rows opens its choice. An agent is named by its role, its table's name: a name or role is read-only, and nothing in the sidebar edits it. The sidebar shows the session's crew, and marks what the session changed from the file — see [the configuration](#the-configuration). `r` reads the file again and starts the session over from it |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
-| footer | the keys that work, centred under a thin rule — never a key that does nothing. The window's keys are `enter choose` (on an agent's row), `r reload` and `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)), then `? help · q quit`; `ctrl-c quit` works too, unnamed. While a choice is open its keys are `esc close`, `enter pick` (when the cursor's row can be picked), then `? help · q quit`; while the id input is open its keys are `esc back`, `enter pick` and `ctrl-c quit`, and every other key types. The movement keys are in the help, not the footer |
-| choice | the choice of the row under the cursor, titled with the agent and the field (`builder model`): a small list with a cursor of its own. A harness lists the table's three; a model lists the harness's models, with `type an id…` last; an effort lists the harness's levels. `enter` picks and saves, `esc` closes without saving |
-| help | `?` opens the keys, in the sidebar and over the choice; any key closes it and gives the choice back |
+| footer | the keys that work, centred under a thin rule — never a key that does nothing. The window's keys are `enter choose` (on an agent's row), `r reload`, `c crew size` and `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)), then `? help · q quit`; `ctrl-c quit` works too, unnamed. While a choice is open its keys are `esc close`, `enter pick` (when the cursor's row can be picked), then `? help · q quit`; while the id input is open its keys are `esc back`, `enter pick` and `ctrl-c quit`, and every other key types; while the crew-size selector is open its keys are `esc close`, `enter pick`, then `? help · q quit`. The movement keys are in the help, not the footer |
+| choice | the choice of the row under the cursor, titled with the agent and the field (`builder model`): a small list with a cursor of its own. A harness lists the table's three; a model lists the harness's models, with `type an id…` last; an effort lists the harness's levels. `enter` picks it for the session, `esc` closes without picking |
+| crew-size selector | `c` opens the three crew sizes, over the window. See [the crew size](#the-configuration) |
+| help | `?` opens the keys, in the sidebar, over the choice and over the selector; any key closes it and gives the choice back |
 | tab bar | none: the flow has one screen, not a set of tabs |
 
 The two empty states are painted on `text.dim`, as raul's empty states are.
@@ -173,7 +174,8 @@ configuration, the sidebar says so — `config.json is not read` — rather than
 ignoring it silently.
 
 The sidebar acts in two small ways. `r` reloads the configuration: the file is
-read again and the sidebar shows it at once, so a hand-edited file takes effect
+read again, the session starts over from it — the picks made this session are
+dropped — and the sidebar shows it at once, so a hand-edited file takes effect
 without a restart. Reloading is not starting the tool: the runtime record is
 already read on every redraw, so the reload touches the configuration only. A
 file that does not parse after a reload is handled as it is at startup — the
@@ -182,9 +184,43 @@ shown beside it — and a reload with no configuration file writes the defaults.
 
 Every agent is configured from hugo. The cursor moves over each agent's
 harness, model and effort, and `enter` opens that row's choice: the builder's
-and the reviewer's rows open theirs as the orchestrator's does. A pick is
-saved at once; `esc` closes a choice without saving anything. The title of a
-choice is the agent and the field, as `builder model`.
+and the reviewer's rows open theirs as the orchestrator's does. A pick applies
+at once, **for the session**: it is drawn and used on the spot, and nothing is
+written to the file. `esc` closes a choice without picking anything. The title
+of a choice is the agent and the field, as `builder model`.
+
+**The file's values are the session's defaults.** The session starts from the
+file as it is at launch, and a pick is a difference from it. raul's Settings
+edits the file's values, and a hand edit does too; a session that has picked a
+value keeps its pick until the session ends or `r` starts it over.
+
+**The session tag.** The sidebar draws the session's crew, and marks what
+differs from the file: an agent with a value that differs carries a dim
+`session` after its name, and the key of each field that differs is strong.
+An agent the file does not have is tagged the same way. The `AGENTS` group
+carries `session` too when the session's crew has other roles than the file's.
+
+**The crew size.** `c` opens the crew-size selector: three lines, one per size,
+each drawn as the roles it has and the roles it leaves out, then its hint.
+
+```text
+ 󰚩○○ single agent
+ 󰚩󰖷○ orchestrator also reviews
+ 󰚩󰖷󰈈 one agent per role
+```
+
+The roles are the icons of the sidebar: the orchestrator, the builder and the
+reviewer; an empty circle stands for a role the size leaves out. The unicode
+set draws the same roles with its own glyphs, as the sidebar does. The cursor
+starts on the size in force, `↑ k` and `↓ j` move it, `enter` picks it for the
+session and `esc` closes it. The orchestrator is always there, so the sizes
+are one, two and three roles, not a count.
+
+A size takes the roles it has and leaves the rest off the session's crew. A
+role that is left off keeps its values, so a role the crew takes back comes
+with them; a role the session never had comes with the file's values, else the
+defaults'. The crew's composition is still the one the main pane states: one
+per role, the orchestrator reviews, or the orchestrator alone.
 
 **The harness choice.** The list is the table's three harnesses. A harness the
 machine does not have is listed dim as `not installed` and cannot be picked.
@@ -216,7 +252,7 @@ effort` on the warning slot, and `s` refuses until one is picked; the harness's
 default is not assumed.
 
 Nothing else on the sidebar is changed from the screen. `s` starts the
-orchestrator; the loop it runs is the orchestrator's.
+orchestrator over the session's crew; the loop it runs is the orchestrator's.
 
 **Nothing is dropped without a word.** A row too wide for the pane is cut with
 the theme's marker — the provider and the model's own name are on rows of their
@@ -249,7 +285,9 @@ the error on the failure slot, as raul names a file it cannot read.
 `s` starts the orchestrator. hugo opens a herdr tab in the current workspace,
 starts the agent the orchestrator row names, on that row's harness and model,
 and prompts it to run `hugo --skill orchestrator` over the queue's tasks, in
-order. The loop is the orchestrator's: hugo starts it and does not run it.
+order. The tab's environment carries the session's crew, in `HUGO_SESSION`, so
+the skill prints the crew the session runs. The loop is the orchestrator's:
+hugo starts it and does not run it.
 
 The queue is the unclaimed work the main pane draws. A task an agent holds is
 that agent's, so no second orchestrator is given it. The footer names `s start`
@@ -302,10 +340,9 @@ machine with no home folder has nowhere for hugo to write: the shell still
 runs, and the sidebar says `no configuration yet`.
 
 The configuration is read at launch, and `r` reads it again without a
-restart. The only things hugo writes there from the screen are the picks: an
-agent's harness, model or effort, each saved in place, so the file keeps its
-comments and the values the pick does not change. A pick is made on the file
-as it is now. `s` starts the orchestrator without writing anything.
+restart. hugo writes nothing there from the screen: its picks last the session,
+and the file keeps its comments and its values. `s` starts the orchestrator
+without writing anything.
 
 The records are not part of this file and do not follow it: the journal and
 the runtime record are machine-written, so they stay JSON.
@@ -339,8 +376,9 @@ hugo --skill orchestrator|builder|reviewer
 
 `--skill` prints text and exits; no window is set up. A bare `--skill` lists
 the three roles. A role prints that role's skill, opened by a **crew** section
-built from the configuration in force: each agent's role, harness, model and
-effort with the arguments and environment that start it, and the review-round
-limit. A configuration that cannot be read prints the defaults and says so in
+built from the crew in force: the session's, when the orchestrator's tab sets
+`HUGO_SESSION`, else the file's. Each agent's role, harness, model and effort
+with the arguments and environment that start it, and the review-round limit,
+are named; a role the crew leaves out is named `none`. A configuration that cannot be read prints the defaults and says so in
 one line. The texts live in `crates/hugo/skills/` and are embedded with
 `include_str!`. `--skill` does not combine with `--render`.

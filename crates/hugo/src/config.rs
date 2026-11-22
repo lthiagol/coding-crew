@@ -10,13 +10,17 @@
 //! configuration explains itself. The old `config.json` is not read: when one
 //! sits beside the configuration, hugo names it rather than ignoring it, and
 //! converts nothing.
+//!
+//! hugo never writes the file after the defaults. Its picks are the session's:
+//! they live in the window and in the environment of the orchestrator's tab,
+//! and end with the session.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use coding_crew_core::config::{CONFIG_FILE, Config, ConfigError, ConfigFile, LEGACY_CONFIG_FILE};
+use coding_crew_core::config::{CONFIG_FILE, Config, LEGACY_CONFIG_FILE};
 pub use coding_crew_core::config::{config_path, home_at, user_home};
 
 use crate::app::ReadError;
@@ -116,50 +120,47 @@ pub fn load(home: Option<&Path>) -> ConfigRead {
     }
 }
 
-/// Save one change into the configuration under `home`.
-///
-/// The change is made on the configuration the file holds now, not on the one
-/// in hand, so a value the human edited since the last read is kept. Only the
-/// values the change sets are written back: every comment and every other
-/// setting stays. When the file is gone, the configuration in hand is written
-/// whole, with the change. `change` says whether there was an agent to change.
-/// Returns the configuration as saved, so the sidebar shows what the file holds.
-pub fn save_change_at(
-    home: &Path,
-    config: &Config,
-    change: impl Fn(&mut Config) -> bool,
-) -> Result<Config, ReadError> {
-    let _ = ensure_at(home)
-        .map_err(|error| unreadable(home_at(home).display().to_string(), error.to_string()))?;
-    let path = config_path(home);
-    let mut file = match ConfigFile::read(&path) {
-        Ok(file) => file,
-        Err(ConfigError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
-            let mut whole = config.clone();
-            if !change(&mut whole) {
-                return Err(no_agent());
-            }
-            whole
-                .write(&path)
-                .map_err(|error| unreadable(CONFIG_FILE.to_string(), error.to_string()))?;
-            return Ok(whole);
-        }
-        Err(error) => return Err(unreadable(CONFIG_FILE.to_string(), error.to_string())),
-    };
-    let mut changed = file.config().clone();
-    if !change(&mut changed) {
-        return Err(no_agent());
-    }
-    file.save(&changed)
-        .map_err(|error| unreadable(CONFIG_FILE.to_string(), error.to_string()))?;
-    Ok(file.config().clone())
+/// The environment variable a session's crew travels in. `s` sets it on the
+/// orchestrator's tab, so the `hugo --skill` that tab runs prints the crew the
+/// session runs rather than the file's.
+pub const SESSION_ENV: &str = "HUGO_SESSION";
+
+/// The crew a session runs, as the text the environment variable holds: the
+/// configuration's four parts, as JSON. The file's own reader expects the
+/// file's shape, so the parts are written and read one by one.
+pub fn encode_session(config: &Config) -> String {
+    serde_json::json!({
+        "agents": config.agents,
+        "round_limit": config.round_limit,
+        "order": config.order,
+        "raul": config.raul,
+    })
+    .to_string()
 }
 
-fn no_agent() -> ReadError {
-    unreadable(
-        CONFIG_FILE.to_string(),
-        "the configuration has no such agent".to_string(),
-    )
+/// The crew a session runs, read from the environment variable's text. Text
+/// that is not a configuration is no session.
+pub fn decode_session(text: &str) -> Option<Config> {
+    let value: serde_json::Value = serde_json::from_str(text).ok()?;
+    let part = |key: &str| value.get(key).cloned();
+    Some(Config {
+        agents: serde_json::from_value(part("agents")?).ok()?,
+        round_limit: serde_json::from_value(part("round_limit")?).ok()?,
+        order: serde_json::from_value(part("order")?).ok()?,
+        raul: serde_json::from_value(part("raul")?).ok()?,
+    })
+}
+
+/// The configuration a skill is printed under: the session's crew when this
+/// process runs in a session's tab, else the file as [`load`] reads it.
+pub fn session_or_load(home: Option<&Path>) -> ConfigRead {
+    match std::env::var(SESSION_ENV)
+        .ok()
+        .and_then(|text| decode_session(&text))
+    {
+        Some(config) => ConfigRead::of(ConfigState::Config(config)),
+        None => load(home),
+    }
 }
 
 /// The name of the old configuration beside the new one, when it is there.
@@ -389,118 +390,20 @@ mod tests {
     }
 
     #[test]
-    fn a_pick_is_saved_into_the_text_the_human_wrote() {
-        let home = scratch("pick");
-        fs::create_dir_all(home_at(&home)).expect("the home");
-        let path = config_path(&home);
-        let text = "\
-# Mine: three cycles is enough.
-round_limit = 3
-
-# One entry per agent.
-[[agents]]
-name = \"builder\"
-role = \"runner\"
-model = \"opencode-go/deepseek-v4.1-flash#high\"
-
-[[agents]]
-name = \"orchestrator\"
-role = \"orchestrator\"
-model = \"opencode-go/glm-5.3#high\"
-
-[harness]
-tool = \"opencode\"
-driven = \"--standalone\"
-
-[[order]]
-step = \"groom\"
-role = \"creator\"
-gates = [{ from = \"groomed\", to = \"approved\" }]
-";
-        let config = Config::from_toml(text).expect("the configuration");
-        fs::write(&path, text).expect("a human's configuration");
-
-        let saved = save_change_at(&home, &config, |config| {
-            config.set_orchestrator_model("opencode-go/kimi-k3")
-        })
-        .expect("the pick");
+    fn a_session_crew_travels_in_the_environment_and_reads_back_whole() {
+        // The orchestrator's tab carries the session's crew as text; the skill
+        // it prints reads the same crew back, with the roles it has.
+        let mut crew = Config::default();
+        crew.agents.truncate(2);
+        crew.round_limit = 3;
+        let text = encode_session(&crew);
+        assert!(!text.contains('\n'), "the value spans lines: {text}");
+        assert_eq!(decode_session(&text), Some(crew));
         assert_eq!(
-            saved
-                .agents
-                .iter()
-                .find(|agent| agent.role == coding_crew_core::FlowRole::Orchestrator)
-                .map(|agent| agent.model.as_str()),
-            Some("opencode-go/kimi-k3")
+            decode_session("round_limit = 3"),
+            None,
+            "TOML is no session"
         );
-        assert_eq!(saved.round_limit, 3, "the pick lost another setting");
-        let after = fs::read_to_string(&path).expect("the file");
-        assert!(after.contains("Mine: three cycles"), "{after}");
-        assert!(after.contains("model = \"opencode-go/kimi-k3\""), "{after}");
-        // The builder is the flow's: the pick did not touch it.
-        assert!(
-            after.contains("model = \"opencode-go/deepseek-v4.1-flash#high\""),
-            "{after}"
-        );
-        let _ = fs::remove_dir_all(&home);
-    }
-
-    #[test]
-    fn a_change_is_made_on_the_file_as_it_is_now_and_keeps_what_the_human_edited() {
-        // The window's copy says five rounds; the human has since edited the
-        // file to three. The pick keeps the file's three.
-        let home = scratch("change-now");
-        fs::create_dir_all(home_at(&home)).expect("the home");
-        let path = config_path(&home);
-        fs::write(
-            &path,
-            Config::default()
-                .to_toml()
-                .replace("round_limit = 5", "round_limit = 3"),
-        )
-        .expect("an edited configuration");
-        let saved = save_change_at(&home, &Config::default(), |config| {
-            config.set_orchestrator_model("opencode-go/kimi-k3")
-        })
-        .expect("the pick");
-        assert_eq!(saved.round_limit, 3, "the pick reverted the human's edit");
-        assert_eq!(
-            Config::read(&path).expect("the file").round_limit,
-            3,
-            "the file lost the human's edit"
-        );
-        let _ = fs::remove_dir_all(&home);
-    }
-
-    #[test]
-    fn a_pick_with_no_file_writes_the_configuration_whole() {
-        let home = scratch("pick-absent");
-        let mut config = Config::default();
-        config.agents.iter_mut().for_each(|agent| {
-            if agent.role == coding_crew_core::FlowRole::Orchestrator {
-                agent.model = "opencode-go/kimi-k3".to_string();
-            }
-        });
-        let saved = save_change_at(&home, &config, |config| {
-            config.set_orchestrator_model("opencode-go/kimi-k3")
-        })
-        .expect("the pick");
-        let after = fs::read_to_string(config_path(&home)).expect("the file");
-        assert!(after.contains("model = \"opencode-go/kimi-k3\""), "{after}");
-        assert_eq!(saved, config);
-        let _ = fs::remove_dir_all(&home);
-    }
-
-    #[test]
-    fn a_pick_that_cannot_be_written_names_the_home() {
-        let home = scratch("pick-blocked");
-        fs::write(home.join(CONFIG_DIR), "not a folder").expect("a blocking file");
-        let error = save_change_at(&home, &Config::default(), |config| {
-            config.set_orchestrator_model("opencode-go/kimi-k3")
-        })
-        .expect_err("the home cannot be made");
-        assert_eq!(error.file, home_at(&home).display().to_string());
-        assert!(!error.error.is_empty(), "{error:?}");
-        let _ = fs::remove_dir_all(&home);
     }
 
     #[test]

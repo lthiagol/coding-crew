@@ -16,7 +16,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
 
-use coding_crew_core::config::{CONFIG_FILE, Config};
+use coding_crew_core::config::{Agent, Config};
 use coding_crew_core::harness::{self, HARNESSES, Harness};
 use coding_crew_core::runtime::{CrewMember, Runtime};
 use coding_crew_core::{FlowRole, age_text, parse_rfc3339};
@@ -52,6 +52,23 @@ pub const CHOOSE_KEY: &str = "enter";
 pub const CLOSE_KEY: &str = "esc";
 /// The key that starts the orchestrator over the queue.
 pub const START_KEY: &str = "s";
+/// The key that opens the crew-size selector.
+pub const CREW_KEY: &str = "c";
+/// The crew-size selector's title.
+pub const CREW_SIZE_TITLE: &str = "crew size";
+/// The roles a crew is made of, in the order the crew reads them: the
+/// orchestrator is always there, and a crew of size N is the first N.
+const CREW_ORDER: [FlowRole; 3] = [
+    FlowRole::Orchestrator,
+    FlowRole::Builder,
+    FlowRole::Reviewer,
+];
+/// The hint each crew size carries in the selector, by size from one.
+const CREW_HINTS: [&str; 3] = [
+    "single agent",
+    "orchestrator also reviews",
+    "one agent per role",
+];
 /// The notice when `s` is pressed outside herdr.
 pub const START_NEEDS_HERDR: &str = "start needs herdr";
 /// The notice when `s` is pressed with no task in the queue.
@@ -238,14 +255,58 @@ enum Note {
     Failed(String),
 }
 
+/// The roles a crew of `size` agents has: the first `size` of the crew's order.
+fn crew_roles(size: usize) -> &'static [FlowRole] {
+    &CREW_ORDER[..size.clamp(1, CREW_ORDER.len())]
+}
+
+/// The size of the crew a configuration runs, when it is one the selector
+/// offers: the roles it has are exactly the roles of that size.
+fn crew_size_of(config: &Config) -> Option<usize> {
+    (1..=CREW_ORDER.len()).find(|size| {
+        let roles = crew_roles(*size);
+        config.agents.len() == roles.len()
+            && roles
+                .iter()
+                .all(|role| config.agents.iter().any(|agent| agent.role == *role))
+    })
+}
+
+/// The crew a session starts from: the file's, or none when the file is not
+/// there to be read.
+fn session_of(state: &ConfigState) -> Option<Config> {
+    match state {
+        ConfigState::Config(config) => Some(config.clone()),
+        _ => None,
+    }
+}
+
+/// Take the agent of a role out of a crew, when the crew has one.
+fn take_role(agents: &mut Vec<Agent>, role: FlowRole) -> Option<Agent> {
+    let at = agents.iter().position(|agent| agent.role == role)?;
+    Some(agents.remove(at))
+}
+
+/// A copy of the agent of a role, when the list has one.
+fn agent_of(agents: &[Agent], role: FlowRole) -> Option<Agent> {
+    agents.iter().find(|agent| agent.role == role).cloned()
+}
+
 /// The state of the window.
 pub struct App {
     /// The colours of the window.
     pub theme: Theme,
     /// The icon set in force: every pane's title and every role draws with it.
     pub icons: IconSet,
-    /// The configuration as read, and what a pick is saved into.
+    /// The configuration as read from the file. A reload reads it again.
     pub config: ConfigRead,
+    /// The crew this session runs: the file's configuration with hugo's picks
+    /// made on it. It is never written back; a reload starts it again from the
+    /// file. `None` when there is no configuration to start from.
+    session: Option<Config>,
+    /// The agents a crew-size pick has taken off the session's crew. A role
+    /// the crew takes back comes with the values it had.
+    parked: Vec<Agent>,
     /// The user's home, when there is one: the configuration lives under it.
     home: Option<PathBuf>,
     /// The sidebar's row the cursor is on, as [`sidebar::cursor_of`] numbers
@@ -260,8 +321,8 @@ pub struct App {
     reading: Option<JoinHandle<Result<Catalog, String>>>,
     /// The help overlay is open.
     help: bool,
-    /// A pick that could not be saved, named so nothing fails silently.
-    notice: Option<ReadError>,
+    /// The crew-size selector is open, with its cursor on this size minus one.
+    crew_cursor: Option<usize>,
     /// The launcher `s` starts the orchestrator through. `None` outside herdr:
     /// the key says why, and starts nothing.
     launch: Option<Arc<dyn Launcher>>,
@@ -287,36 +348,33 @@ pub struct App {
 }
 
 /// The row the cursor starts on: the builder's harness, when the crew has a
-/// builder; otherwise the orchestrator's, the first row. A window with no
-/// configuration starts as the defaults do.
-fn first_cursor(state: &ConfigState) -> usize {
-    let builder = |agents: &[coding_crew_core::Agent]| {
-        agents
-            .iter()
-            .position(|agent| agent.role == FlowRole::Builder)
-    };
-    let row = match state {
-        ConfigState::Config(config) => builder(&config.agents),
-        _ => builder(&Config::default().agents),
-    };
-    row.map_or(0, |agent| sidebar::cursor_of(agent, Field::Harness))
+/// builder; otherwise the orchestrator's, the first row.
+fn first_cursor(config: &Config) -> usize {
+    config
+        .agents
+        .iter()
+        .position(|agent| agent.role == FlowRole::Builder)
+        .map_or(0, |agent| sidebar::cursor_of(agent, Field::Harness))
 }
 
 impl App {
     /// A window with a theme and a configuration of its own.
     pub fn new(theme: Theme, icons: IconSet, config: ConfigRead, home: Option<PathBuf>) -> Self {
-        let cursor = first_cursor(&config.state);
+        let session = session_of(&config.state);
+        let cursor = first_cursor(session.as_ref().unwrap_or(&Config::default()));
         Self {
             theme,
             icons,
             config,
+            session,
+            parked: Vec::new(),
             home,
             cursor,
             agents_drawn: true,
             choice: None,
             reading: None,
             help: false,
-            notice: None,
+            crew_cursor: None,
             launch: None,
             starting: None,
             queued: Vec::new(),
@@ -374,9 +432,14 @@ impl App {
             self.choice_key(key);
             return Action::Redraw;
         }
+        if self.crew_cursor.is_some() {
+            self.crew_key(key);
+            return Action::Redraw;
+        }
         match key.code {
             KeyCode::Char('?') => self.help = true,
             KeyCode::Char('r') => self.reload(),
+            KeyCode::Char('c') => self.open_crew(),
             KeyCode::Up | KeyCode::Char('k') => self.move_cursor(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_cursor(1),
             KeyCode::Enter => self.open_choice(),
@@ -384,6 +447,23 @@ impl App {
             _ => {}
         }
         Action::Redraw
+    }
+
+    /// Handle a key while the crew-size selector is open: the cursor moves
+    /// over the sizes, enter picks the size under it, and esc closes it.
+    fn crew_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('?') => self.help = true,
+            KeyCode::Esc => self.crew_cursor = None,
+            KeyCode::Up | KeyCode::Char('k') => self.move_crew(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_crew(1),
+            KeyCode::Enter => {
+                if let Some(cursor) = self.crew_cursor.take() {
+                    self.set_crew(cursor + 1);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Handle a key while a choice covers the sidebar.
@@ -480,6 +560,8 @@ impl App {
             self.help_pane(frame, frame.area());
         } else if self.choice.is_some() {
             self.choice_pane(frame, frame.area());
+        } else if self.crew_cursor.is_some() {
+            self.crew_pane(frame, frame.area());
         }
     }
 
@@ -501,17 +583,14 @@ impl App {
         } else {
             (area, area.width, area.height)
         };
-        let cursor = if self.loaded().is_some() {
+        let cursor = if self.session().is_some() {
             self.cursor
         } else {
             usize::MAX
         };
-        // A pick that could not be saved is named, never swallowed: the
-        // configuration on screen is the one still in force. It is drawn
-        // inside the sidebar's rows, so the fit budgets for it.
         let drawn = sidebar::lines(
             &self.config,
-            self.notice.as_ref(),
+            self.session(),
             &self.theme,
             self.icons,
             usize::from(width),
@@ -526,17 +605,14 @@ impl App {
     }
 
     /// The configuration as loaded, when the file parsed.
-    fn loaded(&self) -> Option<&Config> {
-        match &self.config.state {
-            ConfigState::Config(config) => Some(config),
-            _ => None,
-        }
+    fn session(&self) -> Option<&Config> {
+        self.session.as_ref()
     }
 
     /// The agent and the field the cursor is on, when the configuration has
     /// them.
     fn cursor_row(&self) -> Option<(usize, Field)> {
-        let config = self.loaded()?;
+        let config = self.session()?;
         let (agent, field) = sidebar::field_at(self.cursor);
         (agent < config.agents.len()).then_some((agent, field))
     }
@@ -552,7 +628,7 @@ impl App {
         if !self.agents_drawn {
             return;
         }
-        let Some(rows) = self.loaded().map(sidebar::pick_rows) else {
+        let Some(rows) = self.session().map(sidebar::pick_rows) else {
             return;
         };
         if rows == 0 {
@@ -562,14 +638,17 @@ impl App {
         self.cursor = next.clamp(0, rows as isize - 1) as usize;
     }
 
-    /// Read the configuration again: the sidebar shows the file as it is now.
+    /// Read the configuration again, and start the session over from it.
     ///
-    /// This is the configuration only. The runtime record is already read on
-    /// every redraw, and a catalogue is read when a choice opens.
+    /// The file is the session's start, so the picks made this session are
+    /// dropped and the sidebar shows the file as it is now. This is the
+    /// configuration only. The runtime record is already read on every redraw,
+    /// and a catalogue is read when a choice opens.
     fn reload(&mut self) {
         self.config = config::load(self.home.as_deref());
-        self.notice = None;
-        self.cursor = match self.loaded() {
+        self.session = session_of(&self.config.state);
+        self.parked.clear();
+        self.cursor = match self.session() {
             Some(config) => self
                 .cursor
                 .min(sidebar::pick_rows(config).saturating_sub(1)),
@@ -599,11 +678,63 @@ impl App {
         }
     }
 
+    /// Open the crew-size selector, with its cursor on the crew in force. A
+    /// window with no configuration has no crew to size.
+    fn open_crew(&mut self) {
+        let Some(size) = self
+            .session()
+            .map(|config| crew_size_of(config).unwrap_or(1))
+        else {
+            return;
+        };
+        self.crew_cursor = Some(size - 1);
+    }
+
+    /// Move the crew-size selector's cursor over the three sizes.
+    fn move_crew(&mut self, delta: isize) {
+        if let Some(cursor) = self.crew_cursor.as_mut() {
+            let last = CREW_ORDER.len() as isize - 1;
+            *cursor = (*cursor as isize + delta).clamp(0, last) as usize;
+        }
+    }
+
+    /// Set the session's crew to the roles of `size`.
+    ///
+    /// A role the crew keeps keeps its values. A role it takes back comes with
+    /// the values it was taken off with, else the file's, else the defaults.
+    /// A role it leaves off is parked, not lost. The file is not written.
+    fn set_crew(&mut self, size: usize) {
+        let wanted = crew_roles(size);
+        let file = session_of(&self.config.state).unwrap_or_default();
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+        let mut agents = Vec::new();
+        for role in CREW_ORDER {
+            let present = take_role(&mut session.agents, role);
+            if !wanted.contains(&role) {
+                if let Some(agent) = present {
+                    self.parked.push(agent);
+                }
+                continue;
+            }
+            agents.extend(
+                present
+                    .or_else(|| take_role(&mut self.parked, role))
+                    .or_else(|| agent_of(&file.agents, role))
+                    .or_else(|| agent_of(&Config::default().agents, role)),
+            );
+        }
+        session.agents = agents;
+        let rows = sidebar::pick_rows(session);
+        self.cursor = self.cursor.min(rows.saturating_sub(1));
+    }
+
     /// Open the harness choice: every harness the table holds, and one the
     /// machine does not have listed dim and unpickable.
     fn open_harness_choice(&mut self, agent: usize) {
         let Some(current) = self
-            .loaded()
+            .session()
             .and_then(|config| config.agents.get(agent))
             .map(|row| row.harness.clone())
         else {
@@ -624,7 +755,7 @@ impl App {
     /// the window.
     fn open_model_choice(&mut self, agent: usize) {
         let Some(harness) = self
-            .loaded()
+            .session()
             .and_then(|config| config.agents.get(agent))
             .and_then(|row| harness::find(&row.harness))
         else {
@@ -638,7 +769,7 @@ impl App {
     /// Open the effort choice: the levels the agent's harness takes, with the
     /// level in force under the cursor.
     fn open_effort_choice(&mut self, agent: usize) {
-        let Some(row) = self.loaded().and_then(|config| config.agents.get(agent)) else {
+        let Some(row) = self.session().and_then(|config| config.agents.get(agent)) else {
             return;
         };
         let Some(harness) = harness::find(&row.harness) else {
@@ -679,7 +810,7 @@ impl App {
         state: ChoiceState,
     ) {
         let Some((title, role)) = self
-            .loaded()
+            .session()
             .and_then(|config| config.agents.get(agent))
             .map(|row| (format!("{} {}", row.role.as_str(), field.label()), row.role))
         else {
@@ -757,7 +888,7 @@ impl App {
             return;
         };
         let current = self
-            .loaded()
+            .session()
             .and_then(|config| config.agents.get(agent))
             .map(|row| row.model.clone())
             .unwrap_or_default();
@@ -796,12 +927,10 @@ impl App {
                 let Some(target) = harness::find(&name) else {
                     return;
                 };
-                self.save(move |config| match config.agents.get_mut(agent) {
-                    Some(row) => {
+                self.change(move |config| {
+                    if let Some(row) = config.agents.get_mut(agent) {
                         pick::switch_harness(row, target, &catalog);
-                        true
                     }
-                    None => false,
                 });
             }
             Err(error) => self.set_state(ChoiceState::Failed(error)),
@@ -849,7 +978,7 @@ impl App {
             return;
         };
         let current = self
-            .loaded()
+            .session()
             .and_then(|config| config.agents.get(agent))
             .map(|row| row.harness.clone());
         if current.as_deref() == Some(name.as_str()) {
@@ -886,47 +1015,28 @@ impl App {
         let Some((agent, level)) = self.entry_under_cursor() else {
             return;
         };
-        self.save(move |config| match config.agents.get_mut(agent) {
-            Some(row) => {
+        self.change(move |config| {
+            if let Some(row) = config.agents.get_mut(agent) {
                 row.effort = Some(level.clone());
-                true
             }
-            None => false,
         });
         self.close_choice();
     }
 
     /// Save an agent's model.
     fn set_model(&mut self, agent: usize, model: String) {
-        self.save(move |config| match config.agents.get_mut(agent) {
-            Some(row) => {
+        self.change(move |config| {
+            if let Some(row) = config.agents.get_mut(agent) {
                 row.model = model.clone();
-                true
             }
-            None => false,
         });
     }
 
-    /// Save one change into the configuration, and show what was saved. A save
-    /// that fails is named on the sidebar, and the configuration in force
-    /// stays.
-    fn save(&mut self, change: impl Fn(&mut Config) -> bool) {
-        let Some(config) = self.loaded().cloned() else {
-            return;
-        };
-        let saved = match &self.home {
-            Some(home) => config::save_change_at(home, &config, change),
-            None => Err(ReadError {
-                file: CONFIG_FILE.to_string(),
-                error: "there is no home to save the configuration in".to_string(),
-            }),
-        };
-        match saved {
-            Ok(saved) => {
-                self.config.state = ConfigState::Config(saved);
-                self.notice = None;
-            }
-            Err(error) => self.notice = Some(error),
+    /// Apply one pick to the session's crew. The file is not written: a pick
+    /// lasts the session, and a reload starts the session over from the file.
+    fn change(&mut self, change: impl FnOnce(&mut Config)) {
+        if let Some(session) = self.session.as_mut() {
+            change(session);
         }
     }
 
@@ -949,7 +1059,7 @@ impl App {
 
     /// What the configuration lacks before the flow can start.
     fn gaps(&self) -> Vec<String> {
-        self.loaded().map(pick::gaps).unwrap_or_default()
+        self.session().map(pick::gaps).unwrap_or_default()
     }
 
     /// Whether `s` can act: herdr hosts hugo, the queue has work, every agent
@@ -1002,7 +1112,7 @@ impl App {
     /// holds them, the project's root, and the queue in order.
     fn launch_request(&self) -> Result<LaunchRequest, String> {
         let config = self
-            .loaded()
+            .session()
             .ok_or_else(|| "the configuration cannot be read".to_string())?;
         let agent = config
             .agents
@@ -1016,10 +1126,17 @@ impl App {
             .root
             .clone()
             .ok_or_else(|| "the project's folder is not known".to_string())?;
+        // The orchestrator's `hugo --skill` prints the crew this session runs,
+        // so the session's picks reach the agents it starts.
+        let mut env = start.env;
+        env.push((
+            config::SESSION_ENV.to_string(),
+            config::encode_session(config),
+        ));
         Ok(LaunchRequest {
             kind: harness.kind.to_string(),
             args: start.args,
-            env: start.env,
+            env,
             project,
             tasks: self.queued.clone(),
         })
@@ -1737,6 +1854,48 @@ impl App {
         );
     }
 
+    /// The crew-size selector: one line per size, the roles it has drawn as
+    /// their icons and the roles it leaves out as empty circles, then the hint.
+    fn crew_pane(&self, frame: &mut Frame, area: Rect) {
+        let Some(cursor) = self.crew_cursor else {
+            return;
+        };
+        let entries: Vec<picker::Row> = (1..=CREW_ORDER.len())
+            .map(|size| picker::Row {
+                text: self.crew_entry(size),
+                style: self.theme.text.normal,
+            })
+            .collect();
+        picker::draw(
+            frame,
+            picker::popup(area, entries.len()),
+            CREW_SIZE_TITLE,
+            Icon::Config,
+            self.icons,
+            &self.theme,
+            &[],
+            &entries,
+            cursor,
+        );
+    }
+
+    /// One size's line in the selector: the glyph of each role the size has,
+    /// then the glyph of each it leaves out, then the size's hint.
+    fn crew_entry(&self, size: usize) -> String {
+        let roles = crew_roles(size);
+        let glyphs: String = CREW_ORDER
+            .iter()
+            .map(|role| {
+                if roles.contains(role) {
+                    role_icon(*role).glyph(self.icons)
+                } else {
+                    Icon::RoleAbsent.glyph(self.icons)
+                }
+            })
+            .collect();
+        format!("{glyphs} {}", CREW_HINTS[size - 1])
+    }
+
     /// The choice's entries as the picker draws them: a harness the machine
     /// does not have is dim and says so.
     fn entry_rows(&self, choice: &Choice) -> Vec<picker::Row> {
@@ -1834,10 +1993,20 @@ impl App {
             lines.push((u8::MAX, line("?", "this help")));
             return lines;
         }
+        if self.crew_cursor.is_some() {
+            return vec![
+                (0, line("↑↓ j/k", "move")),
+                (1, line("ctrl-c", "quit")),
+                (2, line(CLOSE_KEY, "close")),
+                (3, line(CHOOSE_KEY, "pick")),
+                (u8::MAX, line("q", "quit")),
+                (u8::MAX, line("?", "this help")),
+            ];
+        }
         let mut lines = Vec::new();
         if self.agents_drawn
             && self
-                .loaded()
+                .session()
                 .is_some_and(|config| !config.agents.is_empty())
         {
             lines.push((0, line("↑↓ j/k", "move")));
@@ -1846,6 +2015,9 @@ impl App {
         lines.push((2, line(RELOAD_KEY, "reload")));
         if self.can_choose() {
             lines.push((3, line(CHOOSE_KEY, "choose")));
+        }
+        if self.session().is_some() {
+            lines.push((3, line(CREW_KEY, "crew size")));
         }
         lines.push((3, line(START_KEY, "start the orchestrator")));
         lines.push((u8::MAX, line("q", "quit")));
@@ -1861,6 +2033,10 @@ impl App {
         let closing = vec![part("?", "help"), part("q", "quit")];
         if self.help {
             let actions = vec![part(CLOSE_KEY, "close help")];
+            return chrome::footer(&actions, &closing, width, rows, &self.theme);
+        }
+        if self.crew_cursor.is_some() {
+            let actions = vec![part(CLOSE_KEY, "close"), part(CHOOSE_KEY, "pick")];
             return chrome::footer(&actions, &closing, width, rows, &self.theme);
         }
         if let Some(choice) = &self.choice {
@@ -1884,6 +2060,9 @@ impl App {
             actions.push(part(CHOOSE_KEY, "choose"));
         }
         actions.push(part(RELOAD_KEY, "reload"));
+        if self.session().is_some() {
+            actions.push(part(CREW_KEY, "crew size"));
+        }
         if self.can_start() {
             actions.push(part(START_KEY, "start"));
         }
@@ -1891,7 +2070,6 @@ impl App {
     }
 }
 
-/// The rows the choice's popup holds when the catalogue is longer.
 /// Where the help sits: three fifths of the window, centred.
 fn help_popup(area: Rect) -> Rect {
     let width = area.width.saturating_mul(3) / 5;
@@ -2146,6 +2324,8 @@ mod tests {
 
     use std::fs;
 
+    use coding_crew_core::config::CONFIG_FILE;
+
     use super::*;
     use coding_crew_core::RoundKind;
     use coding_crew_core::config::LEGACY_CONFIG_FILE;
@@ -2274,7 +2454,7 @@ mod tests {
     /// The model an agent runs, as the window's configuration holds it.
     fn model_of<'a>(window: &'a App, name: &str) -> Option<&'a str> {
         window
-            .loaded()?
+            .session()?
             .agents
             .iter()
             .find(|agent| agent.role.as_str() == name)
@@ -3841,7 +4021,7 @@ mod tests {
             config::load_at(&home),
             Some(home.clone()),
         );
-        assert_eq!(app.loaded().expect("the configuration").round_limit, 5);
+        assert_eq!(app.session().expect("the configuration").round_limit, 5);
         // A human edits the file while hugo runs.
         let mine = Config {
             round_limit: 2,
@@ -3854,7 +4034,7 @@ mod tests {
             Action::Redraw,
             "reload quit the window"
         );
-        assert_eq!(app.loaded().expect("the configuration").round_limit, 2);
+        assert_eq!(app.session().expect("the configuration").round_limit, 2);
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         assert!(
             text_of(&rows).contains("2 build-and-fix rounds"),
@@ -3949,7 +4129,7 @@ mod tests {
     }
 
     #[test]
-    fn a_pick_is_saved_and_the_sidebar_shows_what_it_saved() {
+    fn a_pick_is_made_in_the_session_and_the_file_is_not_written() {
         let home = scratch("pick");
         let mut app = on_orchestrator(Some(home.clone()));
         answer_choice(
@@ -3967,7 +4147,7 @@ mod tests {
             "a pick quit the window"
         );
         assert!(app.choice.is_none(), "the choice stayed open");
-        let saved = app.loaded().expect("the configuration");
+        let saved = app.session().expect("the configuration");
         assert_eq!(
             saved
                 .agents
@@ -3995,16 +4175,22 @@ mod tests {
             Some("claude-opus-5-5")
         );
 
-        // The pick survives a restart: the file holds it, and only it.
-        let on_disk = Config::read(&config::config_path(&home)).expect("the saved configuration");
-        assert_eq!(on_disk, *saved);
-        let text = fs::read_to_string(config::config_path(&home)).expect("the file");
-        assert!(text.contains("model = \"claude-sonnet-5-5\""), "{text}");
-        assert!(text.contains("model = \"claude-haiku-5-5\""), "{text}");
+        // The pick lasts the session: the file is not written, and the builder
+        // keeps the model the file holds.
+        assert!(
+            !config::config_path(&home).exists(),
+            "the pick wrote the configuration"
+        );
+        assert_eq!(model_of(&app, "builder"), Some("claude-haiku-5-5"));
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         assert!(
             text_of(&rows).contains("claude-sonnet-5-5"),
             "the sidebar does not draw the pick: {}",
+            text_of(&rows)
+        );
+        assert!(
+            text_of(&rows).contains("orchestrator session"),
+            "the sidebar does not tag the pick: {}",
             text_of(&rows)
         );
         let _ = fs::remove_dir_all(&home);
@@ -4027,8 +4213,10 @@ mod tests {
             Some("claude-opus-5-5"),
             "the pick dropped the variant in force"
         );
-        let text = fs::read_to_string(config::config_path(&home)).expect("the saved file");
-        assert!(text.contains("model = \"claude-opus-5-5\""), "{text}");
+        assert!(
+            !config::config_path(&home).exists(),
+            "the pick wrote the configuration"
+        );
         let _ = fs::remove_dir_all(&home);
     }
 
@@ -4079,9 +4267,14 @@ mod tests {
             window.choice.is_none(),
             "enter did not pick the listed model"
         );
+        assert_eq!(
+            model_of(&window, "orchestrator"),
+            Some("p/m0"),
+            "the pick was not made in the session"
+        );
         assert!(
-            config::config_path(&home).exists(),
-            "the pick was not saved"
+            !config::config_path(&home).exists(),
+            "the pick wrote the configuration"
         );
         let _ = fs::remove_dir_all(&home);
     }
@@ -4257,15 +4450,10 @@ mod tests {
     }
 
     #[test]
-    fn a_pick_that_cannot_be_saved_is_named_on_the_sidebar() {
-        // The configuration keeps the model in force, and the sidebar says
-        // the pick did not land.
-        let home = scratch("pick-failure");
-        fs::write(
-            home.join(coding_crew_core::config::CONFIG_DIR),
-            "not a folder",
-        )
-        .expect("a blocking file");
+    fn r_starts_the_session_over_from_the_file() {
+        // A pick lasts until the file is read again: reload drops the picks,
+        // and the sidebar shows the file's values.
+        let home = scratch("reload-picks");
         let mut app = on_orchestrator(Some(home.clone()));
         answer_choice(
             &mut app,
@@ -4273,29 +4461,332 @@ mod tests {
         );
         app.on_key(press(KeyCode::Char('k')));
         app.on_key(press(KeyCode::Enter));
-        assert!(app.choice.is_none());
-        assert!(app.notice.is_some(), "the failed save is silent");
+        assert_eq!(model_of(&app, "orchestrator"), Some("claude-sonnet-5-5"));
+
+        app.on_key(press(KeyCode::Char('r')));
         assert_eq!(
             model_of(&app, "orchestrator"),
             Some("claude-opus-5-5"),
-            "a failed save changed the configuration on screen"
+            "reload kept the session's pick"
         );
-        let (rows, paint) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
-        let text = text_of(&rows);
-        assert!(text.contains(sidebar::NOT_SAVED), "{text}");
-        // The home is what could not be made, and it is what is named.
-        let home_name = config::home_at(&home).display().to_string();
-        let shown = cut_to(&home_name, 29);
-        assert!(text.contains(&shown), "{text}");
-        assert!(!text.contains(CONFIG_FILE), "{text}");
-        // The failure is painted on the failure slot.
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        assert!(!text_of(&rows).contains("session"), "{}", text_of(&rows));
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_crew_size_selector_sets_the_session_crew_and_the_file_stays() {
+        // c opens the selector on the crew in force; enter on the first size
+        // takes the builder and the reviewer off the session's crew, and the
+        // file is not written.
+        let home = scratch("crew-size");
+        let mut app = on_orchestrator(Some(home.clone()));
+        app.on_key(press(KeyCode::Char('c')));
         assert_eq!(
-            colour_of(&rows, &paint, "hugo-app-pick-failure"),
-            theme().semantic.error.fg.expect("the error colour")
+            app.crew_cursor,
+            Some(2),
+            "the selector is not on the crew in force"
+        );
+        app.on_key(press(KeyCode::Up));
+        app.on_key(press(KeyCode::Up));
+        app.on_key(press(KeyCode::Enter));
+        assert!(app.crew_cursor.is_none(), "enter left the selector open");
+        let roles: Vec<FlowRole> = app
+            .session()
+            .expect("the session")
+            .agents
+            .iter()
+            .map(|agent| agent.role)
+            .collect();
+        assert_eq!(roles, [FlowRole::Orchestrator]);
+        assert!(
+            !config::config_path(&home).exists(),
+            "the crew wrote the file"
+        );
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        assert!(text.contains("AGENTS session"), "{text}");
+        assert_eq!(text.matches("harness claude").count(), 1, "{text}");
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_crew_size_takes_a_role_back_with_the_values_it_had() {
+        // A builder's model picked this session survives leaving the crew and
+        // coming back: the crew parks it rather than losing it.
+        let home = scratch("crew-park");
+        let mut window = on_builder(&home, Field::Model);
+        answer_choice_for(
+            &mut window,
+            1,
+            Ok(Catalog::from_lines("claude-sonnet-5-5\nclaude-haiku-5-5\n")),
+        );
+        window.on_key(press(KeyCode::Up));
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(model_of(&window, "builder"), Some("claude-sonnet-5-5"));
+
+        window.on_key(press(KeyCode::Char('c')));
+        window.on_key(press(KeyCode::Up));
+        window.on_key(press(KeyCode::Up));
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(model_of(&window, "builder"), None, "the builder stayed");
+        window.on_key(press(KeyCode::Char('c')));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(model_of(&window, "builder"), Some("claude-sonnet-5-5"));
+        assert!(
+            !config::config_path(&home).exists(),
+            "the crew wrote the file"
         );
         let _ = fs::remove_dir_all(&home);
     }
 
+    #[test]
+    fn the_crew_size_selector_is_drawn_at_40_and_at_100_columns() {
+        // The selector is a popup over the window: each size shows its roles
+        // as icons, empty circles for the roles it leaves out, and its hint.
+        for width in [40u16, 100] {
+            let home = scratch("crew-picker");
+            let mut window = on_orchestrator(Some(home.clone()));
+            window.on_key(press(KeyCode::Char('c')));
+            let (rows, _) = render_app(&mut window, width, 40, &RuntimeRead::Absent);
+            let text = text_of(&rows);
+            assert!(text.contains("crew size"), "{width}: {text}");
+            for hint in [
+                "single agent",
+                "orchestrator also reviews",
+                "one agent per role",
+            ] {
+                assert!(text.contains(hint), "{width}: {hint} is not drawn: {text}");
+            }
+            let one = Icon::RoleOrchestrator.glyph(IconSet::Nerd);
+            let absent = Icon::RoleAbsent.glyph(IconSet::Nerd);
+            assert!(
+                text.contains(&format!("{one}{absent}{absent} single agent")),
+                "{width}: {text}"
+            );
+            let _ = fs::remove_dir_all(&home);
+        }
+    }
+
+    #[test]
+    fn the_session_crew_is_what_s_hands_the_orchestrator_and_its_skill_prints() {
+        // The orchestrator's tab carries the session's crew, so its skill
+        // prints the crew the session runs, not the file's.
+        let home = scratch("crew-launch");
+        let mut window = on_orchestrator(Some(home.clone()));
+        window.queued = vec!["TSK29".to_string()];
+        window.root = Some(home.clone());
+        window.on_key(press(KeyCode::Char('c')));
+        window.on_key(press(KeyCode::Up));
+        window.on_key(press(KeyCode::Up));
+        window.on_key(press(KeyCode::Enter));
+        let request = window.launch_request().expect("a request");
+        let value = request
+            .env
+            .iter()
+            .find(|(key, _)| key == config::SESSION_ENV)
+            .map(|(_, value)| value.clone())
+            .expect("the session travels in the environment");
+        let session = config::decode_session(&value).expect("the session decodes");
+        assert_eq!(session.agents.len(), 1, "{session:?}");
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn each_crew_size_sets_the_roles_the_sidebar_draws_and_the_roles_s_starts() {
+        // Sizes 1, 2 and 3 take the session's crew to their roles. The sidebar
+        // draws those roles' heads and no others, and `s` hands the
+        // orchestrator a session with the same roles.
+        let cases: [(usize, Vec<FlowRole>); 3] = [
+            (1, vec![FlowRole::Orchestrator]),
+            (2, vec![FlowRole::Orchestrator, FlowRole::Builder]),
+            (
+                3,
+                vec![
+                    FlowRole::Orchestrator,
+                    FlowRole::Builder,
+                    FlowRole::Reviewer,
+                ],
+            ),
+        ];
+        for (size, roles) in cases {
+            let home = scratch(&format!("crew-table-{size}"));
+            let fake = Arc::new(FakeLauncher::default());
+            let mut window = on_orchestrator(Some(home.clone())).with_launcher(Some(fake.clone()));
+            window.root = Some(PathBuf::from("/work/project"));
+
+            window.on_key(press(KeyCode::Char('c')));
+            for _ in CREW_ORDER {
+                window.on_key(press(KeyCode::Up));
+            }
+            for _ in 1..size {
+                window.on_key(press(KeyCode::Down));
+            }
+            window.on_key(press(KeyCode::Enter));
+            let session_roles: Vec<FlowRole> = window
+                .session()
+                .expect("the session")
+                .agents
+                .iter()
+                .map(|agent| agent.role)
+                .collect();
+            assert_eq!(session_roles, roles, "size {size}: the session's crew");
+
+            let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+            let text = text_of(&rows);
+            for role in CREW_ORDER {
+                let head = format!("{} {}", role_icon(role).glyph(IconSet::Nerd), role.as_str());
+                assert_eq!(
+                    text.contains(&head),
+                    roles.contains(&role),
+                    "size {size}: {head:?} is drawn wrongly: {text}"
+                );
+            }
+
+            // Rendering clears the queue when the runtime is absent, so the
+            // queue is set after it.
+            window.queued = vec!["TSK29".to_string()];
+            window.on_key(press(KeyCode::Char('s')));
+            wait_for_start(&mut window);
+            let requests = fake.requests.lock().expect("the requests");
+            assert_eq!(requests.len(), 1, "size {size}: the start count");
+            let value = requests[0]
+                .env
+                .iter()
+                .find(|(key, _)| key == config::SESSION_ENV)
+                .map(|(_, value)| value.clone())
+                .expect("the session travels in the environment");
+            let started = config::decode_session(&value).expect("the session decodes");
+            let started_roles: Vec<FlowRole> =
+                started.agents.iter().map(|agent| agent.role).collect();
+            assert_eq!(started_roles, roles, "size {size}: the roles s starts");
+            let _ = fs::remove_dir_all(&home);
+        }
+    }
+
+    #[test]
+    fn no_pick_writes_a_configuration_that_is_there() {
+        // A human's configuration stays byte for byte through every pick: a
+        // harness, a model, an effort and the crew size. Each pick is made
+        // and checked on the session before the file is compared.
+        let home = scratch("picks-keep-file");
+        let path = config::config_path(&home);
+        fs::create_dir_all(config::home_at(&home)).expect("the home");
+        let mine = Config {
+            round_limit: 3,
+            ..Config::default()
+        };
+        mine.write(&path).expect("the human's configuration");
+        let before = fs::read_to_string(&path).expect("the file");
+        let tool = crate::catalog::scratch_tool("picks-keep-file", "#!/bin/sh\necho p/m0\n");
+        let mut window = on_builder(&home, Field::Harness);
+        window.config = config::load_at(&home);
+        window.session = Some(mine);
+        window.present = Some(all_but_cursor_agent);
+        window.catalog_tool = Some(tool.clone());
+
+        // A harness pick: the builder moves from claude to opencode.
+        window.on_key(press(KeyCode::Enter));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Enter));
+        wait_for_catalog(&mut window);
+        let harness_of_builder = window
+            .session()
+            .and_then(|config| {
+                config
+                    .agents
+                    .iter()
+                    .find(|agent| agent.role == FlowRole::Builder)
+            })
+            .map(|agent| agent.harness.clone());
+        assert_eq!(
+            harness_of_builder.as_deref(),
+            Some("opencode"),
+            "the harness pick did not land"
+        );
+
+        // A model pick: the builder runs sonnet. Its list is answered here,
+        // as a catalogue read would answer it.
+        window.cursor = sidebar::cursor_of(1, Field::Model);
+        answer_choice_for(
+            &mut window,
+            1,
+            Ok(Catalog::from_lines("claude-sonnet-5-5\nclaude-haiku-5-5\n")),
+        );
+        window.on_key(press(KeyCode::Up));
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(
+            model_of(&window, "builder"),
+            Some("claude-sonnet-5-5"),
+            "the model pick did not land"
+        );
+
+        // An effort pick: the orchestrator runs at medium, one level up.
+        window.cursor = sidebar::cursor_of(0, Field::Effort);
+        window.on_key(press(KeyCode::Enter));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Enter));
+        let effort_of_orchestrator = window
+            .session()
+            .and_then(|config| config.agents.first())
+            .and_then(|agent| agent.effort.clone());
+        assert_eq!(
+            effort_of_orchestrator.as_deref(),
+            Some("high"),
+            "the effort pick did not land"
+        );
+
+        // A crew pick: one size down, to the orchestrator and the builder.
+        window.on_key(press(KeyCode::Char('c')));
+        window.on_key(press(KeyCode::Up));
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(
+            window.session().expect("the session").agents.len(),
+            2,
+            "the crew pick did not land"
+        );
+        assert_eq!(
+            window.session().expect("the session").round_limit,
+            3,
+            "the session lost the file's round limit"
+        );
+
+        assert_eq!(
+            fs::read_to_string(&path).expect("the file"),
+            before,
+            "a pick wrote the configuration"
+        );
+        let _ = fs::remove_dir_all(&home);
+        let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
+    }
+
+    #[test]
+    fn the_footer_and_help_name_the_crew_size_key_and_its_selector_keys() {
+        let mut app = on_orchestrator(None);
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
+        assert!(text_of(&rows).contains("c crew size"), "{}", text_of(&rows));
+        app.on_key(press(KeyCode::Char('c')));
+        let footer: String = app
+            .footer_lines(100, 1)
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(
+            footer.contains("esc") && footer.contains("pick"),
+            "{footer}"
+        );
+        assert!(!footer.contains("reload"), "{footer}");
+        let help: String = app
+            .help_lines(60)
+            .into_iter()
+            .flat_map(|(_, line)| line.spans)
+            .map(|span| span.content.into_owned())
+            .collect();
+        assert!(help.contains("move") && help.contains("pick"), "{help}");
+    }
     #[test]
     fn enter_opens_a_choice_on_every_agents_rows() {
         // Every agent is configured from hugo: each of its three rows opens
@@ -4431,7 +4922,15 @@ mod tests {
                 "auto"
             ]
         );
-        assert!(requests[0].env.is_empty());
+        // The only environment the start carries is the session's crew.
+        assert!(
+            requests[0]
+                .env
+                .iter()
+                .all(|(key, _)| key == config::SESSION_ENV),
+            "{:?}",
+            requests[0].env
+        );
         assert_eq!(requests[0].project, PathBuf::from("/work/project"));
         assert_eq!(requests[0].tasks, ["TSK29"]);
     }
@@ -4559,7 +5058,7 @@ mod tests {
         wait_for_catalog(&mut window);
         assert!(window.choice.is_none(), "the switch left its choice open");
         let builder = window
-            .loaded()
+            .session()
             .and_then(|config| {
                 config
                     .agents
@@ -4576,9 +5075,10 @@ mod tests {
             "{}",
             text_of(&rows)
         );
-        let text = fs::read_to_string(config::config_path(&home)).expect("the file");
-        assert!(text.contains("harness = \"opencode\""), "{text}");
-        assert!(text.contains("model = \"\""), "{text}");
+        assert!(
+            !config::config_path(&home).exists(),
+            "the switch wrote the configuration"
+        );
         let _ = fs::remove_dir_all(&home);
         let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
     }
@@ -4597,17 +5097,19 @@ mod tests {
         let mut window = on_builder(&home, Field::Harness);
         window.present = Some(all_but_cursor_agent);
         window.catalog_tool = Some(tool.clone());
-        window.config = ConfigRead::of(ConfigState::Config({
+        let file = {
             let mut config = Config::default();
             config.agents[1].effort = Some("xhigh".to_string());
             config
-        }));
+        };
+        window.config = ConfigRead::of(ConfigState::Config(file.clone()));
+        window.session = Some(file);
         window.on_key(press(KeyCode::Enter));
         window.on_key(press(KeyCode::Down));
         window.on_key(press(KeyCode::Enter));
         wait_for_catalog(&mut window);
         let builder = window
-            .loaded()
+            .session()
             .and_then(|config| {
                 config
                     .agents
@@ -4649,7 +5151,7 @@ mod tests {
             "a refused switch was saved"
         );
         assert_eq!(
-            window.loaded().expect("the configuration").agents[1].harness,
+            window.session().expect("the configuration").agents[1].harness,
             "claude"
         );
         let _ = fs::remove_dir_all(&home);
@@ -4708,8 +5210,10 @@ mod tests {
         window.on_key(press(KeyCode::Enter));
         assert!(window.choice.is_none(), "enter did not pick the typed id");
         assert_eq!(model_of(&window, "builder"), Some("opencode-go/qwen"));
-        let text = fs::read_to_string(config::config_path(&home)).expect("the file");
-        assert!(text.contains("model = \"opencode-go/qwen\""), "{text}");
+        assert!(
+            !config::config_path(&home).exists(),
+            "the id was written to the configuration"
+        );
         let _ = fs::remove_dir_all(&home);
     }
 
@@ -4800,7 +5304,7 @@ mod tests {
         assert!(window.choice.is_none());
         assert_eq!(
             window
-                .loaded()
+                .session()
                 .and_then(|config| config
                     .agents
                     .iter()
@@ -4808,8 +5312,10 @@ mod tests {
                 .and_then(|agent| agent.effort.as_deref()),
             Some("xhigh")
         );
-        let text = fs::read_to_string(config::config_path(&home)).expect("the file");
-        assert!(text.contains("effort = \"xhigh\""), "{text}");
+        assert!(
+            !config::config_path(&home).exists(),
+            "the effort was written to the configuration"
+        );
         let _ = fs::remove_dir_all(&home);
     }
 
@@ -4848,12 +5354,14 @@ mod tests {
     fn s_refuses_while_an_agent_has_no_model_and_names_which() {
         let fake = Arc::new(FakeLauncher::default());
         let mut window = in_herdr(&fake);
-        window.config = ConfigRead::of(ConfigState::Config({
+        let file = {
             let mut config = Config::default();
             config.agents[1].model.clear();
             config.agents[2].effort = None;
             config
-        }));
+        };
+        window.config = ConfigRead::of(ConfigState::Config(file.clone()));
+        window.session = Some(file);
         let runtime = RuntimeRead::Record(runtime());
         let (rows, _) = render_app(&mut window, 100, 40, &runtime);
         assert!(

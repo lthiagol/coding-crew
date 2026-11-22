@@ -16,7 +16,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
 use coding_crew_core::FlowRole;
-use coding_crew_core::config::Config;
+use coding_crew_core::config::{Agent, Config};
 use coding_crew_theme::text::{cut_to, text_width};
 use coding_crew_theme::{Icon, IconSet, Theme, role_style, selected_line};
 
@@ -82,9 +82,9 @@ pub const UNREADABLE: &str = "configuration is unreadable";
 /// The line that says the defaults are what the tool would use, beside an
 /// error: the human sees both what is wrong and what is in force.
 pub const USING_DEFAULTS: &str = "using the defaults:";
-/// The line that says a pick could not be saved. The configuration on screen
-/// is the one still in force.
-pub const NOT_SAVED: &str = "the pick was not saved";
+/// The tag that marks what this session has changed from the file: a group or
+/// an agent that differs from the file carries it.
+pub const SESSION_TAG: &str = "session";
 
 /// One row of a group, before it is cut to the pane: its spans, each with
 /// the style it is painted in.
@@ -104,9 +104,10 @@ impl Row {
     }
 }
 
-/// One group of the sidebar: its title and its rows.
+/// One group of the sidebar: its title, the tag the title carries, and its rows.
 struct Group {
     title: &'static str,
+    tag: Option<&'static str>,
     rows: Vec<Row>,
 }
 
@@ -120,18 +121,18 @@ pub struct Drawn {
 
 /// The sidebar's lines, at a width and a height, cut to fit.
 ///
-/// `notice` is a pick that could not be saved: it is drawn first, as the
-/// sidebar's leading rows, so the fit counts it. `cursor` is the agents
-/// group's row the cursor is on, as [`cursor_of`] numbers it; `usize::MAX`
-/// draws no cursor. A group that
-/// does not fit the height is left out whole; one line under the groups says
-/// `not shown:` with each group's name and how much it held, the way the main
-/// pane names the blocks it leaves out. An unreadable configuration names the
-/// file and the error, then shows the defaults beside them. An old
-/// `config.json` is named at the top: it is never read silently.
+/// `session` is the crew this session runs, when there is one: it is drawn in
+/// place of the file's, and the values that differ from the file carry the
+/// session tag. `None` draws the file as it is. `cursor` is the agents group's
+/// row the cursor is on, as [`cursor_of`] numbers it; `usize::MAX` draws no
+/// cursor. A group that does not fit the height is left out whole; one line
+/// under the groups says `not shown:` with each group's name and how much it
+/// held, the way the main pane names the blocks it leaves out. An unreadable
+/// configuration names the file and the error, then shows the defaults beside
+/// them. An old `config.json` is named at the top: it is never read silently.
 pub fn lines(
     state: &ConfigRead,
-    notice: Option<&crate::app::ReadError>,
+    session: Option<&Config>,
     theme: &Theme,
     icons: IconSet,
     width: usize,
@@ -145,24 +146,9 @@ pub fn lines(
         };
     }
     // Each prefix row carries the short name a marker uses for it when the
-    // row does not fit. The pick's notice comes first: it says what the
-    // screen just failed to do. The error comes before the old file's
-    // notice: what is wrong outranks what is merely ignored.
+    // row does not fit. The error comes before the old file's notice: what is
+    // wrong outranks what is merely ignored.
     let mut prefix: Vec<(String, Line<'static>)> = Vec::new();
-    if let Some(error) = notice {
-        prefix.push((
-            NOT_SAVED.to_string(),
-            line(NOT_SAVED, theme.text.normal, width),
-        ));
-        prefix.push((
-            format!("{} error", error.file),
-            line(
-                &format!("{}: {}", error.file, error.error),
-                theme.semantic.error,
-                width,
-            ),
-        ));
-    }
     match &state.state {
         ConfigState::Absent => prefix.push((EMPTY.to_string(), line(EMPTY, theme.text.dim, width))),
         ConfigState::Config(config) => {
@@ -172,9 +158,10 @@ pub fn lines(
                     line(&legacy_notice(file), theme.text.dim, width),
                 ));
             }
+            let shown = session.unwrap_or(config);
             return fits(
                 prefix,
-                groups(config, theme, icons, cursor),
+                groups(shown, config, theme, icons, cursor),
                 theme,
                 icons,
                 width,
@@ -209,7 +196,13 @@ pub fn lines(
     match &state.state {
         ConfigState::Unreadable(_) => fits(
             prefix,
-            groups(&Config::default(), theme, icons, usize::MAX),
+            groups(
+                &Config::default(),
+                &Config::default(),
+                theme,
+                icons,
+                usize::MAX,
+            ),
             theme,
             icons,
             width,
@@ -231,15 +224,26 @@ fn legacy_notice(file: &str) -> String {
     format!("{file} is not read")
 }
 
-/// The configuration's groups, in the order they are read.
-fn groups(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<Group> {
+/// The configuration's groups, in the order they are read. `config` is the
+/// crew in force and `file` is the configuration it differs from: the agents
+/// group carries the session tag when the crew's roles are not the file's.
+fn groups(
+    config: &Config,
+    file: &Config,
+    theme: &Theme,
+    icons: IconSet,
+    cursor: usize,
+) -> Vec<Group> {
+    let crew_differs = !same_crew(config, file);
     vec![
         Group {
             title: AGENTS_TITLE,
-            rows: agent_rows(config, theme, icons, cursor),
+            tag: crew_differs.then_some(SESSION_TAG),
+            rows: agent_rows(config, file, theme, icons, cursor),
         },
         Group {
             title: LIMIT_TITLE,
+            tag: None,
             rows: vec![Row::plain(
                 format!("{} build-and-fix rounds", config.round_limit),
                 theme.text.normal,
@@ -248,9 +252,32 @@ fn groups(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<
         },
         Group {
             title: ORDER_TITLE,
+            tag: None,
             rows: order_rows(config, theme),
         },
     ]
+}
+
+/// Whether two configurations have the same roles in their crew.
+fn same_crew(config: &Config, file: &Config) -> bool {
+    config.agents.len() == file.agents.len()
+        && config
+            .agents
+            .iter()
+            .all(|agent| file.agents.iter().any(|known| known.role == agent.role))
+}
+
+/// Whether a field of an agent differs from the file's agent of the same role.
+/// An agent the file does not have differs in every field.
+fn differs(agent: &Agent, file: Option<&Agent>, field: Field) -> bool {
+    let Some(file) = file else {
+        return true;
+    };
+    match field {
+        Field::Harness => agent.harness != file.harness,
+        Field::Model => agent.model != file.model,
+        Field::Effort => agent.effort != file.effort,
+    }
 }
 
 /// One entry per agent: its role icon and its name, the name on the role's
@@ -258,10 +285,19 @@ fn groups(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<
 /// its effort on the rows under it. The keys are dim and aligned in a column;
 /// the model is the strong value. The head row is not picked; the cursor is on
 /// one of the three rows under it. A model that is empty, or an effort that is
-/// absent, says so on the warning slot.
-fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<Row> {
+/// absent, says so on the warning slot. An agent that differs from the file
+/// carries the session tag on its head, and a field that differs has a strong
+/// key.
+fn agent_rows(
+    config: &Config,
+    file: &Config,
+    theme: &Theme,
+    icons: IconSet,
+    cursor: usize,
+) -> Vec<Row> {
     let mut rows = Vec::new();
     for (index, agent) in config.agents.iter().enumerate() {
+        let was = file.agents.iter().find(|known| known.role == agent.role);
         // The agent is named by its role: its table is the role's name. The
         // role's word stays beside its icon: an icon decorates a word, it never
         // replaces one.
@@ -270,12 +306,20 @@ fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> 
             role_icon(agent.role).glyph(icons),
             agent.role.as_str()
         );
-        let spans = vec![(head, role_style(theme, agent.role))];
+        let mut spans = vec![(head, role_style(theme, agent.role))];
+        if FIELDS.iter().any(|field| differs(agent, was, *field)) {
+            spans.push((format!(" {SESSION_TAG}"), theme.text.dim));
+        }
         rows.push(Row {
             spans,
             selected: false,
         });
         for field in FIELDS {
+            let key = if differs(agent, was, field) {
+                theme.text.strong
+            } else {
+                theme.text.dim
+            };
             let (value, style) = match field {
                 Field::Harness => (agent.harness.clone(), theme.text.normal),
                 Field::Model if agent.model.is_empty() => {
@@ -291,7 +335,7 @@ fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> 
                 spans: vec![
                     (
                         format!("  {:<width$}", field.label(), width = KEY_COLUMN),
-                        theme.text.dim,
+                        key,
                     ),
                     (value, style),
                 ],
@@ -417,7 +461,7 @@ fn fits(
 fn drawn(groups: &[Group], width: usize, icons: IconSet, theme: &Theme) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for group in groups {
-        lines.push(group_line(group.title, width, theme));
+        lines.push(group_line(group.title, group.tag, width, theme));
         for row in &group.rows {
             lines.push(row_line(&row.spans, row.selected, width, icons, theme));
         }
@@ -425,15 +469,21 @@ fn drawn(groups: &[Group], width: usize, icons: IconSet, theme: &Theme) -> Vec<L
     lines
 }
 
-/// A group's title: the label bold on the accent, then a dim rule to the
-/// pane's edge.
-fn group_line(title: &str, width: usize, theme: &Theme) -> Line<'static> {
+/// A group's title: the label bold on the accent, its tag dim after it when it
+/// has one, then a dim rule to the pane's edge.
+fn group_line(title: &str, tag: Option<&str>, width: usize, theme: &Theme) -> Line<'static> {
     let label = cut_to(title, width.saturating_sub(BAR));
-    let used = text_width(&label);
+    let mut used = text_width(&label);
     let mut spans = vec![
         Span::raw(" "),
         Span::styled(label, theme.chrome.tab_active.add_modifier(Modifier::BOLD)),
     ];
+    if let Some(tag) = tag {
+        let tagged = format!(" {tag}");
+        let tagged = cut_to(&tagged, width.saturating_sub(BAR + used));
+        used += text_width(&tagged);
+        spans.push(Span::styled(tagged, theme.text.dim));
+    }
     let rest = width.saturating_sub(BAR + used);
     if rest > 1 {
         spans.push(Span::styled(
@@ -922,35 +972,65 @@ mod tests {
     }
 
     #[test]
-    fn a_pick_notice_is_budgeted_with_the_groups_and_nothing_is_cut_silently() {
-        // The notice is two rows drawn inside the fit: the groups it pushes
-        // out are named, and the pane never holds more rows than it has.
-        let notice = crate::app::ReadError {
-            file: CONFIG_FILE.to_string(),
-            error: "denied".to_string(),
-        };
-        let full = rendered(&configured(), 30, 1000).len() + 2;
-        for height in 3..=40usize {
-            let drawn = lines(
-                &configured(),
-                Some(&notice),
-                &theme(),
-                IconSet::Nerd,
-                30,
-                height,
-                usize::MAX,
-            );
-            let rows = text(&drawn.lines);
-            assert!(rows.len() <= height, "{height}: {rows:#?}");
-            assert_eq!(rows[0], NOT_SAVED, "{height}: {rows:#?}");
-            let named = rows.iter().any(|row| row.starts_with("not shown:"));
-            assert!(
-                named || rows.len() == full,
-                "{height}: a group is gone without a word: {rows:#?}"
-            );
-        }
+    fn a_session_value_that_differs_from_the_file_is_tagged_on_its_agent() {
+        // The session's model is drawn, the agent that changed says session,
+        // and an agent that did not change carries no tag.
+        let file = Config::default();
+        let mut session = Config::default();
+        session.agents[0].model = "claude-sonnet-5-5".to_string();
+        let state = ConfigRead::of(ConfigState::Config(file));
+        let drawn = lines(
+            &state,
+            Some(&session),
+            &theme(),
+            IconSet::Nerd,
+            30,
+            40,
+            usize::MAX,
+        );
+        let rows = text(&drawn.lines);
+        let head = rows
+            .iter()
+            .position(|row| row.contains("orchestrator"))
+            .expect("the orchestrator's head");
+        assert!(rows[head].ends_with("session"), "{rows:#?}");
+        assert!(rows[head + 2].contains("claude-sonnet-5-5"), "{rows:#?}");
+        let builder = rows
+            .iter()
+            .position(|row| row.contains("builder"))
+            .expect("the builder's head");
+        assert!(!rows[builder].contains("session"), "{rows:#?}");
     }
 
+    #[test]
+    fn a_crew_with_other_roles_than_the_file_tags_the_agents_group() {
+        // One agent in the session and three in the file: the agents group
+        // says session, and the roles the session left off are not drawn.
+        let file = Config::default();
+        let mut session = Config::default();
+        session.agents.truncate(1);
+        let state = ConfigRead::of(ConfigState::Config(file));
+        let drawn = lines(
+            &state,
+            Some(&session),
+            &theme(),
+            IconSet::Nerd,
+            30,
+            40,
+            usize::MAX,
+        );
+        let rows = text(&drawn.lines);
+        assert!(
+            rows[0].contains("AGENTS") && rows[0].contains("session"),
+            "{rows:#?}"
+        );
+        // One agent's rows: its head, harness, model and effort.
+        assert_eq!(
+            rows.iter().filter(|row| row.contains("harness")).count(),
+            1,
+            "{rows:#?}"
+        );
+    }
     #[test]
     fn the_cursor_is_on_a_pickable_row_and_the_bar_reaches_the_edge() {
         let drawn = lines(

@@ -51,6 +51,7 @@ paint and never the words. This redesign adds glyphs, not words.
 | `role_runner` | `󰖷` U+F0587 | `▸` | runner / builder |
 | `role_reviewer` | `󰈈` U+F0208 | `◎` | reviewer |
 | `role_human` | `󰀄` U+F0004 | `☺` | human |
+| `role_absent` | `○` U+25CB | `○` | a role the crew leaves out (hugo's crew-size range) |
 | `blocked` | `󰌾` U+F033E | `⊘` | blocked, waits on |
 | `finding` | `󰅚` U+F015A | `✗` | open finding |
 | `link` | `󰌷` U+F0337 | `→` | a dependency, a link |

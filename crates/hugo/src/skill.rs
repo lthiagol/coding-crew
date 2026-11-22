@@ -191,6 +191,28 @@ mod tests {
     }
 
     #[test]
+    fn the_crew_printed_is_the_session_crew_and_names_the_roles_it_leaves_out() {
+        // A session of one agent prints the orchestrator alone, and names the
+        // builder and the reviewer as the orchestrator's to do.
+        let mut crew = Config::default();
+        crew.agents.truncate(1);
+        let text = for_role(
+            SkillName::Orchestrator,
+            ConfigRead::of(ConfigState::Config(crew)),
+        );
+        assert!(text.contains("- orchestrator: harness claude"), "{text}");
+        assert!(!text.contains("- builder: harness"), "{text}");
+        assert!(
+            text.contains("- builder: none; the orchestrator builds it"),
+            "{text}"
+        );
+        assert!(
+            text.contains("- reviewer: none; the orchestrator reviews it"),
+            "{text}"
+        );
+    }
+
+    #[test]
     fn each_role_opens_with_the_crew_and_then_its_own_text() {
         for role in SkillName::ALL {
             let text = for_role(role, ConfigRead::of(ConfigState::Config(Config::default())));

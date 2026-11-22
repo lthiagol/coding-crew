@@ -241,6 +241,30 @@ lists it, and the effort only when the new harness takes it; the rest is
 cleared or reset, and the row says so. `s` refuses while any agent lacks a
 harness, a model or an effort, and names which.
 
+The ruling above says a pick saves in place. That is amended by the ruling
+below: a pick is the session's, and nothing is written to the file.
+
+## Ruling, 2026-11-22: hugo's picks are session-only
+
+hugo never writes `config.toml`. Its picks — each agent's harness, model and
+effort, and the crew's size — apply to the session. The file's values are the
+defaults, and raul's Settings edits them. The file is read at launch and by
+`r`; a pick is a difference from it, and the sidebar marks that difference.
+
+- **The crew size** is a range of three choices, opened by `c`: one agent
+  (`󰚩○○ single agent`), the orchestrator and a builder, where the orchestrator
+  also reviews (`󰚩󰖷○ orchestrator also reviews`), and one agent per role
+  (`󰚩󰖷󰈈 one agent per role`). The roles are icons; a role the size leaves out
+  is an empty circle, `role_absent` in the icon table, with a unicode fallback.
+- **The session's crew is the crew the sidebar shows**, and `s` and
+  `hugo --skill` use it. The tab `s` opens carries the crew in `HUGO_SESSION`,
+  so the orchestrator's skill prints the session's crew.
+- **A session tag marks the difference from the file**: the agent that differs
+  carries it, and the agents group does when its roles differ.
+
+Not ruled: whether `r` keeps the session's picks. The build drops them, so the
+file is what the session starts over from. The human confirms or reverses this.
+
 ## Not decided here
 
 - Whether the autopilot runs at all, or hugo describes a policy the human
