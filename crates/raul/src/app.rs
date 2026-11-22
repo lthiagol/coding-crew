@@ -1579,7 +1579,13 @@ mod tests {
         )
         .0;
         let text = rows.join("\n");
-        assert!(text.contains("EXECUTION · 1…"), "{text}");
+        // The entry is wider than the pane, so it gives way whole and the
+        // marker says more is hidden.
+        assert!(
+            rows.iter()
+                .any(|row| row.trim_matches(|symbol| symbol == '│' || symbol == ' ') == "…"),
+            "the marker is not the pane's only row: {text}"
+        );
         assert!(!text.contains("TSK29"), "a row was drawn: {text}");
         // view.rs says what it renders, not that it keeps a window with a
         // row: at this height there is no such window.
@@ -1935,16 +1941,18 @@ mod tests {
             app.on_key(key(KeyCode::Char('G')), &work, now());
             let (rows, _) = render(&mut app, 100, 12);
             let text = rows.join("\n");
+            // Each line of the announcement is checked on its own: a long one
+            // wraps onto the next row of the pane.
             let expected = match tab {
-                Tab::NeedsYou => {
+                Tab::NeedsYou => vec![
                     "not shown: approve (2 hidden), review (3 hidden), escalated (0 hidden)"
-                        .to_string()
-                }
-                Tab::Path => concat!(
-                    "not shown: EXECUTION · 1, AWAITING APPROVAL · 2, BLOCKED · 3, ",
-                    "RUNNING · 6, REVIEW · 2"
-                )
-                .to_string(),
+                        .to_string(),
+                ],
+                Tab::Path => vec![
+                    "not shown: EXECUTION (1 hidden), AWAITING APPROVAL (2 hidden), BLOCKED (3 hidden)"
+                        .to_string(),
+                    "RUNNING (6 hidden), REVIEW (3 hidden)".to_string(),
+                ],
                 Tab::Backlog => {
                     // The hidden count is what the group holds minus the rows
                     // the scrolled window draws, both read from the fixtures
@@ -1958,19 +1966,21 @@ mod tests {
                             .count();
                         group.rows.len() - shown
                     };
-                    format!(
+                    vec![format!(
                         "not shown: IDEAS ({} hidden), SMALL TASKS ({} hidden), DRAFTS ({} hidden)",
                         hidden(&groups[0]),
                         hidden(&groups[1]),
                         hidden(&groups[2])
-                    )
+                    )]
                 }
                 _ => unreachable!("a tab without rows"),
             };
-            assert!(
-                text.contains(&expected),
-                "{tab:?}: the scrolled count is not {expected:?}: {text}"
-            );
+            for line in &expected {
+                assert!(
+                    text.contains(line),
+                    "{tab:?}: the scrolled count is not {line:?}: {text}"
+                );
+            }
         }
     }
 

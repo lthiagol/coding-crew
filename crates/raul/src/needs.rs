@@ -413,7 +413,9 @@ fn layout(
         let index = index_of(group.reason);
         let start = row_index;
         row_index += group.rows.len();
-        if row_index <= first {
+        // An empty group has no rows above the window, so its header is
+        // shown wherever the window starts.
+        if !group.rows.is_empty() && row_index <= first {
             // The whole group is above the window.
             omitted[index] = group.rows.len();
             continue;
@@ -651,8 +653,8 @@ fn row_line_plain(row: &Row, width: usize, age_width: usize, theme: &Theme) -> L
         spans.extend(tail);
         return Line::from(spans);
     }
-    // Nothing but the id fits.
-    Line::from(Span::styled(cut_to(&format!("{indent}{id}"), width), style))
+    // Nothing but the id fits: the indent gives way first.
+    Line::from(Span::styled(cut_to(&id, width), style))
 }
 
 /// How a piece of the announcement is painted.
@@ -1771,6 +1773,43 @@ mod tests {
         assert!(text.contains("review (2 hidden)"), "{text}");
         assert!(text.contains("escalated (3 hidden)"), "{text}");
         assert!(text.contains("approve (0 hidden)"), "{text}");
+    }
+
+    #[test]
+    fn an_empty_first_group_keeps_its_header_in_a_short_pane() {
+        // No task waits for approval, so the approval group leads the tab
+        // empty. Its header is drawn, and it is not said to be hidden.
+        let work = work_of(
+            (1..=8)
+                .map(|n| waiter(&format!("TSK{n:02}"), coding_crew_core::Status::CodeReview))
+                .collect(),
+        );
+        for height in [5u16, 6, 7, 8] {
+            let rows = draw(&work, 60, height);
+            let text = rows.join("\n");
+            assert!(
+                rows.iter()
+                    .any(|row| row.contains("approve") && row.contains("· 0")),
+                "{height}: {text}"
+            );
+            // The announcement names the group with none of its tasks hidden.
+            assert!(text.contains("not shown: approve 0,"), "{height}: {text}");
+        }
+    }
+
+    #[test]
+    fn the_narrowest_row_shows_its_id_and_not_the_indent() {
+        // From five to eight columns of content nothing but the id fits. The
+        // indent gives way first, so the row is its id, not a run of blanks.
+        // The pane's border takes two columns of the width.
+        for width in 7..=10u16 {
+            let rows = inner(&draw(&mock_work(), width, 40));
+            let row = rows
+                .iter()
+                .find(|row| row.contains("TSK21"))
+                .unwrap_or_else(|| panic!("no row for TSK21: {rows:?}"));
+            assert_eq!(row.trim_end(), "TSK21", "{width}: {row:?}");
+        }
     }
 
     /// A task that waits on a human for the given status.

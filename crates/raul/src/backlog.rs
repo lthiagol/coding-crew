@@ -589,35 +589,14 @@ fn layout_groups(
     for (index, group) in groups.iter().enumerate() {
         let start = row_index;
         row_index += group.rows.len();
-        if row_index <= first {
+        // An empty group has no rows above the window, so its header is
+        // shown wherever the window starts.
+        if !group.rows.is_empty() && row_index <= first {
             // The whole group is above the window: its header is hidden too.
             omitted[index] = group.rows.len();
             continue;
         }
         if used + 1 > capacity {
-            // The header does not fit. The cursor's row still may: the row
-            // the enter key opens is worth more than the header above it,
-            // and the announcement names the group the header would have.
-            if let Some(cursor) =
-                selected.and_then(|id| group.rows.iter().position(|row| row.id == id))
-                && used < capacity
-            {
-                let row_index = start + cursor;
-                let height = row_height(&group.rows[cursor]);
-                if row_index >= first && used + height <= capacity {
-                    out.extend(row_lines(
-                        &group.rows[cursor],
-                        width,
-                        metrics,
-                        theme,
-                        selected,
-                    ));
-                    shown_rows.push(row_index);
-                    omitted[index] = group.rows.len() - 1;
-                    used += height;
-                    continue;
-                }
-            }
             omitted[index] = group.rows.len();
             continue;
         }
@@ -1703,6 +1682,39 @@ mod tests {
         let text = said_text(&rows);
         assert!(text.contains("IDEAS (0 hidden)"), "{text}");
         assert!(!text.contains("IDEAS (hidden)"), "{text}");
+    }
+
+    #[test]
+    fn an_empty_first_group_keeps_its_header_in_a_short_pane() {
+        // No ideas and many small tasks: the empty IDEAS group leads the tab.
+        // Its header is drawn, and the announcement does not call it hidden.
+        let groups = [
+            Group {
+                kind: GroupKind::Ideas,
+                rows: Vec::new(),
+            },
+            Group {
+                kind: GroupKind::SmallTasks,
+                rows: (1..=8)
+                    .map(|n| {
+                        row(
+                            &format!("ITM{n:02}"),
+                            "bug",
+                            "a small task",
+                            None,
+                            "open",
+                            None,
+                            true,
+                        )
+                    })
+                    .collect(),
+            },
+        ];
+        for height in [3usize, 4, 5, 6] {
+            let text = text_of(&lines(&groups, 60, height, &theme(), None));
+            assert!(text.contains("IDEAS · 0"), "{height}: {text}");
+            assert!(!text.contains("IDEAS (hidden)"), "{height}: {text}");
+        }
     }
 
     #[test]

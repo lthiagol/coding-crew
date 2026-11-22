@@ -842,7 +842,7 @@ fn summary(dropped: &[Dropped], width: usize, theme: &Theme) -> Vec<Line<'static
     let mut first = true;
     let mut cut = false;
     for branch in dropped {
-        let entry = format!("{} · {}", branch.name, branch.count);
+        let entry = format!("{} ({} hidden)", branch.name, branch.count);
         let entry_width = text_width(&entry);
         if entry_width > width {
             // Not even the group and its count fit whole: it is not cut.
@@ -1159,23 +1159,21 @@ fn row(
     ];
     let mut used = content + id.chars().count();
     let mut chunks = chunks.iter();
-    match chunks.next() {
-        Some(first) => {
-            if beside {
-                head.push(Span::raw(" ".repeat(GAP)));
-                head.push(Span::styled(first.clone(), style));
-                used += GAP + first.chars().count();
-            }
-            lines.push(Line::from(head));
-            for chunk in chunks {
-                lines.push(Line::from(vec![
-                    Span::raw(" ".repeat(text_col)),
-                    Span::styled(chunk.clone(), style),
-                ]));
-                used = text_col + chunk.chars().count();
-            }
-        }
-        None => lines.push(Line::from(head)),
+    let first = chunks.next();
+    if let Some(first) = first.filter(|_| beside) {
+        head.push(Span::raw(" ".repeat(GAP)));
+        head.push(Span::styled(first.clone(), style));
+        used += GAP + first.chars().count();
+    }
+    lines.push(Line::from(head));
+    // Beside the id the first piece is on the id's line; under it, every
+    // piece is drawn from the column.
+    for chunk in first.filter(|_| !beside).into_iter().chain(chunks) {
+        lines.push(Line::from(vec![
+            Span::raw(" ".repeat(text_col)),
+            Span::styled(chunk.clone(), style),
+        ]));
+        used = text_col + chunk.chars().count();
     }
     // What the row says about the task: what it waits on, and what holds
     // it when it is not only the dependencies.
@@ -1481,7 +1479,7 @@ mod tests {
                         if hidden == 0 {
                             continue;
                         }
-                        let claimed = summary.contains(&format!("{name} · {hidden}"));
+                        let claimed = summary.contains(&format!("{name} ({hidden} hidden)"));
                         // The inline form belongs to its own group: an
                         // announcement inside another branch is not this
                         // group's word about its hidden rows.
@@ -1501,7 +1499,7 @@ mod tests {
                         );
                         if shown_here > 0 {
                             assert!(
-                                !summary.contains(&format!("{name} · {}", end - start)),
+                                !summary.contains(&format!("{name} ({} hidden)", end - start)),
                                 "{width}/{first}/{height}: a partly shown {name} is announced as wholly hidden\n{text}"
                             );
                         }
@@ -1517,14 +1515,17 @@ mod tests {
         // named with the count of what is hidden, and the count is the
         // rows not drawn, not the group's total.
         let tree = tree(&mock_work(), now());
-        let (rows, _, shown, _) = window(&tree, 58, 6, &theme(), None, 10);
+        let (rows, _, shown, _) = window(&tree, 58, 7, &theme(), None, 10);
         let text = rows
             .iter()
             .map(text_of_line)
             .collect::<Vec<String>>()
             .join("\n");
         assert!(text.contains("RUNNING · 6"), "the header: {text}");
-        assert!(text.contains("RUNNING · 4"), "the hidden count: {text}");
+        assert!(
+            text.contains("RUNNING (4 hidden)"),
+            "the hidden count: {text}"
+        );
         assert_eq!(shown.len(), 2, "{shown:?}");
     }
 
@@ -1585,12 +1586,12 @@ mod tests {
                 count: 2,
             },
         ];
-        let text = summary(&dropped, 20, &theme)
+        let text = summary(&dropped, 22, &theme)
             .iter()
             .map(text_of_line)
             .collect::<Vec<String>>()
             .join("\n");
-        assert!(text.contains("EXECUTION · 1…"), "{text}");
+        assert!(text.contains("EXECUTION (1 hidden)…"), "{text}");
         assert!(!text.contains("AWAITING APPROVAL"), "{text}");
         assert!(!text.contains("AWAIT…"), "{text}");
         // Not even the first entry fits: the marker is the whole summary.
@@ -1793,7 +1794,7 @@ mod tests {
             for height in [4u16, 6, 8, 12, 24, 40] {
                 let text = text_of(&draw(&work, width, height));
                 assert!(
-                    text.contains("TSK29") || text.contains("EXECUTION ·"),
+                    text.contains("TSK29") || text.contains("EXECUTION ("),
                     "{width}x{height}: {text}"
                 );
             }
@@ -1912,11 +1913,16 @@ mod tests {
     fn no_title_is_cut_at_any_width() {
         let work = mock_work();
         let tree = tree(&work, now());
-        for width in [40u16, 60, 100] {
+        // Below twenty columns a branch's deepest rows are wider than the
+        // pane, and the tree does not draw the branch at all: that is what
+        // `row` is spared, and `a_title_keeps_every_letter_at_any_row_width`
+        // checks the row on its own.
+        for width in (19u16..=22).chain([40, 60, 100]) {
             // A title that does not fit wraps under its own column: no
             // letter of it is lost. The pane is tall enough for the whole
-            // tree, so every title is on the screen.
-            let text: String = inner(&draw(&work, width, 120))
+            // tree, so every title is on the screen: at the narrowest of
+            // these widths a title wraps to a letter a line.
+            let text: String = inner(&draw(&work, width, 2000))
                 .iter()
                 .flat_map(|row| row.chars())
                 .filter(|ch| !ch.is_whitespace())
@@ -2014,12 +2020,41 @@ mod tests {
     }
 
     #[test]
+    fn a_title_keeps_every_letter_at_any_row_width() {
+        // An id that leaves no room beside it puts the title under the id,
+        // and the first piece of the title is drawn there too.
+        let entry = Entry {
+            id: "TSK04".to_string(),
+            title: "The Needs you row says the review state".to_string(),
+            status: Status::Approved,
+            waits_on: Vec::new(),
+            hold: None,
+            review: None,
+        };
+        for width in 1..=40 {
+            let text: String = row(" │ ├─ ", &entry, width, &theme(), false)
+                .iter()
+                .map(text_of_line)
+                .collect::<String>()
+                .chars()
+                .filter(|ch| !ch.is_whitespace())
+                .collect();
+            let title: String = entry
+                .title
+                .chars()
+                .filter(|ch| !ch.is_whitespace())
+                .collect();
+            assert!(text.contains(&title), "{width}: {text}");
+        }
+    }
+
+    #[test]
     fn a_branch_that_is_not_shown_is_announced() {
         // The pane is too short for the whole tree: the branches that are not
         // shown are named, with the count of the tasks they hold.
         let text = text_of(&draw(&mock_work(), 100, 16));
         assert!(text.contains("not shown"), "{text}");
-        assert!(text.contains("REVIEW · 3"), "{text}");
+        assert!(text.contains("REVIEW (3 hidden)"), "{text}");
     }
 
     #[test]

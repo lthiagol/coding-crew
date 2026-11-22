@@ -761,12 +761,12 @@ fn kinds_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
         .max()
         .unwrap_or(0);
     // The label is padded as far as the column allows.
-    let pad = LABEL_WIDTH.min(inner.saturating_sub(digits));
+    let pad = LABEL_WIDTH.min(inner.saturating_sub(digits + 1));
     let mut lines = vec![Line::from(Span::styled(
         "smaller tasks by kind",
         theme.semantic.info,
     ))];
-    if label_width <= pad {
+    if label_width < pad {
         for (kind, count) in &kinds {
             lines.push(Line::from(vec![
                 Span::styled(format!("{:<pad$}", kind.as_str()), theme.text.normal),
@@ -774,8 +774,9 @@ fn kinds_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
             ]));
         }
     } else {
-        // A kind and its count do not fit on one row: the block is left out
-        // whole rather than showing a count on a row of its own.
+        // A kind and its count do not keep a gap on one row: the block is left
+        // out whole rather than showing a count on a row of its own, or against
+        // its label.
         lines.clear();
     }
     Panel {
@@ -1927,12 +1928,29 @@ mod tests {
                     .unwrap_or_else(|| panic!("no row for {label} at {width}"));
                 let text = text_of(std::slice::from_ref(row));
                 assert!(text.contains(&count.to_string()), "{width}: {text}");
+                // The count is never on the label's last column.
+                assert!(text.ends_with(&format!(" {count}")), "{width}: {text}");
                 assert_eq!(
                     rows_of(std::slice::from_ref(row), width.saturating_sub(BORDER)),
                     1,
                     "{width}: {text}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn the_kinds_counts_share_a_column_with_the_other_panels() {
+        // At an ordinary width the counts sit where the other panels' do.
+        let panel = kinds_panel(&mock_work(), 40, &theme());
+        assert!(panel.lines.len() > 1, "the block is left out");
+        for line in &panel.lines[1..] {
+            let text = text_of(std::slice::from_ref(line));
+            assert_eq!(
+                text.chars().position(|symbol| symbol.is_ascii_digit()),
+                Some(LABEL_WIDTH),
+                "{text}"
+            );
         }
     }
 
