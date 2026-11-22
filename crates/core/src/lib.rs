@@ -26,7 +26,7 @@ pub use config::{Agent, CONFIG_FILE, Config, ConfigError, Gate, OrderStep};
 pub use harness::{Harness, Invocation, Models};
 pub use item::{Item, ItemError, ItemKind, ItemStatus};
 pub use lifecycle::{Event, Overlay, Overlays, Reason, Status, TransitionContext, TransitionError};
-pub use markdown::{escape_literal, task_to_markdown};
+pub use markdown::{escape_literal, item_to_markdown, task_to_markdown};
 pub use runtime::{
     AgentState, Budget, Composition, CrewMember, QueueItem, Runtime, RuntimeError, RuntimeRound,
     Severities, Stamp,

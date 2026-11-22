@@ -1,13 +1,13 @@
-//! The task → markdown projection.
+//! The task and smaller-task → markdown projections.
 //!
 //! The record stays JSON; this is its human-facing view, as
 //! [ADR 0009](../../../docs/decisions/0009-markdown-projection.md) decides.
 //!
 //! Free text — intent, scope, criterion descriptions, step prose, notes,
-//! findings, questions and comments — is markdown in its own right. Values
-//! that must not be interpreted — ids, statuses, kinds, timestamps, actors and
-//! sessions, file paths and verification commands — are escaped or rendered as
-//! code.
+//! findings, questions, comments and an item's body — is markdown in its own
+//! right. Values that must not be interpreted — ids, statuses, kinds,
+//! timestamps, actors and sessions, file paths and verification commands — are
+//! escaped or rendered as code.
 //!
 //! The projection is pure: the second slice supplies the project context for
 //! reverse dependencies and children, and nothing here reads a clock, a
@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 
+use crate::item::{Item, ItemStatus};
 use crate::lifecycle::Overlay;
 use crate::task::{
     AcceptanceCriterion, Claim, Finding, FindingStatus, Focus, Question, QuestionStatus, Round,
@@ -55,6 +56,54 @@ pub fn task_to_markdown(task: &Task, tasks: &[Task]) -> String {
     children(&mut out, task, &canonical);
 
     out
+}
+
+/// Project a smaller task to one markdown document.
+///
+/// The sections are fixed and ordered: Header, Body, History. The header is
+/// the card: the title, then the id, kind, status and scope, one list item
+/// each. The body is the item's own sentence, markdown in its own right. The
+/// history is the trail the item keeps: when it was made and last changed, the
+/// task it became, and why it was dismissed.
+///
+/// Like `task_to_markdown`, nothing here reads a clock, a terminal or the
+/// filesystem, and every fixed value is escaped or rendered as code.
+pub fn item_to_markdown(item: &Item) -> String {
+    let mut out = String::new();
+
+    item_header(&mut out, item);
+    item_body(&mut out, item);
+    item_history(&mut out, item);
+
+    out
+}
+
+fn item_header(out: &mut String, item: &Item) {
+    out.push_str("# Header\n\n");
+    if !item.title.trim().is_empty() {
+        out.push_str(&format!("**{}**\n\n", escape_literal(&item.title)));
+    }
+    out.push_str(&format!("- **id:** {}\n", code(&item.id)));
+    out.push_str(&format!("- **kind:** {}\n", code(item.kind.as_str())));
+    out.push_str(&format!("- **status:** {}\n", code(item.status.as_str())));
+    out.push_str(&format!("- **scope:** {}\n", codes(&item.scope)));
+}
+
+fn item_body(out: &mut String, item: &Item) {
+    out.push_str("\n# Body\n\n");
+    prose_block(out, &item.body);
+}
+
+fn item_history(out: &mut String, item: &Item) {
+    out.push_str("\n# History\n\n");
+    out.push_str(&format!("- **created:** {}\n", code(&item.created)));
+    out.push_str(&format!("- **updated:** {}\n", code(&item.updated)));
+    if let Some(task) = item.promoted_to.as_deref().filter(|id| !id.is_empty()) {
+        out.push_str(&format!("- **promoted to:** {}\n", link(task)));
+    }
+    if item.status == ItemStatus::Dismissed {
+        prose_bullet(out, "dismissed because", &item.dismissed_reason);
+    }
 }
 
 /// The header card: the title, then each field as a `key value` item, the

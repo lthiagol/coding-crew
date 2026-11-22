@@ -227,6 +227,9 @@ is drawn in both its lines or in neither.
 Smaller tasks are grouped by kind — ideas first, then the small tasks that
 could be worked. The grouping is derived from the kind; it is never stored.
 
+`enter` on any row opens its document in the detail pane: a draft task opens
+as the task it is, and a smaller task opens its own document (below).
+
 ### Settings
 
 **The configuration file, as a file.** Settings shows
@@ -330,6 +333,12 @@ task's own free text — the intent, the criterion descriptions, the notes — i
 markdown in its own right and is rendered as such; the title is a label, never
 a heading and never a link, and is escaped like the other fields that must not
 be interpreted.
+
+A smaller task (`ITM`) has its own document, of three sections: the header card
+— the title, then id, kind, status and scope — the body, and the history — when
+it was made and last changed, the task it became, and why it was dismissed.
+The history shows only what the item keeps: a live item names no task and no
+reason. Its projection is `item_to_markdown`, under the same escaping rules.
 
 Nothing in the detail pane is editable in v1. raul reads.
 

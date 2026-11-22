@@ -1009,6 +1009,61 @@ fn the_backlog_row_carries_its_body_on_the_second_line() {
     );
 }
 
+/// A render's text with the borders and the padding of each row taken off,
+/// and the rows joined by spaces: a sentence that wraps reads as one line.
+fn flowed(text: &str) -> String {
+    text.lines()
+        .map(|row| row.trim_matches(|ch: char| ch == '│' || ch.is_whitespace()))
+        .filter(|row| !row.is_empty())
+        .collect::<Vec<&str>>()
+        .join(" ")
+}
+
+#[test]
+fn an_item_opens_its_own_document_at_forty_and_one_hundred_columns() {
+    // A smaller task has a document like a task's: the header card, the body
+    // and the history. Neither width says the item has no document, and the
+    // body reads whole at both, wrapped only where the pane wraps it.
+    let body = "The activity block says what happened; it does not say when the run began.";
+    for (width, height) in [("40", "400"), ("100", "220")] {
+        let output = run(&[
+            "--render", "--plain", "--detail", "ITM01", "--width", width, "--height", height, WORK,
+        ]);
+        assert!(
+            output.status.success(),
+            "raul failed at {width}: {output:?}"
+        );
+        let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+        let limit: usize = width.parse().expect("a width");
+        assert!(
+            text.lines().all(|row| display_width(row) <= limit),
+            "a row is wider than {width} columns:\n{text}"
+        );
+        assert!(!text.contains("no document yet"), "{text}");
+        assert!(!text.contains("smaller task"), "{text}");
+
+        let flat = flowed(&text);
+        assert!(flat.contains("ITM01"), "{text}");
+        for section in ["Header", "Body", "History"] {
+            assert!(
+                text.lines()
+                    .any(|row| words(row.trim_matches('│').trim()) == section),
+                "the {section} section is missing at {width}:\n{text}"
+            );
+        }
+        for field in ["• id:", "• kind:", "• status:", "• scope:"] {
+            assert!(
+                flat.contains(field),
+                "{field} is missing at {width}:\n{text}"
+            );
+        }
+        assert!(
+            flat.contains(body),
+            "the body does not read whole at {width}:\n{text}"
+        );
+    }
+}
+
 /// The most urgent severity among a task's open findings.
 fn most_urgent(task: &coding_crew_core::Task) -> Option<&'static str> {
     let mut found = [false; 3];

@@ -288,8 +288,7 @@ pub fn render(
 /// through the vendored engine at the pane's own width.
 ///
 /// The record is looked up again on every redraw. A record that left the
-/// folder is said, not a blank screen; a smaller task is said to be one,
-/// not shown as the task it is not.
+/// folder is said, not a blank screen.
 fn document_lines(
     work: &Work,
     detail: &Detail,
@@ -300,14 +299,19 @@ fn document_lines(
     if width == 0 {
         return Vec::new();
     }
-    match work.task(&detail.id) {
-        Some(task) => render_markdown(
-            &coding_crew_core::task_to_markdown(task, &work.tasks),
-            width,
-            icons,
-            theme,
-        ),
-        None => notice_lines(work, detail, width, theme),
+    match document_markdown(work, &detail.id) {
+        Some(markdown) => render_markdown(&markdown, width, icons, theme),
+        None => notice_lines(detail, width, theme),
+    }
+}
+
+/// The markdown of the record the pane shows: a task's document, or a smaller
+/// task's. `None` when the folder holds no record of that id.
+fn document_markdown(work: &Work, id: &str) -> Option<String> {
+    match (work.task(id), work.item(id)) {
+        (Some(task), _) => Some(coding_crew_core::task_to_markdown(task, &work.tasks)),
+        (None, Some(item)) => Some(coding_crew_core::item_to_markdown(item)),
+        (None, None) => None,
     }
 }
 
@@ -321,9 +325,8 @@ fn cached_document(
     icons: IconSet,
     theme: &Theme,
 ) -> Vec<Line<'static>> {
-    match work.task(&detail.id) {
-        Some(task) if width > 0 => {
-            let markdown = coding_crew_core::task_to_markdown(task, &work.tasks);
+    match document_markdown(work, &detail.id) {
+        Some(markdown) if width > 0 => {
             rendered_lines(detail, &markdown, width, icons, theme, || {
                 render_markdown(&markdown, width, icons, theme)
             })
@@ -385,20 +388,13 @@ fn render_markdown(
     .lines
 }
 
-/// The lines that say why a document is not shown: the record is not in the
-/// folder, or it is a smaller task with no document of its own.
-fn notice_lines(work: &Work, detail: &Detail, width: usize, theme: &Theme) -> Vec<Line<'static>> {
-    let line = if work.item(&detail.id).is_some() {
-        format!(
-            "the smaller task {} has no document yet",
-            escape_literal(&detail.id)
-        )
-    } else {
-        format!(
-            "the record {} is not in the work folder",
-            escape_literal(&detail.id)
-        )
-    };
+/// The line that says why a document is not shown: the record is not in the
+/// folder.
+fn notice_lines(detail: &Detail, width: usize, theme: &Theme) -> Vec<Line<'static>> {
+    let line = format!(
+        "the record {} is not in the work folder",
+        escape_literal(&detail.id)
+    );
     // A notice is said quietly: both take `text.dim`, the paint the
     // doc gives the empty state and other secondary text.
     vec![Line::from(Span::styled(
@@ -1874,42 +1870,43 @@ mod tests {
     }
 
     #[test]
-    fn a_smaller_task_is_said_to_be_one() {
-        // The pane opens from the Backlog, whose rows are smaller tasks
-        // too. A smaller task has no document: it is said, not shown as
-        // the task it is not.
+    fn a_smaller_task_opens_its_document() {
+        // The pane opens from the Backlog, whose rows are smaller tasks too.
+        // A smaller task has a document of its own: its header card, its body
+        // and its history, not a notice.
         let work = mock_work();
         let (rows, _) = draw(&work, &pane("ITM01"), 100, 40);
         let text = text_of(&rows);
         assert!(text.contains("ITM01"), "{text}");
-        assert!(text.contains("smaller task"), "{text}");
-        assert!(text.contains("no document yet"), "{text}");
-        assert!(!text.contains("Header"), "{text}");
+        assert!(text.contains("Header"), "{text}");
+        assert!(text.contains("Body"), "{text}");
+        assert!(text.contains("History"), "{text}");
+        assert!(
+            text.contains("The activity block says what happened"),
+            "{text}"
+        );
+        assert!(!text.contains("no document yet"), "{text}");
+        assert!(!text.contains("smaller task"), "{text}");
     }
 
     #[test]
     fn a_notice_is_painted_dim() {
-        // Both notices — the record that left the folder and the smaller
-        // task with no document — take `text.dim`: a notice is secondary
-        // text, not the document's own words. The check can fail: an
-        // unstyled notice reads as document text.
+        // The notice — the record that left the folder — takes `text.dim`: a
+        // notice is secondary text, not the document's own words. The check
+        // can fail: an unstyled notice reads as document text.
         let work = mock_work();
         let dim = theme().text.dim.fg.expect("the dim colour");
-        for (id, marker) in [
-            ("TSK99", "not in the work folder"),
-            ("ITM01", "no document yet"),
-        ] {
-            let (rows, paints) = draw(&work, &pane(id), 100, 40);
-            let row_at = rows
-                .iter()
-                .position(|row| row.contains(marker))
-                .unwrap_or_else(|| panic!("{id}: the notice is not on screen"));
-            let column = rows[row_at].find(marker).expect("the notice's column");
-            assert_eq!(
-                paints[row_at][column].fg, dim,
-                "{id}: the notice is not on text.dim"
-            );
-        }
+        let marker = "not in the work folder";
+        let (rows, paints) = draw(&work, &pane("TSK99"), 100, 40);
+        let row_at = rows
+            .iter()
+            .position(|row| row.contains(marker))
+            .expect("the notice is not on screen");
+        let column = rows[row_at].find(marker).expect("the notice's column");
+        assert_eq!(
+            paints[row_at][column].fg, dim,
+            "the notice is not on text.dim"
+        );
     }
 
     #[test]

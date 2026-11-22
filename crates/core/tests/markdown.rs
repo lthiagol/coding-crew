@@ -6,7 +6,9 @@ use coding_crew_core::task::{
     Intent, Meta, Note, Priority, Question, QuestionStatus, Review, Round, RoundKind, Scope,
     Severity, Step, StepStatus, Task, TaskKind, Verdict,
 };
-use coding_crew_core::{CriterionStatus, Status, task_to_markdown};
+use coding_crew_core::{
+    CriterionStatus, Item, ItemStatus, Status, item_to_markdown, task_to_markdown,
+};
 
 const HEADINGS: [&str; 10] = [
     "# Header",
@@ -1916,5 +1918,179 @@ fn the_markdown_matches_the_snapshot_byte_for_byte() {
         document,
         include_str!("snapshots/task.md"),
         "the projection differs from tests/snapshots/task.md"
+    );
+}
+
+/// A stable smaller task: a promoted bug, with a body that is markdown, a
+/// scope and a history that names the task it became.
+fn item_fixture() -> Item {
+    let mut item = Item::new("ITM05", "The candidate row overflows");
+    item.kind = coding_crew_core::ItemKind::Bug;
+    item.status = ItemStatus::Promoted;
+    item.body =
+        "The **candidate** row overflows when the title is `wider` than the row.".to_string();
+    item.scope = vec!["the candidate row".to_string(), "the title cut".to_string()];
+    item.created = "2026-11-02T08:00:00Z".to_string();
+    item.updated = "2026-11-06T15:00:00Z".to_string();
+    item.promoted_to = Some("TSK27".to_string());
+    item
+}
+
+const ITEM_HEADINGS: [&str; 3] = ["# Header", "# Body", "# History"];
+
+#[test]
+fn an_item_has_three_sections_in_order() {
+    let document = item_to_markdown(&item_fixture());
+    assert_eq!(headings(&document), ITEM_HEADINGS);
+}
+
+#[test]
+fn an_item_header_is_the_card_of_its_id_kind_state_and_scope() {
+    let document = item_to_markdown(&item_fixture());
+    let header = section(&document, "# Header");
+
+    assert!(
+        header.contains("**The candidate row overflows**"),
+        "{header}"
+    );
+    assert!(header.contains("- **id:** `ITM05`"), "{header}");
+    assert!(header.contains("- **kind:** `bug`"), "{header}");
+    assert!(header.contains("- **status:** `promoted`"), "{header}");
+    assert!(
+        header.contains("- **scope:** `the candidate row`, `the title cut`"),
+        "{header}"
+    );
+}
+
+#[test]
+fn an_item_body_is_markdown_and_an_empty_one_says_so() {
+    let document = item_to_markdown(&item_fixture());
+    let body = section(&document, "# Body");
+    assert!(body.contains("**candidate**"), "{body}");
+    assert!(body.contains("`wider`"), "{body}");
+
+    let mut empty = item_fixture();
+    empty.body = "  \n ".to_string();
+    let document = item_to_markdown(&empty);
+    assert!(
+        section(&document, "# Body").contains("_none_"),
+        "{document}"
+    );
+}
+
+#[test]
+fn an_item_history_names_the_task_it_became() {
+    let document = item_to_markdown(&item_fixture());
+    let history = section(&document, "# History");
+
+    assert!(
+        history.contains("- **created:** `2026-11-02T08:00:00Z`"),
+        "{history}"
+    );
+    assert!(
+        history.contains("- **updated:** `2026-11-06T15:00:00Z`"),
+        "{history}"
+    );
+    assert!(
+        history.contains("- **promoted to:** [`TSK27`](TSK27)"),
+        "{history}"
+    );
+    assert!(!history.contains("dismissed because"), "{history}");
+}
+
+#[test]
+fn a_dismissed_item_keeps_its_reason_and_a_live_one_has_none() {
+    let mut dismissed = item_fixture();
+    dismissed.status = ItemStatus::Dismissed;
+    dismissed.promoted_to = None;
+    dismissed.dismissed_reason = "Deferred by the human.".to_string();
+    let document = item_to_markdown(&dismissed);
+    let history = section(&document, "# History");
+    assert!(
+        history.contains("- **dismissed because:** Deferred by the human."),
+        "{history}"
+    );
+    assert!(!history.contains("promoted to"), "{history}");
+
+    let mut live = item_fixture();
+    live.status = ItemStatus::Open;
+    live.promoted_to = None;
+    let document = item_to_markdown(&live);
+    assert!(
+        !section(&document, "# History").contains("dismissed"),
+        "{document}"
+    );
+    assert!(
+        !section(&document, "# History").contains("promoted"),
+        "{document}"
+    );
+}
+
+#[test]
+fn every_fixed_item_field_keeps_its_code_span_under_attack() {
+    const ATTACK: &str = "FIXED-ATTACK\n# injected-heading\n- injected-item\n1. injected-order\n> injected-quote\n```injected-fence\n[link](https://injected.example)\n| injected-cell |";
+
+    let mut item = Item::new(
+        ATTACK,
+        "# Title attack [link](https://title.example) | cell\n- title item",
+    );
+    item.status = ItemStatus::Dismissed;
+    item.scope = vec![ATTACK.to_string()];
+    item.created = ATTACK.to_string();
+    item.updated = ATTACK.to_string();
+    item.promoted_to = Some(ATTACK.to_string());
+    item.dismissed_reason = "**bold** reason".to_string();
+    item.body = "**bold** body".to_string();
+
+    let document = item_to_markdown(&item);
+
+    assert_eq!(headings(&document), ITEM_HEADINGS);
+    assert!(document.contains("FIXED-ATTACK"), "{document}");
+    assert!(
+        !document
+            .lines()
+            .any(|line| line.starts_with("```") && !line.starts_with("````"))
+    );
+
+    let header = section(&document, "# Header");
+    assert!(header.contains("\\# Title attack \\[link\\]"), "{header}");
+    assert!(!document.contains("](https://title.example)"), "{document}");
+
+    let outside = without_link_destinations(&without_code_spans(&document));
+    for token in [
+        "FIXED-ATTACK",
+        "injected-heading",
+        "injected-item",
+        "injected-order",
+        "injected-quote",
+        "injected-fence",
+        "injected.example",
+        "injected-cell",
+    ] {
+        assert!(
+            !outside.contains(token),
+            "{token} escaped its span:\n{outside}"
+        );
+    }
+    for line in outside.lines() {
+        assert!(
+            !line.starts_with("# ") || ITEM_HEADINGS.contains(&line),
+            "a level-one heading outside the three sections:\n{line}"
+        );
+        assert!(!line.starts_with("```"), "{line}");
+    }
+
+    // Prose keeps its markdown.
+    assert!(outside.contains("**bold** body"), "{outside}");
+    assert!(outside.contains("**bold** reason"), "{outside}");
+}
+
+#[test]
+fn the_item_markdown_matches_the_snapshot_byte_for_byte() {
+    let document = item_to_markdown(&item_fixture());
+    assert_eq!(
+        document,
+        include_str!("snapshots/item.md"),
+        "the item projection differs from tests/snapshots/item.md"
     );
 }
