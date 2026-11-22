@@ -2,16 +2,17 @@
 //! of the flow.
 //!
 //! The texts are markdown embedded in the binary. Each opens with the crew the
-//! configuration in force names — the harness, each agent's model, the
-//! review-round limit — because the texts refer to "the reviewer model above".
+//! configuration in force names — each agent's harness, model and effort, the
+//! arguments and environment that start it, and the review-round limit —
+//! because the texts refer to "the reviewer model above".
 //! The configuration is read the way the window reads it, so the crew printed
 //! is the crew hugo shows.
 
 use anyhow::Result;
 
 use coding_crew_core::Config;
+use coding_crew_core::harness;
 
-use crate::catalog::model_args;
 use crate::config::{ConfigRead, ConfigState};
 
 /// The roles a skill is printed for.
@@ -111,28 +112,38 @@ pub fn for_role(role: SkillName, read: ConfigRead) -> String {
     format!("{}{}", crew(&config, note.as_deref()), role.text())
 }
 
-/// The crew section: the harness, each agent's role and model with the
-/// arguments that start it, and the review-round limit.
+/// The crew section: each agent's role, its harness, model and effort, the
+/// arguments and environment that start it, and the review-round limit.
+///
+/// The environment is part of the start: a harness that reads its model from
+/// it is started with the variable set, so it is named beside the arguments.
 fn crew(config: &Config, note: Option<&str>) -> String {
     let mut out = String::from("# Crew\n\n");
     if let Some(note) = note {
         out.push_str(note);
         out.push_str("\n\n");
     }
-    out.push_str(&format!(
-        "Harness: {}, driven as {}.\n",
-        config.harness.tool, config.harness.driven
-    ));
     out.push_str(&format!("Review-round limit: {}.\n\n", config.round_limit));
     for agent in &config.agents {
+        let effort = agent.effort.as_deref().unwrap_or("default");
         out.push_str(&format!(
-            "- {} ({}): {}\n",
+            "- {} ({}): harness {}, model {}, effort {effort}\n",
             agent.name,
             agent.role.as_str(),
+            agent.harness,
             agent.model
         ));
-        let args = model_args(&config.harness.tool, &agent.model);
-        out.push_str(&format!("  model args: {}\n", args.join(" ")));
+        match harness::find(&agent.harness) {
+            Some(known) => {
+                let start = known.invocation(&agent.name, &agent.model, agent.effort.as_deref());
+                out.push_str(&format!("  start kind: {}\n", known.kind));
+                out.push_str(&format!("  start args: {}\n", start.args.join(" ")));
+                for (key, value) in &start.env {
+                    out.push_str(&format!("  start env: {key}={value}\n"));
+                }
+            }
+            None => out.push_str("  start: the harness is not in the table\n"),
+        }
     }
     out.push('\n');
     out
@@ -177,13 +188,58 @@ mod tests {
     }
 
     #[test]
-    fn the_crew_names_each_agent_with_its_model_and_start_args() {
+    fn the_crew_names_each_agent_with_its_harness_model_effort_and_start_args() {
         let text = crew(&Config::default(), None);
-        assert!(text.contains("Harness: opencode, driven as --standalone · role config."));
-        assert!(text.contains("- builder (runner): opencode-go/deepseek-v4.1-flash#high\n"));
-        assert!(text.contains("- reviewer (reviewer): opencode-go/glm-5.3#high\n"));
-        assert!(text.contains("- orchestrator (orchestrator): opencode-go/glm-5.3#high\n"));
-        assert!(text.contains("  model args: --model opencode-go/glm-5.3#high\n"));
+        assert!(
+            text.contains(
+                "- builder (runner): harness claude, model claude-haiku-5-5, effort high\n"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "- reviewer (reviewer): harness claude, model claude-opus-5-5, effort medium\n"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "  start args: --model claude-haiku-5-5 --effort high --permission-mode auto\n"
+            ),
+            "{text}"
+        );
+        assert!(!text.contains("Harness:"), "{text}");
+    }
+
+    #[test]
+    fn a_harness_that_reads_its_model_names_the_environment_it_starts_with() {
+        let mut config = Config::default();
+        config.agents[1].harness = "opencode".to_string();
+        config.agents[1].model = "opencode-go/glm-5.3".to_string();
+        config.agents[1].effort = Some("high".to_string());
+        let text = crew(&config, None);
+        assert!(
+            text.contains("  start args: --standalone --auto\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "  start env: OPENCODE_CONFIG_CONTENT={\"agent\":{\"reviewer\":{\"mode\":\"primary\",\"model\":\"opencode-go/glm-5.3#high\"}},\"default_agent\":\"reviewer\"}\n"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn an_agent_with_no_effort_names_the_default() {
+        let mut config = Config::default();
+        config.agents[0].effort = None;
+        let text = crew(&config, None);
+        assert!(text.contains("effort default\n"), "{text}");
+        assert!(
+            text.contains("  start args: --model claude-haiku-5-5 --permission-mode auto\n"),
+            "{text}"
+        );
     }
 
     #[test]

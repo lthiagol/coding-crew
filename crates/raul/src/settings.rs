@@ -28,6 +28,7 @@ use coding_crew_core::actor::Role;
 use coding_crew_core::config::{
     Config, ConfigError, ConfigFile, config_path, gates_from_text, gates_text, home_at, quote,
 };
+use coding_crew_core::harness;
 use coding_crew_theme::chrome;
 use coding_crew_theme::icons::ENV as ICONS_ENV;
 use coding_crew_theme::text::{cut_to, text_width};
@@ -65,9 +66,9 @@ enum Field {
     Round,
     AgentName(usize),
     AgentRole(usize),
+    AgentHarness(usize),
     AgentModel(usize),
-    Tool,
-    Driven,
+    AgentEffort(usize),
     StepName(usize),
     StepRole(usize),
     StepGates(usize),
@@ -98,10 +99,11 @@ impl Field {
     fn place(self) -> (&'static str, Option<usize>) {
         match self {
             Field::Round => ("", None),
-            Field::AgentName(index) | Field::AgentRole(index) | Field::AgentModel(index) => {
-                ("agents", Some(index))
-            }
-            Field::Tool | Field::Driven => ("harness", None),
+            Field::AgentName(index)
+            | Field::AgentRole(index)
+            | Field::AgentHarness(index)
+            | Field::AgentModel(index)
+            | Field::AgentEffort(index) => ("agents", Some(index)),
             Field::StepName(index) | Field::StepRole(index) | Field::StepGates(index) => {
                 ("order", Some(index))
             }
@@ -116,9 +118,9 @@ impl Field {
             Field::Round => "round_limit",
             Field::AgentName(_) => "name",
             Field::AgentRole(_) | Field::StepRole(_) => "role",
+            Field::AgentHarness(_) => "harness",
             Field::AgentModel(_) => "model",
-            Field::Tool => "tool",
-            Field::Driven => "driven",
+            Field::AgentEffort(_) => "effort",
             Field::StepName(_) => "step",
             Field::StepGates(_) => "gates",
             Field::Theme => "theme",
@@ -147,23 +149,29 @@ impl Field {
             | Field::Icons
             | Field::Sort
             | Field::AgentRole(_)
+            | Field::AgentHarness(_)
+            | Field::AgentEffort(_)
             | Field::StepRole(_) => Kind::Choice,
-            Field::AgentName(_)
-            | Field::AgentModel(_)
-            | Field::Tool
-            | Field::Driven
-            | Field::StepName(_) => Kind::Text,
+            Field::AgentName(_) | Field::AgentModel(_) | Field::StepName(_) => Kind::Text,
             Field::StepGates(_) => Kind::Gates,
         }
     }
 
-    /// The words a choice or a boolean takes, in the order ←/→ cycle them.
-    fn options(self) -> Vec<&'static str> {
+    /// The words a choice or a boolean takes, in the order ←/→ cycle them. An
+    /// effort takes the levels of the harness its agent runs in.
+    fn options(self, config: &Config) -> Vec<&'static str> {
         match self {
             Field::Theme => Preset::ALL.iter().map(|preset| preset.name()).collect(),
             Field::Icons => IconSet::ALL.iter().map(|set| set.name()).collect(),
             Field::Sort => Key::ALL.iter().map(|key| key.name()).collect(),
             Field::AgentRole(_) | Field::StepRole(_) => ROLES.to_vec(),
+            Field::AgentHarness(_) => harness::names(),
+            Field::AgentEffort(index) => config
+                .agents
+                .get(index)
+                .and_then(|agent| harness::find(&agent.harness))
+                .map(|harness| harness.efforts.to_vec())
+                .unwrap_or_default(),
             Field::Reverse => BOOLEANS.to_vec(),
             _ => Vec::new(),
         }
@@ -180,9 +188,13 @@ impl Field {
             Field::AgentRole(index) => {
                 agent(index).map_or_else(String::new, |a| a.role.as_str().to_string())
             }
+            Field::AgentHarness(index) => {
+                agent(index).map_or_else(String::new, |a| a.harness.clone())
+            }
             Field::AgentModel(index) => agent(index).map_or_else(String::new, |a| a.model.clone()),
-            Field::Tool => config.harness.tool.clone(),
-            Field::Driven => config.harness.driven.clone(),
+            Field::AgentEffort(index) => agent(index)
+                .and_then(|a| a.effort.clone())
+                .unwrap_or_default(),
             Field::StepName(index) => step(index).map_or_else(String::new, |s| s.step.clone()),
             Field::StepRole(index) => {
                 step(index).map_or_else(String::new, |s| s.role.as_str().to_string())
@@ -226,9 +238,15 @@ impl Field {
                 }
             }
             Field::AgentRole(index) => {
-                let name = choice(text, &self.options())?;
+                let name = choice(text, &self.options(config))?;
                 if let (Some(agent), Some(role)) = (config.agents.get_mut(index), role_of(name)) {
                     agent.role = role;
+                }
+            }
+            Field::AgentHarness(index) => {
+                let name = choice(text, &self.options(config))?;
+                if let Some(agent) = config.agents.get_mut(index) {
+                    agent.harness = name.to_string();
                 }
             }
             Field::AgentModel(index) => {
@@ -237,8 +255,12 @@ impl Field {
                     agent.model = model;
                 }
             }
-            Field::Tool => config.harness.tool = filled(text, "tool")?,
-            Field::Driven => config.harness.driven = filled(text, "driven")?,
+            Field::AgentEffort(index) => {
+                let effort = choice(text, &self.options(config))?;
+                if let Some(agent) = config.agents.get_mut(index) {
+                    agent.effort = Some(effort.to_string());
+                }
+            }
             Field::StepName(index) => {
                 let name = filled(text, "step")?;
                 if let Some(step) = config.order.get_mut(index) {
@@ -246,7 +268,7 @@ impl Field {
                 }
             }
             Field::StepRole(index) => {
-                let name = choice(text, &self.options())?;
+                let name = choice(text, &self.options(config))?;
                 if let (Some(step), Some(role)) = (config.order.get_mut(index), role_of(name)) {
                     step.role = role;
                 }
@@ -258,10 +280,14 @@ impl Field {
                     step.gates = gates;
                 }
             }
-            Field::Theme => config.raul.theme = choice(text, &self.options())?.to_string(),
-            Field::Icons => config.raul.icons = choice(text, &self.options())?.to_string(),
-            Field::Sort => config.raul.tasks.sort = choice(text, &self.options())?.to_string(),
-            Field::Reverse => config.raul.tasks.reverse = choice(text, &self.options())? == "true",
+            Field::Theme => config.raul.theme = choice(text, &self.options(config))?.to_string(),
+            Field::Icons => config.raul.icons = choice(text, &self.options(config))?.to_string(),
+            Field::Sort => {
+                config.raul.tasks.sort = choice(text, &self.options(config))?.to_string()
+            }
+            Field::Reverse => {
+                config.raul.tasks.reverse = choice(text, &self.options(config))? == "true";
+            }
         }
         Ok(())
     }
@@ -282,25 +308,18 @@ fn choice(text: &str, options: &[&'static str]) -> Result<&'static str, String> 
         .iter()
         .copied()
         .find(|option| *option == text)
-        .ok_or_else(|| format!("not one of {}", options.join(" · ")))
+        .ok_or_else(|| format!("{text} is not one of {}", options.join(" · ")))
 }
 
-/// A model id: `provider/name`, with an optional `#variant`. The catalogue is
-/// hugo's, so only the shape is checked here.
+/// A model id: one word, as the harness names it. Its effort is the agent's
+/// own setting, so a `#` is not part of it. The catalogue is hugo's, so only
+/// the shape is checked here.
 fn model_id(text: &str) -> Result<String, String> {
-    let (base, variant) = match text.split_once('#') {
-        Some((base, variant)) => (base, Some(variant)),
-        None => (text, None),
-    };
-    let shaped = base
-        .split_once('/')
-        .is_some_and(|(provider, name)| !provider.is_empty() && !name.is_empty())
-        && variant.is_none_or(|variant| !variant.is_empty())
-        && !text.chars().any(char::is_whitespace);
+    let shaped = !text.is_empty() && !text.chars().any(|c| c.is_whitespace() || c == '#');
     if shaped {
         Ok(text.to_string())
     } else {
-        Err("a model is provider/name, with an optional #variant".to_string())
+        Err("a model is one word; its effort is set beside it".to_string())
     }
 }
 
@@ -510,7 +529,7 @@ impl Panel {
         let Some(field) = self.field_at(id) else {
             return;
         };
-        let options = field.options();
+        let options = field.options(&self.draft);
         if options.is_empty() {
             return;
         }
@@ -907,7 +926,7 @@ impl Panel {
             tails.push(vec![Span::styled(format!("  {note}"), dim)]);
         }
         if selected && matches!(field.kind(), Kind::Choice | Kind::Bool) {
-            tails.push(choices(field, &current, theme));
+            tails.push(choices(&field.options(&self.draft), &current, theme));
         }
         let line = fit(spans, tails, room, theme);
         let reason = self.reason(field, &checked).map(|reason| {
@@ -1058,15 +1077,15 @@ fn assignment<'a>(trimmed: &'a str, place: &Place) -> Option<(Field, &'a str)> {
     let index = place.index;
     let field = match (place.name.as_str(), key.trim()) {
         ("", "round_limit") => Field::Round,
-        ("harness", "tool") => Field::Tool,
-        ("harness", "driven") => Field::Driven,
         ("raul", "theme") => Field::Theme,
         ("raul", "icons") => Field::Icons,
         ("raul.tasks", "sort") => Field::Sort,
         ("raul.tasks", "reverse") => Field::Reverse,
         ("agents", "name") => Field::AgentName(index?),
         ("agents", "role") => Field::AgentRole(index?),
+        ("agents", "harness") => Field::AgentHarness(index?),
         ("agents", "model") => Field::AgentModel(index?),
+        ("agents", "effort") => Field::AgentEffort(index?),
         ("order", "step") => Field::StepName(index?),
         ("order", "role") => Field::StepRole(index?),
         ("order", "gates") => Field::StepGates(index?),
@@ -1107,19 +1126,19 @@ fn paint_of(paint: Paint, theme: &Theme) -> Style {
 }
 
 /// The choices of a value, with the one it holds in bold: `◂ dark · nord ▸`.
-fn choices(field: Field, current: &str, theme: &Theme) -> Vec<Span<'static>> {
+fn choices(options: &[&'static str], current: &str, theme: &Theme) -> Vec<Span<'static>> {
     let dim = theme.text.dim;
     let mut spans = vec![Span::styled("  ◂ ", dim)];
-    for (index, option) in field.options().into_iter().enumerate() {
+    for (index, option) in options.iter().enumerate() {
         if index > 0 {
             spans.push(Span::styled(" · ", dim));
         }
-        let style = if option == current {
+        let style = if *option == current {
             theme.text.strong
         } else {
             dim
         };
-        spans.push(Span::styled(option, style));
+        spans.push(Span::styled(*option, style));
     }
     spans.push(Span::styled(" ▸", dim));
     spans
@@ -1446,15 +1465,19 @@ mod tests {
                 "round_limit",
                 "agents.0.name",
                 "agents.0.role",
+                "agents.0.harness",
                 "agents.0.model",
+                "agents.0.effort",
                 "agents.1.name",
                 "agents.1.role",
+                "agents.1.harness",
                 "agents.1.model",
+                "agents.1.effort",
                 "agents.2.name",
                 "agents.2.role",
+                "agents.2.harness",
                 "agents.2.model",
-                "harness.tool",
-                "harness.driven",
+                "agents.2.effort",
                 "order.0.step",
                 "order.0.role",
                 "order.0.gates",
@@ -1485,55 +1508,37 @@ mod tests {
     fn a_value_written_inline_or_dotted_is_text_not_a_stop() {
         // Valid TOML, and core saves into it; the tab shows the line as text for
         // now. Making each value a stop is a follow-up in TODO.md.
-        let defaults = Config::default();
-        let harness = format!(
-            "# The tool the agents run in, and the way it is driven.\n[harness]\ntool = {}\ndriven = {}\n",
-            quote(&defaults.harness.tool),
-            quote(&defaults.harness.driven),
-        );
-        // A root key: it must come before the first table header.
-        let inline = format!(
-            "harness = {{ tool = {}, driven = {} }}",
-            quote(&defaults.harness.tool),
-            quote(&defaults.harness.driven),
-        );
-        let text = defaults
+        let base = Config::default()
             .to_toml()
-            .replace(&harness, "")
-            .replace(
-                &format!("round_limit = {}\n", defaults.round_limit),
-                &format!("round_limit = {}\n{inline}\n", defaults.round_limit),
-            )
-            .replace(
-                "[raul.tasks]\nsort = \"id\"\nreverse = false\n",
-                "tasks.sort = \"id\"\ntasks.reverse = false\n",
+            .replace("[raul.tasks]\nsort = \"id\"\nreverse = false\n", "");
+        for (number, form) in [
+            "tasks = { sort = \"id\", reverse = false }\n",
+            "tasks.sort = \"id\"\ntasks.reverse = false\n",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let text = base.replace("icons = \"nerd\"\n", &format!("icons = \"nerd\"\n{form}"));
+            let home = scratch(&format!("inline-stops-{number}"));
+            fs::create_dir_all(home_at(&home)).expect("the folder");
+            fs::write(config_path(&home), &text).expect("the file");
+            let panel = Panel::open(Some(&home), Overrides::default());
+            assert!(!panel.read_only(), "the file cannot be read");
+            let ids = panel.ids();
+            for id in ["raul.tasks.sort", "raul.tasks.reverse"] {
+                assert!(!ids.iter().any(|stop| stop == id), "{id} is a stop");
+            }
+            assert!(ids.iter().any(|stop| stop == "raul.theme"));
+            let rows = draw(&panel, 100, 200, None);
+            let shown = inner(&rows);
+            assert!(
+                shown.contains(form.lines().next().expect("a line")),
+                "{shown}"
             );
-        assert!(
-            text.contains(&inline),
-            "the inline table is not in the file"
-        );
-        assert!(text.contains("tasks.sort = \"id\""), "{text}");
-        let home = scratch("inline-stops");
-        fs::create_dir_all(home_at(&home)).expect("the folder");
-        fs::write(config_path(&home), &text).expect("the file");
-        let panel = Panel::open(Some(&home), Overrides::default());
-        assert!(!panel.read_only(), "the file cannot be read");
-        let ids = panel.ids();
-        for id in [
-            "harness.tool",
-            "harness.driven",
-            "raul.tasks.sort",
-            "raul.tasks.reverse",
-        ] {
-            assert!(!ids.iter().any(|stop| stop == id), "{id} is a stop");
+            // Both are set in the file, so neither is a default drawn in its place.
+            assert!(!shown.contains("(default, not in the file)"), "{shown}");
+            let _ = fs::remove_dir_all(&home);
         }
-        assert!(ids.iter().any(|stop| stop == "raul.theme"));
-        let rows = draw(&panel, 100, 200, None);
-        let shown = inner(&rows);
-        assert!(shown.contains(&inline), "{shown}");
-        assert!(shown.contains("tasks.sort = \"id\""), "{shown}");
-        // Both are set in the file, so neither is a default drawn in its place.
-        assert!(!shown.contains("(default, not in the file)"), "{shown}");
     }
 
     #[test]
@@ -1588,32 +1593,79 @@ mod tests {
     fn a_change_to_a_value_that_is_not_a_choice_does_nothing() {
         let (mut panel, _) = panel("not-choice");
         panel.change("round_limit", 1);
-        panel.change("harness.tool", 1);
+        panel.change("agents.0.model", 1);
         assert!(!panel.unsaved());
     }
 
     #[test]
     fn a_word_is_typed_inline_and_kept_or_dropped() {
         let (mut panel, _) = panel("typed");
-        panel.begin("harness.driven");
+        panel.begin("agents.0.model");
         assert!(panel.editing());
-        panel.typing().expect("the text").push_str(" plus");
-        let rows = draw(&panel, 100, 60, Some("harness.driven"));
-        assert!(row_with(&rows, "driven = \"--standalone · role config plus").contains("plus"));
+        panel.typing().expect("the text").push_str("-x");
+        let rows = draw(&panel, 100, 60, Some("agents.0.model"));
+        assert!(row_with(&rows, "claude-haiku-5-5-x").contains("-x"));
         panel.keep();
         assert!(!panel.editing());
-        assert_eq!(
-            panel.draft.harness.driven,
-            "--standalone · role config plus"
-        );
+        assert_eq!(panel.draft.agents[0].model, "claude-haiku-5-5-x");
 
-        panel.begin("harness.tool");
+        panel.begin("agents.1.name");
         panel.typing().expect("the text").push('x');
         panel.drop_edit();
         assert!(!panel.editing());
         assert_eq!(
-            panel.draft.harness.tool, "opencode",
+            panel.draft.agents[1].name, "reviewer",
             "a dropped edit was kept"
+        );
+    }
+
+    #[test]
+    fn a_harness_is_cycled_from_the_table_and_its_efforts_follow_it() {
+        let (mut panel, _) = panel("harness");
+        // The builder runs claude at high: opencode is next in the table, and
+        // its levels are low, medium and high, so the effort is still high.
+        panel.change("agents.0.harness", 1);
+        assert_eq!(panel.draft.agents[0].harness, "opencode");
+        assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("high"));
+        // The effort cycles through opencode's levels, wrapping forward.
+        panel.change("agents.0.effort", 1);
+        assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("low"));
+        // The harness the table ends on wraps back to the first.
+        panel.change("agents.0.harness", 1);
+        panel.change("agents.0.harness", 1);
+        assert_eq!(panel.draft.agents[0].harness, "claude");
+        let rows = draw(&panel, 100, 60, Some("agents.0.harness"));
+        assert!(
+            rows.iter()
+                .any(|row| row.contains("◂ claude · opencode · cursor-agent ▸")),
+            "{}",
+            rows.join("\n")
+        );
+    }
+
+    #[test]
+    fn an_effort_the_harness_does_not_take_is_refused_on_save() {
+        let (mut panel, path) = panel("refused-effort");
+        // claude's xhigh is not one of cursor-agent's levels.
+        panel.change("agents.0.effort", 1);
+        assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("xhigh"));
+        panel.change("agents.0.harness", 1);
+        panel.change("agents.0.harness", 1);
+        assert_eq!(panel.draft.agents[0].harness, "cursor-agent");
+        assert!(
+            !panel.save(),
+            "an effort the harness does not take was saved"
+        );
+        assert!(
+            panel
+                .notice()
+                .is_some_and(|notice| notice.contains("xhigh"))
+        );
+        assert!(
+            fs::read_to_string(&path)
+                .expect("the file")
+                .contains("effort = \"high\""),
+            "the file changed"
         );
     }
 
@@ -1656,25 +1708,22 @@ mod tests {
     }
 
     #[test]
-    fn a_model_is_a_provider_and_a_name_with_an_optional_variant() {
-        assert!(model_id("opencode-go/glm-5.3#high").is_ok());
+    fn a_model_is_one_word_and_its_effort_is_set_beside_it() {
+        assert!(model_id("claude-haiku-5-5").is_ok());
         assert!(model_id("opencode-go/glm-5.3").is_ok());
-        for bad in ["glm", "/glm", "opencode-go/", "opencode-go/glm#", "a b/c"] {
+        for bad in ["", "a b", "glm#high"] {
             assert_eq!(
                 model_id(bad),
-                Err("a model is provider/name, with an optional #variant".to_string()),
+                Err("a model is one word; its effort is set beside it".to_string()),
                 "{bad}"
             );
         }
         let (mut panel, _) = panel("model");
         panel.begin("agents.0.model");
-        panel.typing().expect("the text").replace_range(.., "glm");
+        panel.typing().expect("the text").replace_range(.., "a b");
         panel.keep();
         assert!(panel.editing());
-        assert_eq!(
-            panel.draft.agents[0].model,
-            "opencode-go/deepseek-v4.1-flash#high"
-        );
+        assert_eq!(panel.draft.agents[0].model, "claude-haiku-5-5");
     }
 
     #[test]

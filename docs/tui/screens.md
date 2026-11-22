@@ -234,17 +234,17 @@ names the path, and `● modified` while there are unsaved changes. Decided
 2026-11-22: the tab that "persists nothing" is overruled.
 
 **Everything in the file is editable** — raul's own `[raul]` table and the
-flow's sections (`round_limit`, each agent's `model` and `role`, the
-`[harness]`, the order's steps' values). Rows cannot be added or removed from
+flow's sections (`round_limit`, each agent's `harness`, `model`, `effort` and
+`role`, the order's steps' values). Rows cannot be added or removed from
 raul; only values change. A comment line is not a row the cursor stops on.
-A value written inline (`harness = { … }`, `tasks = { … }`) or as a dotted key
+A value written inline (`tasks = { … }`) or as a dotted key
 (`tasks.sort = …`) is shown as text, not a stop, until the follow-up in
 `TODO.md` makes each one editable.
 
 | value | how it changes |
 |---|---|
-| a choice (`theme`, `icons`, `role`, `sort`, a boolean) | `←` `→` cycle it in place; the line shows `◂ one · two · three ▸` while the cursor is on it |
-| text or a number (`model`, `driven`, `round_limit`) | `enter` edits it inline in the line; `enter` keeps, `esc` drops |
+| a choice (`theme`, `icons`, `role`, `harness`, `effort`, `sort`, a boolean) | `←` `→` cycle it in place; the line shows `◂ one · two · three ▸` while the cursor is on it. A `harness` cycles the harness table; an `effort` cycles the levels of the agent's harness |
+| text or a number (`model`, `name`, `round_limit`) | `enter` edits it inline in the line; `enter` keeps, `esc` drops |
 
 **A change previews at once** — pick `nord` and the screen repaints in Nord —
 and is written only by `w`. `u` undoes the unsaved changes; `r` reloads the
@@ -252,9 +252,9 @@ file from disk. Quitting with unsaved changes asks first, in the footer: `w`
 save, `q` quit without saving, `esc` stay.
 
 **A value is checked before it is kept.** A choice can only be one of its
-choices; a number must be in its range (`round_limit` ≥ 1); a `model` must be
-a model id (`provider/name`, an optional `#variant`) — the catalogue is hugo's,
-so raul checks the shape only. A value that fails names its reason on its own
+choices; a number must be in its range (`round_limit` ≥ 1); a `model` is one
+word with no `#` — its effort is the agent's own `effort`, and the catalogue
+is the harness's, so raul checks the shape only. A value that fails names its reason on its own
 line and is not kept.
 
 **Nothing on disk is lost.** The file is written format-preserving: the

@@ -5,7 +5,7 @@
     "builder": {
       "mode": "primary",
       "description": "Implements exactly one unit of work, runs the gate, and reports back to the orchestrator. Never commits, never dispatches another agent, never decides what happens next.",
-      "model": "opencode-go/deepseek-v4.1-flash#high"
+      "model": "claude-haiku-5-5"
     }
   }
 }

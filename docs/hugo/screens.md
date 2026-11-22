@@ -60,7 +60,7 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 | part | behaviour |
 |---|---|
 | title line | the tool's icon and name, `hugo`, then a dim `·` and the project's folder when one is found; a window too narrow for the name shows no title rather than a cut of the name |
-| sidebar | the configuration, on the left: the agents and the model each runs, the harness, the review-round limit and the order, in that order. The agents group has a cursor: `↑ k` and `↓ j` move it, and `enter` on the orchestrator's row chooses its model. The builder's and the reviewer's rows are read-only. `r` reloads the configuration from the file |
+| sidebar | the configuration, on the left: each agent with its harness, model and effort, the review-round limit and the order, in that order. The agents group has a cursor: `↑ k` and `↓ j` move it, and `enter` on the orchestrator's row chooses its model. The builder's and the reviewer's rows are read-only. `r` reloads the configuration from the file |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
 | footer | the keys that work — never a key that does nothing. The window's keys are `q quit`, `ctrl-c quit`, `r reload`, `↑ k` `↓ j` move, `enter choose` (on the orchestrator's row), `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)) and `? help`; while the choice is open its keys are `esc close`, `enter pick`, `↑ k` `↓ j` move, and `q quit` and `? help` still work |
 | choice | the `orchestrator model`, as a small list of the catalogue's models with a cursor of its own; `enter` picks one and saves it, `esc` closes it without saving |
@@ -140,15 +140,14 @@ the stamp is the last fact to give way.
 
 ## The configuration
 
-The sidebar is the configuration: what the human governs. It shows four
+The sidebar is the configuration: what the human governs. It shows three
 groups, in this order:
 
 | order | group | shows |
 |---|---|---|
-| 1 | `AGENTS` | one entry per agent: its role's icon, its name and role, then the model it runs — the provider and the model's own name on the rows under it |
-| 2 | `HARNESS` | the tool the agents run in, and the way it is driven |
-| 3 | `ROUNDS` | the build-and-fix cycles a task gets, and the set the count counts |
-| 4 | `ORDER` | the numbered steps, each with the gates it passes |
+| 1 | `AGENTS` | one entry per agent: its role's icon, its name and role, then the harness it runs in, the model it runs and its effort, on the rows under it |
+| 2 | `ROUNDS` | the build-and-fix cycles a task gets, and the set the count counts |
+| 3 | `ORDER` | the numbered steps, each with the gates it passes |
 
 The configuration is **provisional**: the flow has not written one yet, and the
 format may change when it does. Its shape is
@@ -159,10 +158,12 @@ is **TOML**: it is the one file a human edits, and a comment is how a
 configuration explains itself, so the defaults hugo writes carry a short note
 beside each part. raul's Settings edits the same file. When the file is
 absent, hugo writes the defaults — the project's own flow: the builder on
-`opencode-go/deepseek-v4.1-flash#high` and the reviewer on
-`opencode-go/glm-5.3#high`, with the orchestrator beside them; the `opencode`
-harness, `--standalone` with each agent's role config; five build-and-fix
-cycles; and the order [roles/roles.md](../roles/roles.md#the-order) records.
+`claude-haiku-5-5` at `high`, the reviewer and the orchestrator on
+`claude-opus-5-5` at `medium`, every agent in the `claude` harness; five
+build-and-fix cycles; and the order [roles/roles.md](../roles/roles.md#the-order)
+records. Each agent names its own harness, model and effort; the harnesses
+are the table's three, `claude`, `opencode` and `cursor-agent`, and nothing
+else is one.
 
 The old `config.json` is **not read** any more, and it is never converted: the
 format is provisional and a conversion would guess. When one sits beside the
@@ -184,8 +185,10 @@ own; `enter` saves the model and returns to the sidebar, and `esc` closes it
 without saving anything. The builder's and the reviewer's models are
 read-only: the flow starts those, not hugo, so their rows open nothing.
 
-**The models are the catalogue's.** The list is `opencode models`, derived at
-the moment the choice opens, never written out by hand. A pick is checked
+**The models are the harness's own list.** The list is the orchestrator's
+harness's: `claude` lists its models from the table, `opencode` runs
+`opencode models`, and `cursor-agent` runs `cursor-agent --list-models`. It is
+derived at the moment the choice opens, never written out by hand. A pick is checked
 against the same catalogue the list comes from, so the configuration cannot
 hold a model that does not exist. The read is bounded: the choice opens at
 once and says `reading the model catalog` while the tool runs, and the window
@@ -316,8 +319,8 @@ hugo --skill orchestrator|runner|reviewer
 
 `--skill` prints text and exits; no window is set up. A bare `--skill` lists
 the three roles. A role prints that role's skill, opened by a **crew** section
-built from the configuration in force: the harness and how it is driven, each
-agent's role and model with the arguments that start it, and the review-round
+built from the configuration in force: each agent's role, harness, model and
+effort with the arguments and environment that start it, and the review-round
 limit. A configuration that cannot be read prints the defaults and says so in
 one line. The texts live in `crates/hugo/skills/` and are embedded with
 `include_str!`. `--skill` does not combine with `--render`.

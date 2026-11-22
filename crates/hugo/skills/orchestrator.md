@@ -16,12 +16,12 @@ code yourself, and you do not review it yourself.
 ## The crew
 
 - **One reviewer, cleared per task.** Start it once, in its own tab, on the
-  reviewer model above. It keeps its context through one task's rounds, so
+  reviewer's harness, model and effort above. It keeps its context through one task's rounds, so
   it does not re-raise what it settled; send it `/clear` before the next
   task's first review, because a long context is re-sent on every prompt and
   the old tasks add nothing. A whole-codebase review always starts clean.
 - **A fresh runner per job.** Start a new runner tab for every build or fix
-  job, on the runner model above, and close its tab when its report is in. A
+  job, on the runner's harness, model and effort above, and close its tab when its report is in. A
   runner's context is small: one job, one brief.
 - **Never two builds at once** unless the machine has room: builds compete for
   CPU and memory.
@@ -29,9 +29,9 @@ code yourself, and you do not review it yourself.
 Start an agent:
 
 ```sh
-R=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$PWD" --label <name>)
+R=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$PWD" --label <name> --env <start env, KEY=VALUE, when the crew names one>)
 # read .result.root_pane.pane_id and .result.tab.tab_id from R
-herdr agent start <name> --kind <harness> --pane <pane> -- <model args>
+herdr agent start <name> --kind <start kind> --pane <pane> -- <start args>
 herdr agent prompt <name> "Read <brief path> and do the job it describes."
 ```
 

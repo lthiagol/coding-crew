@@ -158,7 +158,7 @@ fn the_sidebar_is_shown_wide_and_announced_where_it_is_dropped() {
     let wide = screen(100, 40);
     assert!(wide.contains("configuration"), "{wide}");
     assert!(wide.contains("flow"), "{wide}");
-    for group in ["AGENTS", "HARNESS", "ROUNDS", "ORDER"] {
+    for group in ["AGENTS", "ROUNDS", "ORDER"] {
         assert!(
             wide.contains(group),
             "{group} is not on the sidebar: {wide}"
@@ -181,7 +181,7 @@ fn the_sidebar_is_shown_wide_and_announced_where_it_is_dropped() {
             "{width}: the line does not name what is not shown: {narrow}"
         );
         assert!(
-            !narrow.contains("harness"),
+            !narrow.contains("AGENTS"),
             "{width}: the sidebar is still drawn: {narrow}"
         );
     }
@@ -442,16 +442,15 @@ fn the_shell_runs_without_a_home_folder() {
 #[test]
 fn an_absent_configuration_is_written_with_the_defaults() {
     // The tool writes the defaults into the home it creates, and the sidebar
-    // shows them. The model strings are the project's own flow.
+    // shows them. The agents are the project's own flow.
     let home = fresh_home("defaults");
     let config = home.join(".config").join("coding-crew").join("config.toml");
     assert!(!config.exists(), "the test home is not fresh");
     let text = screen_in(&mock_project(), &home);
     for fact in [
         "builder · runner",
-        "opencode-go",
-        "deepseek-v4.1-flash#high",
-        "glm-5.3#high",
+        "claude-haiku-5-5",
+        "claude-opus-5-5",
         "5 build-and-fix rounds",
         "1 groom · creator",
     ] {
@@ -479,20 +478,18 @@ fn a_configuration_that_is_there_is_read_and_never_overwritten() {
     let home = fresh_home("kept");
     let config = home.join(".config").join("coding-crew").join("config.toml");
     fs::create_dir_all(config.parent().expect("the home")).expect("the configuration home");
-    let mine = coding_crew_core::Config {
+    let mut mine = coding_crew_core::Config {
         round_limit: 2,
-        harness: coding_crew_core::Harness {
-            tool: "another-harness".to_string(),
-            ..coding_crew_core::Config::default().harness
-        },
         ..coding_crew_core::Config::default()
     };
+    mine.agents[0].harness = "cursor-agent".to_string();
+    mine.agents[0].model = "auto".to_string();
     mine.write(&config).expect("a configuration");
     let before = fs::read_to_string(&config).expect("the configuration");
 
     let text = screen_in(&mock_project(), &home);
     assert!(text.contains("2 build-and-fix rounds"), "{text}");
-    assert!(text.contains("another-harness"), "{text}");
+    assert!(text.contains("harness cursor-agent"), "{text}");
     assert!(!text.contains("5 build-and-fix rounds"), "{text}");
     assert_eq!(
         fs::read_to_string(&config).expect("the configuration"),

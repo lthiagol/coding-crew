@@ -24,9 +24,9 @@ RUNTIME = ROOT / "coding-crew" / "runtime.json"
 # flow/reviewer.json. The orchestrator reviews when the crew is two, so it
 # runs the reviewer's family: the reviewer is never the model that wrote the
 # code.
-ORCHESTRATOR_MODEL = "opencode-go/glm-5.3#high"
-RUNNER_MODEL = "opencode-go/deepseek-v4.1-flash#high"
-REVIEWER_MODEL = "opencode-go/glm-5.3#high"
+ORCHESTRATOR_MODEL = "claude-opus-5-5"
+RUNNER_MODEL = "claude-haiku-5-5"
+REVIEWER_MODEL = "claude-opus-5-5"
 
 # The briefs. The fixtures describe this project's own work, so a task
 # opened in raul reads like a task a human could review. Drafts carry a

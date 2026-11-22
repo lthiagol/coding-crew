@@ -17,12 +17,13 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use coding_crew_core::config::{CONFIG_FILE, Config};
+use coding_crew_core::harness::{self, Harness};
 use coding_crew_core::runtime::{CrewMember, Runtime};
 use coding_crew_core::{Role, age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, tail_to, text_width};
 use coding_crew_theme::{Icon, IconSet, Slot, Theme, chrome, phase_style, selected_line};
 
-use crate::catalog::{Catalog, base_of, model_args};
+use crate::catalog::Catalog;
 use crate::config::{self, ConfigRead, ConfigState};
 use crate::launch::{self, LaunchRequest, Launcher, Start};
 use crate::sidebar::{self, role_icon};
@@ -196,6 +197,10 @@ pub struct App {
     pub project: Option<String>,
     /// The project's root: the folder the orchestrator's tab opens in.
     pub root: Option<PathBuf>,
+    /// The program the catalogue is read from, in place of the harness's own
+    /// list: a test's stand-in for it.
+    #[cfg(test)]
+    catalog_tool: Option<PathBuf>,
 }
 
 impl App {
@@ -218,6 +223,8 @@ impl App {
             note: None,
             project: None,
             root: None,
+            #[cfg(test)]
+            catalog_tool: None,
         }
     }
 
@@ -445,11 +452,34 @@ impl App {
         if !self.can_choose() {
             return;
         }
-        let Some(tool) = self.loaded().map(|config| config.harness.tool.clone()) else {
+        let Some(harness) = self.orchestrator_harness() else {
             return;
         };
-        let reading = std::thread::spawn(move || Catalog::read(&tool));
+        let reading = self.read_catalog(harness);
         self.begin_choice(reading);
+    }
+
+    /// The harness the orchestrator runs in, when the table holds it.
+    fn orchestrator_harness(&self) -> Option<&'static Harness> {
+        let agent = self
+            .loaded()?
+            .agents
+            .iter()
+            .find(|agent| agent.role == Role::Orchestrator)?;
+        harness::find(&agent.harness)
+    }
+
+    /// Read a harness's catalogue beside the window.
+    fn read_catalog(&self, harness: &'static Harness) -> JoinHandle<Result<Catalog, String>> {
+        #[cfg(test)]
+        {
+            if let Some(tool) = self.catalog_tool.clone() {
+                return std::thread::spawn(move || {
+                    Catalog::read_command(&tool.to_string_lossy(), &[], crate::catalog::READ_BOUND)
+                });
+            }
+        }
+        std::thread::spawn(move || Catalog::read(harness))
     }
 
     /// Open the choice on a read that has not answered yet.
@@ -535,12 +565,6 @@ impl App {
             self.close_choice();
             return;
         }
-        // The catalogue lists base ids. A pick of the model in force keeps its
-        // variant, so `#high` is not lost by picking what already runs.
-        let model = match self.orchestrator_model() {
-            Some(current) if base_of(current) == model.as_str() => current.to_string(),
-            _ => model,
-        };
         let Some(mut config) = self.loaded().cloned() else {
             self.close_choice();
             return;
@@ -609,9 +633,9 @@ impl App {
         }));
     }
 
-    /// The request a start is made with: the harness and the orchestrator's
-    /// model as the configuration holds them, the project's root, and the
-    /// queue in order.
+    /// The request a start is made with: the orchestrator's agent kind and
+    /// the invocation that starts it in its harness, as the configuration
+    /// holds them, the project's root, and the queue in order.
     fn launch_request(&self) -> Result<LaunchRequest, String> {
         let config = self
             .loaded()
@@ -621,13 +645,17 @@ impl App {
             .iter()
             .find(|agent| agent.role == Role::Orchestrator)
             .ok_or_else(|| "the configuration names no orchestrator".to_string())?;
+        let harness = harness::find(&agent.harness)
+            .ok_or_else(|| format!("{} is not a harness", agent.harness))?;
+        let start = harness.invocation(&agent.name, &agent.model, agent.effort.as_deref());
         let project = self
             .root
             .clone()
             .ok_or_else(|| "the project's folder is not known".to_string())?;
         Ok(LaunchRequest {
-            harness: config.harness.tool.clone(),
-            model_args: model_args(&config.harness.tool, &agent.model),
+            kind: harness.kind.to_string(),
+            args: start.args,
+            env: start.env,
             project,
             tasks: self.queued.clone(),
         })
@@ -2881,11 +2909,10 @@ mod tests {
         for fact in [
             "AGENTS",
             "builder · runner",
-            "opencode-go",
-            "deepseek-v4.1-flash#high",
-            "HARNESS",
-            "opencode",
-            "--standalone · role config",
+            "harness",
+            "claude",
+            "claude-haiku-5-5",
+            "effort",
             "ROUNDS",
             "5 build-and-fix rounds",
             "ORDER",
@@ -2897,8 +2924,7 @@ mod tests {
         }
         // The groups are read in the documented order.
         let at = |needle: &str| row_of(&rows, needle);
-        assert!(at("AGENTS") < at("HARNESS"), "{text}");
-        assert!(at("HARNESS") < at("ROUNDS"), "{text}");
+        assert!(at("AGENTS") < at("ROUNDS"), "{text}");
         assert!(at("ROUNDS") < at("ORDER"), "{text}");
 
         // A redraw draws the same configuration: the keys only change what
@@ -3120,7 +3146,8 @@ mod tests {
             "100 by 40".to_string(),
             NAME.trim().to_string(),
             sidebar::AGENTS_TITLE.to_string(),
-            sidebar::HARNESS_TITLE.to_string(),
+            "harness".to_string(),
+            "effort".to_string(),
             sidebar::LIMIT_TITLE.to_string(),
             sidebar::ORDER_TITLE.to_string(),
             sidebar::UNREADABLE.to_string(),
@@ -3140,7 +3167,7 @@ mod tests {
             CATALOG_UNREADABLE.to_string(),
             format!("{} seconds", crate::catalog::READ_BOUND.as_secs()),
             HELP_TITLE.to_string(),
-            "opencode models".to_string(),
+            "the harness's own list".to_string(),
             CREW_TITLE.to_string(),
             QUEUE_TITLE.to_string(),
             ROUND_TITLE.to_string(),
@@ -3244,13 +3271,6 @@ mod tests {
         rows.join("\n")
     }
 
-    /// A configuration whose harness tool is the script at `tool`.
-    fn config_with_tool(tool: &std::path::Path) -> ConfigRead {
-        let mut config = Config::default();
-        config.harness.tool = tool.to_string_lossy().into_owned();
-        ConfigRead::of(ConfigState::Config(config))
-    }
-
     /// Wait for a catalogue read to answer the way the loop does: by polling
     /// it, never by waiting on it.
     fn wait_for_catalog(window: &mut App) {
@@ -3265,11 +3285,18 @@ mod tests {
         }
     }
 
-    /// A window on the orchestrator's row, with a harness tool of its own.
+    /// A window on the orchestrator's row, reading its catalogue from `tool`
+    /// in place of the harness's own list.
     fn on_orchestrator_with(tool: &std::path::Path) -> App {
-        let mut window = App::new(theme(), IconSet::Nerd, config_with_tool(tool), None);
+        let mut window = App::new(
+            theme(),
+            IconSet::Nerd,
+            ConfigRead::of(ConfigState::Config(Config::default())),
+            None,
+        );
         window.agents_drawn = true;
         window.cursor = 2;
+        window.catalog_tool = Some(tool.to_path_buf());
         window
     }
 
@@ -3328,7 +3355,7 @@ mod tests {
         let text = text_of(&rows);
         assert!(text.contains(CATALOG_UNREADABLE), "{text}");
         assert_eq!(
-            colour_of(&rows, &paint, "models f"),
+            colour_of(&rows, &paint, "failed:"),
             theme().semantic.error.fg.expect("the error colour")
         );
         // Nothing is picked from a catalogue that could not be read: enter does
@@ -3448,16 +3475,12 @@ mod tests {
         let home = scratch("choice");
         let mut app = on_orchestrator(Some(home.clone()));
         app.fill_choice(Ok(Catalog::from_lines(
-            "opencode-go/kimi-k3\nopencode-go/glm-5.3\nopencode-go/deepseek-v4.1-flash\n",
+            "claude-sonnet-5-5\nclaude-opus-5-5\nclaude-haiku-5-5\n",
         )));
         let choice = app.choice.as_ref().expect("the choice");
         assert_eq!(
             choice.catalog.models(),
-            [
-                "opencode-go/kimi-k3",
-                "opencode-go/glm-5.3",
-                "opencode-go/deepseek-v4.1-flash"
-            ],
+            ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
             "the list is not the catalogue's"
         );
         // The orchestrator runs glm-5.3#high: the cursor starts there.
@@ -3478,7 +3501,7 @@ mod tests {
         let home = scratch("pick");
         let mut app = on_orchestrator(Some(home.clone()));
         app.fill_choice(Ok(Catalog::from_lines(
-            "opencode-go/kimi-k3\nopencode-go/glm-5.3\nopencode-go/deepseek-v4.1-flash\n",
+            "claude-sonnet-5-5\nclaude-opus-5-5\nclaude-haiku-5-5\n",
         )));
         // The cursor starts on glm-5.3; move up to kimi-k3 and pick it.
         app.on_key(press(KeyCode::Char('k')));
@@ -3496,7 +3519,7 @@ mod tests {
                 .iter()
                 .find(|agent| agent.role == Role::Orchestrator)
                 .map(|agent| agent.model.as_str()),
-            Some("opencode-go/kimi-k3"),
+            Some("claude-sonnet-5-5"),
             "the sidebar does not show the pick"
         );
         // The flow's own agents are untouched.
@@ -3506,7 +3529,7 @@ mod tests {
                 .iter()
                 .find(|agent| agent.role == Role::Runner)
                 .map(|agent| agent.model.as_str()),
-            Some("opencode-go/deepseek-v4.1-flash#high")
+            Some("claude-haiku-5-5")
         );
         assert_eq!(
             saved
@@ -3514,21 +3537,18 @@ mod tests {
                 .iter()
                 .find(|agent| agent.role == Role::Reviewer)
                 .map(|agent| agent.model.as_str()),
-            Some("opencode-go/glm-5.3#high")
+            Some("claude-opus-5-5")
         );
 
         // The pick survives a restart: the file holds it, and only it.
         let on_disk = Config::read(&config::config_path(&home)).expect("the saved configuration");
         assert_eq!(on_disk, *saved);
         let text = fs::read_to_string(config::config_path(&home)).expect("the file");
-        assert!(text.contains("model = \"opencode-go/kimi-k3\""), "{text}");
-        assert!(
-            text.contains("model = \"opencode-go/deepseek-v4.1-flash#high\""),
-            "{text}"
-        );
+        assert!(text.contains("model = \"claude-sonnet-5-5\""), "{text}");
+        assert!(text.contains("model = \"claude-haiku-5-5\""), "{text}");
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         assert!(
-            text_of(&rows).contains("kimi-k3"),
+            text_of(&rows).contains("claude-sonnet-5-5"),
             "the sidebar does not draw the pick: {}",
             text_of(&rows)
         );
@@ -3542,20 +3562,17 @@ mod tests {
         let home = scratch("pick-in-force");
         let mut app = on_orchestrator(Some(home.clone()));
         app.fill_choice(Ok(Catalog::from_lines(
-            "opencode-go/glm-5.3\nopencode-go/kimi-k3\n",
+            "claude-opus-5-5\nclaude-sonnet-5-5\n",
         )));
         assert_eq!(app.choice.as_ref().expect("the choice").cursor, 0);
         app.on_key(press(KeyCode::Enter));
         assert_eq!(
             app.orchestrator_model(),
-            Some("opencode-go/glm-5.3#high"),
+            Some("claude-opus-5-5"),
             "the pick dropped the variant in force"
         );
         let text = fs::read_to_string(config::config_path(&home)).expect("the saved file");
-        assert!(
-            text.contains("model = \"opencode-go/glm-5.3#high\""),
-            "{text}"
-        );
+        assert!(text.contains("model = \"claude-opus-5-5\""), "{text}");
         let _ = fs::remove_dir_all(&home);
     }
 
@@ -3567,14 +3584,8 @@ mod tests {
         let home = scratch("choice-enter-reading");
         let tool =
             crate::catalog::scratch_tool("app-enter-reading", "#!/bin/sh\nsleep 0.5\necho p/m0\n");
-        let mut window = App::new(
-            theme(),
-            IconSet::Nerd,
-            config_with_tool(&tool),
-            Some(home.clone()),
-        );
-        window.agents_drawn = true;
-        window.cursor = 2;
+        let mut window = on_orchestrator_with(&tool);
+        window.home = Some(home.clone());
         window.on_key(press(KeyCode::Enter));
         assert_eq!(
             window.choice.as_ref().expect("the choice").state,
@@ -3624,7 +3635,7 @@ mod tests {
         let home = scratch("choice-esc");
         let mut app = on_orchestrator(Some(home.clone()));
         app.fill_choice(Ok(Catalog::from_lines(
-            "opencode-go/kimi-k3\nopencode-go/glm-5.3\n",
+            "claude-sonnet-5-5\nclaude-opus-5-5\n",
         )));
         app.on_key(press(KeyCode::Char('k')));
         app.on_key(press(KeyCode::Esc));
@@ -3635,7 +3646,7 @@ mod tests {
         );
         assert_eq!(
             app.orchestrator_model(),
-            Some("opencode-go/glm-5.3#high"),
+            Some("claude-opus-5-5"),
             "esc changed the model in force"
         );
         let _ = fs::remove_dir_all(&home);
@@ -3797,7 +3808,7 @@ mod tests {
         .expect("a blocking file");
         let mut app = on_orchestrator(Some(home.clone()));
         app.fill_choice(Ok(Catalog::from_lines(
-            "opencode-go/kimi-k3\nopencode-go/glm-5.3\n",
+            "claude-sonnet-5-5\nclaude-opus-5-5\n",
         )));
         app.on_key(press(KeyCode::Char('k')));
         app.on_key(press(KeyCode::Enter));
@@ -3805,7 +3816,7 @@ mod tests {
         assert!(app.notice.is_some(), "the failed save is silent");
         assert_eq!(
             app.orchestrator_model(),
-            Some("opencode-go/glm-5.3#high"),
+            Some("claude-opus-5-5"),
             "a failed save changed the configuration on screen"
         );
         let (rows, paint) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
@@ -3944,11 +3955,19 @@ mod tests {
             1,
             "a second key started a second orchestrator"
         );
-        assert_eq!(requests[0].harness, "opencode");
+        assert_eq!(requests[0].kind, "claude");
         assert_eq!(
-            requests[0].model_args,
-            ["--model", "opencode-go/glm-5.3#high"]
+            requests[0].args,
+            [
+                "--model",
+                "claude-opus-5-5",
+                "--effort",
+                "medium",
+                "--permission-mode",
+                "auto"
+            ]
         );
+        assert!(requests[0].env.is_empty());
         assert_eq!(requests[0].project, PathBuf::from("/work/project"));
         assert_eq!(requests[0].tasks, ["TSK29"]);
     }

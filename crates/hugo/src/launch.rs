@@ -6,7 +6,7 @@
 //! on. The launch is a trait: the tests stand a fake in for herdr, and no test
 //! runs it.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,15 +33,18 @@ const AGENT_START_TIMEOUT_MS: u64 = 30_000;
 /// report it.
 const AGENT_START_BOUND: Duration = Duration::from_secs(35);
 
-/// What a start needs: the harness, the arguments that start its model, the
-/// project's root, and the queue's task ids in order.
+/// What a start needs: the agent kind, the invocation that starts the agent
+/// in its harness, the project's root, and the queue's task ids in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchRequest {
-    /// The harness tool, as herdr names its kind.
-    pub harness: String,
-    /// The arguments that start the model, as `herdr agent start` takes them
+    /// The agent kind herdr starts the harness as.
+    pub kind: String,
+    /// The arguments that start the agent, as `herdr agent start` takes them
     /// after `--`.
-    pub model_args: Vec<String>,
+    pub args: Vec<String>,
+    /// The environment the agent's tab is opened with: a harness that reads
+    /// its model from it needs it set before the agent starts.
+    pub env: Vec<(String, String)>,
     /// The project's root: the folder the tab opens in.
     pub project: PathBuf,
     /// The queue's task ids, in the order the record holds them.
@@ -121,7 +124,7 @@ impl Launcher for Herdr {
         if self.workspace.is_empty() {
             bail!("HERDR_WORKSPACE_ID is not set");
         }
-        let tab = herdr_json(&tab_create_args(&self.workspace, &req.project))?;
+        let tab = herdr_json(&tab_create_args(&self.workspace, req))?;
         let tab_id = text_at(&tab, &["result", "tab", "tab_id"])?;
         let pane = text_at(&tab, &["result", "root_pane", "pane_id"])?;
         // The tab is open from here on: a failure after it names the tab, so
@@ -147,11 +150,16 @@ pub fn prompt(req: &LaunchRequest) -> String {
     )
 }
 
-/// The command that opens the orchestrator's tab in the workspace.
-fn tab_create_args(workspace: &str, project: &Path) -> Vec<String> {
+/// The command that opens the orchestrator's tab in the workspace, with the
+/// environment the agent starts in.
+fn tab_create_args(workspace: &str, req: &LaunchRequest) -> Vec<String> {
     let mut args = words(&["tab", "create", "--workspace", workspace, "--cwd"]);
-    args.push(project.display().to_string());
+    args.push(req.project.display().to_string());
     args.extend(words(&["--label", ORCHESTRATOR]));
+    for (key, value) in &req.env {
+        args.extend(words(&["--env"]));
+        args.push(format!("{key}={value}"));
+    }
     args
 }
 
@@ -163,14 +171,14 @@ fn agent_start_args(req: &LaunchRequest, pane: &str) -> Vec<String> {
         "start",
         ORCHESTRATOR,
         "--kind",
-        &req.harness,
+        &req.kind,
         "--pane",
         pane,
         "--timeout",
         &AGENT_START_TIMEOUT_MS.to_string(),
         "--",
     ]);
-    args.extend(req.model_args.iter().cloned());
+    args.extend(req.args.iter().cloned());
     args
 }
 
@@ -295,11 +303,14 @@ mod tests {
 
     fn request() -> LaunchRequest {
         LaunchRequest {
-            harness: "opencode".to_string(),
-            model_args: vec![
+            kind: "claude".to_string(),
+            args: vec![
                 "--model".to_string(),
-                "opencode-go/glm-5.3#high".to_string(),
+                "claude-opus-5-5".to_string(),
+                "--effort".to_string(),
+                "medium".to_string(),
             ],
+            env: Vec::new(),
             project: PathBuf::from("/work/project"),
             tasks: vec!["TSK10".to_string(), "TSK29".to_string()],
         }
@@ -308,7 +319,7 @@ mod tests {
     #[test]
     fn the_tab_opens_in_the_workspace_at_the_project_and_is_labelled() {
         assert_eq!(
-            tab_create_args("w1", Path::new("/work/project")),
+            tab_create_args("w1", &request()),
             [
                 "tab",
                 "create",
@@ -323,6 +334,21 @@ mod tests {
     }
 
     #[test]
+    fn the_tab_carries_the_environment_its_agent_starts_with() {
+        let mut req = request();
+        req.env = vec![("OPENCODE_CONFIG_CONTENT".to_string(), "{}".to_string())];
+        assert_eq!(
+            tab_create_args("w1", &req).last().map(String::as_str),
+            Some("OPENCODE_CONFIG_CONTENT={}")
+        );
+        assert!(
+            tab_create_args("w1", &req)
+                .windows(2)
+                .any(|pair| pair == ["--env", "OPENCODE_CONFIG_CONTENT={}"]),
+        );
+    }
+
+    #[test]
     fn the_agent_starts_on_the_harness_and_its_model_in_the_tabs_pane() {
         assert_eq!(
             agent_start_args(&request(), "w1:p9"),
@@ -331,14 +357,16 @@ mod tests {
                 "start",
                 "orchestrator",
                 "--kind",
-                "opencode",
+                "claude",
                 "--pane",
                 "w1:p9",
                 "--timeout",
                 "30000",
                 "--",
                 "--model",
-                "opencode-go/glm-5.3#high"
+                "claude-opus-5-5",
+                "--effort",
+                "medium"
             ]
         );
     }

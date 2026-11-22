@@ -90,21 +90,29 @@ fn each_role_prints_the_crew_and_then_its_text() {
 #[test]
 fn the_crew_header_reflects_a_configuration_that_is_not_the_default() {
     let home = fresh_home("configured");
-    let mut config = Config::default();
-    config.harness.tool = "claude".to_string();
-    config.round_limit = 2;
-    config.agents[1].model = "anthropic/claude-opus#high".to_string();
+    let mut config = Config {
+        round_limit: 2,
+        ..Config::default()
+    };
+    config.agents[1].harness = "opencode".to_string();
+    config.agents[1].model = "opencode-go/glm-5.3".to_string();
+    config.agents[1].effort = Some("low".to_string());
     config.write(&config_file(&home)).expect("a configuration");
 
     let text = stdout_of(&run(Some(&home), &["--skill", "reviewer"]));
-    assert!(text.contains("Harness: claude,"), "{text}");
     assert!(text.contains("Review-round limit: 2."), "{text}");
     assert!(
-        text.contains("- reviewer (reviewer): anthropic/claude-opus#high\n"),
+        text.contains(
+            "- reviewer (reviewer): harness opencode, model opencode-go/glm-5.3, effort low\n"
+        ),
         "{text}"
     );
     assert!(
-        text.contains("  model args: --model anthropic/claude-opus --effort high\n"),
+        text.contains("  start args: --standalone --auto\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("  start env: OPENCODE_CONFIG_CONTENT={"),
         "{text}"
     );
     assert!(!text.contains("Review-round limit: 5."), "{text}");

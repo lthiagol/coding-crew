@@ -1708,7 +1708,7 @@ mod tests {
         let work = mock_work();
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.settings = settings_panel("enter");
-        app.selection = Some("harness.driven".to_string());
+        app.selection = Some("agents.0.model".to_string());
         app.on_key(key(KeyCode::Enter), &work, now());
         assert!(app.settings.editing(), "enter did not start the edit");
         assert!(app.detail.is_none(), "enter opened a record on Settings");
@@ -1716,7 +1716,7 @@ mod tests {
         assert!(!app.settings.editing(), "esc did not drop the edit");
         // The rows still move: the tab scrolls like the other lists.
         app.on_key(key(KeyCode::Down), &work, now());
-        assert_ne!(app.selection.as_deref(), Some("harness.driven"));
+        assert_ne!(app.selection.as_deref(), Some("agents.0.model"));
     }
 
     #[test]
@@ -2012,14 +2012,14 @@ mod tests {
                     app.settings = settings_panel(&format!("every-{scope:?}"));
                     app.selection = Some(
                         if binding.act == Act::Begin {
-                            "harness.driven"
+                            "agents.0.model"
                         } else {
                             "raul.theme"
                         }
                         .to_string(),
                     );
                     match scope {
-                        Scope::Value => app.settings.begin("harness.driven"),
+                        Scope::Value => app.settings.begin("agents.0.model"),
                         Scope::Asking => {
                             app.settings.change("raul.theme", 1);
                             app.settings.ask();
@@ -3424,7 +3424,7 @@ mod tests {
         // An unsaved change for w and u to act on, and a reload for r.
         app.settings.change("raul.theme", 1);
         app.apply_look();
-        app.selection = Some("harness.driven".to_string());
+        app.selection = Some("agents.0.model".to_string());
         app.on_key(key(KeyCode::Enter), &work, now());
         assert!(app.settings.editing(), "enter did not start the edit");
         for code in [

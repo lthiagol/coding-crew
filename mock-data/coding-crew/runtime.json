@@ -3,19 +3,19 @@
   "crew": [
     {
       "role": "orchestrator",
-      "model": "opencode-go/glm-5.3#high",
+      "model": "claude-opus-5-5",
       "state": "idle"
     },
     {
       "role": "runner",
-      "model": "opencode-go/deepseek-v4.1-flash#high",
+      "model": "claude-haiku-5-5",
       "holds": "TSK10",
       "since": "2026-11-09T09:00Z",
       "state": "executing"
     },
     {
       "role": "reviewer",
-      "model": "opencode-go/glm-5.3#high",
+      "model": "claude-opus-5-5",
       "holds": "TSK13",
       "since": "2026-11-10T16:00Z",
       "state": "reviewing"

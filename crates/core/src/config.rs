@@ -5,8 +5,8 @@
 //! `~/.config/coding-crew/config.toml`, because it is policy rather than work.
 //! It is TOML rather than JSON because it is the one file a human edits, and
 //! TOML carries comments: the defaults hugo writes explain themselves.
-//! What it holds is settled in `docs/tasks/task-model.md` § 11.3: the agents
-//! and their models, the harness they run in, the review-round limit and the
+//! What it holds is settled in `docs/tasks/task-model.md` § 11.3: the agents,
+//! the harness, model and effort each runs, the review-round limit and the
 //! order — the project's own flow.
 
 use std::fs;
@@ -19,6 +19,7 @@ use thiserror::Error;
 use toml_edit::{DocumentMut, Item, Table, TableLike, TomlError};
 
 use crate::actor::Role;
+use crate::harness;
 use crate::lifecycle::Status;
 
 /// The configuration's file name under the tool's home.
@@ -33,11 +34,10 @@ pub const LEGACY_CONFIG_FILE: &str = "config.json";
 
 /// The flow's configuration, as the file holds it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "Stored")]
 pub struct Config {
     /// One entry per agent of the automation.
     pub agents: Vec<Agent>,
-    /// The tool the agents run in, and the way it is driven.
-    pub harness: Harness,
     /// The build-and-fix cycles a task gets.
     pub round_limit: u32,
     /// The order the flow follows: the steps and their gates.
@@ -152,20 +152,20 @@ impl Config {
             if index == 0 {
                 out.push_str(
                     "# One entry per agent of the automation: the name its role config\n\
-                     # gives it, the role it fills, and the model it runs.\n",
+                     # gives it, the role it fills, the harness it runs in, the model\n\
+                     # and the effort. The harnesses are claude, opencode and cursor-agent.\n",
                 );
             }
             out.push_str("[[agents]]\n");
             out.push_str(&format!("name = {}\n", quote(&agent.name)));
             out.push_str(&format!("role = {}\n", quote(agent.role.as_str())));
-            out.push_str(&format!("model = {}\n\n", quote(&agent.model)));
+            out.push_str(&format!("harness = {}\n", quote(&agent.harness)));
+            out.push_str(&format!("model = {}\n", quote(&agent.model)));
+            if let Some(effort) = &agent.effort {
+                out.push_str(&format!("effort = {}\n", quote(effort)));
+            }
+            out.push('\n');
         }
-        out.push_str(
-            "# The tool the agents run in, and the way it is driven.\n\
-             [harness]\n",
-        );
-        out.push_str(&format!("tool = {}\n", quote(&self.harness.tool)));
-        out.push_str(&format!("driven = {}\n\n", quote(&self.harness.driven)));
         for (index, step) in self.order.iter().enumerate() {
             if index == 0 {
                 out.push_str(
@@ -348,12 +348,36 @@ fn apply(document: &mut dyn TableLike, before: &Table, after: &Table) {
                     for (index, (was, now)) in was.iter().zip(now.iter()).enumerate() {
                         if let Some(table) = tables.get_mut(index) {
                             apply(table, was, now);
+                            if !same(&Item::Table(was.clone()), &Item::Table(now.clone())) {
+                                name_the_shape(table, now);
+                            }
                         }
                     }
                 }
             }
             _ => set(document, key, now),
         }
+    }
+}
+
+/// Give a changed agent the keys the file may not name yet. A file written
+/// before agents named their harness and effort reads them from the old
+/// global harness and from the model's `#variant`; once an agent is saved, it
+/// names both itself, so the file reads back as it was saved. The model is
+/// written without its `#variant` too, or an explicit effort would leave the
+/// `#variant` in the model.
+fn name_the_shape(table: &mut dyn TableLike, now: &Table) {
+    for key in ["harness", "effort"] {
+        if !table.contains_key(key)
+            && let Some(item) = now.get(key)
+        {
+            table.insert(key, item.clone());
+        }
+    }
+    if let Some(model) = now.get("model")
+        && table.get("model").and_then(Item::as_str) != model.as_str()
+    {
+        set(table, "model", model);
     }
 }
 
@@ -519,32 +543,34 @@ fn location(text: &str, index: usize) -> String {
 }
 
 impl Default for Config {
-    /// The project's own flow: the pair it runs, the harness its panes run in,
-    /// the budget it works to, the order `docs/roles/roles.md` records, and
-    /// raul's own defaults.
+    /// The project's own flow: the agents it runs, the models and efforts they
+    /// run at, the budget it works to, the order `docs/roles/roles.md` records,
+    /// and raul's own defaults.
     fn default() -> Self {
         Self {
             agents: vec![
                 Agent {
                     name: "builder".to_string(),
                     role: Role::Runner,
-                    model: "opencode-go/deepseek-v4.1-flash#high".to_string(),
+                    harness: "claude".to_string(),
+                    model: "claude-haiku-5-5".to_string(),
+                    effort: Some("high".to_string()),
                 },
                 Agent {
                     name: "reviewer".to_string(),
                     role: Role::Reviewer,
-                    model: "opencode-go/glm-5.3#high".to_string(),
+                    harness: "claude".to_string(),
+                    model: "claude-opus-5-5".to_string(),
+                    effort: Some("medium".to_string()),
                 },
                 Agent {
                     name: "orchestrator".to_string(),
                     role: Role::Orchestrator,
-                    model: "opencode-go/glm-5.3#high".to_string(),
+                    harness: "claude".to_string(),
+                    model: "claude-opus-5-5".to_string(),
+                    effort: Some("medium".to_string()),
                 },
             ],
-            harness: Harness {
-                tool: "opencode".to_string(),
-                driven: "--standalone · role config".to_string(),
-            },
             round_limit: 5,
             order: vec![
                 OrderStep {
@@ -591,22 +617,108 @@ fn gate(from: Status, to: Status) -> Gate {
     Gate { from, to }
 }
 
-/// One agent of the automation: its name, the role it fills, and its model.
+/// One agent of the automation: its name, the role it fills, the harness it
+/// runs in, and the model and effort it runs at.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Agent {
     /// The name its role config gives it — `builder`, `reviewer`.
     pub name: String,
     pub role: Role,
-    /// The model it runs, provider and variant.
+    /// The harness it runs in: a name of the harness table.
+    pub harness: String,
+    /// The model it runs, as the harness names it.
     pub model: String,
+    /// The effort it runs at: one of the harness's levels. `None` is the
+    /// harness's own default, and the file leaves the key out.
+    pub effort: Option<String>,
 }
 
-/// The tool the agents run in, and the way it is driven.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Harness {
-    pub tool: String,
-    /// The way the tool is driven, in a short phrase.
-    pub driven: String,
+/// The configuration as a file holds it.
+///
+/// Two shapes read: the one this code writes, and the one before agents named
+/// their harness. That one had a global `[harness]` table, and a model that
+/// carried its effort as `#effort`.
+#[derive(Deserialize)]
+struct Stored {
+    agents: Vec<StoredAgent>,
+    /// The old shape's harness: an agent that names none runs in it.
+    harness: Option<StoredHarness>,
+    round_limit: u32,
+    order: Vec<OrderStep>,
+    #[serde(default)]
+    raul: Raul,
+}
+
+#[derive(Deserialize)]
+struct StoredAgent {
+    name: String,
+    role: Role,
+    harness: Option<String>,
+    model: String,
+    effort: Option<String>,
+}
+
+/// The old shape's global harness. Only the tool is read: the way it was
+/// driven is no longer a setting.
+#[derive(Deserialize)]
+struct StoredHarness {
+    tool: String,
+}
+
+impl TryFrom<Stored> for Config {
+    type Error = String;
+
+    fn try_from(stored: Stored) -> Result<Self, String> {
+        let legacy = stored.harness.as_ref().map(|harness| harness.tool.clone());
+        let agents = stored
+            .agents
+            .into_iter()
+            .map(|agent| agent_of(agent, legacy.as_deref()))
+            .collect::<Result<Vec<Agent>, String>>()?;
+        Ok(Self {
+            agents,
+            round_limit: stored.round_limit,
+            order: stored.order,
+            raul: stored.raul,
+        })
+    }
+}
+
+/// An agent as the file states it, checked against the harness table. An
+/// agent that names no harness takes the old global one; a model's `#effort`
+/// is split off into the effort when the file names none.
+fn agent_of(stored: StoredAgent, legacy: Option<&str>) -> Result<Agent, String> {
+    let harness = stored
+        .harness
+        .or_else(|| legacy.map(str::to_string))
+        .ok_or_else(|| format!("{} names no harness", stored.name))?;
+    let known = harness::find(&harness).ok_or_else(|| {
+        format!(
+            "{} runs in {harness}, which is not a harness: the harnesses are {}",
+            stored.name,
+            harness::names().join(", ")
+        )
+    })?;
+    let (model, effort) = match (stored.effort, stored.model.split_once('#')) {
+        (None, Some((model, effort))) => (model.to_string(), Some(effort.to_string())),
+        (effort, _) => (stored.model, effort),
+    };
+    if let Some(effort) = &effort
+        && !known.takes(effort)
+    {
+        return Err(format!(
+            "{} runs {harness} at {effort}, which is not one of its efforts: {}",
+            stored.name,
+            known.efforts.join(", ")
+        ));
+    }
+    Ok(Agent {
+        name: stored.name,
+        role: stored.role,
+        harness,
+        model,
+        effort,
+    })
 }
 
 /// raul's own settings: the palette it paints with, the icons it draws, and the
@@ -704,8 +816,6 @@ mod tests {
     fn the_defaults_are_the_projects_flow() {
         let config = Config::default();
         assert_eq!(config.round_limit, 5);
-        assert_eq!(config.harness.tool, "opencode");
-        assert!(!config.harness.driven.is_empty());
         // One agent per role the automation runs; the creator is the human's
         // grooming session and holds no agent.
         let roles: Vec<Role> = config.agents.iter().map(|agent| agent.role).collect();
@@ -714,8 +824,33 @@ mod tests {
             vec![Role::Runner, Role::Reviewer, Role::Orchestrator]
         );
         for agent in &config.agents {
-            assert!(agent.model.contains('/'), "{}: {}", agent.name, agent.model);
+            assert_eq!(agent.harness, "claude", "{}", agent.name);
+            assert!(agent.effort.is_some(), "{}", agent.name);
         }
+    }
+
+    #[test]
+    fn the_defaults_run_each_role_on_its_model_and_effort() {
+        let config = Config::default();
+        let runs: Vec<(&str, &str, Option<&str>)> = config
+            .agents
+            .iter()
+            .map(|agent| {
+                (
+                    agent.name.as_str(),
+                    agent.model.as_str(),
+                    agent.effort.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            runs,
+            [
+                ("builder", "claude-haiku-5-5", Some("high")),
+                ("reviewer", "claude-opus-5-5", Some("medium")),
+                ("orchestrator", "claude-opus-5-5", Some("medium")),
+            ]
+        );
     }
 
     #[test]
@@ -822,13 +957,16 @@ mod tests {
         for part in [
             "round_limit",
             "[[agents]]",
-            "[harness]",
+            "harness = \"claude\"",
+            "effort = \"high\"",
             "[[order]]",
             "[raul]",
             "[raul.tasks]",
         ] {
             assert!(text.contains(part), "{part} is not in the shape:\n{text}");
         }
+        // The harness is an agent's, not the flow's: no global table is written.
+        assert!(!text.contains("[harness]"), "{text}");
         // The comments are not a second copy of the shape: they sit above it.
         assert_eq!(
             Config::from_toml(&text).expect("the written shape parses"),
@@ -838,13 +976,8 @@ mod tests {
 
     #[test]
     fn an_escaped_string_round_trips() {
-        let config = Config {
-            harness: Harness {
-                tool: "a \"quoted\" \\ tool".to_string(),
-                driven: "one\ttab\u{7f}".to_string(),
-            },
-            ..Config::default()
-        };
+        let mut config = Config::default();
+        config.agents[0].model = "a \"quoted\" \\ model\tand\u{7f}".to_string();
         assert_eq!(
             Config::from_toml(&config.to_toml()).expect("the written shape parses"),
             config
@@ -876,10 +1009,8 @@ mod tests {
 
     #[test]
     fn a_wrong_type_is_a_shape_error_not_a_syntax_error() {
-        let error = Config::from_toml(
-            "round_limit = \"five\"\nagents = []\norder = []\n[harness]\ntool = \"x\"\ndriven = \"y\"\n",
-        )
-        .expect_err("a string is not a round limit");
+        let error = Config::from_toml("round_limit = \"five\"\nagents = []\norder = []\n")
+            .expect_err("a string is not a round limit");
         assert!(matches!(&error, ConfigError::Shape { .. }), "{error:?}");
         assert!(!error.to_string().contains("syntax"), "{error}");
         assert!(error.to_string().contains("invalid"), "{error}");
@@ -1044,14 +1175,9 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
 
     #[test]
     fn a_save_into_an_inline_table_keeps_the_inline_form() {
-        // `harness` and `[raul] tasks` written inline are valid TOML. A save
-        // changes a value in each, and the file keeps both inline.
+        // `[raul] tasks` written inline is valid TOML. A save changes a value
+        // in it, and the file keeps it inline.
         let text = HAND_WRITTEN
-            .replacen(
-                "[harness]\ndriven = \"--standalone\"\ntool = \"opencode\"\n",
-                "harness = { tool = \"opencode\", driven = \"--standalone\" }\n",
-                1,
-            )
             .replacen("[raul.tasks]\nsort = \"id\"\nreverse = false\n", "", 1)
             .replacen(
                 "icons = \"nerd\"\n",
@@ -1062,13 +1188,10 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         let path = scratch.path();
         let mut file = ConfigFile::read(&path).expect("the configuration");
         let mut config = file.config().clone();
-        config.harness.driven = "--embedded".to_string();
         config.raul.tasks.reverse = true;
         file.save(&config).expect("the save");
         let saved = fs::read_to_string(&path).expect("the file");
-        let expected = text
-            .replacen("driven = \"--standalone\"", "driven = \"--embedded\"", 1)
-            .replacen("reverse = false", "reverse = true", 1);
+        let expected = text.replacen("reverse = false", "reverse = true", 1);
         assert_eq!(saved, expected);
         assert_eq!(
             Config::from_toml(&saved).expect("the saved file parses"),
@@ -1180,13 +1303,13 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
 
     #[test]
     fn a_refused_save_leaves_no_edit_in_the_document() {
-        // The document's tool is one the loaded configuration does not have,
+        // The document's theme is one the loaded configuration does not have,
         // so the text a save writes would not hold the configuration: the save
         // is refused. Its round-limit edit must not stay in the document.
         let scratch = scratch_file("refused", HAND_WRITTEN);
         let path = scratch.path();
         let mut file = ConfigFile::read(&path).expect("the configuration");
-        file.document["harness"]["tool"] = toml_edit::value("elsewhere");
+        file.document["raul"]["theme"] = toml_edit::value("elsewhere");
         let mut config = file.config().clone();
         config.round_limit = 3;
         let error = file.save(&config).expect_err("the text would not hold it");
@@ -1207,14 +1330,16 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     #[test]
     fn the_pick_replaces_only_the_orchestrators_model_line() {
         let text = Config::default().to_toml();
-        let picked = pick("pick", &text, "opencode-go/glm-5.3");
+        let picked = pick("pick", &text, "claude-sonnet-5-5");
         let config = Config::from_toml(&picked).expect("the edited text still parses");
         let orchestrator = config
             .agents
             .iter()
             .find(|agent| agent.role == Role::Orchestrator)
             .expect("the orchestrator");
-        assert_eq!(orchestrator.model, "opencode-go/glm-5.3");
+        assert_eq!(orchestrator.model, "claude-sonnet-5-5");
+        // The effort is the orchestrator's own: a pick keeps it.
+        assert_eq!(orchestrator.effort.as_deref(), Some("medium"));
         // The other agents are their own: the flow starts those, so a pick
         // does not touch them.
         let builder = config
@@ -1222,13 +1347,13 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
             .iter()
             .find(|agent| agent.role == Role::Runner)
             .expect("the builder");
-        assert_eq!(builder.model, "opencode-go/deepseek-v4.1-flash#high");
+        assert_eq!(builder.model, "claude-haiku-5-5");
         let reviewer = config
             .agents
             .iter()
             .find(|agent| agent.role == Role::Reviewer)
             .expect("the reviewer");
-        assert_eq!(reviewer.model, "opencode-go/glm-5.3#high");
+        assert_eq!(reviewer.model, "claude-opus-5-5");
         // Every other line is byte-identical: the file is the human's.
         let before: Vec<&str> = text.lines().collect();
         let after: Vec<&str> = picked.lines().collect();
@@ -1237,7 +1362,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
             .filter(|index| before[*index] != after[*index])
             .collect();
         assert_eq!(changed.len(), 1, "{picked}");
-        assert!(after[changed[0]].contains("glm-5.3"), "{picked}");
+        assert!(after[changed[0]].contains("claude-sonnet-5-5"), "{picked}");
     }
 
     #[test]
@@ -1286,25 +1411,11 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
                 .iter()
                 .find(|agent| agent.role == Role::Orchestrator)
                 .map(|agent| agent.model.as_str()),
-            Some("opencode-go/glm-5.3#high")
+            Some("opencode-go/glm-5.3")
         );
-        let picked = pick("literal", &text, "opencode-go/kimi-k3#low");
+        let picked = pick("literal", &text, "opencode-go/kimi-k3");
         assert!(
-            picked.contains("model = \"opencode-go/kimi-k3#low\" # the orchestrator's lens"),
-            "{picked}"
-        );
-    }
-
-    #[test]
-    fn a_hash_inside_a_model_is_part_of_the_value() {
-        // `#high` is the model's variant, not a comment.
-        let picked = pick(
-            "variant",
-            &Config::default().to_toml(),
-            "opencode-go/glm-5.3#low",
-        );
-        assert!(
-            picked.contains("model = \"opencode-go/glm-5.3#low\""),
+            picked.contains("model = \"opencode-go/kimi-k3\" # the orchestrator's lens"),
             "{picked}"
         );
     }
@@ -1362,8 +1473,8 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         // A pick is no longer searched for in the text: a model is what an
         // agent runs, and an agent that names none is not a configuration.
         let text = Config::default().to_toml().replacen(
-            "role = \"orchestrator\"\nmodel = \"opencode-go/glm-5.3#high\"\n",
-            "role = \"orchestrator\"\n",
+            "role = \"orchestrator\"\nharness = \"claude\"\nmodel = \"claude-opus-5-5\"\n",
+            "role = \"orchestrator\"\nharness = \"claude\"\n",
             1,
         );
         let error = Config::from_toml(&text).expect_err("the orchestrator names no model");
@@ -1437,5 +1548,180 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         assert_eq!(gates_from_text("[]"), Ok(Vec::new()));
         assert!(gates_from_text("[{ from = \"nowhere\", to = \"done\" }]").is_err());
         assert!(gates_from_text("[").is_err());
+    }
+
+    #[test]
+    fn an_old_file_reads_its_global_harness_and_splits_the_effort() {
+        // The old shape: one harness for every agent, and `#effort` in the
+        // model. The file reads as the agents it names, in the new shape.
+        let config = Config::from_toml(HAND_WRITTEN).expect("the old shape");
+        let runs: Vec<(&str, &str, &str, Option<&str>)> = config
+            .agents
+            .iter()
+            .map(|agent| {
+                (
+                    agent.name.as_str(),
+                    agent.harness.as_str(),
+                    agent.model.as_str(),
+                    agent.effort.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            runs,
+            [
+                (
+                    "builder",
+                    "opencode",
+                    "opencode-go/deepseek-v4.1-flash",
+                    Some("high")
+                ),
+                (
+                    "orchestrator",
+                    "opencode",
+                    "opencode-go/glm-5.3",
+                    Some("high")
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_agent_that_names_its_harness_is_not_the_old_global_one() {
+        let text = HAND_WRITTEN.replacen(
+            "model = \"opencode-go/glm-5.3#high\" # the orchestrator's lens",
+            "harness = \"cursor-agent\"\nmodel = \"auto\"\neffort = \"low\"",
+            1,
+        );
+        let config = Config::from_toml(&text).expect("a mixed configuration");
+        let orchestrator = config
+            .agents
+            .iter()
+            .find(|agent| agent.role == Role::Orchestrator)
+            .expect("the orchestrator");
+        assert_eq!(orchestrator.harness, "cursor-agent");
+        assert_eq!(orchestrator.model, "auto");
+        assert_eq!(orchestrator.effort.as_deref(), Some("low"));
+    }
+
+    #[test]
+    fn an_old_file_saved_names_the_harness_and_effort_of_each_agent_it_changes() {
+        // The pick changes the orchestrator's model. Its harness and effort
+        // were the old file's: the save names them, so the file reads back as
+        // it was saved, and the builder's lines are left as they were.
+        let picked = pick("names", HAND_WRITTEN, "opencode-go/kimi-k3");
+        let config = Config::from_toml(&picked).expect("the saved file");
+        let orchestrator = config
+            .agents
+            .iter()
+            .find(|agent| agent.role == Role::Orchestrator)
+            .expect("the orchestrator");
+        assert_eq!(orchestrator.harness, "opencode");
+        assert_eq!(orchestrator.effort.as_deref(), Some("high"));
+        assert!(picked.contains("harness = \"opencode\""), "{picked}");
+        assert!(picked.contains("effort = \"high\""), "{picked}");
+        assert!(
+            picked.contains("model = \"opencode-go/deepseek-v4.1-flash#high\""),
+            "{picked}"
+        );
+    }
+
+    /// Change the builder of a file holding `text`, save it, and check that the
+    /// file reads back as the configuration saved. Returns the saved text.
+    fn change_builder(name: &str, text: &str, change: impl FnOnce(&mut Agent)) -> String {
+        let scratch = scratch_file(name, text);
+        let path = scratch.path();
+        let mut file = ConfigFile::read(&path).expect("the configuration");
+        let mut config = file.config().clone();
+        change(&mut config.agents[0]);
+        file.save(&config).expect("the save");
+        let saved = fs::read_to_string(&path).expect("the file");
+        assert_eq!(
+            Config::from_toml(&saved).expect("the saved file parses"),
+            config
+        );
+        saved
+    }
+
+    #[test]
+    fn an_old_file_saved_with_only_the_effort_changed_reads_back() {
+        // The builder's model still carries `#high` in the file. A save that
+        // changes only its effort names the model without the `#`, so the
+        // effort does not leave `#high` in the model.
+        let saved = change_builder("effort-only", HAND_WRITTEN, |agent| {
+            agent.effort = Some("low".to_string());
+        });
+        assert!(saved.contains("effort = \"low\""), "{saved}");
+        assert!(saved.contains("harness = \"opencode\""), "{saved}");
+        assert!(
+            saved.contains("model = \"opencode-go/deepseek-v4.1-flash\""),
+            "{saved}"
+        );
+        assert!(!saved.contains("deepseek-v4.1-flash#high"), "{saved}");
+    }
+
+    #[test]
+    fn an_old_file_saved_with_only_the_harness_changed_reads_back() {
+        let saved = change_builder("harness-only", HAND_WRITTEN, |agent| {
+            agent.harness = "claude".to_string();
+        });
+        assert!(saved.contains("harness = \"claude\""), "{saved}");
+        assert!(saved.contains("effort = \"high\""), "{saved}");
+        assert!(
+            saved.contains("model = \"opencode-go/deepseek-v4.1-flash\""),
+            "{saved}"
+        );
+        assert!(!saved.contains("deepseek-v4.1-flash#high"), "{saved}");
+    }
+
+    #[test]
+    fn an_agent_with_no_harness_and_no_global_one_is_unreadable() {
+        let text = Config::default()
+            .to_toml()
+            .replacen("harness = \"claude\"\n", "", 1);
+        let error = Config::from_toml(&text).expect_err("the builder names no harness");
+        assert!(matches!(&error, ConfigError::Shape { .. }), "{error:?}");
+        assert!(
+            error.to_string().contains("builder names no harness"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_harness_the_table_does_not_hold_is_unreadable_and_named() {
+        let text = Config::default().to_toml().replacen(
+            "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"",
+            "harness = \"aider\"\nmodel = \"claude-haiku-5-5\"",
+            1,
+        );
+        let error = Config::from_toml(&text).expect_err("aider is not a harness");
+        assert!(error.to_string().contains("aider"), "{error}");
+        assert!(error.to_string().contains("cursor-agent"), "{error}");
+    }
+
+    #[test]
+    fn an_effort_the_harness_does_not_take_is_unreadable_and_named() {
+        let text = Config::default().to_toml().replacen(
+            "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\neffort = \"high\"",
+            "harness = \"cursor-agent\"\nmodel = \"claude-haiku-5-5\"\neffort = \"xhigh\"",
+            1,
+        );
+        let error = Config::from_toml(&text).expect_err("cursor takes no xhigh");
+        assert!(error.to_string().contains("xhigh"), "{error}");
+        assert!(error.to_string().contains("low, medium, high"), "{error}");
+    }
+
+    #[test]
+    fn an_agent_with_no_effort_runs_on_the_harness_default() {
+        let text = Config::default()
+            .to_toml()
+            .replacen("effort = \"high\"\n", "", 1);
+        let config = Config::from_toml(&text).expect("an agent without an effort");
+        assert_eq!(config.agents[0].effort, None);
+        assert!(
+            !config.to_toml().contains("effort = \"high\""),
+            "{}",
+            config.to_toml()
+        );
     }
 }

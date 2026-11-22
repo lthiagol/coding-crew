@@ -1,8 +1,8 @@
 //! The sidebar's content: the configuration, and the cursor that picks the
 //! orchestrator's model.
 //!
-//! The groups, in the order the screen reads them: the **agents** and the
-//! model each runs, the **harness**, the **review-round limit**, and the
+//! The groups, in the order the screen reads them: the **agents**, each with
+//! its harness, model and effort, the **review-round limit**, and the
 //! **order** — the numbered steps with their gates. The configuration is
 //! provisional and lives in the tool's home. The agents group has a cursor:
 //! the orchestrator's row is the one row a screen changes, because the
@@ -26,7 +26,6 @@ use crate::config::{ConfigRead, ConfigState};
 /// The sidebar's groups, in the order they are read. Each label is the dim
 /// upper-case word the screen draws.
 pub const AGENTS_TITLE: &str = "AGENTS";
-pub const HARNESS_TITLE: &str = "HARNESS";
 pub const LIMIT_TITLE: &str = "ROUNDS";
 pub const ORDER_TITLE: &str = "ORDER";
 
@@ -189,22 +188,6 @@ fn groups(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<
             rows: agent_rows(config, theme, icons, cursor),
         },
         Group {
-            title: HARNESS_TITLE,
-            style: title,
-            rows: vec![
-                Row {
-                    text: config.harness.tool.clone(),
-                    style: theme.text.normal,
-                    selected: false,
-                },
-                Row {
-                    text: format!("  {}", config.harness.driven),
-                    style: theme.text.dim,
-                    selected: false,
-                },
-            ],
-        },
-        Group {
             title: LIMIT_TITLE,
             style: title,
             rows: vec![Row {
@@ -221,9 +204,9 @@ fn groups(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<
     ]
 }
 
-/// One entry per agent: its role icon, its name and role, then its model — the
-/// provider and the model's own name — on the rows under it. The cursor is on
-/// an entry's head row.
+/// One entry per agent: its role icon, its name and role, then the harness it
+/// runs in, its model and its effort on the rows under it. The cursor is on an
+/// entry's head row.
 fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<Row> {
     let mut rows = Vec::new();
     for (index, agent) in config.agents.iter().enumerate() {
@@ -240,24 +223,22 @@ fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> 
             style: theme.text.normal,
             selected,
         });
-        match agent.model.split_once('/') {
-            Some((provider, model)) => {
-                rows.push(Row {
-                    text: format!("  {provider}"),
-                    style: theme.text.dim,
-                    selected: false,
-                });
-                rows.push(Row {
-                    text: format!("  {model}"),
-                    style: theme.text.dim,
-                    selected: false,
-                });
-            }
-            None => rows.push(Row {
-                text: format!("  {}", agent.model),
+        for (label, value) in [
+            ("harness", agent.harness.clone()),
+            ("model", agent.model.clone()),
+            (
+                "effort",
+                agent
+                    .effort
+                    .clone()
+                    .unwrap_or_else(|| "default".to_string()),
+            ),
+        ] {
+            rows.push(Row {
+                text: format!("  {label} {value}"),
                 style: theme.text.dim,
                 selected: false,
-            }),
+            });
         }
     }
     rows
@@ -427,7 +408,7 @@ fn line(text: &str, style: Style, width: usize) -> Line<'static> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use coding_crew_core::config::{Agent, CONFIG_FILE, Harness, OrderStep};
+    use coding_crew_core::config::{Agent, CONFIG_FILE, OrderStep};
     use coding_crew_theme::Preset;
 
     fn theme() -> Theme {
@@ -481,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn the_groups_are_the_agents_the_harness_the_limit_and_the_order() {
+    fn the_groups_are_the_agents_the_limit_and_the_order() {
         let rows = rendered(&configured(), 30, 40);
         let at = |needle: &str| {
             rows.iter()
@@ -489,37 +470,33 @@ mod tests {
                 .unwrap_or_else(|| panic!("{needle} is not a group: {rows:#?}"))
         };
         let agents = at(AGENTS_TITLE);
-        let harness = at(HARNESS_TITLE);
         let limit = at(LIMIT_TITLE);
         let order = at(ORDER_TITLE);
-        assert!(agents < harness, "{agents} {harness}");
-        assert!(harness < limit, "{harness} {limit}");
+        assert!(agents < limit, "{agents} {limit}");
         assert!(limit < order, "{limit} {order}");
+        // The harness is an agent's, not a group of its own.
+        assert!(!rows.iter().any(|row| row == "HARNESS"), "{rows:#?}");
     }
 
     #[test]
-    fn every_agent_is_its_role_and_the_model_it_runs() {
+    fn every_agent_is_its_role_then_its_harness_model_and_effort() {
         let rows = rendered(&configured(), 30, 40);
-        let text = rows.join("\n");
-        for fact in [
-            "builder · runner",
-            "reviewer",
-            "orchestrator",
-            "opencode-go",
-            "deepseek-v4.1-flash#high",
-            "glm-5.3#high",
-        ] {
-            assert!(text.contains(fact), "{fact} is not on the sidebar: {text}");
-        }
+        let at = |needle: &str| {
+            rows.iter()
+                .position(|row| row.ends_with(needle))
+                .unwrap_or_else(|| panic!("{needle} is not on the sidebar: {rows:#?}"))
+        };
+        let head = at("builder · runner");
+        assert_eq!(rows[head + 1], "  harness claude", "{rows:#?}");
+        assert_eq!(rows[head + 2], "  model claude-haiku-5-5", "{rows:#?}");
+        assert_eq!(rows[head + 3], "  effort high", "{rows:#?}");
+        let reviewer = at("reviewer");
+        assert_eq!(rows[reviewer + 2], "  model claude-opus-5-5", "{rows:#?}");
+        assert_eq!(rows[reviewer + 3], "  effort medium", "{rows:#?}");
         // The name is said once when it is the role.
+        let text = rows.join("\n");
         assert!(!text.contains("reviewer · reviewer"), "{text}");
         assert!(!text.contains("orchestrator · orchestrator"), "{text}");
-        // The provider and the model's own name are both whole.
-        assert!(
-            rows.iter()
-                .any(|row| row.trim() == "deepseek-v4.1-flash#high"),
-            "the model's variant is cut: {text}"
-        );
         assert!(
             !text.contains('…'),
             "the default configuration is cut: {text}"
@@ -527,11 +504,14 @@ mod tests {
     }
 
     #[test]
-    fn the_harness_names_the_tool_and_the_way_it_is_driven() {
-        let rows = rendered(&configured(), 30, 40);
-        let text = rows.join("\n");
-        assert!(text.contains("opencode"), "{text}");
-        assert!(text.contains("--standalone · role config"), "{text}");
+    fn an_agent_with_no_effort_says_it_runs_on_the_default() {
+        let mut config = Config::default();
+        config.agents[0].effort = None;
+        let rows = rendered(&ConfigRead::of(ConfigState::Config(config)), 30, 40);
+        assert!(
+            rows.iter().any(|row| row == "  effort default"),
+            "{rows:#?}"
+        );
     }
 
     #[test]
@@ -686,7 +666,7 @@ mod tests {
             USING_DEFAULTS,
             AGENTS_TITLE,
             "builder · runner",
-            HARNESS_TITLE,
+            "harness claude",
             LIMIT_TITLE,
             "5 build-and-fix rounds",
             ORDER_TITLE,
@@ -932,18 +912,18 @@ mod tests {
                 Agent {
                     name: "builder".to_string(),
                     role: coding_crew_core::Role::Runner,
-                    model: "provider/model#low".to_string(),
+                    harness: "cursor-agent".to_string(),
+                    model: "auto".to_string(),
+                    effort: Some("low".to_string()),
                 },
                 Agent {
                     name: "reviewer".to_string(),
                     role: coding_crew_core::Role::Reviewer,
-                    model: "provider/model#low".to_string(),
+                    harness: "cursor-agent".to_string(),
+                    model: "auto".to_string(),
+                    effort: None,
                 },
             ],
-            harness: Harness {
-                tool: "a-harness".to_string(),
-                driven: "driven this way".to_string(),
-            },
             round_limit: 2,
             order: vec![OrderStep {
                 step: "plan".to_string(),
@@ -959,8 +939,8 @@ mod tests {
         let text = rows.join("\n");
         for fact in [
             "2 build-and-fix rounds",
-            "a-harness",
-            "driven this way",
+            "harness cursor-agent",
+            "effort low",
             "1 plan · creator",
             "draft → groomed",
         ] {

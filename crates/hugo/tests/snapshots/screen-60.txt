@@ -2,12 +2,10 @@
  sidebar not shown: configuration (it needs 80 columns)
 ╭─ 󰑮 flow ─────────────────────────────────────────────────╮
 │╭─ 󰚩 crew ───────────────────────────────────────────────╮│
-││󰚩 orchestrator glm-5.3#high idle                        ││
-││  holds nothing                                         ││
-││󰖷 runner deepseek-v4.1-flash#high ⠋ executing           ││
-││  holds TSK10 · held 10d                                ││
-││󰈈 reviewer glm-5.3#high ⠋ reviewing                     ││
-││  holds TSK13 · held 8d                                 ││
+││role           model            task  held  state       ││
+││󰚩 orchestrator claude-opus-5-5  —     —     idle        ││
+││󰖷 runner       claude-haiku-5-5 TSK10 󰥔 10d ⠋ executing ││
+││󰈈 reviewer     claude-opus-5-5  TSK13 󰥔 8d  ⠋ reviewing ││
 ││one per role · the reviewer reviews                     ││
 │╰────────────────────────────────────────────────────────╯│
 │╭─ 󰚇 queue ──────────────────────────────────────────────╮│
@@ -23,6 +21,8 @@
 │╭─ 󰅚 findings ───────────────────────────────────────────╮│
 ││17 open findings · 8 high · 8 medium · 1 low            ││
 │╰────────────────────────────────────────────────────────╯│
+│                                                          │
+│                                                          │
 │                                                          │
 │                                                          │
 │                                                          │

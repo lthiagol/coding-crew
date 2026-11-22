@@ -632,8 +632,7 @@ found beside the configuration, hugo says so and converts nothing.
 
 | field | rule |
 |---|---|
-| `agents` | one entry per agent of the automation |
-| `harness` | the `tool` the agents run in, and the way it is `driven` |
+| `agents` | one entry per agent of the automation: its harness, model and effort |
 | `round_limit` | the build-and-fix cycles a task gets: five |
 | `order` | the flow's steps, in the order they run |
 | `[raul]` | raul's own settings: the palette and the icons |
@@ -645,16 +644,13 @@ The TOML shape:
 # The build-and-fix cycles a task gets.
 round_limit = 5
 
-# One entry per agent of the automation.
+# One entry per agent of the automation: its harness, model and effort.
 [[agents]]
 name = "builder"
 role = "runner"
-model = "opencode-go/deepseek-v4.1-flash#high"
-
-# The tool the agents run in, and the way it is driven.
-[harness]
-tool = "opencode"
-driven = "--standalone · role config"
+harness = "claude"
+model = "claude-haiku-5-5"
+effort = "high"
 
 # The order the flow follows: one step per entry, in the order they run.
 [[order]]
@@ -681,7 +677,21 @@ An agent entry:
 |---|---|
 | `name` | the name its role config gives it — `builder`, `reviewer` |
 | `role` | `runner`, `reviewer` or `orchestrator` |
-| `model` | the model it runs, provider and variant — `opencode-go/deepseek-v4.1-flash#high` |
+| `harness` | the harness it runs in: `claude` · `opencode` · `cursor-agent`, the names of the harness table in `crates/core/src/harness.rs` |
+| `model` | the model it runs, as its harness names it — `claude-haiku-5-5`, `opencode-go/glm-5.3` |
+| `effort` | the effort it runs at, one of its harness's levels; absent, the harness's own default |
+
+The harness table holds, for each harness, its program, the agent kind herdr
+starts it as, its efforts, how its models are listed, and how a model and an
+effort become the arguments that start it. `claude` lists a curated set of
+models; `opencode` lists `opencode models`; `cursor-agent` lists
+`cursor-agent --list-models`. Nothing else is a harness.
+
+A file written before agents named their harness has one `[harness]` table
+for all of them, and a model that carries its effort as `#effort`. It still
+loads: an agent with no `harness` takes the old table's `tool`, and the
+`#effort` is split off into `effort`. Nothing is rewritten until a save; a
+save writes the harness and effort of each agent it changes.
 
 An order step:
 
@@ -706,19 +716,16 @@ without `[raul]` is not rewritten to add it. For `theme` and `icons` the order
 is a flag, then the environment (`CODING_CREW_ICONS`, icons only), then the
 file, then the default.
 
-The defaults are the project's own flow: the builder on
-`opencode-go/deepseek-v4.1-flash#high` and the reviewer on
-`opencode-go/glm-5.3#high`, with the orchestrator beside them on the reviewer's
-model; the `opencode` harness, `--standalone` with each agent's role config;
-five build-and-fix cycles; and the order [roles.md](../roles/roles.md#the-order)
-records. A test reads that table and the two role configs, so the defaults and
-the flow cannot drift.
+The defaults are the project's own flow: the builder on `claude-haiku-5-5` at
+`high`, the reviewer and the orchestrator on `claude-opus-5-5` at `medium`, all
+in the `claude` harness; five build-and-fix cycles; and the order
+[roles.md](../roles/roles.md#the-order) records. A test reads that table and
+the two role configs, so the defaults and the flow cannot drift.
 
 **The orchestrator's model is the one hugo writes.** The orchestrator is the
 agent hugo starts, so its model is picked in hugo's sidebar and saved into this
-file, where hugo can use it. The models offered are the ones the catalogue
-knows — `opencode models` — so the file cannot hold a model that does not
-exist. The builder's and the reviewer's models are the flow's: hugo reads them
+file, where hugo can use it. The models offered are the ones the orchestrator's
+harness lists, so the file cannot hold a model that does not exist. The builder's and the reviewer's models are the flow's: hugo reads them
 and writes none of them.
 
 ## 12. Derived, never stored

@@ -1,20 +1,21 @@
 //! The models the catalog knows.
 //!
 //! The orchestrator's model is picked in the sidebar, so the list of models
-//! is the harness's own catalogue: `opencode models`, one model per line. The
-//! list is derived from that command, never written out by hand, and a pick
-//! is checked against the same list it came from — so `config.toml` cannot
-//! hold a model that does not exist.
+//! is its harness's own: the table in `coding_crew_core::harness` says where
+//! each harness lists its models — a curated list, or a command such as
+//! `opencode models`, one model per line. The list is never written out here,
+//! and a pick is checked against the same list it came from, so `config.toml`
+//! cannot hold a model that does not exist.
 //!
-//! A model's variant travels in the model string (`provider/model#high`); the
-//! catalogue lists the model, and a variant is part of a model the catalogue
-//! knows.
+//! The effort is not part of a model: the catalogue lists the model, and the
+//! agent's effort is a setting of its own.
 //!
-//! The tool is a harness's, so reading it is bounded: a tool that hangs, is
-//! missing or fails is an error the caller shows, never a window that waits
-//! on it.
+//! A command is bounded: a tool that hangs, is missing or fails is an error
+//! the caller shows, never a window that waits on it.
 
 use std::time::Duration;
+
+use coding_crew_core::harness::{Harness, Models};
 
 use crate::bounded;
 
@@ -32,44 +33,71 @@ pub struct Catalog {
 
 impl Catalog {
     /// The catalogue a tool printed: one model per line, in the order it
-    /// printed them. Blank lines are dropped, a model listed twice is one
-    /// model, and a line that is not a model id is not a pick.
+    /// printed them. A line is a model id, or an id and its label after
+    /// ` - `. Blank lines are dropped, a model listed twice is one model, and
+    /// a line that is not a model id is not a pick.
     pub fn from_lines(text: &str) -> Self {
         let mut models: Vec<String> = Vec::new();
         for line in text.lines() {
-            let model = line.trim();
-            if is_model_id(model) && !models.iter().any(|known| known == model) {
+            if let Some(model) = model_of(line)
+                && !models.iter().any(|known| known == model)
+            {
                 models.push(model.to_string());
             }
         }
         Self { models }
     }
 
-    /// The catalogue the harness's tool knows.
-    pub fn read(tool: &str) -> Result<Self, String> {
-        Self::read_within(tool, READ_BOUND)
+    /// The catalogue a harness's table holds.
+    pub fn from_models(models: &[&str]) -> Self {
+        Self {
+            models: models.iter().map(|model| model.to_string()).collect(),
+        }
     }
 
-    /// The catalogue the tool knows, given up after `bound`.
+    /// The catalogue a harness lists its models in.
+    pub fn read(harness: &Harness) -> Result<Self, String> {
+        Self::read_within(harness, READ_BOUND)
+    }
+
+    /// The catalogue a harness lists, given up after `bound` when it is a
+    /// command.
+    pub fn read_within(harness: &Harness, bound: Duration) -> Result<Self, String> {
+        match harness.models {
+            Models::Curated(models) => Ok(Self::from_models(models)),
+            Models::Command(args) => {
+                if !harness.on_path() {
+                    return Err(format!("{} is not on PATH", harness.binary));
+                }
+                Self::read_command(harness.binary, args, bound)
+            }
+        }
+    }
+
+    /// The catalogue a program lists with `args`, given up after `bound`.
     ///
     /// The tool is watched, not waited on: one that answers is read, and one
     /// still running at the bound is killed and reported. The bound is a
     /// timeout on the monotonic clock, not the frame's instant, which only
     /// the loop reads.
-    pub fn read_within(tool: &str, bound: Duration) -> Result<Self, String> {
-        let answer = bounded::run(tool, ["models"], bound)
-            .map_err(|error| format!("{tool} models: {error}"))?;
+    pub fn read_command(tool: &str, args: &[&str], bound: Duration) -> Result<Self, String> {
+        let command = std::iter::once(tool)
+            .chain(args.iter().copied())
+            .collect::<Vec<&str>>()
+            .join(" ");
+        let answer =
+            bounded::run(tool, args, bound).map_err(|error| format!("{command}: {error}"))?;
         if !answer.status.success() {
             let why = String::from_utf8_lossy(&answer.stderr);
             let why = why.trim();
             return Err(if why.is_empty() {
-                format!("{tool} models failed")
+                format!("{command} failed")
             } else {
-                format!("{tool} models failed: {why}")
+                format!("{command} failed: {why}")
             });
         }
         let text =
-            String::from_utf8(answer.stdout).map_err(|error| format!("{tool} models: {error}"))?;
+            String::from_utf8(answer.stdout).map_err(|error| format!("{command}: {error}"))?;
         Ok(Self::from_lines(&text))
     }
 
@@ -93,44 +121,32 @@ impl Catalog {
     }
 }
 
-/// Whether a line is a model id: a provider, a slash, and a model.
+/// The model id a line of a harness's list names, when it names one.
 ///
-/// The harness tool prints a list of models, but a banner or a header can
-/// sit among them. Only a model id is pickable: no whitespace, and a non-empty
-/// provider and model. The model may route through more providers
+/// A harness prints its models one to a line, with a label after ` - ` on
+/// some (`auto - Auto (default)`). A banner or a header can sit among them,
+/// and only a model id is pickable.
+fn model_of(line: &str) -> Option<&str> {
+    let line = line.trim();
+    let id = line.split_once(" - ").map_or(line, |(id, _)| id.trim_end());
+    is_model_id(id).then_some(id)
+}
+
+/// Whether a word is a model id: no whitespace, a letter or a digit first, and
+/// no empty part between slashes. A model may route through more providers
 /// (`openrouter/anthropic/claude-sonnet-4`), and may carry a tag
 /// (`ollama/llama3:8b`), so it may hold slashes and colons.
-fn is_model_id(line: &str) -> bool {
-    if line.is_empty() || line.chars().any(char::is_whitespace) {
-        return false;
-    }
-    let Some((provider, model)) = line.split_once('/') else {
-        return false;
-    };
-    !provider.is_empty() && !model.is_empty()
+fn is_model_id(id: &str) -> bool {
+    !id.is_empty()
+        && !id.chars().any(char::is_whitespace)
+        && id.starts_with(|character: char| character.is_ascii_alphanumeric())
+        && id.split('/').all(|part| !part.is_empty())
 }
 
 /// A model's name without its variant: `provider/model#high` is the model
 /// `provider/model`.
 pub fn base_of(model: &str) -> &str {
     model.split_once('#').map_or(model, |(base, _)| base)
-}
-
-/// The arguments that start a model in a harness, as `herdr agent start`
-/// takes them after `--`.
-///
-/// `claude` takes the base model and its variant as `--effort`. Every other
-/// tool is given the model string as it is configured, variant included: on
-/// opencode the variant is part of the model id, as flow/*.json carry it.
-pub fn model_args(tool: &str, model: &str) -> Vec<String> {
-    if tool != "claude" {
-        return vec!["--model".to_string(), model.to_string()];
-    }
-    let mut args = vec!["--model".to_string(), base_of(model).to_string()];
-    if let Some((_, variant)) = model.split_once('#') {
-        args.extend(["--effort".to_string(), variant.to_string()]);
-    }
-    args
 }
 
 /// A scratch folder holding an executable tool that answers with the script's
@@ -157,27 +173,20 @@ mod tests {
     use std::time::Instant;
 
     #[test]
-    fn claude_takes_the_variant_as_its_effort() {
-        assert_eq!(
-            model_args("claude", "anthropic/claude-opus#high"),
-            ["--model", "anthropic/claude-opus", "--effort", "high"]
-        );
-        assert_eq!(
-            model_args("claude", "anthropic/claude-opus"),
-            ["--model", "anthropic/claude-opus"]
-        );
+    fn a_curated_harness_lists_the_models_its_table_holds() {
+        let claude = coding_crew_core::harness::find("claude").expect("claude");
+        let catalog = Catalog::read(claude).expect("the curated list");
+        assert!(catalog.knows("claude-haiku-5-5"));
+        assert!(catalog.knows("opus"));
+        assert!(!catalog.knows("opencode-go/glm-5.3"));
     }
 
     #[test]
-    fn other_tools_take_the_model_as_it_is_configured() {
-        assert_eq!(
-            model_args("opencode", "opencode-go/glm-5.3#high"),
-            ["--model", "opencode-go/glm-5.3#high"]
-        );
-        assert_eq!(
-            model_args("aider", "ollama/llama3:8b"),
-            ["--model", "ollama/llama3:8b"]
-        );
+    fn a_label_after_the_id_is_not_part_of_the_model() {
+        // cursor-agent prints `id - Label`; the id is the model.
+        let catalog =
+            Catalog::from_lines("Available models\n\nauto - Auto (default)\ngpt-5 - GPT-5\n");
+        assert_eq!(catalog.models(), ["auto", "gpt-5"]);
     }
 
     #[test]
@@ -262,8 +271,8 @@ mod tests {
 
     #[test]
     fn a_tool_that_is_not_there_cannot_be_read() {
-        let error =
-            Catalog::read("coding-crew-no-such-tool-for-hugo").expect_err("there is no such tool");
+        let error = Catalog::read_command("coding-crew-no-such-tool-for-hugo", &[], READ_BOUND)
+            .expect_err("there is no such tool");
         assert!(
             error.contains("coding-crew-no-such-tool-for-hugo"),
             "{error}"
@@ -274,7 +283,7 @@ mod tests {
     fn a_tool_that_answers_is_read_without_waiting_for_the_bound() {
         let tool = scratch_tool("answers", "#!/bin/sh\necho p/m0\necho p/m1\n");
         let started = Instant::now();
-        let catalog = Catalog::read_within(&tool.to_string_lossy(), Duration::from_secs(30))
+        let catalog = Catalog::read_command(&tool.to_string_lossy(), &[], Duration::from_secs(30))
             .expect("the tool answers");
         assert_eq!(catalog.models(), ["p/m0", "p/m1"]);
         assert!(
@@ -290,7 +299,7 @@ mod tests {
         // an error the caller can show, returned inside the bound.
         let tool = scratch_tool("hangs", "#!/bin/sh\nexec sleep 30\n");
         let started = Instant::now();
-        let error = Catalog::read_within(&tool.to_string_lossy(), Duration::from_millis(100))
+        let error = Catalog::read_command(&tool.to_string_lossy(), &[], Duration::from_millis(100))
             .expect_err("a hanging tool cannot be read");
         assert!(error.contains("timed out"), "{error}");
         assert!(error.contains("a-tool"), "{error}");
@@ -308,7 +317,7 @@ mod tests {
         // output pipes open: the read is still bounded.
         let tool = scratch_tool("orphan", "#!/bin/sh\n(sleep 30) &\necho p/m\n");
         let started = Instant::now();
-        let error = Catalog::read_within(&tool.to_string_lossy(), Duration::from_millis(300))
+        let error = Catalog::read_command(&tool.to_string_lossy(), &[], Duration::from_millis(300))
             .expect_err("a read held by a child's pipes cannot be read");
         assert!(error.contains("timed out"), "{error}");
         assert!(
@@ -325,7 +334,7 @@ mod tests {
             "fails",
             "#!/bin/sh\necho 'the harness is not configured' >&2\nexit 3\n",
         );
-        let error = Catalog::read_within(&tool.to_string_lossy(), Duration::from_secs(5))
+        let error = Catalog::read_command(&tool.to_string_lossy(), &[], Duration::from_secs(5))
             .expect_err("a failing tool cannot be read");
         assert!(error.contains("failed"), "{error}");
         assert!(error.contains("the harness is not configured"), "{error}");
@@ -340,7 +349,7 @@ mod tests {
             "long",
             "#!/bin/sh\nawk 'BEGIN { for (i = 0; i < 12000; i++) print \"p/m\" i }'\n",
         );
-        let catalog = Catalog::read_within(&tool.to_string_lossy(), Duration::from_secs(30))
+        let catalog = Catalog::read_command(&tool.to_string_lossy(), &[], Duration::from_secs(30))
             .expect("the long catalogue");
         assert_eq!(catalog.models().len(), 12000);
         assert_eq!(

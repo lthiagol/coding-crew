@@ -1,18 +1,18 @@
  󰚩 hugo · mock-data                                                                       󰑮 running
 ╭─ 󰒓 configuration ────────────╮╭─ 󰑮 flow ─────────────────────────────────────────────────────────╮
 │ AGENTS                       ││╭─ 󰚩 crew ───────────────────────────────────────────────────────╮│
-│▌󰖷 builder · runner           │││role           model                    task  held  state       ││
-│   opencode-go                │││󰚩 orchestrator glm-5.3#high             —     —     idle        ││
-│   deepseek-v4.1-flash#high   │││󰖷 runner       deepseek-v4.1-flash#high TSK10 󰥔 10d ⠋ executing ││
-│ 󰈈 reviewer                   │││󰈈 reviewer     glm-5.3#high             TSK13 󰥔 8d  ⠋ reviewing ││
-│   opencode-go                │││one per role · the reviewer reviews                             ││
-│   glm-5.3#high               ││╰────────────────────────────────────────────────────────────────╯│
-│ 󰚩 orchestrator               ││╭─ 󰚇 queue ──────────────────────────────────────────────────────╮│
-│   opencode-go                │││the automation's queue · 1 task                                 ││
-│   glm-5.3#high               │││TSK29  approved                                                 ││
-│ HARNESS                      ││╰────────────────────────────────────────────────────────────────╯│
-│ opencode                     ││╭─ 󰈈 round ──────────────────────────────────────────────────────╮│
-│   --standalone · role config │││TSK13 · external · round 1                                      ││
+│▌󰖷 builder · runner           │││role           model            task  held  state               ││
+│   harness claude             │││󰚩 orchestrator claude-opus-5-5  —     —     idle                ││
+│   model claude-haiku-5-5     │││󰖷 runner       claude-haiku-5-5 TSK10 󰥔 10d ⠋ executing         ││
+│   effort high                │││󰈈 reviewer     claude-opus-5-5  TSK13 󰥔 8d  ⠋ reviewing         ││
+│ 󰈈 reviewer                   │││one per role · the reviewer reviews                             ││
+│   harness claude             ││╰────────────────────────────────────────────────────────────────╯│
+│   model claude-opus-5-5      ││╭─ 󰚇 queue ──────────────────────────────────────────────────────╮│
+│   effort medium              │││the automation's queue · 1 task                                 ││
+│ 󰚩 orchestrator               │││TSK29  approved                                                 ││
+│   harness claude             ││╰────────────────────────────────────────────────────────────────╯│
+│   model claude-opus-5-5      ││╭─ 󰈈 round ──────────────────────────────────────────────────────╮│
+│   effort medium              │││TSK13 · external · round 1                                      ││
 │ ROUNDS                       ││╰────────────────────────────────────────────────────────────────╯│
 │ 5 build-and-fix rounds       ││╭─ 󰥔 budget ─────────────────────────────────────────────────────╮│
 │ ORDER                        │││external rounds ████░░░░░░ 18 of 45                             ││

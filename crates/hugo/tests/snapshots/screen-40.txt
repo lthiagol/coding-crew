@@ -3,13 +3,13 @@
 ╭─ 󰑮 flow ─────────────────────────────╮
 │╭─ 󰚩 crew ───────────────────────────╮│
 ││󰚩 orchestrator idle                 ││
-││  glm-5.3#high                      ││
+││  claude-opus-5-5                   ││
 ││  holds nothing                     ││
 ││󰖷 runner ⠋ executing                ││
-││  deepseek-v4.1-flash#high          ││
+││  claude-haiku-5-5                  ││
 ││  holds TSK10 · held 10d            ││
 ││󰈈 reviewer ⠋ reviewing              ││
-││  glm-5.3#high                      ││
+││  claude-opus-5-5                   ││
 ││  holds TSK13 · held 8d             ││
 ││one per role · the reviewer reviews ││
 │╰────────────────────────────────────╯│

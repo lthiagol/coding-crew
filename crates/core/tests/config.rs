@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 
 use coding_crew_core::config::{Config, Gate};
+use coding_crew_core::harness::{self, Models};
 use coding_crew_core::{Role, Status};
 
 fn repo_root() -> PathBuf {
@@ -133,7 +134,7 @@ fn the_model_doc_shows_the_configurations_toml_shape() {
         "config.json",
         "TOML",
         "[[agents]]",
-        "[harness]",
+        "harness = ",
         "[[order]]",
         "provisional",
     ] {
@@ -169,20 +170,24 @@ fn a_role_runs_the_same_model_in_the_configuration_and_in_the_crew() {
 }
 
 #[test]
-fn every_agent_runs_a_model_with_a_provider_and_a_variant() {
-    // The sidebar shows both halves; a model without either is one the pane
-    // could not name whole.
+fn every_agent_runs_a_model_its_harness_lists_at_an_effort_it_takes() {
+    // The harness table is the only list of harnesses, and a model is one the
+    // harness lists: a configuration that names neither cannot start.
     for agent in Config::default().agents {
-        let (provider, model) = agent
-            .model
-            .split_once('/')
-            .unwrap_or_else(|| panic!("{} names no provider: {}", agent.name, agent.model));
-        assert!(!provider.is_empty(), "{}", agent.name);
-        assert!(
-            model.contains('#'),
-            "{} names no variant: {}",
-            agent.name,
-            model
-        );
+        let harness = harness::find(&agent.harness)
+            .unwrap_or_else(|| panic!("{} runs in no harness: {}", agent.name, agent.harness));
+        if let Models::Curated(models) = harness.models {
+            assert!(
+                models.contains(&agent.model.as_str()),
+                "{} runs {} on a model it does not list: {}",
+                agent.name,
+                harness.name,
+                agent.model
+            );
+        }
+        let effort = agent
+            .effort
+            .unwrap_or_else(|| panic!("{} names no effort", agent.name));
+        assert!(harness.takes(&effort), "{}: {effort}", agent.name);
     }
 }
