@@ -3,27 +3,27 @@
 ▔▔▔▔▔▔▔▔▔▔▔▔────────────────────────────────────────────────────────────────────────────────────────
 ╭─ 󰕮 counts ─────────────────────────────────────╮╭─ 󰂚 needs you ──────────────────────────────────╮
 │30 tasks by status                              ││8 tasks wait on a human                         │
-│draft       6 groomed     3                     ││approve     2                                   │
-│approved    4 executing   3                     ││review      3                                   │
-│code-review 3 remediating 3                     ││escalated   3                                   │
-│needs-human 3 done        5                     │╰────────────────────────────────────────────────╯
-╰────────────────────────────────────────────────╯╭─ 󰄲 claimable ──────────────────────────────────╮
-╭─ 󰚇 smaller tasks ──────────────────────────────╮│1 task an agent could claim right now           │
-│smaller tasks by kind                           ││approved, free, dependencies done               │
-│idea        1                                   │╰────────────────────────────────────────────────╯
-│feature     2                                   │╭─ 󰥔 activity ───────────────────────────────────╮
-│bug         2                                   ││+153 earlier events                             │
-╰────────────────────────────────────────────────╯│2026-11-16T09:30Z remediated TSK21 answered the…│
-                                                  │2026-11-16T10:00Z finding_raised TSK21 raised F…│
-                                                  │2026-11-16T10:00Z escalated TSK21 the review bu…│
-                                                  │2026-11-16T12:00Z approved TSK29 left the human…│
-                                                  │2026-11-16T12:00Z commented TSK21 The budget is…│
+│󰝦 draft       6 ████████████████████████████████││󰪥 approve     2                                 │
+│󰪥 groomed     3 ████████████████░░░░░░░░░░░░░░░░││󰈈 review      3                                 │
+│󰄲 approved    4 █████████████████████░░░░░░░░░░░││󰀦 escalated   3                                 │
+│󰐊 executing   3 ████████████████░░░░░░░░░░░░░░░░│╰────────────────────────────────────────────────╯
+│󰈈 code-review 3 ████████████████░░░░░░░░░░░░░░░░│╭─ 󰄲 claimable ──────────────────────────────────╮
+│󰖷 remediating 3 ████████████████░░░░░░░░░░░░░░░░││󰖷 1 task an agent could claim right now         │
+│󰀦 needs-human 3 ████████████████░░░░░░░░░░░░░░░░││approved, free, dependencies done               │
+│󰄬 done        5 ██████████████████████████░░░░░░│╰────────────────────────────────────────────────╯
+╰────────────────────────────────────────────────╯╭─ 󰥔 activity ───────────────────────────────────╮
+╭─ 󰚇 smaller tasks ──────────────────────────────╮│+153 earlier events                             │
+│smaller tasks by kind                           ││── 2026-11-16 ──                                │
+│󰌵 idea        1                                 ││09:30 󰖷 TSK21 remediated answered the findings  │
+│󰐕 feature     2                                 ││10:00 󰅚 TSK21 finding_raised raised FIND-05     │
+│󰃤 bug         2                                 ││10:00 󰀦 TSK21 escalated the review budget is sp…│
+╰────────────────────────────────────────────────╯│12:00 󰄲 TSK29 approved left the human lane      │
+                                                  │12:00 󰀄 TSK21 commented The budget is spent and…│
                                                   ╰────────────────────────────────────────────────╯
                                                   ╭─ 󰘬 next ───────────────────────────────────────╮
-                                                  │TSK29 The fixtures keep their gates             │
+                                                  │󰌷 TSK29 The fixtures keep their gates           │
                                                   │the first task of the path                      │
                                                   ╰────────────────────────────────────────────────╯
-
 
 
 

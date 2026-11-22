@@ -599,7 +599,7 @@ fn row_line(
 /// A reason is a phase in words, so its icon is the phase's, on the reason's
 /// slot. `approve` is `groomed`, `review` is `code-review`, `escalated` is
 /// `needs-human`.
-fn reason_icon(reason: Reason) -> Icon {
+pub(crate) fn reason_icon(reason: Reason) -> Icon {
     match reason {
         Reason::Approve => Icon::StatusGroomed,
         Reason::Review => Icon::StatusReview,

@@ -8,15 +8,16 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 
-use coding_crew_core::{ActivityEvent, Status};
+use coding_crew_core::{ActivityEvent, EventKind, Status};
 
 use crate::data::{Missing, Reason, Work};
+use crate::needs::reason_icon;
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, head_to, text_width};
-use coding_crew_theme::{Icon, IconSet, Theme, phase_style, reason_style};
+use coding_crew_theme::{Icon, IconSet, Theme, phase_slot, phase_style, reason_style};
 
-/// Below this width the blocks are stacked in one column.
-const NARROW: u16 = 58;
+/// From this width the cards take two columns; below it they stack in one.
+const TWO_COLUMNS: u16 = 80;
 /// The rows a block of the Overview takes for its border.
 const BORDER: u16 = 2;
 /// The columns the label of a count takes, so the counts line up.
@@ -47,7 +48,7 @@ pub fn render(
         render_empty(frame, area, work, icons, theme);
         return;
     }
-    if area.width < NARROW {
+    if area.width < TWO_COLUMNS {
         render_stacked(frame, area, work, icons, theme, now);
     } else {
         render_wide(frame, area, work, icons, theme, now);
@@ -200,16 +201,16 @@ fn render_wide(
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
     // The unreadable block outranks the kinds: a file that could not be read
     // matters more than how many smaller tasks there are.
-    let mut left = vec![counts_panel(work, columns[0].width, theme)];
+    let mut left = vec![counts_panel(work, columns[0].width, icons, theme)];
     if !work.errors.is_empty() {
         left.push(errors_panel(work, theme));
     }
-    left.push(kinds_panel(work, columns[0].width, theme));
+    left.push(kinds_panel(work, columns[0].width, icons, theme));
     let right = vec![
-        needs_you_panel(work, columns[1].width, theme),
-        claimable_panel(work, theme, now),
-        activity_panel(work, columns[1].width, theme),
-        next_panel(work, theme, now),
+        needs_you_panel(work, columns[1].width, icons, theme),
+        claimable_panel(work, icons, theme, now),
+        activity_panel(work, columns[1].width, icons, theme),
+        next_panel(work, icons, theme, now),
     ];
     let fits = column_fits(
         &left,
@@ -237,21 +238,21 @@ fn render_stacked(
     now: &str,
 ) {
     let mut panels = vec![
-        needs_you_panel(work, area.width, theme),
-        claimable_panel(work, theme, now),
-        next_panel(work, theme, now),
+        needs_you_panel(work, area.width, icons, theme),
+        claimable_panel(work, icons, theme, now),
+        next_panel(work, icons, theme, now),
     ];
-    panels.push(counts_panel(work, area.width, theme));
+    panels.push(counts_panel(work, area.width, icons, theme));
     // The unreadable block outranks the kinds: a file that could not be read
     // matters more than how many smaller tasks there are.
     if !work.errors.is_empty() {
         panels.push(errors_panel(work, theme));
     }
-    panels.push(kinds_panel(work, area.width, theme));
+    panels.push(kinds_panel(work, area.width, icons, theme));
     // The activity block is the last to give up its rows: a short pane keeps
     // the counts and the next task, and the block says how many events it
     // left out.
-    panels.push(activity_panel(work, area.width, theme));
+    panels.push(activity_panel(work, area.width, icons, theme));
     let width = area.width.saturating_sub(BORDER);
     let fits = column_fits(&panels, width, area.height);
     let area = summary_area(frame, area, work, fits, theme, now);
@@ -630,8 +631,9 @@ fn total(content: &[u16]) -> u16 {
         .sum()
 }
 
-/// Tasks per status.
-fn counts_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
+/// Tasks per status: the total, then a row per status with its count and a
+/// bar sized to the largest count.
+fn counts_panel(work: &Work, width: u16, icons: IconSet, theme: &Theme) -> Panel {
     let counts = work.status_counts();
     let total: usize = counts.iter().map(|(_, count)| count).sum();
     let heading = counts_heading(total, theme);
@@ -642,41 +644,37 @@ fn counts_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
         .max()
         .unwrap_or(0);
     let digits = count_width(counts.iter().map(|(_, count)| *count));
-    // The count stands apart from its label: the two never touch.
-    let cell = label_width + 1 + digits;
+    let largest = counts.iter().map(|(_, count)| *count).max().unwrap_or(0);
+    // The row without its bar: the icon and the space after it, the label, a
+    // space and the count. The count stands apart from its label.
+    let row = 2 + label_width + 1 + digits;
+    let dense = dense_counts(&counts, total, inner, icons, theme);
     let mut lines = vec![heading];
-    // The dense form: the statuses in pairs, each count with its status.
-    let dense = dense_counts(&counts, total, inner, theme);
-    // Two statuses per row, when the column is wide enough for it.
-    if usize::from(inner) > 2 * cell {
-        for pair in counts.chunks(2) {
-            let mut spans = Vec::new();
-            for (position, (status, count)) in pair.iter().enumerate() {
-                if position > 0 {
-                    spans.push(Span::raw(" "));
-                }
-                spans.push(Span::styled(
-                    format!("{:<label_width$}", status.as_str()),
-                    phase_style(theme, *status),
-                ));
-                spans.push(Span::styled(
-                    format!(" {count:>digits$}"),
-                    theme.text.strong,
+    if usize::from(inner) >= row {
+        // The bar takes what is left of the card, after a space.
+        let bar = usize::from(inner).saturating_sub(row + 1);
+        for (status, count) in &counts {
+            let paint = phase_style(theme, *status);
+            let mut spans = vec![
+                Span::styled(format!("{} ", status_icon(*status).glyph(icons)), paint),
+                Span::styled(format!("{:<label_width$}", status.as_str()), paint),
+                Span::styled(format!(" {count:>digits$}"), theme.text.strong),
+            ];
+            if bar > 0 {
+                spans.push(Span::raw(" "));
+                spans.extend(chrome::progress_bar(
+                    *count,
+                    largest,
+                    bar,
+                    phase_slot(*status),
+                    theme,
                 ));
             }
             lines.push(Line::from(spans));
         }
-    } else if label_width + 1 + digits <= usize::from(inner) {
-        // One status per row: the label is padded to the width of the
-        // longest status, and the row fits the column, so a count stays on
-        // the row of its label.
-        for (status, count) in &counts {
-            lines.push(status_line(*status, *count, label_width, digits, theme));
-        }
     } else {
-        // The padded label does not fit the column. The dense form keeps
-        // every count with its status; when it does not fit either, the
-        // block is left out whole.
+        // The rows do not fit the card. The dense form keeps every count with
+        // its status; when it does not fit either, the block is left out whole.
         lines = dense.clone().unwrap_or_default();
     }
     Panel {
@@ -705,6 +703,11 @@ fn counts_heading(total: usize, theme: &Theme) -> Line<'static> {
     ])
 }
 
+/// The icon of a status: its phase's icon.
+fn status_icon(status: Status) -> Icon {
+    Icon::for_status(status.as_str()).expect("every status has its icon")
+}
+
 /// The dense form of the counts: a status and its count on the same row.
 ///
 /// The rows are built to fit the column, so a count is never parted from
@@ -714,6 +717,7 @@ fn dense_counts(
     counts: &[(Status, usize)],
     total: usize,
     inner: u16,
+    icons: IconSet,
     theme: &Theme,
 ) -> Option<Vec<Line<'static>>> {
     let inner = usize::from(inner);
@@ -722,7 +726,8 @@ fn dense_counts(
     let mut used = 0usize;
     for (status, count) in counts {
         let label = status.as_str();
-        let width = label.chars().count() + 1 + count.to_string().chars().count();
+        // The icon and the space after it lead the label.
+        let width = 2 + label.chars().count() + 1 + count.to_string().chars().count();
         if width > inner {
             return None;
         }
@@ -735,7 +740,12 @@ fn dense_counts(
                 used += 1;
             }
         }
-        row.push(Span::styled(label.to_string(), phase_style(theme, *status)));
+        let paint = phase_style(theme, *status);
+        row.push(Span::styled(
+            format!("{} ", status_icon(*status).glyph(icons)),
+            paint,
+        ));
+        row.push(Span::styled(label.to_string(), paint));
         row.push(Span::raw(" "));
         row.push(Span::styled(count.to_string(), theme.text.strong));
         used += width;
@@ -748,32 +758,12 @@ fn dense_counts(
     Some(lines)
 }
 
-/// One status and its count.
-///
-/// The row is exactly as wide as the label column plus the count, so the
-/// count stays on the row of its label.
-fn status_line(
-    status: Status,
-    count: usize,
-    label_width: usize,
-    digits: usize,
-    theme: &Theme,
-) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(
-            format!("{:<label_width$}", status.as_str()),
-            phase_style(theme, status),
-        ),
-        Span::styled(format!(" {count:>digits$}"), theme.text.strong),
-    ])
-}
-
 /// Smaller tasks per kind.
 ///
 /// The label is padded to the width of the column, so a count stays on the
 /// row of its label. A kind whose label and count do not fit on one row
 /// leaves the block out whole.
-fn kinds_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
+fn kinds_panel(work: &Work, width: u16, icons: IconSet, theme: &Theme) -> Panel {
     let kinds = work.kind_counts();
     let inner = usize::from(width.saturating_sub(BORDER));
     let digits = count_width(kinds.iter().map(|(_, count)| *count));
@@ -782,15 +772,18 @@ fn kinds_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
         .map(|(kind, _)| kind.as_str().chars().count())
         .max()
         .unwrap_or(0);
-    // The label is padded as far as the column allows.
-    let pad = LABEL_WIDTH.min(inner.saturating_sub(digits + 1));
+    // The label is padded as far as the column allows, after the icon and
+    // the space that follows it.
+    let pad = LABEL_WIDTH.min(inner.saturating_sub(2 + digits + 1));
     let mut lines = vec![Line::from(Span::styled(
         "smaller tasks by kind",
         theme.semantic.info,
     ))];
     if label_width < pad {
         for (kind, count) in &kinds {
+            let icon = Icon::for_kind(kind.as_str()).expect("every kind has its icon");
             lines.push(Line::from(vec![
+                Span::styled(format!("{} ", icon.glyph(icons)), theme.text.normal),
                 Span::styled(format!("{:<pad$}", kind.as_str()), theme.text.normal),
                 Span::styled(count.to_string(), theme.text.strong),
             ]));
@@ -815,7 +808,7 @@ fn kinds_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
 }
 
 /// What waits on a human.
-fn needs_you_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
+fn needs_you_panel(work: &Work, width: u16, icons: IconSet, theme: &Theme) -> Panel {
     let (approve, review, escalated) = work.needs_you_counts();
     let total = approve + review + escalated;
     let headline = Line::from(vec![
@@ -837,7 +830,7 @@ fn needs_you_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
         (Reason::Review, review),
         (Reason::Escalated, escalated),
     ] {
-        let line = reason_line(reason, count, column, theme);
+        let line = reason_line(reason, count, column, icons, theme);
         // The reason and its count share a row: when they do not fit, the
         // reason is left out rather than parted from its count.
         if rows_of(std::slice::from_ref(&line), inner) == 1 {
@@ -869,7 +862,7 @@ fn needs_you_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
         // paints them: the count is a count, and every other count on the
         // screen is `text.strong`.
         spans.push(Span::styled(
-            reason.label().to_string(),
+            format!("{} {}", reason_icon(reason).glyph(icons), reason.label()),
             reason_style(theme, reason),
         ));
         spans.push(Span::raw(" "));
@@ -890,12 +883,19 @@ fn needs_you_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
     }
 }
 
-/// One reason and its count.
-fn reason_line(reason: Reason, count: usize, column: bool, theme: &Theme) -> Line<'static> {
+/// One reason and its count, led by the reason's icon.
+fn reason_line(
+    reason: Reason,
+    count: usize,
+    column: bool,
+    icons: IconSet,
+    theme: &Theme,
+) -> Line<'static> {
+    let icon = reason_icon(reason).glyph(icons);
     let label = if column {
-        format!("  {:<LABEL_WIDTH$}", reason.label())
+        format!("{icon} {:<LABEL_WIDTH$}", reason.label())
     } else {
-        format!("  {} ", reason.label())
+        format!("{icon} {} ", reason.label())
     };
     Line::from(vec![
         Span::styled(label, reason_style(theme, reason)),
@@ -913,10 +913,14 @@ fn count_width(counts: impl IntoIterator<Item = usize>) -> usize {
 }
 
 /// How many tasks an agent could claim at `now`.
-fn claimable_panel(work: &Work, theme: &Theme, now: &str) -> Panel {
+fn claimable_panel(work: &Work, icons: IconSet, theme: &Theme, now: &str) -> Panel {
     let count = work.claimable_at(now).len();
     let lines = vec![
         Line::from(vec![
+            Span::styled(
+                format!("{} ", Icon::RoleRunner.glyph(icons)),
+                theme.semantic.agent,
+            ),
             Span::styled(format!("{count} "), theme.text.strong),
             Span::styled(
                 format!("{} an agent could claim right now", task_word(count)),
@@ -946,7 +950,7 @@ fn claimable_panel(work: &Work, theme: &Theme, now: &str) -> Panel {
 /// The block is the record's own: it takes the last events in the file's
 /// order, and never adds, sorts or invents one. An optional journal that is
 /// not there says so in one line, and says nothing else.
-fn activity_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
+fn activity_panel(work: &Work, width: u16, icons: IconSet, theme: &Theme) -> Panel {
     // A journal that is there but cannot be read is named. It is not the
     // same state as a project that has no journal, and it must not read as
     // one: the errors panel names the file, and this block names the state.
@@ -999,11 +1003,24 @@ fn activity_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
             theme.text.dim,
         )));
     }
-    lines.extend(
-        events[events.len() - shown..]
-            .iter()
-            .map(|event| event_line(event, width.saturating_sub(BORDER), theme)),
-    );
+    // The date is drawn once a day, as a divider above the day's first event.
+    let mut day = None;
+    for event in &events[events.len() - shown..] {
+        let (date, _) = day_and_time(&event.at);
+        if day != Some(date) {
+            lines.push(Line::from(Span::styled(
+                format!("── {date} ──"),
+                theme.text.dim,
+            )));
+            day = Some(date);
+        }
+        lines.push(event_line(
+            event,
+            icons,
+            width.saturating_sub(BORDER),
+            theme,
+        ));
+    }
     if unreadable > 0 {
         lines.push(Line::from(Span::styled(
             format!("{unreadable} {} could not be read", event_word(unreadable)),
@@ -1033,19 +1050,48 @@ fn activity_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
     }
 }
 
-/// One event: when it happened, the kind, the task, and the note when there
-/// is one. The event is one row: a line that does not fit is cut, never
-/// wrapped into the rows of the event below it.
-fn event_line(event: &ActivityEvent, width: u16, theme: &Theme) -> Line<'static> {
+/// One event: its time, the icon of its kind, the task, then the kind's word
+/// and the note when there is one. The event is one row: a line that does not
+/// fit is cut, never wrapped into the rows of the event below it.
+fn event_line(event: &ActivityEvent, icons: IconSet, width: u16, theme: &Theme) -> Line<'static> {
+    let (_, time) = day_and_time(&event.at);
     let mut spans = vec![
-        Span::styled(format!("{} ", event.at), theme.text.dim),
-        Span::styled(format!("{} ", event.kind.as_str()), theme.semantic.info),
+        Span::styled(format!("{time:<5} "), theme.text.dim),
+        Span::styled(
+            format!("{} ", event_icon(event.kind).glyph(icons)),
+            theme.text.strong,
+        ),
         Span::styled(event.task.clone(), theme.text.strong),
+        Span::styled(format!(" {}", event.kind.as_str()), theme.semantic.info),
     ];
     if let Some(note) = event.note.as_deref().filter(|note| !note.is_empty()) {
         spans.push(Span::styled(format!(" {note}"), theme.text.normal));
     }
     fit_line(spans, width)
+}
+
+/// The day and the time of a journal stamp: `2026-11-16T09:30Z` is the day
+/// `2026-11-16` at `09:30`. A stamp with no time is a day with no time.
+fn day_and_time(at: &str) -> (&str, &str) {
+    match at.split_once('T') {
+        Some((day, rest)) => (day, rest.get(..5).unwrap_or(rest)),
+        None => (at, ""),
+    }
+}
+
+/// The icon of an event's kind.
+fn event_icon(kind: EventKind) -> Icon {
+    match kind {
+        EventKind::Created => Icon::StatusDraft,
+        EventKind::Approved => Icon::StatusApproved,
+        EventKind::Claimed => Icon::RoleRunner,
+        EventKind::ReviewRequested => Icon::StatusReview,
+        EventKind::FindingRaised => Icon::Finding,
+        EventKind::Remediated => Icon::StatusRemediating,
+        EventKind::Escalated => Icon::StatusNeedsHuman,
+        EventKind::Completed => Icon::StatusDone,
+        EventKind::Commented => Icon::RoleHuman,
+    }
 }
 
 /// The spans, cut to one row of `width` columns.
@@ -1091,10 +1137,11 @@ fn event_word(count: usize) -> &'static str {
 }
 
 /// What happens next: the first claimable task at `now`.
-fn next_panel(work: &Work, theme: &Theme, now: &str) -> Panel {
+fn next_panel(work: &Work, icons: IconSet, theme: &Theme, now: &str) -> Panel {
     let lines = match work.next_at(now) {
         Some(task) => vec![
             Line::from(vec![
+                Span::styled(format!("{} ", Icon::Link.glyph(icons)), theme.text.strong),
                 Span::styled(format!("{} ", task.id), theme.text.strong),
                 Span::styled(task.title.clone(), theme.text.normal),
             ]),
@@ -1477,7 +1524,7 @@ mod tests {
     #[test]
     fn a_dropped_activity_block_says_how_many_events_it_left_out() {
         let work = with_activity((1..=8).map(journal_event).collect());
-        let panel = activity_panel(&work, 50, &theme());
+        let panel = activity_panel(&work, 50, IconSet::Nerd, &theme());
         let marker = panel.marker.as_ref().expect("a marker");
         assert!(
             marker.text.contains("activity not shown"),
@@ -1489,7 +1536,7 @@ mod tests {
         // does not fit.
         let mut work = mock_work();
         work.activity = None;
-        let panel = activity_panel(&work, 50, &theme());
+        let panel = activity_panel(&work, 50, IconSet::Nerd, &theme());
         let marker = panel.marker.as_ref().expect("a marker");
         assert_eq!(marker.text, "no activity yet");
     }
@@ -1550,16 +1597,14 @@ mod tests {
     fn a_short_terminal_does_not_cut_a_count() {
         let work = mock_work();
         let text = draw(&work, 60, 16).join("\n");
-        // What is shown is shown whole, and what is hidden is announced.
+        // What is shown is shown whole, and what is hidden is announced: the
+        // stacked column has no room for the counts block, so it is named.
         let counts = work.needs_you_counts();
         let waiting = counts.0 + counts.1 + counts.2;
-        assert!(text.contains("draft"), "{text}");
+        assert!(!text.contains("draft"), "{text}");
+        assert!(text.contains("counts not shown"), "{text}");
         assert!(
             text.contains(&format!("{waiting} tasks wait on a human")),
-            "{text}"
-        );
-        assert!(
-            text.contains("more statuses") || text.contains("needs-human"),
             "{text}"
         );
     }
@@ -1620,7 +1665,7 @@ mod tests {
         )
         .expect("writing a task");
         let work = Work::load(&dir);
-        let text = draw(&work, 40, 20).join("\n");
+        let text = draw(&work, 40, 24).join("\n");
         // The word is broken over rows; every letter of it is shown.
         assert_eq!(text.chars().filter(|ch| *ch == 'X').count(), 90, "{text}");
     }
@@ -1706,7 +1751,8 @@ mod tests {
     fn the_dense_counts_keep_a_count_with_its_status() {
         let work = mock_work();
         let counts = work.status_counts();
-        let dense = dense_counts(&counts, work.tasks.len(), 38, &theme()).expect("a dense form");
+        let dense = dense_counts(&counts, work.tasks.len(), 38, IconSet::Nerd, &theme())
+            .expect("a dense form");
         for line in &dense {
             let text = text_of(std::slice::from_ref(line));
             assert!(text.chars().count() <= 38, "{text}");
@@ -1724,9 +1770,10 @@ mod tests {
     #[test]
     fn a_block_is_dropped_before_another_one_is_made_dense() {
         let work = mock_work();
-        let rows = draw(&work, 80, 12);
+        let rows = draw(&work, 80, 17);
         // The counts keep their full form: the labels are padded, so the
-        // counts stand in a column.
+        // counts stand in a column. The column is counted in characters, one
+        // per cell: the icons and the bars are several bytes each.
         let column = |label: &str| -> usize {
             let row = rows
                 .iter()
@@ -1734,7 +1781,12 @@ mod tests {
                 .unwrap_or_else(|| panic!("no row with {label}: {rows:?}"));
             let start = row.find(label).expect("the label");
             let rest = &row[start + label.len()..];
-            start + label.len() + rest.find(|ch: char| ch.is_ascii_digit()).expect("a count")
+            row[..start].chars().count()
+                + label.chars().count()
+                + rest
+                    .chars()
+                    .position(|ch| ch.is_ascii_digit())
+                    .expect("a count")
         };
         assert_eq!(column("draft"), column("code-review"));
         // The block after the counts is the one that is left out.
@@ -1789,7 +1841,7 @@ mod tests {
             ("escalated", counts.2),
         ];
         for width in 1..=40 {
-            let panel = needs_you_panel(&work, width, &theme());
+            let panel = needs_you_panel(&work, width, IconSet::Nerd, &theme());
             for line in &panel.lines {
                 let text = text_of(std::slice::from_ref(line));
                 for (reason, count) in expected {
@@ -1813,7 +1865,7 @@ mod tests {
         // `text.strong`, as every other count on the screen does.
         let work = mock_work();
         let theme = theme();
-        let panel = needs_you_panel(&work, 100, &theme);
+        let panel = needs_you_panel(&work, 100, IconSet::Nerd, &theme);
         let compact = panel.compact.as_deref().expect("a dense form");
         let line = compact.last().expect("the dense reasons");
         let counts: Vec<&str> = line
@@ -1915,7 +1967,7 @@ mod tests {
         let work = mock_work();
         let counts = work.status_counts();
         for width in 1..=60 {
-            let panel = counts_panel(&work, width, &theme());
+            let panel = counts_panel(&work, width, IconSet::Nerd, &theme());
             if panel.lines.is_empty() {
                 // The block is left out whole: the marker says so.
                 continue;
@@ -1944,7 +1996,7 @@ mod tests {
     fn a_count_stays_with_its_kind_at_every_width() {
         let work = mock_work();
         for width in 1..=60 {
-            let panel = kinds_panel(&work, width, &theme());
+            let panel = kinds_panel(&work, width, IconSet::Nerd, &theme());
             if panel.lines.is_empty() {
                 // The block is left out whole: the marker says so.
                 continue;
@@ -1971,29 +2023,186 @@ mod tests {
 
     #[test]
     fn the_kinds_counts_share_a_column_with_the_other_panels() {
-        // At an ordinary width the counts sit where the other panels' do.
-        let panel = kinds_panel(&mock_work(), 40, &theme());
+        // At an ordinary width the counts sit where the other panels' do: the
+        // label starts after its icon and a space, and is padded to the column.
+        let panel = kinds_panel(&mock_work(), 40, IconSet::Nerd, &theme());
         assert!(panel.lines.len() > 1, "the block is left out");
         for line in &panel.lines[1..] {
             let text = text_of(std::slice::from_ref(line));
             assert_eq!(
                 text.chars().position(|symbol| symbol.is_ascii_digit()),
-                Some(LABEL_WIDTH),
+                Some(2 + LABEL_WIDTH),
                 "{text}"
             );
         }
     }
 
     #[test]
+    fn the_cards_take_two_columns_from_eighty_columns() {
+        let work = mock_work();
+        let shares_a_row = |rows: &[String]| {
+            rows.iter()
+                .any(|row| row.contains("counts") && row.contains("needs you"))
+        };
+        assert!(shares_a_row(&draw(&work, TWO_COLUMNS, 40)));
+        assert!(!shares_a_row(&draw(&work, TWO_COLUMNS - 1, 40)));
+    }
+
+    #[test]
+    fn the_status_bars_are_proportional_to_the_largest_count() {
+        let work = mock_work();
+        let panel = counts_panel(&work, 40, IconSet::Nerd, &theme());
+        // Draft holds the largest count, six: its bar is full. Groomed holds
+        // three, half of it, so its bar is half full.
+        let bar = |label: &str| -> (usize, usize) {
+            let row = panel
+                .lines
+                .iter()
+                .map(|line| text_of(std::slice::from_ref(line)))
+                .find(|text| text.contains(label))
+                .unwrap_or_else(|| panic!("no row for {label}"));
+            (row.matches('█').count(), row.matches('░').count())
+        };
+        let (draft, draft_empty) = bar("draft");
+        assert_eq!(draft_empty, 0, "the largest count does not fill its bar");
+        let (groomed, _) = bar("groomed");
+        assert_eq!(groomed * 2, draft, "groomed is not half of draft");
+    }
+
+    /// The first of some lines that holds `needle`.
+    fn line_with<'a>(lines: &'a [Line<'static>], needle: &str) -> &'a Line<'static> {
+        lines
+            .iter()
+            .find(|line| text_of(std::slice::from_ref(line)).contains(needle))
+            .unwrap_or_else(|| panic!("no line with {needle}"))
+    }
+
+    #[test]
+    fn approve_has_the_same_icon_on_the_card_as_on_the_needs_tab() {
+        let work = mock_work();
+        let panel = needs_you_panel(&work, 100, IconSet::Nerd, &theme());
+        let approve = line_with(&panel.lines, "approve");
+        assert!(
+            approve.spans[0]
+                .content
+                .starts_with(Icon::StatusGroomed.glyph(IconSet::Nerd)),
+            "{approve:?}"
+        );
+    }
+
+    #[test]
+    fn the_needs_you_card_paints_each_reason_on_its_slot_and_each_count_strong() {
+        let work = mock_work();
+        let theme = theme();
+        let panel = needs_you_panel(&work, 100, IconSet::Nerd, &theme);
+        for (reason, label) in [
+            (Reason::Approve, "approve"),
+            (Reason::Review, "review"),
+            (Reason::Escalated, "escalated"),
+        ] {
+            let line = line_with(&panel.lines, label);
+            let [reason_span, count_span] = line.spans.as_slice() else {
+                panic!("a reason and a count: {line:?}");
+            };
+            assert!(
+                reason_span
+                    .content
+                    .starts_with(reason_icon(reason).glyph(IconSet::Nerd)),
+                "{label}: {line:?}"
+            );
+            assert_eq!(reason_span.style, reason_style(&theme, reason), "{label}");
+            assert_eq!(count_span.style, theme.text.strong, "{label}");
+        }
+    }
+
+    #[test]
+    fn the_claimable_card_paints_its_icon_on_the_agent_slot_and_its_count_strong() {
+        let work = mock_work();
+        let theme = theme();
+        let panel = claimable_panel(&work, IconSet::Nerd, &theme, now());
+        let line = &panel.lines[0];
+        let [icon, count, _words] = line.spans.as_slice() else {
+            panic!("an icon, a count and the words: {line:?}");
+        };
+        assert_eq!(icon.style, theme.semantic.agent);
+        assert_eq!(count.style, theme.text.strong);
+        assert_eq!(
+            count.content.trim(),
+            work.claimable_at(now()).len().to_string()
+        );
+    }
+
+    #[test]
+    fn the_smaller_tasks_card_paints_each_count_strong() {
+        let work = mock_work();
+        let theme = theme();
+        let panel = kinds_panel(&work, 100, IconSet::Nerd, &theme);
+        let kinds = work.kind_counts();
+        // The first line is the heading; each kind has a row after it.
+        let rows = &panel.lines[1..];
+        assert_eq!(rows.len(), kinds.len(), "{rows:?}");
+        for (line, (kind, count)) in rows.iter().zip(kinds) {
+            let [icon, label, number] = line.spans.as_slice() else {
+                panic!("an icon, a kind and a count: {line:?}");
+            };
+            assert_eq!(icon.style, theme.text.normal);
+            assert_eq!(label.content.trim(), kind.as_str());
+            assert_eq!(number.style, theme.text.strong);
+            assert_eq!(number.content, count.to_string());
+        }
+    }
+
+    #[test]
+    fn the_next_card_paints_its_icon_and_its_id_strong() {
+        let work = mock_work();
+        let theme = theme();
+        let next = work.next_at(now()).expect("a claimable task");
+        let panel = next_panel(&work, IconSet::Nerd, &theme, now());
+        let line = &panel.lines[0];
+        let [icon, id, _title] = line.spans.as_slice() else {
+            panic!("an icon, an id and a title: {line:?}");
+        };
+        assert!(
+            icon.content.starts_with(Icon::Link.glyph(IconSet::Nerd)),
+            "{line:?}"
+        );
+        assert_eq!(icon.style, theme.text.strong);
+        assert_eq!(id.content.trim(), next.id);
+        assert_eq!(id.style, theme.text.strong);
+    }
+
+    #[test]
+    fn the_activity_block_draws_each_days_date_once_and_the_time_of_each_event() {
+        let event = |at: &str, n: usize| coding_crew_core::ActivityEvent {
+            at: at.to_string(),
+            kind: EventKind::Commented,
+            task: "TSK01".to_string(),
+            by: "human".to_string(),
+            note: Some(format!("note {n}")),
+        };
+        let work = with_activity(vec![
+            event("2026-11-16T09:30Z", 1),
+            event("2026-11-16T10:00Z", 2),
+            event("2026-11-17T08:15Z", 3),
+        ]);
+        let text = draw(&work, 100, 60).join("\n");
+        assert_eq!(text.matches("── 2026-11-16 ──").count(), 1, "{text}");
+        assert_eq!(text.matches("── 2026-11-17 ──").count(), 1, "{text}");
+        assert!(text.contains("09:30 "), "{text}");
+        assert!(text.contains("08:15 "), "{text}");
+        assert!(!text.contains("T09:30Z"), "a stamp is drawn whole: {text}");
+    }
+
+    #[test]
     fn a_block_that_cannot_hold_a_count_is_left_out_whole() {
         let work = mock_work();
-        // The counts do not fit a column of fourteen: the block is left
-        // out, not shown with a count on a row of its own.
-        let text = draw(&work, 14, 60).join("\n");
+        // The counts do not fit a column of sixteen: the block is left out,
+        // not shown with a count on a row of its own.
+        let text = draw(&work, 16, 60).join("\n");
         assert!(text.contains("counts not sh"), "{text}");
         assert!(!text.contains("code-review"), "{text}");
-        // At fifteen columns they fit, and every count is with its status.
-        let text = draw(&work, 15, 60).join("\n");
+        // At seventeen columns they fit, and every count is with its status.
+        let text = draw(&work, 17, 60).join("\n");
         let code_review = work
             .status_counts()
             .into_iter()

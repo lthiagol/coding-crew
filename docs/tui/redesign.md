@@ -89,7 +89,7 @@ take the slot of the word they sit beside.
 ```
 ╭─ 󰕮 status ─────────────────────────╮ ╭─ 󰂚 needs you ──────────────────────╮
 │ 30 tasks                           │ │ 8 wait on a human                  │
-│ 󰝦 draft        6 ██████            │ │ 󰄲 approve   2                      │
+│ 󰝦 draft        6 ██████            │ │ 󰪥 approve   2                      │
 │ 󰪥 groomed      3 ███               │ │ 󰈈 review    3                      │
 │ 󰄲 approved     4 ████              │ │ 󰀦 escalated 3                      │
 │ …                                  │ ╰────────────────────────────────────╯
