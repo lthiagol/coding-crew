@@ -1368,6 +1368,17 @@ injection rule and a snapshot, and a render at 40 and 100 columns checks the
 pane. No ruling was made. The header's omitted tags and the always-present
 history are the builder's choices (see THE FOLLOW-UPS). Commit `85c5757`.
 
+Unit closed: Settings in colour (plan 76). Three build rounds and three
+reviews; the third clean. The Settings TOML is painted by the document's
+syntax roles: headers, keys, `=`, strings, numbers, booleans and comments, each
+on its own role. The selected line keeps its bar and tint, and a value's error
+keeps its colour. The terminal preset tells the token kinds apart by attribute.
+Round one asked whether that attribute table should stand, because theme.md and
+palettes.md said the terminal keeps no distinctions beyond the engine's own
+modifiers. Ruling: keep the table, since the done-when says the terminal preset
+uses attributes; both docs now record it. The key-role and colour choices wait
+for the human (see THE FOLLOW-UPS). Commit `f245f20`.
+
 ---
 
 ## Lessons

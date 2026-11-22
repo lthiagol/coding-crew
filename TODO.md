@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 75.
+Updated 2026-11-22 by the orchestrator, after unit 76.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,10 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–75, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–76, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- 76 · Settings in colour (S)
+None. Every Ready row is closed.
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
@@ -481,6 +481,14 @@ None blocking. Carried from the closed units.
   omits tags, which the task header shows, and the History section is always
   present, with `_none_` for an empty time. The brief said history "when the
   model has them". The human confirms both.
+- **Settings colour choices to confirm** (2026-11-22, unit 76). A key is
+  painted as a variable, not a tag, though the palette lists attribute names
+  under tag. A section header takes the heading role. Read-only lines of the
+  file get the same colours, and values the file leaves out stay dim. The
+  human confirms all four.
+- **`Theme::document_style` rebuilds the document palette on every call**
+  (2026-11-22, unit 76). Not cached. The builder judged it cheap, pure
+  arithmetic. No action unless a profile shows it.
 
 ## WHAT WAITS ON THE FLOW
 
