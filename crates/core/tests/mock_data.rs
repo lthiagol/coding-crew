@@ -1,4 +1,5 @@
-use coding_crew_core::{Status, Store, Task, parse_rfc3339};
+use coding_crew_core::lifecycle::{Event, TransitionContext, transition};
+use coding_crew_core::{Actor, Role, Status, Store, Task, parse_rfc3339};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -399,63 +400,104 @@ fn phase_counts_match_the_fixtures() {
     );
 }
 
+/// Replay `event` on `task`, put back to `from`, through the real gate.
+///
+/// The fixture must pass the gates of the phase it sits in, so the event that
+/// carries it into that phase must be allowed from the phase before it.
+fn must_pass(task: &Task, from: Status, event: Event, actor: &Actor, done: &HashSet<String>) {
+    let mut replayed = task.clone();
+    replayed.status = from;
+    let is_done = |id: &str| done.contains(id);
+    let ctx = TransitionContext {
+        dependency_done: Some(&is_done),
+        reason: None,
+    };
+    if let Err(error) = transition(&mut replayed, event, actor, &ctx) {
+        panic!("{} does not pass {event:?} from {from:?}: {error}", task.id);
+    }
+}
+
+fn creator() -> Actor {
+    Actor::agent("creator", Role::Creator).in_session("session-creator")
+}
+
+fn reviewer() -> Actor {
+    Actor::agent("reviewer", Role::Reviewer).in_session("session-reviewer")
+}
+
+fn runner_of(task: &Task) -> Actor {
+    let claim = task.claim.as_ref().expect("a claimed task");
+    let session = claim.session.as_deref().expect("a recorded claim session");
+    Actor::agent(claim.by.as_str(), Role::Runner).in_session(session)
+}
+
 #[test]
 fn fixtures_keep_their_gates() {
-    for task in by_status(Status::Approved) {
-        assert!(
-            task.criteria_covered(),
-            "{} has uncovered criteria",
-            task.id
-        );
-        assert!(
-            task.steps_have_done_when(),
-            "{} has a step without done_when",
-            task.id
-        );
+    let done: HashSet<String> = by_status(Status::Done).into_iter().map(|t| t.id).collect();
+
+    for task in by_status(Status::Groomed) {
+        must_pass(&task, Status::Draft, Event::Groom, &creator(), &done);
     }
 
-    for task in by_status(Status::Executing) {
-        assert!(task.claim.is_some(), "{} is not claimed", task.id);
-        assert!(
-            task.acceptance_criteria
-                .iter()
-                .any(|c| !c.evidence.is_empty()),
-            "{} has no evidence",
-            task.id
+    for task in by_status(Status::Approved) {
+        must_pass(&task, Status::Groomed, Event::Approve, &creator(), &done);
+    }
+
+    for mut task in by_status(Status::Executing) {
+        // The lease is a clock fact, and these fixtures were written on dates
+        // that have passed. Its gate is tested on its own in `task.rs`.
+        task.claim
+            .as_mut()
+            .expect("a claimed task")
+            .lease_expires_at
+            .clear();
+        must_pass(
+            &task,
+            Status::Approved,
+            Event::Start,
+            &runner_of(&task),
+            &done,
         );
     }
 
     for task in by_status(Status::CodeReview) {
-        assert!(task.self_rounds() > 0, "{} has no self round", task.id);
-        assert!(
-            task.steps
-                .iter()
-                .all(|s| s.status == coding_crew_core::StepStatus::Done),
-            "{} has unsettled steps",
-            task.id
+        must_pass(
+            &task,
+            Status::Executing,
+            Event::Finish,
+            &runner_of(&task),
+            &done,
         );
     }
 
     for task in by_status(Status::Remediating) {
-        assert!(task.open_findings() > 0, "{} has no open finding", task.id);
-        assert_eq!(
-            task.review.verdict,
-            Some(coding_crew_core::Verdict::ChangesNeeded)
+        must_pass(
+            &task,
+            Status::CodeReview,
+            Event::RequestChanges,
+            &reviewer(),
+            &done,
         );
     }
 
     for task in by_status(Status::NeedsHuman) {
-        assert_eq!(
-            task.external_rounds() as u32,
-            task.review.max_rounds,
-            "{} has not exhausted the round budget",
-            task.id
+        must_pass(
+            &task,
+            Status::CodeReview,
+            Event::Escalate,
+            &reviewer(),
+            &done,
         );
     }
 
     for task in by_status(Status::Done) {
-        assert_eq!(task.open_findings(), 0, "{} has open findings", task.id);
-        assert_eq!(task.review.verdict, Some(coding_crew_core::Verdict::Ok));
+        must_pass(
+            &task,
+            Status::CodeReview,
+            Event::PassReview,
+            &reviewer(),
+            &done,
+        );
     }
 }
 

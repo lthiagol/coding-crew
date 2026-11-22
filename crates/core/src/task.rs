@@ -337,8 +337,12 @@ pub struct AcceptanceCriterion {
 
 impl AcceptanceCriterion {
     /// Status from the latest evidence, or the stored status when there is
-    /// none. A manual override is recorded as evidence.
+    /// none. A manual override is recorded as evidence. A deferral wins over
+    /// both: a criterion parked on purpose is deferred.
     pub fn effective_status(&self) -> CriterionStatus {
+        if self.deferral.is_some() {
+            return CriterionStatus::Deferred;
+        }
         match self.evidence.last() {
             Some(evidence) => evidence.outcome(),
             None => self.status,

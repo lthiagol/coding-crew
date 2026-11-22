@@ -163,6 +163,10 @@ pub fn transition(
         }
     }
 
+    // A cancelled task refuses every event, overlays included: the
+    // cancellation is a record of a decision, and nothing overwrites it.
+    gate(task.overlays.cancelled.is_none(), "task is cancelled")?;
+
     match event {
         Event::Block => return set_overlay(task, actor, ctx, OverlayKind::Blocked),
         Event::Unblock => return clear_overlay(task, OverlayKind::Blocked),
@@ -170,10 +174,6 @@ pub fn transition(
         Event::Undefer => return clear_overlay(task, OverlayKind::Deferred),
         Event::Cancel => return set_overlay(task, actor, ctx, OverlayKind::Cancelled),
         _ => {}
-    }
-
-    if task.overlays.cancelled.is_some() {
-        return Err(TransitionError::Gate("task is cancelled".into()));
     }
 
     let before = task.status;
@@ -236,6 +236,16 @@ pub fn transition(
                 )?;
             }
             for criterion in &task.acceptance_criteria {
+                if criterion.status == CriterionStatus::Deferred {
+                    gate(
+                        criterion.deferral.is_some(),
+                        &format!("{} is deferred without a deferral", criterion.id),
+                    )?;
+                }
+                // A deferred criterion is parked on purpose: it needs no evidence.
+                if criterion.deferral.is_some() {
+                    continue;
+                }
                 gate(
                     !criterion.evidence.is_empty(),
                     &format!("{} has no evidence", criterion.id),
@@ -246,7 +256,6 @@ pub fn transition(
                         !criterion.failure_reason.trim().is_empty(),
                         &format!("{} failed without a reason", criterion.id),
                     )?,
-                    CriterionStatus::Deferred => {}
                     _ => {
                         return Err(TransitionError::Gate(format!(
                             "{} is {}",
@@ -290,14 +299,7 @@ pub fn transition(
         Event::ReReview => {
             expect_status(task, Status::Remediating, event)?;
             gate(task.open_findings() == 0, "open findings remain")?;
-            if let Some(claim) = &task.claim
-                && let Some(session) = &actor.session
-            {
-                gate(
-                    claim.session.as_deref() != Some(session.as_str()),
-                    "the session that executed the task cannot remediate it",
-                )?;
-            }
+            check_remediation_session(task, actor)?;
             task.status = Status::CodeReview;
         }
         Event::Escalate => {
@@ -310,6 +312,7 @@ pub fn transition(
                 task.external_rounds() as u32 >= task.review.max_rounds,
                 "the review round budget is not exhausted",
             )?;
+            check_review_independence(task, actor)?;
             task.status = Status::NeedsHuman;
         }
         Event::ResumeWork => {
@@ -390,15 +393,37 @@ fn check_dependencies(task: &Task, ctx: &TransitionContext<'_>) -> Result<(), Tr
     Ok(())
 }
 
-/// The session that planned a task never reviews it.
+/// The session that planned a task never reviews it. Both sessions must be
+/// recorded: a check that cannot name a session does not pass.
 fn check_review_independence(task: &Task, actor: &Actor) -> Result<(), TransitionError> {
-    if let (Some(planned), Some(session)) = (&task.planned_by, &actor.session) {
-        gate(
-            planned != session,
-            "the session that planned the task cannot review it",
-        )?;
-    }
-    Ok(())
+    let planned = task.planned_by.as_deref();
+    gate(planned.is_some(), "the planning session is not recorded")?;
+    gate(
+        actor.session.is_some(),
+        "the reviewing session is not recorded",
+    )?;
+    gate(
+        actor.session.as_deref() != planned,
+        "the session that planned the task cannot review it",
+    )
+}
+
+/// The session that executed a task never remediates its findings. Both
+/// sessions must be recorded: a check that cannot name a session does not pass.
+fn check_remediation_session(task: &Task, actor: &Actor) -> Result<(), TransitionError> {
+    let executed = task
+        .claim
+        .as_ref()
+        .and_then(|claim| claim.session.as_deref());
+    gate(executed.is_some(), "the executing session is not recorded")?;
+    gate(
+        actor.session.is_some(),
+        "the remediating session is not recorded",
+    )?;
+    gate(
+        actor.session.as_deref() != executed,
+        "the session that executed the task cannot remediate it",
+    )
 }
 
 fn expect_status(task: &Task, expected: Status, event: Event) -> Result<(), TransitionError> {

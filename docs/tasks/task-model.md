@@ -224,11 +224,11 @@ defined once, in [§ 3.3](#33-gates).
 | `draft` → `groomed` | `groom` | creator | `intent.outcome` set, ≥1 acceptance criterion, ≥1 `out_of_scope` entry |
 | `groomed` → `approved` | `approve` | creator | no open questions, every criterion covered by a step, every step has `done_when` — **the step rules do not apply to a small task** (`kind` `bug` or `feature`) |
 | `approved` → `executing` | `start` | runner | task claimed, dependencies satisfied |
-| `executing` → `code-review` | `finish` | runner | all steps settled, every criterion proven or failed with a reason, evidence attached, ≥1 `self` round filed — **a small task has no steps to settle** |
+| `executing` → `code-review` | `finish` | runner | all steps settled, every criterion proven, failed with a reason, or deferred; evidence attached to every criterion not deferred; ≥1 `self` round filed — **a small task has no steps to settle** |
 | `code-review` → `done` | `pass_review` | reviewer | verdict `ok`, no open findings, within the external-round budget, reviewer session is not the planning session |
 | `code-review` → `remediating` | `request_changes` | reviewer | verdict `changes-needed`, ≥1 finding opened, budget not exhausted, reviewer session is not the planning session |
 | `remediating` → `code-review` | `re_review` | runner | all open findings fixed, and the remediation session differs from the execution session |
-| `code-review` → `needs-human` | `escalate` | reviewer | 5 external rounds exhausted and still `changes-needed` |
+| `code-review` → `needs-human` | `escalate` | reviewer | 5 external rounds exhausted and still `changes-needed`, reviewer session is not the planning session |
 | `needs-human` → `executing` | `resume_work` | creator | a human instructed it |
 | `done` → `executing` | `reopen` | creator | — |
 
@@ -237,7 +237,7 @@ external rounds with work still outstanding, the loop stops and the task
 escalates to `needs-human`. The alternative — a sixth round — is the task
 grading its own homework.
 
-**A cancelled task refuses every transition.** `overlays.cancelled` is terminal
+**A cancelled task refuses every event, overlays included.** `overlays.cancelled` is terminal
 by overlay: there is no un-cancel event, because a cancelled task is a record
 of a decision, not a state to be walked back from.
 
@@ -258,8 +258,8 @@ applied apart.
 | `task.claimed` | a claim exists and `claim.by` is the acting runner | `start` |
 | `dependencies.satisfied` | every `depends_on` task is `done` | `start` |
 | `steps.settled` | every step is `done` or `skipped` | `finish` |
-| `evidence.attached` | every criterion carries ≥1 evidence entry | `finish` |
-| `criteria.proven` | every criterion is `passed`, `failed` **with a `failure_reason`**, or `deferred` | `finish` |
+| `evidence.attached` | every criterion not deferred carries ≥1 evidence entry | `finish` |
+| `criteria.proven` | every criterion is `passed`, `failed` **with a `failure_reason`**, or `deferred` **with a `deferral`** | `finish` |
 | `self_round.filed` | ≥1 round of kind `self` | `finish` |
 | `review.verdict_ok` | `review.verdict` is `ok` | `pass_review` |
 | `review.verdict_changes_needed` | `review.verdict` is `changes-needed` | `request_changes`, `escalate` |
@@ -269,8 +269,8 @@ applied apart.
 | `review.within_budget` | external rounds ≤ `max_rounds` | `pass_review` |
 | `review.budget_left` | external rounds < `max_rounds` | `request_changes` |
 | `review.budget_exhausted` | external rounds ≥ `max_rounds` | `escalate` |
-| `review.independent` | the acting session is not `planned_by` | `pass_review`, `request_changes` |
-| `remediation.session_distinct` | the acting session is not `claim.session` | `re_review` |
+| `review.independent` | the acting session is not `planned_by`; both are recorded | `pass_review`, `request_changes`, `escalate` |
+| `remediation.session_distinct` | the acting session is not `claim.session`; both are recorded | `re_review` |
 | `overlay.reason_present` | a non-empty reason | `block`, `defer`, `cancel` |
 
 **The budget is asymmetric on purpose.** `pass_review` accepts exactly
@@ -279,6 +279,9 @@ applied apart.
 
 **Dependencies are checked, not assumed.** `dependencies.satisfied` needs the
 store — a check that cannot be performed is a refusal, not a pass.
+
+**Sessions are checked, not assumed.** A session-boundary gate needs both
+sessions recorded. A session that is not recorded is a refusal, not a pass.
 
 ### 3.4 Overlays
 

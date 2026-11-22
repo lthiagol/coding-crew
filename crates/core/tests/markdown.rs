@@ -396,19 +396,15 @@ fn headings(document: &str) -> Vec<&str> {
 
 /// The cells of one table row. A pipe escaped by `cell()` does not split it.
 fn columns(line: &str) -> usize {
+    // GFM splits a row at every pipe that does not directly follow a
+    // backslash, whatever the backslashes before it.
     let mut pipes = 0usize;
-    let mut backslashes = 0;
+    let mut previous = ' ';
     for ch in line.chars() {
-        match ch {
-            '\\' => backslashes += 1,
-            '|' => {
-                if backslashes % 2 == 0 {
-                    pipes += 1;
-                }
-                backslashes = 0;
-            }
-            _ => backslashes = 0,
+        if ch == '|' && previous != '\\' {
+            pipes += 1;
         }
+        previous = ch;
     }
     pipes.saturating_sub(1)
 }
@@ -689,6 +685,56 @@ fn evidence_is_quoted_in_a_blockquote() {
             "> `cargo test` — exit `0` — 12 passed; 0 failed — by `runner-1` in `s-runner` at `2026-11-14T09:00:00Z`"
         ),
         "{body}"
+    );
+}
+
+#[test]
+fn evidence_output_cannot_open_a_heading_an_entity_or_a_block() {
+    let mut task = minimal("TSK01");
+    task.acceptance_criteria = vec![AcceptanceCriterion {
+        id: "ACCEPT-01".to_string(),
+        verification: "python -m unittest".to_string(),
+        evidence: vec![evidence(
+            "python -m unittest",
+            Some(1),
+            "FAIL: x\n======\n&copy; sign\n    indented frame",
+            "2026-11-14T09:00:00Z",
+        )],
+        ..AcceptanceCriterion::default()
+    }];
+
+    let document = task_to_markdown(&task, &[]);
+    let quoted: Vec<&str> = document
+        .lines()
+        .filter(|line| line.starts_with("> "))
+        .collect();
+
+    // The underline is escaped, so the title above it stays a paragraph.
+    assert!(
+        !document
+            .lines()
+            .any(|line| line.trim_start_matches("> ").starts_with("=")),
+        "{document}"
+    );
+    assert!(
+        quoted.iter().any(|line| line.contains("\\=\\=\\=")),
+        "{document}"
+    );
+    // The ampersand is escaped, so the entity is text.
+    assert!(
+        quoted.iter().any(|line| line.contains("\\&copy;")),
+        "{document}"
+    );
+    // The indent is kept as character references, so no line is a code block.
+    assert!(
+        quoted
+            .iter()
+            .any(|line| line.contains("&#32;&#32;&#32;&#32;indented frame")),
+        "{document}"
+    );
+    assert!(
+        !document.lines().any(|line| line.starts_with("    ")),
+        "{document}"
     );
 }
 
@@ -1306,14 +1352,14 @@ fn a_newline_in_a_fixed_field_cannot_break_the_line_structure() {
 }
 
 #[test]
-fn a_backslash_run_resets_at_a_pipe() {
+fn every_pipe_is_escaped_whatever_precedes_it() {
     let mut task = minimal("TSK01");
     task.meta.tags = vec!["a\\||b".to_string()];
     let document = task_to_markdown(&task, &[]);
 
     assert!(
-        document.contains("| tags | `a\\|\\|b` |"),
-        "the backslash run did not reset at the first pipe:\n{document}"
+        document.contains("| tags | `a\\\\|\\|b` |"),
+        "a pipe was left unescaped:\n{document}"
     );
     for line in table_rows(&document, "# Header") {
         assert_eq!(columns(line), 2, "{line}");
@@ -1321,14 +1367,39 @@ fn a_backslash_run_resets_at_a_pipe() {
 }
 
 #[test]
+fn a_verification_keeps_the_backslash_of_a_pipe() {
+    let mut task = minimal("TSK01");
+    task.acceptance_criteria = vec![AcceptanceCriterion {
+        id: "ACCEPT-01".to_string(),
+        verification: "grep -q 'foo\\|bar' f".to_string(),
+        ..AcceptanceCriterion::default()
+    }];
+
+    let document = task_to_markdown(&task, &[]);
+    let body = section(&document, "# Acceptance criteria");
+    let row = table_rows(&document, "# Acceptance criteria")
+        .into_iter()
+        .find(|line| line.contains("ACCEPT-01"))
+        .expect("the criterion row");
+
+    // GFM reads `\|` as an escaped pipe and drops the backslash it added.
+    assert!(row.contains("`grep -q 'foo\\\\|bar' f`"), "{body}");
+    assert_eq!(
+        row.replace("\\|", "|").matches("foo\\|bar").count(),
+        1,
+        "{row}"
+    );
+}
+
+#[test]
 fn backslashes_before_pipes_never_split_a_table_row() {
     let mut values: Vec<String> = (0..=5)
         .map(|backslashes| format!("left{}|right", "\\".repeat(backslashes)))
         .collect();
-    // Adjacent pipes: after the first pipe the backslash run is zero, so the
-    // second pipe must be escaped on its own. Without the reset this splits
-    // the row.
+    // Adjacent pipes, and a pipe after a backslash: each one is escaped on its
+    // own. A pipe that follows a lone backslash splits the row in GFM.
     values.push("a\\||b".to_string());
+    values.push("foo\\|bar".to_string());
 
     for value in values {
         let mut task = minimal("TSK01");

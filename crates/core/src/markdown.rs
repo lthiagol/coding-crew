@@ -791,12 +791,21 @@ pub fn escape_literal(value: &str) -> String {
 ///
 /// The same rule `escape_literal` holds, applied per line: a value that is
 /// quoted line by line cannot open a block on any of them, and the escape is
-/// invisible in the render.
+/// invisible in the render. Leading whitespace becomes character references,
+/// so an indented line cannot open a code block and its indent still shows.
 fn escape_lines(value: &str) -> String {
     value
         .trim()
         .lines()
-        .map(escape_markdown)
+        .map(|line| {
+            let text = line.trim_start_matches([' ', '\t']);
+            let mut out = String::new();
+            for ch in line[..line.len() - text.len()].chars() {
+                out.push_str(if ch == '\t' { "&#9;" } else { "&#32;" });
+            }
+            out.push_str(&escape_markdown(text));
+            out
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -823,6 +832,8 @@ fn escape_markdown(text: &str) -> String {
                 | '<'
                 | '>'
                 | '~'
+                | '='
+                | '&'
         ) {
             out.push('\\');
         }
@@ -842,31 +853,13 @@ fn cell(value: &str) -> String {
     value.replace("\r\n", "<br>").replace(['\n', '\r'], "<br>")
 }
 
-/// Escape a pipe, counting the backslashes already in front of it.
+/// Escape every pipe, whatever precedes it.
 ///
-/// A pipe splits a cell when the run of backslashes before it is even. Adding
-/// one backslash to an even run makes it odd and keeps the pipe inside the
-/// cell; a run that is already odd is escaped, so it is left alone.
+/// GFM splits a row at a pipe that follows a backslash, even inside a code
+/// span, and then drops that backslash. So a pipe is always escaped: a value's
+/// own backslash survives, because the one added is the one dropped.
 fn escape_cell_pipes(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    let mut backslashes = 0usize;
-    for ch in value.chars() {
-        if ch == '|' {
-            if backslashes.is_multiple_of(2) {
-                out.push('\\');
-            }
-            out.push('|');
-            backslashes = 0;
-        } else {
-            if ch == '\\' {
-                backslashes += 1;
-            } else {
-                backslashes = 0;
-            }
-            out.push(ch);
-        }
-    }
-    out
+    value.replace('|', "\\|")
 }
 
 fn oneline(value: &str) -> String {
