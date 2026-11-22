@@ -80,6 +80,8 @@ pub enum Icon {
     TabNeeds,
     /// The Path tab.
     TabPath,
+    /// The Tasks tab.
+    TabTasks,
     /// The Backlog tab.
     TabBacklog,
     /// The Settings tab.
@@ -120,6 +122,8 @@ pub enum Icon {
     Finding,
     /// A dependency, a link.
     Link,
+    /// A subtask's parent.
+    Parent,
     /// An age, a hold, a stamp.
     Clock,
     /// The automation runs.
@@ -156,12 +160,13 @@ pub enum Icon {
 
 impl Icon {
     /// Every icon, in the order of the spec's table.
-    pub const ALL: [Icon; 41] = [
+    pub const ALL: [Icon; 43] = [
         Icon::AppRaul,
         Icon::AppHugo,
         Icon::TabOverview,
         Icon::TabNeeds,
         Icon::TabPath,
+        Icon::TabTasks,
         Icon::TabBacklog,
         Icon::TabSettings,
         Icon::StatusDraft,
@@ -182,6 +187,7 @@ impl Icon {
         Icon::Blocked,
         Icon::Finding,
         Icon::Link,
+        Icon::Parent,
         Icon::Clock,
         Icon::Running,
         Icon::Stopped,
@@ -242,12 +248,13 @@ impl Icon {
 
 /// The icon table: each icon, its name in the spec, and its glyph in the
 /// nerd and unicode sets. Its order is the spec's.
-const TABLE: [(Icon, &str, &str, &str); 41] = [
+const TABLE: [(Icon, &str, &str, &str); 43] = [
     (Icon::AppRaul, "app_raul", "\u{F0645}", "◆"),
     (Icon::AppHugo, "app_hugo", "\u{F06A9}", "◇"),
     (Icon::TabOverview, "tab_overview", "\u{F056E}", "▦"),
     (Icon::TabNeeds, "tab_needs", "\u{F009A}", "◉"),
     (Icon::TabPath, "tab_path", "\u{F062C}", "⑂"),
+    (Icon::TabTasks, "tab_tasks", "\u{F0AE7}", "☑"),
     (Icon::TabBacklog, "tab_backlog", "\u{F0687}", "≡"),
     (Icon::TabSettings, "tab_settings", "\u{F0493}", "⚙"),
     (Icon::StatusDraft, "status_draft", "\u{F0766}", "○"),
@@ -283,6 +290,7 @@ const TABLE: [(Icon, &str, &str, &str); 41] = [
     (Icon::Blocked, "blocked", "\u{F033E}", "⊘"),
     (Icon::Finding, "finding", "\u{F015A}", "✗"),
     (Icon::Link, "link", "\u{F0337}", "→"),
+    (Icon::Parent, "parent", "\u{F005D}", "↑"),
     (Icon::Clock, "clock", "\u{F0954}", "◷"),
     (Icon::Running, "running", "\u{F046E}", "●"),
     (Icon::Stopped, "stopped", "\u{F03E4}", "■"),

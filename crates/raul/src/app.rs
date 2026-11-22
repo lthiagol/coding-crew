@@ -18,6 +18,7 @@ use crate::overview;
 use crate::path;
 use crate::settings;
 use crate::tabs::Tab;
+use crate::tasks::{self, Order};
 use crate::view::View;
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::text_width;
@@ -48,6 +49,8 @@ pub struct App {
     pub theme: Theme,
     /// The icon set in force.
     pub icons: IconSet,
+    /// The order the Tasks tab keeps its rows in. It lives for the session.
+    pub order: Order,
 }
 
 impl App {
@@ -62,6 +65,7 @@ impl App {
             help: false,
             theme,
             icons,
+            order: Order::default(),
         }
     }
 
@@ -120,11 +124,18 @@ impl App {
         // The row keys are for the tabs that are lists; the window keys work
         // everywhere. The Settings tab is a list too, though enter opens
         // nothing there.
+        // The Tasks tab's order keys are its own scope: no other tab answers
+        // them, so the footer and the help name them there alone.
         let act = keys::binding(Scope::Window, &key)
             .or_else(|| {
                 self.tab
                     .lists()
                     .then(|| keys::binding(Scope::Rows, &key))
+                    .flatten()
+            })
+            .or_else(|| {
+                (self.tab == Tab::Tasks)
+                    .then(|| keys::binding(Scope::Tasks, &key))
                     .flatten()
             })
             .map(|binding| binding.act);
@@ -159,6 +170,16 @@ impl App {
                 }
                 Action::Redraw
             }
+            Some(Act::NextSort) => {
+                // The cursor stays on its task: the window follows it to the
+                // task's new place.
+                self.order = self.order.cycled();
+                Action::Redraw
+            }
+            Some(Act::ReverseSort) => {
+                self.order = self.order.reversed();
+                Action::Redraw
+            }
             Some(Act::Back) | None => Action::Redraw,
         }
     }
@@ -186,7 +207,7 @@ impl App {
     /// The row the cursor is on: the selection, or the tab's first row when
     /// nothing is selected yet.
     fn cursor(&self, work: &Work, now: &str) -> Option<String> {
-        let ids = rows_of(work, self.tab, now)?;
+        let ids = rows_of(work, self.tab, now, self.order)?;
         let selected = self.selection.clone().filter(|id| ids.contains(id));
         selected.or_else(|| ids.into_iter().next())
     }
@@ -194,7 +215,7 @@ impl App {
     /// Move the cursor one row, clamped to the tab's rows. A tab without
     /// rows has nowhere to move.
     fn move_selection(&mut self, work: &Work, step: isize, now: &str) -> Action {
-        let Some(ids) = rows_of(work, self.tab, now) else {
+        let Some(ids) = rows_of(work, self.tab, now, self.order) else {
             return Action::Redraw;
         };
         if ids.is_empty() {
@@ -212,7 +233,7 @@ impl App {
     /// Move the cursor to a row, clamped to the tab's rows. The first and
     /// the last row are the ends the `g` and `G` keys reach.
     fn move_to(&mut self, work: &Work, index: usize, now: &str) -> Action {
-        let Some(ids) = rows_of(work, self.tab, now) else {
+        let Some(ids) = rows_of(work, self.tab, now, self.order) else {
             return Action::Redraw;
         };
         let Some(id) = ids.get(index.min(ids.len().saturating_sub(1))) else {
@@ -281,6 +302,16 @@ impl App {
                 &mut self.view,
                 now,
             ),
+            Tab::Tasks => tasks::render_view(
+                frame,
+                body,
+                work,
+                &self.theme,
+                self.icons,
+                selected,
+                &mut self.view,
+                self.order,
+            ),
             Tab::Backlog => backlog::render_view(
                 frame,
                 body,
@@ -297,6 +328,7 @@ impl App {
                 self.icons,
                 selected,
                 &mut self.view,
+                self.order,
             ),
         };
         if let Some(detail) = self.detail.as_mut() {
@@ -310,8 +342,9 @@ impl App {
         frame.render_widget(self.footer(rows[4].width, work, now, hidden), rows[4]);
 
         if self.help {
-            let has_rows = rows_of(work, self.tab, now).is_some_and(|ids| !ids.is_empty());
-            render_help(frame, area, &self.theme, has_rows);
+            let has_rows =
+                rows_of(work, self.tab, now, self.order).is_some_and(|ids| !ids.is_empty());
+            render_help(frame, area, &self.theme, has_rows, self.tab == Tab::Tasks);
         }
     }
 
@@ -404,7 +437,7 @@ impl App {
     /// carry it as a badge. The active tab's label is underlined: the rule
     /// is `─`, broken by a `▔` under that label.
     ///
-    /// A terminal too narrow for the five tabs gets the active tab alone.
+    /// A terminal too narrow for the six tabs gets the active tab alone.
     /// The parts are dropped whole: no label is ever cut in half.
     fn tab_bar(&self, width: u16, work: &Work, now: &str) -> (Line<'static>, Line<'static>) {
         let cells: Vec<Vec<Span<'static>>> = Tab::ALL
@@ -435,7 +468,7 @@ impl App {
             }
             return (Line::from(spans), self.rule(width, underline));
         }
-        // Too narrow for the five tabs: the active tab, marked. The parts
+        // Too narrow for the six tabs: the active tab, marked. The parts
         // are dropped whole, from the least to the most useful.
         let name = format!(
             "{} {}",
@@ -489,8 +522,10 @@ impl App {
     /// the rows cannot disagree.
     fn badge(&self, tab: Tab, work: &Work, now: &str) -> Option<usize> {
         match tab {
-            Tab::NeedsYou | Tab::Backlog => rows_of(work, tab, now).map(|ids| ids.len()),
-            Tab::Overview | Tab::Path | Tab::Settings => None,
+            Tab::NeedsYou | Tab::Backlog => {
+                rows_of(work, tab, now, self.order).map(|ids| ids.len())
+            }
+            Tab::Overview | Tab::Path | Tab::Tasks | Tab::Settings => None,
         }
     }
 
@@ -555,9 +590,9 @@ impl App {
                 true,
             ));
         }
-        parts.push((1, chip("1-5", "tab"), true));
+        parts.push((1, chip("1-6", "tab"), true));
         let mut next = 3;
-        let has_rows = rows_of(work, self.tab, now).is_some_and(|ids| !ids.is_empty());
+        let has_rows = rows_of(work, self.tab, now, self.order).is_some_and(|ids| !ids.is_empty());
         // Enter is named only where it opens: the Settings tab is a list
         // whose rows are facts, and the tab reads.
         if has_rows && self.tab.opens() {
@@ -578,6 +613,10 @@ impl App {
             parts.push((next, chip("pgup/pgdn", "page"), false));
             next += 1;
         }
+        if has_rows && self.tab == Tab::Tasks {
+            parts.push((next, chip("o/O", "sort"), false));
+            next += 1;
+        }
         parts.push((next, chip("?", "help"), true));
         if self.help {
             parts.push((next + 1, chip("esc", "close help"), true));
@@ -595,6 +634,7 @@ fn tab_icon(tab: Tab) -> Icon {
         Tab::Overview => Icon::TabOverview,
         Tab::NeedsYou => Icon::TabNeeds,
         Tab::Path => Icon::TabPath,
+        Tab::Tasks => Icon::TabTasks,
         Tab::Backlog => Icon::TabBacklog,
         Tab::Settings => Icon::TabSettings,
     }
@@ -638,10 +678,11 @@ pub(crate) fn footer_line(
 ///
 /// The Overview is a summary, not a list: it has no rows. The Settings tab
 /// lists what is true, so it has rows too, though enter opens nothing there.
-fn rows_of(work: &Work, tab: Tab, now: &str) -> Option<Vec<String>> {
+fn rows_of(work: &Work, tab: Tab, now: &str, order: Order) -> Option<Vec<String>> {
     match tab {
         Tab::NeedsYou => Some(needs::row_ids(work, now)),
         Tab::Path => Some(path::row_ids(work, now)),
+        Tab::Tasks => Some(tasks::row_ids(work, order)),
         Tab::Backlog => Some(backlog::row_ids(work)),
         Tab::Settings => Some(settings::row_ids()),
         Tab::Overview => None,
@@ -666,9 +707,9 @@ fn help_popup(area: Rect) -> Rect {
 /// lines give way from the least to the most useful: `shift-tab`, then
 /// `h l`, then `tab`, then `← →` (each has a twin that remains), then
 /// `g/G`, then `pgup`/`pgdn` (the arrows still move), then `↑↓`/`j`/`k`,
-/// then `1-5`. `q` and `?` are dropped last: a human who is stuck needs to
+/// then `1-6`. `q` and `?` are dropped last: a human who is stuck needs to
 /// leave and to ask what the keys are.
-fn help_lines(theme: &Theme, has_rows: bool) -> Vec<(u8, Line<'static>)> {
+fn help_lines(theme: &Theme, has_rows: bool, sorts: bool) -> Vec<(u8, Line<'static>)> {
     let line = |key: &str, says: &str| {
         Line::from(vec![
             Span::styled(format!(" {key} "), theme.chrome.key),
@@ -676,7 +717,7 @@ fn help_lines(theme: &Theme, has_rows: bool) -> Vec<(u8, Line<'static>)> {
         ])
     };
     let mut lines = vec![
-        (7, line("1-5", "jump to a tab")),
+        (7, line("1-6", "jump to a tab")),
         (3, line("← →", "switch tab")),
         (1, line("h l", "switch tab")),
         (2, line("tab", "next tab")),
@@ -688,6 +729,9 @@ fn help_lines(theme: &Theme, has_rows: bool) -> Vec<(u8, Line<'static>)> {
         lines.push((6, line("↑↓ j/k", "move")));
         lines.push((5, line("pgup/pgdn", "page")));
         lines.push((4, line("g/G", "top/bottom")));
+    }
+    if sorts {
+        lines.push((4, line("o O", "sort")));
     }
     lines.push((u8::MAX, line("q", "quit")));
     lines.push((u8::MAX, line("?", "this help")));
@@ -712,12 +756,12 @@ fn help_rows(line: &Line<'_>, inner: usize) -> usize {
 }
 
 /// The help overlay.
-fn render_help(frame: &mut Frame, area: Rect, theme: &Theme, has_rows: bool) {
+fn render_help(frame: &mut Frame, area: Rect, theme: &Theme, has_rows: bool, sorts: bool) {
     let popup = help_popup(area);
     // The border takes one row at the top and one at the bottom.
     let inner_width = usize::from(popup.width).saturating_sub(2);
     let room = usize::from(popup.height).saturating_sub(2);
-    let lines = help_lines(theme, has_rows);
+    let lines = help_lines(theme, has_rows, sorts);
     let lines: Vec<Line<'static>> = if inner_width == 0 {
         Vec::new()
     } else {
@@ -1016,7 +1060,7 @@ mod tests {
                 [
                     format!(" {left} {glyph} Overview {right} "),
                     format!(" {glyph} Overview "),
-                    "1/5".to_string(),
+                    "1/6".to_string(),
                     String::new(),
                 ]
                 .contains(&text),
@@ -1057,13 +1101,15 @@ mod tests {
     }
 
     #[test]
-    fn the_tab_bar_shows_five_tabs_in_key_order() {
-        // The five tabs, in the order the keys 1 to 5 reach them: the bar
+    fn the_tab_bar_shows_six_tabs_in_key_order() {
+        // The six tabs, in the order the keys 1 to 6 reach them: the bar
         // is the visible face of Tab::ALL. Each carries its icon, and the two
         // whose counts matter carry the count of their rows.
         let work = mock_work();
-        let needs = rows_of(&work, Tab::NeedsYou, now()).map_or(0, |ids| ids.len());
-        let backlog = rows_of(&work, Tab::Backlog, now()).map_or(0, |ids| ids.len());
+        let needs =
+            rows_of(&work, Tab::NeedsYou, now(), Order::default()).map_or(0, |ids| ids.len());
+        let backlog =
+            rows_of(&work, Tab::Backlog, now(), Order::default()).map_or(0, |ids| ids.len());
         let glyph = |icon: Icon| icon.glyph(IconSet::Nerd);
         let rows = draw(100, 20);
         let bar = rows.get(1).expect("the tab bar").trim_end();
@@ -1071,12 +1117,13 @@ mod tests {
             format!(" {} Overview ", glyph(Icon::TabOverview)),
             format!(" {} Needs you {needs} ", glyph(Icon::TabNeeds)),
             format!(" {} Path ", glyph(Icon::TabPath)),
+            format!(" {} Tasks ", glyph(Icon::TabTasks)),
             format!(" {} Backlog {backlog} ", glyph(Icon::TabBacklog)),
             format!(" {} Settings ", glyph(Icon::TabSettings)),
         ]
         .join(" ");
         // A bar that drops, adds or reorders a tab disagrees with a window
-        // that has five.
+        // that has six.
         assert_eq!(
             bar,
             expected.trim_end(),
@@ -1084,14 +1131,14 @@ mod tests {
         );
         // The dropped tab is not back.
         assert!(!bar.contains("Autopilot"), "{bar}");
-        // Too narrow for the bar, the index counts to five.
+        // Too narrow for the bar, the index counts to six.
         let (narrow, _) = app().tab_bar(8, &work, now());
         let text = narrow
             .spans
             .iter()
             .map(|span| span.content.to_string())
             .collect::<String>();
-        assert_eq!(text, "1/5", "the narrow tab bar counts another window");
+        assert_eq!(text, "1/6", "the narrow tab bar counts another window");
     }
 
     #[test]
@@ -1114,7 +1161,7 @@ mod tests {
     }
 
     #[test]
-    fn the_keys_one_to_five_reach_the_five_tabs_and_six_does_not() {
+    fn the_keys_one_to_six_reach_the_six_tabs_and_seven_does_not() {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         for (offset, tab) in Tab::ALL.iter().enumerate() {
@@ -1123,24 +1170,24 @@ mod tests {
             app.on_key(key(KeyCode::Char(digit)), &work, now());
             assert_eq!(app.tab, *tab, "the key {digit} did not reach {tab:?}");
         }
-        // 6 names no tab: the window stays where it is.
+        // 7 names no tab: the window stays where it is.
         let mut app = window(&theme, Tab::Path, false);
-        app.on_key(key(KeyCode::Char('6')), &work, now());
-        assert_eq!(app.tab, Tab::Path, "6 moved the window");
+        app.on_key(key(KeyCode::Char('7')), &work, now());
+        assert_eq!(app.tab, Tab::Path, "7 moved the window");
     }
 
     #[test]
     fn the_footer_names_no_dead_tab_key() {
-        // The footer and the help name the keys that work: 1-5, never the
-        // numbering of a tab that is gone.
+        // The footer and the help name the keys that work: 1-6, never a
+        // numbering that a tab is not reached by.
         let theme = Theme::preset(Preset::Dark);
         for tab in Tab::ALL {
             for help in [false, true] {
                 let rows = render(&mut window(&theme, tab, help), 100, 20).0;
                 let text = rows.join("\n");
-                assert!(text.contains("1-5"), "{tab:?} help={help}: {text}");
+                assert!(text.contains("1-6"), "{tab:?} help={help}: {text}");
                 assert!(
-                    !text.contains("1-6"),
+                    !text.contains("1-7"),
                     "{tab:?} help={help}: the footer names a dead key: {text}"
                 );
                 assert!(
@@ -1187,7 +1234,7 @@ mod tests {
         )
         .0;
         let text = rows.join("\n");
-        for group in ["theme · 5", "keys · 23", "sort · 5"] {
+        for group in ["theme · 5", "keys · 25", "sort · 6"] {
             assert!(text.contains(group), "{group} is missing: {text}");
         }
         // The groups say what is true, derived from their own sources.
@@ -1204,7 +1251,8 @@ mod tests {
     #[test]
     fn the_settings_tab_has_rows_but_enter_opens_nothing() {
         let work = mock_work();
-        let ids = rows_of(&work, Tab::Settings, now()).expect("Settings is a list");
+        let ids =
+            rows_of(&work, Tab::Settings, now(), Order::default()).expect("Settings is a list");
         assert!(!ids.is_empty(), "Settings has no rows");
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.on_key(key(KeyCode::Enter), &work, now());
@@ -1224,7 +1272,7 @@ mod tests {
         )
         .0;
         let footer = rows.last().expect("a footer row").trim_end().to_string();
-        for works in ["quit", "1-5", "help", "move", "page", "top/bottom"] {
+        for works in ["quit", "1-6", "help", "move", "page", "top/bottom"] {
             assert!(footer.contains(works), "{footer}: {works} is missing");
         }
         for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
@@ -1267,7 +1315,7 @@ mod tests {
         // the mark's own paint is on display. The pane is tall enough for
         // every row: the scroll would otherwise hide the theme at the top.
         app.selection = Some("sort:settings".to_string());
-        let (rows, paint) = render(&mut app, 100, 45);
+        let (rows, paint) = render(&mut app, 100, 50);
         // The icon set in force is marked too, on its own group's rows: the
         // theme's rows are the ones that say what kind of theme they are.
         let mark = Icon::InUse.glyph(IconSet::Nerd);
@@ -1310,8 +1358,8 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         let mut app = window(&theme, Tab::Overview, false);
-        app.on_key(key(KeyCode::Char('5')), &work, now());
-        assert_eq!(app.tab, Tab::Settings, "5 did not reach Settings");
+        app.on_key(key(KeyCode::Char('6')), &work, now());
+        assert_eq!(app.tab, Tab::Settings, "6 did not reach Settings");
         let (rows, paint) = render(&mut app, 100, 20);
         let bar = rows.get(1).expect("the tab bar");
         let column = bar.find(" Settings ").expect("the Settings label");
@@ -1333,7 +1381,7 @@ mod tests {
                 }
                 event
             }
-            keys::Chord::Digits => KeyEvent::from(KeyCode::Char('5')),
+            keys::Chord::Digits => KeyEvent::from(KeyCode::Char('6')),
         }
     }
 
@@ -1346,10 +1394,16 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         for binding in keys::BINDINGS {
             for scope in binding.scopes {
-                let mut app = window(&theme, Tab::Path, false);
-                let ids = rows_of(&work, Tab::Path, now()).expect("a row tab");
+                // The sort keys answer on the Tasks tab alone; the rest on Path.
+                let tab = if *scope == Scope::Tasks {
+                    Tab::Tasks
+                } else {
+                    Tab::Path
+                };
+                let mut app = window(&theme, tab, false);
+                let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
                 if *scope == Scope::Detail {
-                    let mut detail = Detail::opened("TSK13".to_string(), Tab::Path, None);
+                    let mut detail = Detail::opened("TSK13".to_string(), tab, None);
                     detail.scroll = 5;
                     app.detail = Some(detail);
                 } else {
@@ -1373,9 +1427,15 @@ mod tests {
                     Act::Help => {
                         assert!(app.help, "{} did not open the help", binding.key);
                     }
-                    Act::NextTab => assert_eq!(app.tab, Tab::Backlog, "{}", binding.key),
+                    Act::NextTab => assert_eq!(app.tab, Tab::Tasks, "{}", binding.key),
                     Act::PreviousTab => assert_eq!(app.tab, Tab::NeedsYou, "{}", binding.key),
                     Act::JumpTab => assert_eq!(app.tab, Tab::Settings, "{}", binding.key),
+                    Act::NextSort => {
+                        assert_eq!(app.order, Order::default().cycled(), "{}", binding.key);
+                    }
+                    Act::ReverseSort => {
+                        assert_eq!(app.order, Order::default().reversed(), "{}", binding.key);
+                    }
                     Act::Open => {
                         assert!(app.detail.is_some(), "{} did not open", binding.key);
                     }
@@ -1460,7 +1520,7 @@ mod tests {
     fn a_key_the_table_does_not_list_does_nothing() {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        for code in [KeyCode::Char('6'), KeyCode::Char('x'), KeyCode::Char('c')] {
+        for code in [KeyCode::Char('7'), KeyCode::Char('x'), KeyCode::Char('c')] {
             let mut app = window(&theme, Tab::Path, false);
             let before = (app.tab, app.selection.clone(), app.detail.clone(), app.help);
             let action = app.on_key(key(code), &work, now());
@@ -1520,8 +1580,8 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
-        let ids = rows_of(&work, Tab::Settings, now()).expect("a list tab");
-        let rows_of_settings = settings::groups();
+        let ids = rows_of(&work, Tab::Settings, now(), Order::default()).expect("a list tab");
+        let rows_of_settings = settings::groups(Order::default());
         let mut app = window(&theme, Tab::Settings, false);
         for height in [12u16, 8, 6] {
             render(&mut app, 100, height);
@@ -1676,7 +1736,9 @@ mod tests {
         let work = mock_work();
         Tab::ALL
             .into_iter()
-            .filter(|tab| rows_of(&work, *tab, now()).is_some_and(|ids| !ids.is_empty()))
+            .filter(|tab| {
+                rows_of(&work, *tab, now(), Order::default()).is_some_and(|ids| !ids.is_empty())
+            })
             .collect()
     }
 
@@ -1708,7 +1770,7 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         for tab in list_tabs() {
-            let ids = rows_of(&work, tab, now()).expect("a list tab");
+            let ids = rows_of(&work, tab, now(), Order::default()).expect("a list tab");
             assert!(ids.len() > 4, "{tab:?}: not enough rows to scroll");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 10);
@@ -1780,12 +1842,12 @@ mod tests {
         let before = "2029-12-31T23:59:55Z";
         let after = "2030-01-01T00:00:05Z";
         assert_eq!(
-            rows_of(&work, Tab::NeedsYou, before).expect("rows"),
+            rows_of(&work, Tab::NeedsYou, before, Order::default()).expect("rows"),
             ["TSK01", "TSK02"],
             "the boundary moved: before it the id breaks a zero tie"
         );
         assert_eq!(
-            rows_of(&work, Tab::NeedsYou, after).expect("rows"),
+            rows_of(&work, Tab::NeedsYou, after, Order::default()).expect("rows"),
             ["TSK02", "TSK01"],
             "the boundary moved: after it TSK02 has waited"
         );
@@ -1946,7 +2008,7 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab, now()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 10);
             for _ in 0..ids.len() + 3 {
@@ -1994,7 +2056,7 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         for tab in list_tabs() {
-            let ids = rows_of(&work, tab, now()).expect("a list tab");
+            let ids = rows_of(&work, tab, now(), Order::default()).expect("a list tab");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 15);
             let page = app.view.page();
@@ -2040,7 +2102,7 @@ mod tests {
         // The page is what the last draw held; a key pressed before any
         // draw moves one row rather than nothing.
         let work = mock_work();
-        let ids = rows_of(&work, Tab::NeedsYou, now()).expect("a row tab");
+        let ids = rows_of(&work, Tab::NeedsYou, now(), Order::default()).expect("a row tab");
         let mut app = window(&Theme::preset(Preset::Dark), Tab::NeedsYou, false);
         app.on_key(key(KeyCode::PageDown), &work, now());
         assert_eq!(
@@ -2110,7 +2172,7 @@ mod tests {
             let mut app = window(&theme, tab, false);
             let rows = render(&mut app, width, height).0;
             let footer = rows.last().expect("a footer row").trim_end().to_string();
-            let ids = rows_of(&work, tab, now()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
             let hidden = ids.len() - app.view.page();
             assert!(hidden > 0, "{tab:?}: nothing is hidden");
             assert!(
@@ -2178,7 +2240,7 @@ mod tests {
         // movement key is named.
         let at_40 = text(40);
         assert!(at_40.contains(" q ") && at_40.contains("quit"), "{at_40}");
-        assert!(at_40.contains("1-5") && at_40.contains(" tab"), "{at_40}");
+        assert!(at_40.contains("1-6") && at_40.contains(" tab"), "{at_40}");
         assert!(at_40.contains("enter") && at_40.contains("open"), "{at_40}");
         assert!(!at_40.contains("help"), "{at_40}");
         assert!(!at_40.contains("g/G"), "{at_40}");
@@ -2232,6 +2294,12 @@ mod tests {
                         hidden(&groups[2])
                     )]
                 }
+                Tab::Tasks => {
+                    // The count is the rows the scrolled window does not draw,
+                    // read from the screen: a task row names its id.
+                    let shown = text.lines().filter(|line| line.contains("TSK")).count();
+                    vec![format!("{} hidden", work.tasks.len() - shown)]
+                }
                 _ => unreachable!("a tab without rows"),
             };
             for line in &expected {
@@ -2252,7 +2320,7 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab, now()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
             for height in [7u16, 8, 10] {
                 let mut app = window(&theme, tab, false);
                 render(&mut app, 100, height);
@@ -2303,7 +2371,7 @@ mod tests {
         for tab in row_tabs() {
             let mut app = window(&theme, tab, false);
             let (rows, paint) = render(&mut app, 100, 40);
-            let ids = rows_of(&work, tab, now()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
             let first = ids.first().expect("a row");
             let (y, x) = cell_of(&rows, first)
                 .unwrap_or_else(|| panic!("{tab:?}: {first} is not on screen"));
@@ -2331,7 +2399,7 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab, now()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
             assert!(ids.len() >= 3, "{tab:?}: not enough rows to move through");
             let mut app = window(&theme, tab, false);
             // Down moves the paint to the second row.
@@ -2382,7 +2450,7 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab, now()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
             let target = &ids[2];
             let mut app = window(&theme, tab, false);
             app.on_key(key(KeyCode::Down), &work, now());
@@ -2420,6 +2488,7 @@ mod tests {
             (Tab::Overview, false),
             (Tab::NeedsYou, true),
             (Tab::Path, true),
+            (Tab::Tasks, true),
             (Tab::Backlog, true),
             (Tab::Settings, false),
         ]
@@ -2471,7 +2540,7 @@ mod tests {
         let work = mock_work();
         let mut app = app();
         app.tab = Tab::Backlog;
-        let ids = rows_of(&work, Tab::Backlog, now()).expect("rows");
+        let ids = rows_of(&work, Tab::Backlog, now(), Order::default()).expect("rows");
         assert!(ids.len() >= 2, "{ids:?}");
         app.selection = Some(ids[1].clone());
         app.on_key(key(KeyCode::Enter), &work, now());
@@ -2486,6 +2555,66 @@ mod tests {
             Some(ids[1].as_str()),
             "esc did not return to the selection it came from"
         );
+    }
+
+    #[test]
+    fn the_sort_keys_answer_on_the_tasks_tab_alone() {
+        // o cycles the key and O reverses it on the Tasks tab; the other tabs
+        // do not sort by them.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Tasks, false);
+        app.on_key(key(KeyCode::Char('o')), &work, now());
+        assert_eq!(app.order, Order::default().cycled());
+        app.on_key(key(KeyCode::Char('O')), &work, now());
+        assert_eq!(app.order, Order::default().cycled().reversed());
+        let mut path = window(&theme, Tab::Path, false);
+        path.on_key(key(KeyCode::Char('o')), &work, now());
+        path.on_key(key(KeyCode::Char('O')), &work, now());
+        assert_eq!(
+            path.order,
+            Order::default(),
+            "a sort key sorted another tab"
+        );
+    }
+
+    #[test]
+    fn the_cursor_stays_on_its_task_when_the_order_changes() {
+        // The window follows the task: the cursor, and the row enter opens,
+        // are the same task in whatever order the rows are in.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Tasks, false);
+        app.selection = Some("TSK13".to_string());
+        app.on_key(key(KeyCode::Char('o')), &work, now());
+        assert_eq!(app.selection.as_deref(), Some("TSK13"));
+        app.on_key(key(KeyCode::Enter), &work, now());
+        assert_eq!(
+            app.detail.as_ref().map(|detail| detail.id.as_str()),
+            Some("TSK13")
+        );
+    }
+
+    #[test]
+    fn the_tasks_footer_and_help_name_the_sort_keys_and_no_other_tab_does() {
+        let theme = Theme::preset(Preset::Dark);
+        // The footer gives the sort chip up before the page keys at 100
+        // columns, as it gives up any optional key; the help names it there.
+        let footer = render(&mut window(&theme, Tab::Tasks, false), 120, 20)
+            .0
+            .join("\n");
+        assert!(footer.contains("o/O"), "{footer}");
+        assert!(footer.contains("sort"), "{footer}");
+        let help = render(&mut window(&theme, Tab::Tasks, true), 100, 20)
+            .0
+            .join("\n");
+        assert!(help.contains("o O"), "{help}");
+        for tab in [Tab::Path, Tab::NeedsYou, Tab::Backlog] {
+            let text = render(&mut window(&theme, tab, false), 100, 20)
+                .0
+                .join("\n");
+            assert!(!text.contains("o/O"), "{tab:?} names a sort key: {text}");
+        }
     }
 
     #[test]

@@ -280,6 +280,17 @@ pub enum Priority {
     Low,
 }
 
+impl Priority {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Priority::Urgent => "urgent",
+            Priority::High => "high",
+            Priority::Normal => "normal",
+            Priority::Low => "low",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Effort {
     #[serde(rename = "S")]

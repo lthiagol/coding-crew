@@ -15,6 +15,8 @@ pub enum Scope {
     Window,
     /// The rows of a tab that lists them.
     Rows,
+    /// The Tasks tab's rows: the order keys.
+    Tasks,
     /// The detail pane, while it covers the window.
     Detail,
 }
@@ -25,6 +27,7 @@ impl Scope {
         match self {
             Scope::Window => "window",
             Scope::Rows => "rows",
+            Scope::Tasks => "tasks",
             Scope::Detail => "detail",
         }
     }
@@ -53,6 +56,10 @@ pub enum Act {
     Bottom,
     /// Open the cursor's row as the detail pane.
     Open,
+    /// The next key the Tasks tab sorts by.
+    NextSort,
+    /// The Tasks tab's order, the other way.
+    ReverseSort,
     /// Return from the detail pane to the tab it came from.
     Back,
 }
@@ -121,7 +128,7 @@ impl Binding {
 
 /// The keys of the window, in the order the groups read them: the window
 /// first, then the rows, then the detail pane.
-pub const BINDINGS: [Binding; 23] = [
+pub const BINDINGS: [Binding; 25] = [
     Binding {
         scopes: &[Scope::Window, Scope::Detail],
         chords: &[Chord::Key(KeyCode::Char('q'), false)],
@@ -249,6 +256,20 @@ pub const BINDINGS: [Binding; 23] = [
         act: Act::Open,
     },
     Binding {
+        scopes: &[Scope::Tasks],
+        chords: &[Chord::Key(KeyCode::Char('o'), false)],
+        key: "o",
+        says: "next sort key",
+        act: Act::NextSort,
+    },
+    Binding {
+        scopes: &[Scope::Tasks],
+        chords: &[Chord::Key(KeyCode::Char('O'), false)],
+        key: "O",
+        says: "reverse sort",
+        act: Act::ReverseSort,
+    },
+    Binding {
         scopes: &[Scope::Detail],
         chords: &[Chord::Key(KeyCode::Esc, false)],
         key: "esc",
@@ -362,7 +383,7 @@ mod tests {
         // in two scopes sits with the first of them.
         let rank = |scope: Scope| match scope {
             Scope::Window => 0,
-            Scope::Rows => 1,
+            Scope::Rows | Scope::Tasks => 1,
             Scope::Detail => 2,
         };
         let mut last = 0;
@@ -390,15 +411,14 @@ mod tests {
             }
         }
         // Every scope is listed by at least one key.
-        for scope in [Scope::Window, Scope::Rows, Scope::Detail] {
+        for scope in [Scope::Window, Scope::Rows, Scope::Tasks, Scope::Detail] {
             assert!(scopes.contains(&scope), "{scope:?} has no key");
         }
     }
 
     #[test]
     fn the_digits_name_every_tab_and_no_sixth() {
-        // The six the Autopilot tab lost are not back: the digits stop at
-        // the last tab.
+        // The digits stop at the last tab: the seventh names no tab.
         for index in 0..Tab::ALL.len() {
             let name = char::from(b'1' + index as u8);
             let event = press(KeyCode::Char(name));
@@ -406,11 +426,8 @@ mod tests {
             assert_eq!(binding.act, Act::JumpTab, "{name}");
             assert_eq!(digit(&event), Some(index + 1));
         }
-        let six = press(KeyCode::Char('6'));
-        assert!(
-            binding(Scope::Window, &six).is_none(),
-            "6 does something again"
-        );
+        let seven = press(KeyCode::Char('7'));
+        assert!(binding(Scope::Window, &seven).is_none(), "7 does something");
     }
 
     #[test]

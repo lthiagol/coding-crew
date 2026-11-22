@@ -19,8 +19,8 @@ use std::collections::hash_map::Entry;
 
 use crate::lifecycle::Overlay;
 use crate::task::{
-    AcceptanceCriterion, Claim, Finding, FindingStatus, Focus, Priority, Question, QuestionStatus,
-    Round, RoundKind, Severity, StepStatus, Task, Verdict,
+    AcceptanceCriterion, Claim, Finding, FindingStatus, Focus, Question, QuestionStatus, Round,
+    RoundKind, Severity, StepStatus, Task, Verdict,
 };
 
 /// What an empty section or field says.
@@ -71,7 +71,7 @@ fn header(out: &mut String, task: &Task) {
     out.push_str(&format!("- **kind:** {}\n", code(task.kind.as_str())));
     out.push_str(&format!(
         "- **priority:** {}\n",
-        code(priority_str(task.meta.priority))
+        code(task.meta.priority.as_str())
     ));
     out.push_str(&format!(
         "- **effort:** {}\n",
@@ -866,15 +866,6 @@ fn oneline(value: &str) -> String {
         .replace(['\n', '\r'], " ")
         .trim()
         .to_string()
-}
-
-fn priority_str(priority: Priority) -> &'static str {
-    match priority {
-        Priority::Urgent => "urgent",
-        Priority::High => "high",
-        Priority::Normal => "normal",
-        Priority::Low => "low",
-    }
 }
 
 fn step_status_str(status: StepStatus) -> &'static str {

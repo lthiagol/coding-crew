@@ -1,4 +1,4 @@
-//! The five tabs of the window.
+//! The six tabs of the window.
 
 /// A tab of the window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -6,15 +6,17 @@ pub enum Tab {
     Overview,
     NeedsYou,
     Path,
+    Tasks,
     Backlog,
     Settings,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 5] = [
+    pub const ALL: [Tab; 6] = [
         Tab::Overview,
         Tab::NeedsYou,
         Tab::Path,
+        Tab::Tasks,
         Tab::Backlog,
         Tab::Settings,
     ];
@@ -24,6 +26,7 @@ impl Tab {
             Tab::Overview => "Overview",
             Tab::NeedsYou => "Needs you",
             Tab::Path => "Path",
+            Tab::Tasks => "Tasks",
             Tab::Backlog => "Backlog",
             Tab::Settings => "Settings",
         }
@@ -54,6 +57,7 @@ impl Tab {
             Tab::Overview => "overview",
             Tab::NeedsYou => "needs-you",
             Tab::Path => "path",
+            Tab::Tasks => "tasks",
             Tab::Backlog => "backlog",
             Tab::Settings => "settings",
         }
@@ -70,7 +74,7 @@ impl Tab {
     pub fn opens(&self) -> bool {
         match self {
             Tab::Overview | Tab::Settings => false,
-            Tab::NeedsYou | Tab::Path | Tab::Backlog => true,
+            Tab::NeedsYou | Tab::Path | Tab::Tasks | Tab::Backlog => true,
         }
     }
 
@@ -84,12 +88,26 @@ impl Tab {
 mod tests {
     use super::*;
 
-    const LABELS: [&str; 5] = ["Overview", "Needs you", "Path", "Backlog", "Settings"];
-    const NAMES: [&str; 5] = ["overview", "needs-you", "path", "backlog", "settings"];
+    const LABELS: [&str; 6] = [
+        "Overview",
+        "Needs you",
+        "Path",
+        "Tasks",
+        "Backlog",
+        "Settings",
+    ];
+    const NAMES: [&str; 6] = [
+        "overview",
+        "needs-you",
+        "path",
+        "tasks",
+        "backlog",
+        "settings",
+    ];
 
     #[test]
-    fn the_window_has_five_tabs_in_order() {
-        assert_eq!(Tab::ALL.len(), 5);
+    fn the_window_has_six_tabs_in_order() {
+        assert_eq!(Tab::ALL.len(), 6);
         assert_eq!(Tab::ALL.map(|tab| tab.label()), LABELS);
         assert_eq!(Tab::ALL.map(|tab| tab.name()), NAMES);
         for (index, tab) in Tab::ALL.iter().enumerate() {
@@ -102,14 +120,14 @@ mod tests {
     #[test]
     fn only_the_tabs_with_tasks_open_a_row() {
         // The Overview is a summary and the Settings tab reads: enter opens
-        // a record on the three tabs whose rows are tasks, and nowhere else.
+        // a record on the four tabs whose rows are tasks, and nowhere else.
         assert_eq!(
             Tab::ALL.map(|tab| tab.opens()),
-            [false, true, true, true, false]
+            [false, true, true, true, true, false]
         );
         assert_eq!(
             Tab::ALL.map(|tab| tab.lists()),
-            [false, true, true, true, true]
+            [false, true, true, true, true, true]
         );
     }
 

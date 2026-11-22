@@ -1,5 +1,5 @@
  󰙅 raul · mock-data/coding-crew/work                                                     8 need you
- 󰕮 Overview   󰂚 Needs you 8   󰘬 Path   󰚇 Backlog 11   󰒓 Settings
+ 󰕮 Overview   󰂚 Needs you 8   󰘬 Path   󰫧 Tasks   󰚇 Backlog 11   󰒓 Settings
 ▔▔▔▔▔▔▔▔▔▔▔▔────────────────────────────────────────────────────────────────────────────────────────
 ╭─ 󰕮 counts ─────────────────────────────────────╮ ╭─ 󰂚 needs you ─────────────────────────────────╮
 │ 30 tasks by status                             │ │ 8 tasks wait on a human                       │
@@ -37,4 +37,4 @@
 
 
 
- q  quit   1-5  tab   ←→  switch tab   ?  help
+ q  quit   1-6  tab   ←→  switch tab   ?  help

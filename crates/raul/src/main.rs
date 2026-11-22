@@ -2,6 +2,7 @@
 //!
 //! raul reads a work folder and shows it. It writes nothing.
 
+mod announce;
 mod app;
 mod backlog;
 mod data;
@@ -14,6 +15,7 @@ mod review_state;
 mod settings;
 mod sort;
 mod tabs;
+mod tasks;
 mod view;
 
 use std::io::{Stdout, Write};

@@ -318,6 +318,11 @@ def parse_args(argv):
         help=f"the icon set each render draws with (default: {DEFAULT_ICONS})",
     )
     parser.add_argument(
+        "--tab",
+        metavar="NAME",
+        help="the tab each render shows, by its --tab name (default: raul's default tab)",
+    )
+    parser.add_argument(
         "--out",
         metavar="DIR",
         help="where to write one file per width (default: a fresh temp folder)",
@@ -368,6 +373,8 @@ def sweep(args, out, table):
             "--height",
             str(args.height),
         ]
+        if args.tab is not None:
+            command.extend(["--tab", args.tab])
         if args.work is not None:
             command.append(args.work)
         try:

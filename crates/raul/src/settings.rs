@@ -10,7 +10,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 
 use crate::keys;
+use crate::sort;
 use crate::tabs::Tab;
+use crate::tasks::Order;
 use crate::view::View;
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, pad, text_width};
@@ -90,16 +92,17 @@ pub struct Group {
 }
 
 /// The groups, derived: the theme crate's presets, the key table, the tabs'
-/// own sorts and the icon sets, in the order `GroupKind::ALL` names.
-pub fn groups() -> [Group; GROUPS] {
+/// own sorts and the icon sets, in the order `GroupKind::ALL` names. The sort
+/// group names the Tasks tab's order as `order` has it in force.
+pub fn groups(order: Order) -> [Group; GROUPS] {
     GroupKind::ALL.map(|kind| Group {
         kind,
-        rows: rows(kind),
+        rows: rows(kind, order),
     })
 }
 
 /// The rows of one group, derived from the code that owns the fact.
-fn rows(kind: GroupKind) -> Vec<Row> {
+fn rows(kind: GroupKind, order: Order) -> Vec<Row> {
     match kind {
         GroupKind::Theme => Preset::ALL
             .iter()
@@ -134,7 +137,7 @@ fn rows(kind: GroupKind) -> Vec<Row> {
                 preset: None,
                 set: None,
                 label: tab.label().to_string(),
-                says: tab.sort().words(),
+                says: sort::in_force(*tab, order).words(),
                 scopes: None,
             })
             .collect(),
@@ -162,7 +165,8 @@ fn rows(kind: GroupKind) -> Vec<Row> {
 /// The tab is a list: the cursor and the window move through these, though
 /// enter opens nothing.
 pub fn row_ids() -> Vec<String> {
-    groups()
+    // The rows are the same in every order: only the sort row's words move.
+    groups(Order::default())
         .into_iter()
         .flat_map(|group| group.rows.into_iter().map(|row| row.id))
         .collect()
@@ -179,9 +183,10 @@ pub fn render_view(
     icons: IconSet,
     selected: Option<&str>,
     view: &mut View,
+    order: Order,
 ) -> Option<usize> {
     let block = chrome::pane("settings", Icon::TabSettings, icons, false, theme);
-    let groups = groups();
+    let groups = groups(order);
     let ids = row_ids();
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
@@ -966,7 +971,15 @@ mod tests {
         let mut view = View::default();
         terminal
             .draw(|frame| {
-                render_view(frame, frame.area(), theme, IconSet::Nerd, None, &mut view);
+                render_view(
+                    frame,
+                    frame.area(),
+                    theme,
+                    IconSet::Nerd,
+                    None,
+                    &mut view,
+                    Order::default(),
+                );
             })
             .expect("drawing the settings tab");
         let buffer = terminal.backend().buffer();
@@ -991,7 +1004,7 @@ mod tests {
 
     #[test]
     fn the_four_groups_are_derived_in_the_order_of_the_spec() {
-        let groups = groups();
+        let groups = groups(Order::default());
         assert_eq!(
             [
                 groups[0].kind,
@@ -1009,7 +1022,7 @@ mod tests {
 
     #[test]
     fn the_icon_rows_are_every_set_and_say_what_it_needs() {
-        let groups = groups();
+        let groups = groups(Order::default());
         let rows = &groups[3].rows;
         assert_eq!(
             rows.iter()
@@ -1027,7 +1040,7 @@ mod tests {
 
     #[test]
     fn the_theme_rows_are_every_preset_and_say_what_it_is() {
-        let groups = groups();
+        let groups = groups(Order::default());
         let rows = &groups[0].rows;
         assert_eq!(
             rows.iter()
@@ -1055,7 +1068,7 @@ mod tests {
 
     #[test]
     fn the_key_rows_are_the_table_the_input_reads() {
-        let groups = groups();
+        let groups = groups(Order::default());
         let rows = &groups[1].rows;
         assert_eq!(rows.len(), keys::BINDINGS.len());
         for (row, binding) in rows.iter().zip(keys::BINDINGS) {
@@ -1067,7 +1080,7 @@ mod tests {
 
     #[test]
     fn the_sort_rows_are_every_tab_and_its_own_words() {
-        let groups = groups();
+        let groups = groups(Order::default());
         let rows = &groups[2].rows;
         assert_eq!(
             rows.iter()
@@ -1082,7 +1095,7 @@ mod tests {
 
     #[test]
     fn the_tab_always_has_rows_and_its_groups_count_them() {
-        let groups = groups();
+        let groups = groups(Order::default());
         assert_eq!(
             groups
                 .iter()
@@ -1100,13 +1113,13 @@ mod tests {
             Preset::ALL.len() + keys::BINDINGS.len() + Tab::ALL.len() + IconSet::ALL.len()
         );
         // The empty state is gone: the tab has no state to be empty.
-        let text = inner(&draw(&theme(), 100, 40)).join("\n");
+        let text = inner(&draw(&theme(), 100, 46)).join("\n");
         assert!(!text.contains("nothing to set yet"), "{text}");
     }
 
     #[test]
     fn the_groups_are_named_with_their_counts() {
-        let text = inner(&draw(&theme(), 100, 40)).join("\n");
+        let text = inner(&draw(&theme(), 100, 46)).join("\n");
         for (name, count) in [
             ("theme", Preset::ALL.len()),
             ("keys", keys::BINDINGS.len()),
@@ -1124,9 +1137,17 @@ mod tests {
     fn every_preset_marks_its_own_row_exactly_once() {
         for preset in Preset::ALL {
             let theme = Theme::preset(preset);
-            let text = inner(&draw(&theme, 100, 40)).join("\n");
+            let text = inner(&draw(&theme, 100, 46)).join("\n");
             let mark = Icon::InUse.glyph(IconSet::Nerd);
-            let marked: Vec<&str> = text.lines().filter(|line| line.contains(mark)).collect();
+            // The theme's rows say what kind of theme they are; the icon set
+            // in force is marked on its own rows.
+            let marked: Vec<&str> = text
+                .lines()
+                .filter(|line| {
+                    line.contains(mark)
+                        && (line.contains("palette") || line.contains("terminal colours"))
+                })
+                .collect();
             assert_eq!(marked.len(), 1, "{}: {text}", preset.name());
             assert!(
                 marked[0].contains(preset.label()),
@@ -1143,7 +1164,7 @@ mod tests {
 
     #[test]
     fn every_icon_set_marks_its_own_row_exactly_once() {
-        let groups = groups();
+        let groups = groups(Order::default());
         for set in IconSet::ALL {
             let says = groups[3]
                 .rows
@@ -1151,7 +1172,7 @@ mod tests {
                 .find(|row| row.set == Some(set))
                 .map(|row| row.says.as_str())
                 .expect("a row for the set");
-            let (lines, _, _, _) = window(&groups, 98, 40, &theme(), set, None, 0);
+            let (lines, _, _, _) = window(&groups, 98, 44, &theme(), set, None, 0);
             let text = text_of(&lines);
             let mark = Icon::InUse.glyph(set);
             let marked: Vec<&str> = text
@@ -1171,10 +1192,10 @@ mod tests {
     #[test]
     fn the_tab_renders_at_40_60_and_100_columns() {
         for width in [40u16, 60, 100] {
-            let text = inner(&draw(&theme(), width, 40)).join("\n");
+            let text = inner(&draw(&theme(), width, 46)).join("\n");
             assert!(text.contains("theme · 5"), "{width}: {text}");
-            assert!(text.contains("keys · 23"), "{width}: {text}");
-            assert!(text.contains("sort · 5"), "{width}: {text}");
+            assert!(text.contains("keys · 25"), "{width}: {text}");
+            assert!(text.contains("sort · 6"), "{width}: {text}");
             assert!(text.contains("Dracula"), "{width}: {text}");
             assert!(text.contains("palette"), "{width}: {text}");
             assert!(text.contains("terminal colours"), "{width}: {text}");
@@ -1192,7 +1213,7 @@ mod tests {
     fn every_line_fits_the_pane_and_is_drawn_as_one_line() {
         // A line wider than the pane wraps, and the rows below it move: the
         // layout counts one line per row, so each line must be drawn as one.
-        let groups = groups();
+        let groups = groups(Order::default());
         let theme = theme();
         for width in 10..=40usize {
             for height in [2usize, 5, 8, 12, 30] {
@@ -1337,7 +1358,7 @@ mod tests {
     fn a_window_inside_a_group_keeps_its_header() {
         // The window starts in the middle of the keys group: the rows are
         // not shown without the name of the group above them.
-        let groups = groups();
+        let groups = groups(Order::default());
         let (rows, shown, _) = layout(
             &groups,
             10,
@@ -1348,7 +1369,7 @@ mod tests {
             None,
         );
         let text = text_of(&rows);
-        assert!(text.starts_with("  keys · 23"), "{text}");
+        assert!(text.starts_with("  keys · 25"), "{text}");
         assert!(!text.contains("theme · 5"), "{text}");
         assert_eq!(shown.first(), Some(&10), "{shown:?}");
     }
@@ -1357,11 +1378,11 @@ mod tests {
     fn a_scrolled_pane_names_the_rows_above_it() {
         // The window starts at the end of the keys group. What is above it
         // is counted too, by the group it belongs to.
-        let groups = groups();
-        let (rows, _, _, _) = window(&groups, 98, 10, &theme(), IconSet::Nerd, None, 26);
+        let groups = groups(Order::default());
+        let (rows, _, _, _) = window(&groups, 98, 10, &theme(), IconSet::Nerd, None, 29);
         let text = text_of(&rows);
         assert!(text.contains("theme (5 hidden)"), "{text}");
-        assert!(text.contains("keys (21 hidden)"), "{text}");
+        assert!(text.contains("keys (24 hidden)"), "{text}");
         assert!(text.contains("sort (0 hidden)"), "{text}");
     }
 
@@ -1369,7 +1390,7 @@ mod tests {
     fn the_value_in_use_is_marked_with_the_set_glyph() {
         // The mark of a value in use is the icon table's `in_use` in the set
         // in force: the nerd set draws its own glyph, not the unicode dot.
-        let groups = groups();
+        let groups = groups(Order::default());
         let (rows, _, _, _) = window(&groups, 98, 200, &theme(), IconSet::Nerd, None, 0);
         let text = text_of(&rows);
         assert!(text.contains(Icon::InUse.glyph(IconSet::Nerd)), "{text}");
@@ -1437,6 +1458,7 @@ mod tests {
                     IconSet::Nerd,
                     selected,
                     &mut view,
+                    Order::default(),
                 );
             })
             .expect("drawing the settings tab");

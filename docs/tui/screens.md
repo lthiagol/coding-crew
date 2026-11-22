@@ -12,20 +12,20 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │ ◆ coding-crew · ~/projects/app                                     │
-│  ▦ Overview   ◉ Needs you 8   ⑂ Path   ≡ Backlog 11   ⚙ Settings   │
+│  ▦ Overview ◉ Needs you 8 ⑂ Path ☑ Tasks ≡ Backlog 11 ⚙ Settings   │
 │─▔▔▔▔▔▔▔▔▔▔▔▔───────────────────────────────────────────────────────│
 │                                                                    │
 │  content pane — rows of the active tab                             │
 │                                                                    │
 ├────────────────────────────────────────────────────────────────────┤
-│ q  quit   1-5  tab   enter  open   ?  help                         │
+│ q  quit   1-6  tab   enter  open   ?  help                         │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
 | part | behaviour |
 |---|---|
 | header | the app's icon and name, a dim `·`, then the folder the tool reads |
-| tab bar | the five tabs, each its icon and name; `Needs you` and `Backlog` carry their counts as badges; the active tab is bold and underlined by a `▔` on the rule under the bar; `1`–`5`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` |
+| tab bar | the six tabs, each its icon and name; `Needs you` and `Backlog` carry their counts as badges; the active tab is bold and underlined by a `▔` on the rule under the bar; `1`–`6`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` |
 | content pane | the active tab's rows; `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` |
 | detail pane | `enter` on a row opens the task as a full-screen overlay; `esc` returns to the tab and the selection it came from, and `enter` again reopens |
 | footer | contextual keys for the active tab, as key chips — never a key that does nothing. When the content pane has no room for the hidden-rows announcement, the footer carries that count beside the keys, and the content pane says nothing about it — the same fact is never painted twice |
@@ -156,7 +156,7 @@ title. The right-hand column shows **the value of the sort key in force** —
 the created date when sorted by creation, the priority when sorted by
 priority — so the order explains itself and no fact is painted twice. Sorted
 by id, the column is the status. A subtask is a row like any other, flat,
-with its parent in the suffix: `↑ TSK03` (the link icon). Subtasks are never
+with its parent in the suffix: `↑ TSK03` (the parent icon). Subtasks are never
 nested: nesting breaks under any sort but the id and under a filter.
 
 **The order.** `o` cycles the sort key — `id`, `created`, `updated`,
@@ -319,7 +319,7 @@ It is how a prototype is captured and how a snapshot test is written — the
 sketch is the tool's own output, not a drawing of it.
 
 `--tab NAME` renders another tab — `overview`, `needs-you`, `path`,
-`backlog`, `settings` — in the same bounded plain render.
+`tasks`, `backlog`, `settings` — in the same bounded plain render.
 
 `scripts/pty-sweep.py` renders the screen at every width from 40 to 120, keeps
 one file per width, and fails when a line is wider than its width. The gate

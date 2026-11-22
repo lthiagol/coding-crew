@@ -650,10 +650,25 @@ fn render_tab(tab: &str, width: u16) -> String {
 
 /// A tab, rendered at a width in a named preset.
 fn render_tab_with(preset: &str, tab: &str, width: u16) -> String {
+    render_tab_at(preset, tab, width, 40)
+}
+
+/// A tab, rendered at a width and a height in a named preset.
+fn render_tab_at(preset: &str, tab: &str, width: u16, height: u16) -> String {
     let width_arg = width.to_string();
+    let height_arg = height.to_string();
     let output = run(&[
-        "--render", "--plain", "--theme", preset, "--tab", tab, "--width", &width_arg, "--height",
-        "40", WORK,
+        "--render",
+        "--plain",
+        "--theme",
+        preset,
+        "--tab",
+        tab,
+        "--width",
+        &width_arg,
+        "--height",
+        &height_arg,
+        WORK,
     ]);
     assert!(
         output.status.success(),
@@ -664,17 +679,19 @@ fn render_tab_with(preset: &str, tab: &str, width: u16) -> String {
 
 #[test]
 fn the_settings_tab_is_reachable_in_render_mode_at_every_canonical_width() {
+    // The tab's groups take 42 rows, so the render is taller than the
+    // default: every group is on screen to be named.
     for width in [40, 60, 100] {
-        let text = render_tab("settings", width);
+        let text = render_tab_at("dark", "settings", width, 46);
         assert_eq!(
             text.lines().count(),
-            40,
+            46,
             "the render did not take --height at width {width}"
         );
         // The tab bar names it, so the screen is the Settings tab.
         assert!(text.contains("Settings"), "width {width}: {text}");
         // It lists what is true: the themes, the keys and the sorts.
-        for group in ["theme · 5", "keys · 23", "sort · 5"] {
+        for group in ["theme · 5", "keys · 25", "sort · 6"] {
             assert!(text.contains(group), "width {width}: {group} is missing");
         }
         for words in ["Catppuccin", "palette", "terminal colours", "quit", "open"] {
@@ -711,7 +728,7 @@ fn a_short_row_tab_render_shows_the_window_and_announces_what_it_hides() {
     // short tab: the rows that fit are on screen, and the tab's own
     // announcement names the rows that are not. The window the keys move is
     // the same one: the app tests press the keys.
-    for tab in ["needs-you", "path", "backlog"] {
+    for tab in ["needs-you", "path", "tasks", "backlog"] {
         let output = run(&[
             "--render", "--plain", "--tab", tab, "--width", "100", "--height", "12", WORK,
         ]);
@@ -745,7 +762,7 @@ fn a_short_row_tab_render_shows_the_window_and_announces_what_it_hides() {
 fn the_row_tabs_fit_their_width_at_every_canonical_width() {
     // The selection bar is paint only: the plain render carries the same
     // words, and no line grows past the width it is drawn in.
-    for tab in ["needs-you", "path", "backlog"] {
+    for tab in ["needs-you", "path", "tasks", "backlog"] {
         for width in [40u16, 60, 100] {
             let text = render_tab(tab, width);
             assert_eq!(
@@ -767,6 +784,60 @@ fn the_row_tabs_fit_their_width_at_every_canonical_width() {
             }
         }
     }
+}
+
+/// The ids of every task file in the mock work folder, in id order.
+fn mock_task_ids() -> Vec<String> {
+    let mut ids: Vec<String> = fs::read_dir(repo_root().join(WORK))
+        .expect("the mock work folder")
+        .map(|entry| {
+            entry
+                .expect("a directory entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .filter(|name| name.starts_with("TSK") && name.ends_with(".json"))
+        .map(|name| name[..5].to_string())
+        .collect();
+    ids.sort();
+    ids
+}
+
+/// The task id a line of the plain render names first, when it names one.
+fn first_task_id(line: &str) -> Option<String> {
+    let at = line.find("TSK")?;
+    let digits: String = line[at + 3..]
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    (!digits.is_empty()).then(|| format!("TSK{digits}"))
+}
+
+#[test]
+fn the_tasks_tab_lists_every_task_in_id_order_at_forty_and_one_hundred_columns() {
+    // The index of the work: every task file is a row, drafts and finished
+    // tasks included, in the id order a fresh window opens in. The mock
+    // folder's thirty tasks fit the default height, so every one is shown.
+    let expected = mock_task_ids();
+    assert_eq!(expected.len(), 30, "the mock work folder changed");
+    for width in [40u16, 100] {
+        let text = render_tab("tasks", width);
+        let shown: Vec<String> = text.lines().filter_map(first_task_id).collect();
+        assert_eq!(shown, expected, "the tasks tab at {width} columns: {text}");
+    }
+}
+
+#[test]
+fn a_subtask_row_names_its_parent_at_one_hundred_columns() {
+    // A subtask is a flat row, with its parent in the suffix, the parent icon
+    // first. The mock folder has subtasks, so one row carries the suffix.
+    let text = render_tab("tasks", 100);
+    let suffix = format!("{} TSK", Icon::Parent.glyph(IconSet::Nerd));
+    assert!(
+        text.lines().any(|line| line.contains(&suffix)),
+        "no subtask row names its parent: {text}"
+    );
 }
 
 #[test]
@@ -913,7 +984,14 @@ fn a_rendered_row_that_names_the_open_findings_names_the_most_urgent_severity() 
 }
 
 /// Every tab the window has, by its command-line name.
-const TAB_NAMES: [&str; 5] = ["overview", "needs-you", "path", "backlog", "settings"];
+const TAB_NAMES: [&str; 6] = [
+    "overview",
+    "needs-you",
+    "path",
+    "tasks",
+    "backlog",
+    "settings",
+];
 
 #[test]
 fn every_tab_renders_alike_in_every_preset_at_every_canonical_width() {

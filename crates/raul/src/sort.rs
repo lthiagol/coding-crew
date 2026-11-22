@@ -8,6 +8,7 @@ use std::cmp::Ordering;
 use crate::path::Branch;
 use crate::settings::GroupKind;
 use crate::tabs::Tab;
+use crate::tasks::Order;
 
 /// The order a tab puts its rows in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +23,8 @@ pub enum Sort {
     Id,
     /// The tab's groups, in the order the spec names them.
     Groups,
+    /// The order the window has in force on the Tasks tab.
+    Tasks(Order),
 }
 
 impl Sort {
@@ -38,6 +41,7 @@ impl Sort {
                 .map(|group| group.label())
                 .collect::<Vec<&str>>()
                 .join(", "),
+            Sort::Tasks(order) => order.words(),
         }
     }
 
@@ -80,9 +84,21 @@ impl Tab {
             Tab::Overview => Sort::None,
             Tab::NeedsYou => Sort::LongestWait,
             Tab::Path => Sort::Dependency,
+            Tab::Tasks => Sort::Tasks(Order::default()),
             Tab::Backlog => Sort::Id,
             Tab::Settings => Sort::Groups,
         }
+    }
+}
+
+/// The order a tab keeps, with the Tasks tab's order as the window has it.
+///
+/// The Settings tab names this, so a Tasks row says the order in force, not
+/// the order a fresh window starts in.
+pub fn in_force(tab: Tab, tasks: Order) -> Sort {
+    match tab {
+        Tab::Tasks => Sort::Tasks(tasks),
+        other => other.sort(),
     }
 }
 
@@ -97,8 +113,31 @@ mod tests {
         assert_eq!(Tab::Overview.sort(), Sort::None);
         assert_eq!(Tab::NeedsYou.sort(), Sort::LongestWait);
         assert_eq!(Tab::Path.sort(), Sort::Dependency);
+        assert_eq!(Tab::Tasks.sort(), Sort::Tasks(Order::default()));
         assert_eq!(Tab::Backlog.sort(), Sort::Id);
         assert_eq!(Tab::Settings.sort(), Sort::Groups);
+    }
+
+    #[test]
+    fn the_tasks_order_in_force_is_the_one_the_window_has() {
+        let order = Order {
+            key: crate::tasks::Key::Created,
+            reverse: true,
+        };
+        assert_eq!(in_force(Tab::Tasks, order).words(), "created, newest first");
+        assert_eq!(
+            in_force(Tab::Tasks, Order::default()).words(),
+            "by id, ascending"
+        );
+        for tab in [
+            Tab::Overview,
+            Tab::NeedsYou,
+            Tab::Path,
+            Tab::Backlog,
+            Tab::Settings,
+        ] {
+            assert_eq!(in_force(tab, order), tab.sort(), "{tab:?}");
+        }
     }
 
     #[test]
@@ -140,7 +179,13 @@ mod tests {
     fn the_path_order_is_the_branch_order_the_tree_draws() {
         assert_eq!(Tab::Path.sort().branches(), &Branch::ALL);
         // The other sorts have no branches; a tab that gains one says so.
-        for tab in [Tab::Overview, Tab::NeedsYou, Tab::Backlog, Tab::Settings] {
+        for tab in [
+            Tab::Overview,
+            Tab::NeedsYou,
+            Tab::Tasks,
+            Tab::Backlog,
+            Tab::Settings,
+        ] {
             assert!(tab.sort().branches().is_empty(), "{tab:?}");
         }
     }

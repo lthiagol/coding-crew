@@ -33,6 +33,7 @@ paint and never the words. This redesign adds glyphs, not words.
 | `tab_overview` | `󰕮` U+F056E | `▦` | Overview tab |
 | `tab_needs` | `󰂚` U+F009A | `◉` | Needs you tab |
 | `tab_path` | `󰘬` U+F062C | `⑂` | Path tab |
+| `tab_tasks` | `󰫧` U+F0AE7 | `☑` | Tasks tab |
 | `tab_backlog` | `󰚇` U+F0687 | `≡` | Backlog tab |
 | `tab_settings` | `󰒓` U+F0493 | `⚙` | Settings tab |
 | `status_draft` | `󰝦` U+F0766 | `○` | draft |
@@ -53,6 +54,7 @@ paint and never the words. This redesign adds glyphs, not words.
 | `blocked` | `󰌾` U+F033E | `⊘` | blocked, waits on |
 | `finding` | `󰅚` U+F015A | `✗` | open finding |
 | `link` | `󰌷` U+F0337 | `→` | a dependency, a link |
+| `parent` | `󰁝` U+F005D | `↑` | a subtask's parent (Tasks) |
 | `clock` | `󰥔` U+F0954 | `◷` | an age, a hold, a stamp |
 | `running` | `󰑮` U+F046E | `●` | the automation runs |
 | `stopped` | `󰏤` U+F03E4 | `■` | the automation stopped |
