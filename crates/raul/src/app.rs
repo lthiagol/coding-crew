@@ -1054,9 +1054,9 @@ mod tests {
             .iter()
             .filter(|task| task.status == coding_crew_core::Status::Draft)
             .count();
-        assert!(text.contains(&format!("IDEAS · {ideas}")), "{text}");
-        assert!(text.contains(&format!("SMALL TASKS · {small}")), "{text}");
-        assert!(text.contains(&format!("DRAFTS · {drafts}")), "{text}");
+        assert!(text.contains(&format!("IDEAS  {ideas}")), "{text}");
+        assert!(text.contains(&format!("SMALL TASKS  {small}")), "{text}");
+        assert!(text.contains(&format!("DRAFTS  {drafts}")), "{text}");
         assert!(!text.contains("not built yet"), "{text}");
     }
 

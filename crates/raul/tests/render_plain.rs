@@ -797,9 +797,15 @@ fn the_backlog_row_carries_its_body_on_the_second_line() {
         .unwrap_or_else(|| panic!("no ITM01 row: {text}"));
     let body = "The activity block says what happened; it does not say when the run began.";
     assert!(rows[at + 1].contains(body), "{:#?}", &rows[at..at + 2]);
+    // The columns are counted on the screen: the selection bar is three bytes
+    // and one column.
+    let column = |row: &str, text: &str| {
+        let start = row.find(text).expect("the text is on the row");
+        display_width(&row[..start])
+    };
     assert_eq!(
-        rows[at + 1].find(body),
-        rows[at].find("The Overview says"),
+        column(rows[at + 1], body),
+        column(rows[at], "The Overview says"),
         "the body is not indented to the row's own text"
     );
     let draft = rows

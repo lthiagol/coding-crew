@@ -14,7 +14,7 @@ use coding_crew_core::{Item, ItemKind, ItemStatus, Status, Task};
 
 use crate::data::Work;
 use crate::tabs::Tab;
-use crate::view::View;
+use crate::view::{self, View};
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, pad, text_width};
 use coding_crew_theme::{Icon, IconSet, Theme, phase_style, selected_line};
@@ -23,6 +23,8 @@ use coding_crew_theme::{Icon, IconSet, Theme, phase_style, selected_line};
 const BORDER: usize = 2;
 /// The gap between two columns.
 const GAP: usize = 2;
+/// The columns of a row's icon: a space, the icon and a space.
+const ICON_LEAD: usize = 3;
 
 /// A group of the backlog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -227,7 +229,7 @@ pub fn render_view(
     let ids = row_ids(work);
     let (rows, announced) = view.draw(&ids, selected, |first| {
         let (lines, announced, shown, whole) =
-            window(&groups, width, height, theme, selected, first);
+            window(&groups, width, height, theme, icons, selected, first);
         ((lines, announced), shown, whole)
     });
     frame.render_widget(
@@ -238,9 +240,10 @@ pub fn render_view(
     (hidden > 0 && !announced).then_some(hidden)
 }
 
-/// The columns of a row: the fixed ones, and the two that give way.
+/// The columns of a row: the fixed ones, and the ones that give way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Columns {
+    icon: bool,
     id: bool,
     kind: bool,
     state: bool,
@@ -249,34 +252,46 @@ struct Columns {
 
 /// The candidates, in the order the columns give way.
 ///
-/// The title and the scope are what the reader is here for: the id, the
-/// kind and the state give way first, whole.
-const CANDIDATES: [Columns; 5] = [
+/// The title and the scope are what the reader is here for: the icon gives
+/// way first, then the id, the kind and the state, whole.
+const CANDIDATES: [Columns; 6] = [
     Columns {
+        icon: true,
         id: true,
         kind: true,
         state: true,
         scope: true,
     },
     Columns {
+        icon: false,
+        id: true,
+        kind: true,
+        state: true,
+        scope: true,
+    },
+    Columns {
+        icon: false,
         id: true,
         kind: false,
         state: true,
         scope: true,
     },
     Columns {
+        icon: false,
         id: true,
         kind: false,
         state: false,
         scope: true,
     },
     Columns {
+        icon: false,
         id: false,
         kind: false,
         state: false,
         scope: true,
     },
     Columns {
+        icon: false,
         id: false,
         kind: false,
         state: false,
@@ -320,9 +335,10 @@ fn lines(
     width: usize,
     height: usize,
     theme: &Theme,
+    icons: IconSet,
     selected: Option<&str>,
 ) -> Vec<Line<'static>> {
-    window(groups, width, height, theme, selected, 0).0
+    window(groups, width, height, theme, icons, selected, 0).0
 }
 
 /// The lines of the tab, from the row at `first`, and the rows they show.
@@ -343,17 +359,13 @@ fn window(
     width: usize,
     height: usize,
     theme: &Theme,
+    icons: IconSet,
     selected: Option<&str>,
     first: usize,
 ) -> (Vec<Line<'static>>, bool, Vec<usize>, bool) {
     if height == 0 {
         return (Vec::new(), false, Vec::new(), false);
     }
-    let metrics = Metrics {
-        id: id_width(groups),
-        kind: kind_width(groups),
-        state: state_width(groups),
-    };
     let total: usize = groups.iter().map(|group| group.rows.len()).sum();
     // The pane counts lines, and a row with a body is two of them.
     let wanted: usize = groups
@@ -362,7 +374,7 @@ fn window(
         .sum();
     if first == 0 && wanted <= height {
         return (
-            all_lines(groups, width, metrics, theme, selected),
+            all_lines(groups, width, icons, theme, selected),
             false,
             (0..total).collect(),
             true,
@@ -378,7 +390,7 @@ fn window(
     let mut with_cursor: Option<(Vec<Line<'static>>, Vec<Line<'static>>, Vec<usize>)> = None;
     for capacity in (0..=height).rev() {
         let (rows, omitted, headers, shown) =
-            layout_groups(groups, capacity, width, metrics, theme, selected, first);
+            layout_groups(groups, capacity, width, icons, theme, selected, first);
         let room = height.saturating_sub(rows.len());
         let present = present_groups(groups, &shown);
         let (said, cut) = announcement(&omitted, &headers, &present, width, room, theme);
@@ -410,7 +422,7 @@ fn window(
     if let Some((mut out, said, shown)) = with_cursor.or(shortest) {
         if let Some(id) = selected
             && !shown.iter().any(|index| row_id(groups, *index) == id)
-            && let Some((index, mut rows)) = cursor_lines(groups, width, metrics, theme, id)
+            && let Some((index, mut rows)) = cursor_lines(groups, width, icons, theme, id)
         {
             // The pane is too short for the cursor's row and the layout: the
             // row is drawn, and what is left says what the pane hides. Only a
@@ -434,7 +446,7 @@ fn window(
             && height >= 2
             && let Some(id) = selected
             && let Some(cursor) = (0..total).find(|at| row_id(groups, *at) == id)
-            && let Some((_, mut rows)) = cursor_lines(groups, width, metrics, theme, id)
+            && let Some((_, mut rows)) = cursor_lines(groups, width, icons, theme, id)
             && rows.len() < height
         {
             // The rows took every line and said nothing about what they hid.
@@ -457,7 +469,7 @@ fn window(
     // No layout was chosen: the pane is too narrow to draw a header and too
     // short to say anything. The cursor's row is still drawn, alone.
     if let Some(id) = selected
-        && let Some((index, mut rows)) = cursor_lines(groups, width, metrics, theme, id)
+        && let Some((index, mut rows)) = cursor_lines(groups, width, icons, theme, id)
     {
         rows.truncate(height);
         return (rows, false, vec![index], false);
@@ -513,15 +525,19 @@ fn present_with_only(groups: &[Group], cursor: usize) -> [bool; 3] {
 fn cursor_lines(
     groups: &[Group],
     width: usize,
-    metrics: Metrics,
+    icons: IconSet,
     theme: &Theme,
     id: &str,
 ) -> Option<(usize, Vec<Line<'static>>)> {
     let mut index = 0;
     for group in groups {
+        let metrics = group_metrics(groups, group, width);
         for row in &group.rows {
             if row.id == id {
-                return Some((index, row_lines(row, width, metrics, theme, Some(id))));
+                return Some((
+                    index,
+                    row_lines(row, width, metrics, icons, theme, Some(id)),
+                ));
             }
             index += 1;
         }
@@ -545,15 +561,16 @@ fn row_id(groups: &[Group], index: usize) -> &str {
 fn all_lines(
     groups: &[Group],
     width: usize,
-    metrics: Metrics,
+    icons: IconSet,
     theme: &Theme,
     selected: Option<&str>,
 ) -> Vec<Line<'static>> {
     let mut out = Vec::new();
     for group in groups {
+        let metrics = group_metrics(groups, group, width);
         out.push(header(group, width, theme));
         for row in &group.rows {
-            out.extend(row_lines(row, width, metrics, theme, selected));
+            out.extend(row_lines(row, width, metrics, icons, theme, selected));
         }
     }
     out
@@ -570,11 +587,12 @@ fn all_lines(
 /// whose header does not fit is not shown at all, every one of its rows is
 /// left out of view, and the announcement says the header itself was hidden
 /// even when the group holds no rows.
+#[allow(clippy::too_many_arguments)]
 fn layout_groups(
     groups: &[Group],
     capacity: usize,
     width: usize,
-    metrics: Metrics,
+    icons: IconSet,
     theme: &Theme,
     selected: Option<&str>,
     first: usize,
@@ -599,6 +617,7 @@ fn layout_groups(
             omitted[index] = group.rows.len();
             continue;
         }
+        let metrics = group_metrics(groups, group, width);
         out.push(header(group, width, theme));
         headers[index] = true;
         used += 1;
@@ -609,7 +628,7 @@ fn layout_groups(
             if used + height > capacity {
                 break;
             }
-            out.extend(row_lines(row, width, metrics, theme, selected));
+            out.extend(row_lines(row, width, metrics, icons, theme, selected));
             shown_rows.push(start + skip + offset);
             used += height;
             shown += 1;
@@ -621,12 +640,37 @@ fn layout_groups(
     (out, omitted, headers, shown_rows)
 }
 
-/// The widths of the fixed columns.
+/// The widths of the fixed columns, and whether the rows lead with an icon.
 #[derive(Debug, Clone, Copy)]
 struct Metrics {
     id: usize,
     kind: usize,
     state: usize,
+    icon: bool,
+}
+
+/// The metrics of a group of a pane `width` wide.
+///
+/// The icon is decided for the group, not the row: the group shows icons only
+/// when every one of its rows keeps its own, so its ids share a column. The
+/// group headers separate the groups, so a group that gives its icons up
+/// does not take them from the others.
+fn group_metrics(groups: &[Group], group: &Group, width: usize) -> Metrics {
+    let metrics = Metrics {
+        id: id_width(groups),
+        kind: kind_width(groups),
+        state: state_width(groups),
+        icon: true,
+    };
+    let keeps_icon = group.rows.iter().all(|row| {
+        layout(row, width.saturating_sub(view::BAR), metrics)
+            .columns
+            .icon
+    });
+    Metrics {
+        icon: keeps_icon,
+        ..metrics
+    }
 }
 
 /// How a row is laid out in the pane.
@@ -648,6 +692,9 @@ fn layout(row: &Row, width: usize, metrics: Metrics) -> Layout {
     for mut columns in CANDIDATES {
         if row.scope.is_none() {
             columns.scope = false;
+        }
+        if row_icon(row).is_none() || !metrics.icon {
+            columns.icon = false;
         }
         let (fixed, gaps) = fixed_width(columns, metrics);
         let flex = 1 + usize::from(columns.scope);
@@ -671,6 +718,7 @@ fn layout(row: &Row, width: usize, metrics: Metrics) -> Layout {
     }
     Layout {
         columns: Columns {
+            icon: false,
             id: false,
             kind: false,
             state: false,
@@ -681,10 +729,24 @@ fn layout(row: &Row, width: usize, metrics: Metrics) -> Layout {
     }
 }
 
+/// The icon of a row: its kind's, or the draft phase's for a draft task.
+fn row_icon(row: &Row) -> Option<Icon> {
+    if row.kind == "draft" {
+        Some(Icon::StatusDraft)
+    } else {
+        Icon::for_kind(&row.kind)
+    }
+}
+
 /// The width of the fixed columns, and the gaps between every column.
+///
+/// The icon's lead is fixed but takes no gap: it stands before the id.
 fn fixed_width(columns: Columns, metrics: Metrics) -> (usize, usize) {
     let mut fixed = 0;
     let mut count: usize = 1; // the title is always there
+    if columns.icon {
+        fixed += ICON_LEAD;
+    }
     if columns.id {
         fixed += metrics.id;
         count += 1;
@@ -741,19 +803,24 @@ fn row_lines(
     row: &Row,
     width: usize,
     metrics: Metrics,
+    icons: IconSet,
     theme: &Theme,
     selected: Option<&str>,
 ) -> Vec<Line<'static>> {
-    let layout = layout(row, width, metrics);
-    let mut lines = vec![columns_line(row, &layout, width, metrics, theme, selected)];
+    // The selection bar takes the row's first column: the columns are laid
+    // out in the rest.
+    let layout = layout(row, width.saturating_sub(view::BAR), metrics);
+    let mut lines = vec![columns_line(
+        row, &layout, width, metrics, icons, theme, selected,
+    )];
     if let Some(line) = body_line(row, &layout, width, metrics, theme, selected) {
         lines.push(line);
     }
     lines
 }
 
-/// The row's columns line: the id, the kind, the title, the scope and the
-/// state.
+/// The row's columns line: the bar, the icon, the id, the kind, the title, the
+/// scope and the state.
 ///
 /// The tests read a row's first line through this; the tab draws a row
 /// through [`row_lines`].
@@ -762,34 +829,54 @@ fn row_line(
     row: &Row,
     width: usize,
     metrics: Metrics,
+    icons: IconSet,
     theme: &Theme,
     selected: Option<&str>,
 ) -> Line<'static> {
-    let layout = layout(row, width, metrics);
-    columns_line(row, &layout, width, metrics, theme, selected)
+    let layout = layout(row, width.saturating_sub(view::BAR), metrics);
+    columns_line(row, &layout, width, metrics, icons, theme, selected)
 }
 
-/// The row's own line: the id, the kind, the title, the scope and the state.
+/// The row's own line: the bar, the icon, the id, the kind, the title, the
+/// scope and the state.
+///
+/// The bar is the row's first column, drawn whether the row is selected or not,
+/// so the rows line up. The icon is painted in the row's slot: a draft is
+/// settled, so its icon is the dim slot the draft phase has.
 fn columns_line(
     row: &Row,
     layout: &Layout,
     width: usize,
     metrics: Metrics,
+    icons: IconSet,
     theme: &Theme,
     selected: Option<&str>,
 ) -> Line<'static> {
     if width == 0 {
         return Line::from("");
     }
+    let inner = width.saturating_sub(view::BAR);
     let row_style = if row.settled {
         theme.text.dim
     } else {
         theme.text.normal
     };
-    let title_style = theme.text.strong;
+    let id_style = if row.settled {
+        theme.text.dim
+    } else {
+        theme.text.strong
+    };
+    let mut lead: Vec<Span<'static>> = Vec::new();
+    if layout.columns.icon
+        && let Some(icon) = row_icon(row)
+    {
+        lead.push(Span::raw(" "));
+        lead.push(Span::styled(icon.glyph(icons), row_style));
+        lead.push(Span::raw(" "));
+    }
     let mut spans: Vec<Span<'static>> = Vec::new();
     if layout.columns.id {
-        spans.push(Span::styled(pad(&row.id, metrics.id), row_style));
+        spans.push(Span::styled(pad(&row.id, metrics.id), id_style));
     }
     if layout.columns.kind {
         push_gap(&mut spans);
@@ -798,7 +885,7 @@ fn columns_line(
     push_gap(&mut spans);
     spans.push(Span::styled(
         pad(&cut_to(&row.title, layout.title), layout.title),
-        title_style,
+        row_style,
     ));
     if layout.columns.scope
         && let Some(scope) = &row.scope
@@ -815,20 +902,31 @@ fn columns_line(
     trim_trailing(&mut spans);
     let mut line = Line::from(spans);
     // A row whose content is zero columns wide is not silently blank: the
-    // marker says that something was dropped.
+    // marker says that something was dropped. A pane one column wide has no
+    // room for the bar beside the marker, so the marker takes the bar's column.
     if line.width() == 0 && width > 0 {
-        line = Line::from(Span::styled(cut_to("…", width), theme.text.dim));
+        if inner == 0 {
+            return Line::from(Span::styled(cut_to("…", width), theme.text.dim));
+        }
+        line = Line::from(Span::styled(cut_to("…", inner), theme.text.dim));
     }
-    if selected == Some(row.id.as_str()) {
-        return selected_line(line, width, theme);
-    }
-    line
+    let mut spans = lead;
+    spans.extend(line.spans);
+    view::barred(
+        Line::from(spans),
+        width,
+        selected == Some(row.id.as_str()),
+        theme,
+    )
 }
 
-/// The column the row's title starts at: the columns before it, and their
-/// gaps.
+/// The column the row's title starts at: the columns before it, their gaps,
+/// and the icon's lead. The selection bar's column is not counted here.
 fn title_start(layout: &Layout, metrics: Metrics) -> usize {
     let mut start = 0;
+    if layout.columns.icon {
+        start += ICON_LEAD;
+    }
     if layout.columns.id {
         start += metrics.id + GAP;
     }
@@ -838,13 +936,24 @@ fn title_start(layout: &Layout, metrics: Metrics) -> usize {
     start
 }
 
+/// The column the row's body starts at: where the title starts, the selection
+/// bar's column included.
+///
+/// The indent gives way before the body does: a row with no room beside its
+/// indent starts the body at the edge, so the body's marker is drawn.
+fn body_indent(layout: &Layout, metrics: Metrics, width: usize) -> usize {
+    let indent = view::BAR + title_start(layout, metrics);
+    if indent < width { indent } else { 0 }
+}
+
 /// The row's second line: the item's own body, cut, under the row's text.
 ///
-/// The body is indented to where the row's title starts, so it reads as the
-/// row's own and not as a row of its own. It is painted with the dim slot,
-/// the grade the tab gives a hint or a marker, so it never competes with the
-/// title. It is the body, cut by the shared grapheme helper: never a summary,
-/// and a cut body always ends in the tab's own marker.
+/// The body is indented to where the row's title starts, the selection bar's
+/// column included, so it reads as the row's own and not as a row of its own.
+/// It is painted with the dim slot, the grade the tab gives a hint or a
+/// marker, so it never competes with the title. It is the body, cut by the
+/// shared grapheme helper: never a summary, and a cut body always ends in the
+/// tab's own marker.
 fn body_line(
     row: &Row,
     layout: &Layout,
@@ -854,7 +963,7 @@ fn body_line(
     selected: Option<&str>,
 ) -> Option<Line<'static>> {
     let body = row.body.as_deref()?;
-    let indent = title_start(layout, metrics).min(width);
+    let indent = body_indent(layout, metrics, width);
     let room = width - indent;
     let mut spans: Vec<Span<'static>> = Vec::new();
     if indent > 0 {
@@ -900,33 +1009,34 @@ fn group_style(kind: GroupKind, theme: &Theme) -> Style {
     }
 }
 
-/// The header of a group: its name and the count of its rows.
+/// The header of a group: its name, and the count of its rows as a badge.
 ///
 /// The count is `text.strong`, as every count is. It is never cut; when the
 /// pane is too narrow for the whole header, the name gives way.
 fn header(group: &Group, width: usize, theme: &Theme) -> Line<'static> {
-    let count = group.rows.len().to_string();
+    let count = group.rows.len();
+    let digits = count.to_string();
     let label = group.kind.label();
     let style = group_style(group.kind, theme);
-    let separator = " · ";
-    let fixed = text_width(separator) + text_width(&count);
+    let separator = "  ";
+    let fixed = text_width(separator) + text_width(&digits);
     if width >= text_width(label) + fixed {
         return Line::from(vec![
             Span::styled(label.to_string(), style),
-            Span::styled(separator.to_string(), theme.text.dim),
-            Span::styled(count, theme.text.strong),
+            Span::raw(separator),
+            chrome::badge(count, theme),
         ]);
     }
     if width > fixed {
         let room = width - fixed;
         return Line::from(vec![
             Span::styled(cut_to(label, room), style),
-            Span::styled(separator.to_string(), theme.text.dim),
-            Span::styled(count, theme.text.strong),
+            Span::raw(separator),
+            chrome::badge(count, theme),
         ]);
     }
-    if width >= text_width(&count) {
-        return Line::from(Span::styled(count, theme.text.strong));
+    if width >= text_width(&digits) {
+        return Line::from(chrome::badge(count, theme));
     }
     Line::from(Span::styled(cut_to(label, width), style))
 }
@@ -1424,13 +1534,23 @@ mod tests {
             .collect::<String>()
     }
 
-    /// The widths of the fixed columns, as the tab builds them.
+    /// The widths of the fixed columns, with every row keeping its icon.
     fn metrics(groups: &[Group]) -> Metrics {
         Metrics {
             id: id_width(groups),
             kind: kind_width(groups),
             state: state_width(groups),
+            icon: true,
         }
+    }
+
+    /// The metrics of the group that holds the row `id`, `width` wide.
+    fn metrics_of(groups: &[Group], id: &str, width: usize) -> Metrics {
+        let group = groups
+            .iter()
+            .find(|group| group.rows.iter().any(|row| row.id == id))
+            .expect("a row of the tab");
+        group_metrics(groups, group, width)
     }
 
     /// The lines of the tab that are wider than the pane.
@@ -1619,7 +1739,7 @@ mod tests {
         // and count instead of falling back to a bare total.
         let groups = groups(&mock_work());
         for height in [1usize, 2] {
-            let text = text_of(&lines(&groups, 38, height, &theme(), None));
+            let text = text_of(&lines(&groups, 38, height, &theme(), IconSet::Nerd, None));
             for group in &groups {
                 let name = group.kind.label();
                 assert!(text.contains(name), "{height}: {name} is missing: {text}");
@@ -1710,8 +1830,8 @@ mod tests {
             },
         ];
         for height in [3usize, 4, 5, 6] {
-            let text = text_of(&lines(&groups, 60, height, &theme(), None));
-            assert!(text.contains("IDEAS · 0"), "{height}: {text}");
+            let text = text_of(&lines(&groups, 60, height, &theme(), IconSet::Nerd, None));
+            assert!(text.contains("IDEAS  0"), "{height}: {text}");
             assert!(!text.contains("IDEAS (hidden)"), "{height}: {text}");
         }
     }
@@ -1744,7 +1864,8 @@ mod tests {
         // nothing rather than panicking, and the footer carries the count.
         let work = mock_work();
         let groups = groups(&work);
-        let (rows, announced, shown, _) = window(&groups, 0, 1, &theme(), Some("ITM01"), 0);
+        let (rows, announced, shown, _) =
+            window(&groups, 0, 1, &theme(), IconSet::Nerd, Some("ITM01"), 0);
         assert!(rows.len() <= 1, "{rows:?}");
         assert!(!announced);
         assert!(shown.len() <= 1);
@@ -1759,7 +1880,7 @@ mod tests {
         // cut. (Above 29 columns every group and count fits on the row.)
         let groups = groups(&mock_work());
         for width in 10..=29 {
-            let text = text_of(&lines(&groups, width, 1, &theme(), None));
+            let text = text_of(&lines(&groups, width, 1, &theme(), IconSet::Nerd, None));
             let last = text
                 .lines()
                 .last()
@@ -1784,8 +1905,16 @@ mod tests {
             id: id_width(&groups),
             kind: kind_width(&groups),
             state: state_width(&groups),
+            icon: true,
         };
-        let line = row_line(&groups[0].rows[0], 1, metrics, &theme(), None);
+        let line = row_line(
+            &groups[0].rows[0],
+            1,
+            metrics,
+            IconSet::Nerd,
+            &theme(),
+            None,
+        );
         assert!(line.width() > 0, "the row is blank");
         let text = line
             .spans
@@ -1850,7 +1979,7 @@ mod tests {
         let groups = groups(&work);
         let text = draw(&work, 100, 40).join("\n");
         for group in &groups {
-            let heading = format!("{} · {}", group.kind.label(), group.rows.len());
+            let heading = format!("{}  {}", group.kind.label(), group.rows.len());
             assert!(text.contains(&heading), "{heading} is missing: {text}");
         }
         let ideas = text.find("IDEAS").expect("the ideas heading");
@@ -1861,7 +1990,9 @@ mod tests {
 
     #[test]
     fn a_wide_row_shows_every_column() {
-        let text = draw(&mock_work(), 100, 40).join("\n");
+        // The selection bar and the icon's lead take columns: the kind of the
+        // dismissed item needs one more than the default width of 100.
+        let text = draw(&mock_work(), 101, 40).join("\n");
         let row = text
             .lines()
             .find(|line| line.contains("ITM04"))
@@ -1894,7 +2025,7 @@ mod tests {
         let groups = groups(&work);
         for width in 1..=120 {
             for height in 1..=40 {
-                let lines = lines(&groups, width, height, &theme(), None);
+                let lines = lines(&groups, width, height, &theme(), IconSet::Nerd, None);
                 assert!(
                     too_wide(&lines, width).is_empty(),
                     "{width}x{height}: {:?}",
@@ -1921,19 +2052,15 @@ mod tests {
     fn a_narrow_row_drops_whole_columns() {
         let work = mock_work();
         let groups = groups(&work);
-        let metrics = Metrics {
-            id: id_width(&groups),
-            kind: kind_width(&groups),
-            state: state_width(&groups),
-        };
         for width in 1..=120 {
-            let built = lines(&groups, width, 40, &theme(), None);
+            let built = lines(&groups, width, 40, &theme(), IconSet::Nerd, None);
             let mut at = 0;
             for group in &groups {
                 if group.rows.is_empty() {
                     continue;
                 }
                 at += 1; // the header
+                let metrics = group_metrics(&groups, group, width);
                 for row in &group.rows {
                     let text = built[at]
                         .spans
@@ -1942,7 +2069,11 @@ mod tests {
                         .collect::<String>();
                     // The row's next line is its body, when it has one.
                     at += row_height(row);
-                    let layout = layout(row, width, metrics);
+                    let layout = layout(row, width.saturating_sub(view::BAR), metrics);
+                    // The selection bar and the icon's lead come before the
+                    // columns: the columns are what the test reads.
+                    let lead = view::BAR + if layout.columns.icon { ICON_LEAD } else { 0 };
+                    let text: String = text.chars().skip(lead).collect();
                     // A fixed column is shown whole, or not at all.
                     if layout.columns.id {
                         assert!(text.starts_with(&row.id), "{width}: {text:?}");
@@ -1980,10 +2111,10 @@ mod tests {
         let theme = theme();
         let row = &groups[0].rows[0];
         let body = row.body.clone().expect("the idea carries a body");
-        let built = row_lines(row, 98, metrics, &theme, None);
+        let built = row_lines(row, 98, metrics, IconSet::Nerd, &theme, None);
         assert_eq!(built.len(), 2, "the row is not two lines");
-        let layout = layout(row, 98, metrics);
-        let indent = " ".repeat(title_start(&layout, metrics));
+        let layout = layout(row, 98 - view::BAR, metrics);
+        let indent = " ".repeat(body_indent(&layout, metrics, 98));
         assert!(!indent.is_empty(), "the body is not indented");
         assert_eq!(line_text(&built[1]), format!("{indent}{body}"));
         let body_span = built[1]
@@ -1997,7 +2128,7 @@ mod tests {
             .iter()
             .find(|span| span.content.as_ref() == row.title)
             .expect("the title span");
-        assert_eq!(title_span.style, theme.text.strong);
+        assert_eq!(title_span.style, theme.text.normal);
         // The screen draws the same two lines.
         let screen = draw(&work, 100, 40);
         let at = screen
@@ -2022,11 +2153,11 @@ mod tests {
         let body = row.body.clone().expect("the body the row carries");
         assert_eq!(row_height(row), 2);
         for width in 1..=120 {
-            let built = row_lines(row, width, metrics, &theme(), None);
+            let built = row_lines(row, width, metrics, IconSet::Nerd, &theme(), None);
             assert_eq!(built.len(), 2, "{width}: the row is not two lines");
             assert!(built[1].width() <= width, "{width}: a wider body");
-            let layout = layout(row, width, metrics);
-            let indent = " ".repeat(title_start(&layout, metrics));
+            let layout = layout(row, width.saturating_sub(view::BAR), metrics);
+            let indent = " ".repeat(body_indent(&layout, metrics, width));
             let text = line_text(&built[1]);
             let shown = text
                 .strip_prefix(&indent)
@@ -2053,11 +2184,11 @@ mod tests {
         let work = mock_work();
         let groups = groups(&work);
         let theme = theme();
-        let metrics = metrics(&groups);
         let rows: Vec<&Row> = groups.iter().flat_map(|group| group.rows.iter()).collect();
         for width in [40usize, 60, 98] {
             for height in 1..=14 {
-                let (built, _, shown, _) = window(&groups, width, height, &theme, None, 0);
+                let (built, _, shown, _) =
+                    window(&groups, width, height, &theme, IconSet::Nerd, None, 0);
                 assert!(
                     built.len() <= height,
                     "{width}x{height}: {} lines",
@@ -2066,7 +2197,8 @@ mod tests {
                 let texts: Vec<String> = built.iter().map(line_text).collect();
                 for index in &shown {
                     let row = rows[*index];
-                    for line in row_lines(row, width, metrics, &theme, None) {
+                    let metrics = metrics_of(&groups, &row.id, width);
+                    for line in row_lines(row, width, metrics, IconSet::Nerd, &theme, None) {
                         let text = line_text(&line);
                         assert!(
                             texts.contains(&text),
@@ -2092,7 +2224,8 @@ mod tests {
         // whole rather than squeezed in as its columns alone.
         let work = mock_work();
         let groups = groups(&work);
-        let (built, announced, shown, whole) = window(&groups, 98, 5, &theme(), None, 0);
+        let (built, announced, shown, whole) =
+            window(&groups, 98, 5, &theme(), IconSet::Nerd, None, 0);
         assert!(announced && whole, "the window did not choose to announce");
         assert_eq!(shown, vec![0], "the window shows one row");
         let text = text_of(&built);
@@ -2119,11 +2252,11 @@ mod tests {
         assert_eq!(row.body, None, "an empty body is not a body");
         assert_eq!(row_height(row), 1);
         assert_eq!(
-            row_lines(row, 98, metrics, &theme(), None),
-            vec![row_line(row, 98, metrics, &theme(), None)]
+            row_lines(row, 98, metrics, IconSet::Nerd, &theme(), None),
+            vec![row_line(row, 98, metrics, IconSet::Nerd, &theme(), None)]
         );
         // Three headers and the row: no second line is drawn for it.
-        let built = lines(&groups, 98, 40, &theme(), None);
+        let built = lines(&groups, 98, 40, &theme(), IconSet::Nerd, None);
         assert_eq!(built.len(), 4, "{built:#?}");
         assert!(text_of(&built).contains("only an idea"));
     }
@@ -2150,15 +2283,16 @@ mod tests {
         let work = mock_work();
         let groups = groups(&work);
         let theme = theme();
-        let metrics = metrics(&groups);
         let ids = row_ids(&work);
         let rows: Vec<&Row> = groups.iter().flat_map(|group| group.rows.iter()).collect();
         for id in &ids {
             let index = ids.iter().position(|other| other == id).expect("an id");
             let row = rows[index];
+            let metrics = metrics_of(&groups, id, 98);
             for height in 2..=10 {
-                let (built, _, _, _) = window(&groups, 98, height, &theme, Some(id), 0);
-                for line in row_lines(row, 98, metrics, &theme, Some(id)) {
+                let (built, _, _, _) =
+                    window(&groups, 98, height, &theme, IconSet::Nerd, Some(id), 0);
+                for line in row_lines(row, 98, metrics, IconSet::Nerd, &theme, Some(id)) {
                     let text = line_text(&line);
                     assert!(
                         built.iter().any(|built_line| line_text(built_line) == text),
@@ -2167,13 +2301,14 @@ mod tests {
                 }
             }
             // A one-line pane draws the columns line, and counts one row.
-            let (built, announced, shown, _) = window(&groups, 98, 1, &theme, Some(id), 0);
+            let (built, announced, shown, _) =
+                window(&groups, 98, 1, &theme, IconSet::Nerd, Some(id), 0);
             assert_eq!(built.len(), 1, "{id}: a one-line pane drew more");
             assert!(!announced, "{id}: a one-line pane announced");
             assert_eq!(shown, vec![index], "{id}: the cursor's row is not counted");
             assert_eq!(
                 line_text(&built[0]),
-                line_text(&row_line(row, 98, metrics, &theme, Some(id))),
+                line_text(&row_line(row, 98, metrics, IconSet::Nerd, &theme, Some(id))),
                 "{id}: a one-line pane did not draw the row"
             );
         }
@@ -2186,11 +2321,19 @@ mod tests {
         let metrics = metrics(&groups);
         let row = &groups[0].rows[0];
         let selection = theme.text.selected;
-        let built = row_lines(row, 98, metrics, &theme, Some("ITM01"));
+        let built = row_lines(row, 98, metrics, IconSet::Nerd, &theme, Some("ITM01"));
         assert_eq!(built.len(), 2);
-        for line in &built {
+        // The bar is on the first line only, in its own paint: the rest of
+        // both lines is the selection's.
+        assert_eq!(built[0].spans[0].content, "▌");
+        for (index, line) in built.iter().enumerate() {
             assert_eq!(line.width(), 98, "the selection bar stops short");
-            for span in &line.spans {
+            let painted = if index == 0 {
+                &line.spans[1..]
+            } else {
+                &line.spans[..]
+            };
+            for span in painted {
                 assert_eq!(span.style, selection, "{span:?} is not the selection");
             }
         }
@@ -2198,11 +2341,11 @@ mod tests {
 
     #[test]
     fn the_title_and_the_scope_keep_their_room() {
-        // The kind and the state give way, whole, before the title and the
-        // scope are cut: at this width the id, the title and the scope are
-        // still whole.
+        // The icon, the kind and the state give way, whole, before the title
+        // and the scope are cut: at this width the id, the title and the scope
+        // are still whole. The selection bar's column is one of them.
         let groups = groups(&mock_work());
-        let text = text_of(&lines(&groups, 80, 40, &theme(), None));
+        let text = text_of(&lines(&groups, 81, 40, &theme(), IconSet::Nerd, None));
         let row = text
             .lines()
             .find(|line| line.contains("ITM02"))
@@ -2215,7 +2358,7 @@ mod tests {
         assert!(!row.contains("feature"), "{row}");
         // Narrower still: the id gives way before the title and the scope,
         // which keep their room.
-        let text = text_of(&lines(&groups, 58, 40, &theme(), None));
+        let text = text_of(&lines(&groups, 58, 40, &theme(), IconSet::Nerd, None));
         assert!(!text.contains("ITM02"), "{text}");
         assert!(
             text.contains("The Path row names the roun…"),
@@ -2233,7 +2376,7 @@ mod tests {
     fn a_narrow_row_cuts_the_title_and_the_scope_and_nothing_else() {
         let groups = groups(&mock_work());
         for width in 4..=40 {
-            let lines = lines(&groups, width, 40, &theme(), None);
+            let lines = lines(&groups, width, 40, &theme(), IconSet::Nerd, None);
             for line in &lines {
                 let text = line
                     .spans
@@ -2250,10 +2393,10 @@ mod tests {
     }
 
     #[test]
-    fn the_counts_are_strong_and_the_titles_use_the_title_treatment() {
+    fn the_counts_are_strong_the_ids_strong_and_the_titles_normal() {
         let theme = theme();
         let groups = groups(&mock_work());
-        let lines = lines(&groups, 100, 40, &theme, None);
+        let lines = lines(&groups, 100, 40, &theme, IconSet::Nerd, None);
         for (index, heading) in ["IDEAS", "SMALL TASKS", "DRAFTS"].into_iter().enumerate() {
             let count = groups[index].rows.len().to_string();
             let header = lines
@@ -2277,14 +2420,21 @@ mod tests {
             .flat_map(|line| line.spans.iter())
             .find(|span| span.content.as_ref() == title)
             .unwrap_or_else(|| panic!("no title span"));
-        assert_eq!(title_span.style, theme.text.strong);
+        assert_eq!(title_span.style, theme.text.normal);
+        let id = &groups[0].rows[0].id;
+        let id_span = lines
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .find(|span| span.content.trim() == id)
+            .unwrap_or_else(|| panic!("no id span"));
+        assert_eq!(id_span.style, theme.text.strong);
     }
 
     #[test]
     fn a_draft_or_settled_row_is_dim() {
         let theme = theme();
         let groups = groups(&mock_work());
-        let lines = lines(&groups, 100, 40, &theme, None);
+        let lines = lines(&groups, 100, 40, &theme, IconSet::Nerd, None);
         let text_of_line = |line: &Line<'_>| {
             line.spans
                 .iter()
@@ -2313,37 +2463,140 @@ mod tests {
             id: id_width(&groups),
             kind: kind_width(&groups),
             state: state_width(&groups),
+            icon: true,
         };
         let open = &groups[0].rows[0];
         let settled = &groups[1].rows[2];
         // A row that is not the cursor's keeps its own paint.
-        let plain = row_line(open, 100, metrics, &theme, None);
-        assert_eq!(plain.spans[0].style, theme.text.normal, "an open row's id");
-        let plain = row_line(settled, 100, metrics, &theme, None);
-        assert_eq!(plain.spans[0].style, theme.text.dim, "a settled row's id");
-        // The cursor's row takes the selection's pair on every cell, and the
-        // bar runs to the edge of the pane. The rule is a narrow-pane rule as
-        // much as a wide one: at 60 the title and the scope are cut, and the
-        // bar still reaches the edge.
+        let plain = row_line(open, 100, metrics, IconSet::Nerd, &theme, None);
+        assert_eq!(span_style(&plain, "ITM01"), theme.text.strong, "an open id");
+        let plain = row_line(settled, 100, metrics, IconSet::Nerd, &theme, None);
+        assert_eq!(span_style(&plain, "ITM04"), theme.text.dim, "a settled id");
+        // The cursor's row takes the selection's pair on every cell after its
+        // bar, and the bar runs to the edge of the pane. The rule is a
+        // narrow-pane rule as much as a wide one: at 60 the title and the
+        // scope are cut, and the bar still reaches the edge.
         for width in [60, 100] {
-            let selected = row_line(open, width, metrics, &theme, Some("ITM01"));
+            let selected = row_line(open, width, metrics, IconSet::Nerd, &theme, Some("ITM01"));
             assert_eq!(
                 selected.width(),
                 width,
                 "{width}: the selection bar stops short"
             );
-            for span in &selected.spans {
+            assert_eq!(selected.spans[0].content, "▌");
+            assert_eq!(selected.spans[0].style, theme.chrome.border_focus);
+            for span in &selected.spans[1..] {
                 assert_eq!(
                     span.style, selection,
                     "{width}: {span:?} is not the selection"
                 );
             }
-            assert_eq!(selected.spans[0].style.fg, selection.fg);
-            assert_eq!(selected.spans[0].style.bg, selection.bg);
         }
-        // Another row is not painted as the selection.
-        let other = row_line(settled, 100, metrics, &theme, Some("ITM01"));
-        assert_eq!(other.spans[0].style, theme.text.dim);
+        // Another row is not painted as the selection, and keeps its bar's
+        // column blank.
+        let other = row_line(settled, 100, metrics, IconSet::Nerd, &theme, Some("ITM01"));
+        assert_eq!(other.spans[0].content, " ");
+        assert_eq!(span_style(&other, "ITM04"), theme.text.dim);
+    }
+
+    #[test]
+    fn a_row_leads_with_its_kind_icon_and_a_draft_with_the_draft_icon() {
+        // At 120 the lead fits beside the whole row: after the bar's column,
+        // an idea leads with its kind's icon and a draft with the draft
+        // phase's.
+        let groups = groups(&mock_work());
+        let metrics = metrics(&groups);
+        let theme = theme();
+        for (row, icon) in [
+            (&groups[0].rows[0], Icon::KindIdea),
+            (&groups[2].rows[0], Icon::StatusDraft),
+        ] {
+            let line = row_line(row, 120, metrics, IconSet::Unicode, &theme, None);
+            assert_eq!(line.spans[0].content, " ", "{}: the bar's column", row.id);
+            assert_eq!(line.spans[1].content, " ", "{}", row.id);
+            assert_eq!(
+                line.spans[2].content,
+                icon.glyph(IconSet::Unicode),
+                "{}",
+                row.id
+            );
+            assert_eq!(line.spans[3].content, " ", "{}", row.id);
+            assert_eq!(line.spans[4].content, row.id, "{}", row.id);
+        }
+    }
+
+    #[test]
+    fn the_ids_of_a_group_share_a_column() {
+        // The icon is decided for the group: a row that cannot keep its icon
+        // takes none away from the others in its group, so the ids of a group
+        // share a column. At 100 and 120 every row keeps its id; at 80 a row
+        // whose title and scope do not fit beside its id gives the id way, and
+        // the ids still share a column.
+        let groups = groups(&mock_work());
+        let theme = theme();
+        for width in [80, 100, 120] {
+            for icons in [IconSet::Nerd, IconSet::Unicode] {
+                for group in &groups {
+                    let metrics = group_metrics(&groups, group, width);
+                    let starts: Vec<usize> = group
+                        .rows
+                        .iter()
+                        .filter_map(|row| {
+                            let text =
+                                line_text(&row_line(row, width, metrics, icons, &theme, None));
+                            text.find(&row.id).map(|at| text_width(&text[..at]))
+                        })
+                        .collect();
+                    if width >= 100 {
+                        assert_eq!(
+                            starts.len(),
+                            group.rows.len(),
+                            "width {width}: a row lost its id"
+                        );
+                    }
+                    assert!(
+                        starts.windows(2).all(|pair| pair[0] == pair[1]),
+                        "width {width}: the ids start at {starts:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_group_keeps_its_icons_when_another_group_gives_them_up() {
+        // SMALL TASKS holds the long row that cannot keep its icon, and only
+        // that group gives its icons up: at 100 the drafts keep theirs, and at
+        // 120 the ideas and the drafts do.
+        let groups = groups(&mock_work());
+        let theme = theme();
+        assert!(!group_metrics(&groups, &groups[1], 100).icon);
+        for (width, index, icon) in [
+            (100, 2, Icon::StatusDraft),
+            (120, 0, Icon::KindIdea),
+            (120, 2, Icon::StatusDraft),
+        ] {
+            let group = &groups[index];
+            let metrics = group_metrics(&groups, group, width);
+            for row in &group.rows {
+                let line = row_line(row, width, metrics, IconSet::Unicode, &theme, None);
+                assert_eq!(
+                    line.spans[2].content,
+                    icon.glyph(IconSet::Unicode),
+                    "{} at {width}",
+                    row.id
+                );
+            }
+        }
+    }
+
+    /// The style of the span that holds `text`.
+    fn span_style(line: &Line<'_>, text: &str) -> Style {
+        line.spans
+            .iter()
+            .find(|span| span.content.trim() == text)
+            .unwrap_or_else(|| panic!("no span {text:?} in {line:?}"))
+            .style
     }
 
     #[test]
@@ -2374,14 +2627,12 @@ mod tests {
         // and its header is shown whenever the pane has the room.
         let work = work_of(Vec::new(), vec![Item::new("ITM01", "only an idea")]);
         let text = draw(&work, 100, 40).join("\n");
-        assert!(text.contains("IDEAS · 1"), "{text}");
-        assert!(text.contains("SMALL TASKS · 0"), "{text}");
-        assert!(text.contains("DRAFTS · 0"), "{text}");
-        let ideas = text.find("IDEAS · 1").expect("the ideas header");
-        let small = text
-            .find("SMALL TASKS · 0")
-            .expect("the small tasks header");
-        let drafts = text.find("DRAFTS · 0").expect("the drafts header");
+        assert!(text.contains("IDEAS  1"), "{text}");
+        assert!(text.contains("SMALL TASKS  0"), "{text}");
+        assert!(text.contains("DRAFTS  0"), "{text}");
+        let ideas = text.find("IDEAS  1").expect("the ideas header");
+        let small = text.find("SMALL TASKS  0").expect("the small tasks header");
+        let drafts = text.find("DRAFTS  0").expect("the drafts header");
         assert!(ideas < small && small < drafts, "{text}");
     }
 
@@ -2425,13 +2676,13 @@ mod tests {
         let work = mock_work();
         let small = groups(&work)[1].rows.len();
         let text = draw(&work, 100, 10).join("\n");
-        assert!(text.contains(&format!("SMALL TASKS · {small}")), "{text}");
+        assert!(text.contains(&format!("SMALL TASKS  {small}")), "{text}");
         assert!(
             text.contains(&format!("SMALL TASKS ({} hidden)", small - 1)),
             "{text}"
         );
         assert!(
-            !text.contains(&format!("SMALL TASKS · {}", small - 1)),
+            !text.contains(&format!("SMALL TASKS  {}", small - 1)),
             "{text}"
         );
     }
@@ -2446,7 +2697,7 @@ mod tests {
             .map(|group| 1 + group.rows.iter().map(row_height).sum::<usize>())
             .sum();
         for height in 1..=wanted + 2 {
-            let built = lines(&groups, 100, height, &theme(), None);
+            let built = lines(&groups, 100, height, &theme(), IconSet::Nerd, None);
             let text = text_of(&built);
             if wanted > height {
                 assert!(text.contains("hidden"), "{height}: {text}");
@@ -2492,7 +2743,7 @@ mod tests {
             .iter()
             .find(|row| {
                 let text: String = row.iter().map(|(symbol, _)| *symbol).collect();
-                text.contains("DRAFTS") && text.contains(&format!("· {drafts}"))
+                text.contains("DRAFTS") && text.contains(&format!("DRAFTS  {drafts}"))
             })
             .unwrap_or_else(|| panic!("no DRAFTS header"));
         assert_eq!(
@@ -2503,7 +2754,7 @@ mod tests {
         let count = row.iter().map(|(symbol, _)| *symbol).collect::<Vec<char>>();
         let at = count
             .windows(2)
-            .position(|window| window == ['·', ' '])
+            .position(|window| window == [' ', ' '])
             .expect("the DRAFTS count");
         let colour = row
             .get(at + 2)
@@ -2554,7 +2805,7 @@ mod tests {
         let work = work_of(Vec::new(), vec![item]);
         let groups = groups(&work);
         for width in 1..=120 {
-            let built = lines(&groups, width, 40, &theme(), None);
+            let built = lines(&groups, width, 40, &theme(), IconSet::Nerd, None);
             assert!(
                 too_wide(&built, width).is_empty(),
                 "{width}: {:?}",
