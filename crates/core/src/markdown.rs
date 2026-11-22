@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 
-use crate::lifecycle::{Overlay, Overlays};
+use crate::lifecycle::Overlay;
 use crate::task::{
     AcceptanceCriterion, Claim, Finding, FindingStatus, Focus, Priority, Question, QuestionStatus,
     Round, RoundKind, Severity, StepStatus, Task, Verdict,
@@ -57,26 +57,38 @@ pub fn task_to_markdown(task: &Task, tasks: &[Task]) -> String {
     out
 }
 
+/// The header card: the title, a line of chips for the id, status, kind,
+/// priority and effort, then the tags, the claim and each overlay as a list
+/// item. A list item is not a table row, so no cell rule applies to it.
 fn header(out: &mut String, task: &Task) {
     out.push_str("# Header\n\n");
-    out.push_str("| field | value |\n|---|---|\n");
-    row(out, "id", &code(&task.id));
-    row(out, "title", &escape_literal(&task.title));
-    row(out, "status", &code(task.status.as_str()));
-    row(out, "kind", &code(task.kind.as_str()));
-    row(out, "overlays", &overlays_text(&task.overlays));
-    row(
-        out,
-        "claim",
-        &task
-            .claim
-            .as_ref()
-            .map(claim_text)
-            .unwrap_or_else(|| EMPTY.to_string()),
-    );
-    row(out, "priority", &code(priority_str(task.meta.priority)));
-    row(out, "effort", &code(task.meta.effort.as_str()));
-    row(out, "tags", &codes(&task.meta.tags));
+    if !task.title.trim().is_empty() {
+        out.push_str(&format!("**{}**\n\n", escape_literal(&task.title)));
+    }
+    out.push_str(&format!(
+        "{} · {} · kind {} · priority {} · effort {}\n\n",
+        code(&task.id),
+        code(task.status.as_str()),
+        code(task.kind.as_str()),
+        code(priority_str(task.meta.priority)),
+        code(task.meta.effort.as_str()),
+    ));
+    out.push_str(&format!("- **tags:** {}\n", codes(&task.meta.tags)));
+    let claim = task
+        .claim
+        .as_ref()
+        .map(claim_text)
+        .unwrap_or_else(|| EMPTY.to_string());
+    out.push_str(&format!("- **claim:** {claim}\n"));
+    for (kind, overlay) in [
+        ("blocked", &task.overlays.blocked),
+        ("deferred", &task.overlays.deferred),
+        ("cancelled", &task.overlays.cancelled),
+    ] {
+        if let Some(overlay) = overlay {
+            overlay_item(out, kind, overlay);
+        }
+    }
 }
 
 fn intent(out: &mut String, task: &Task) {
@@ -395,10 +407,6 @@ fn children<'a>(out: &mut String, task: &Task, canonical: &HashMap<&'a str, Cano
     }
 }
 
-fn row(out: &mut String, field: &str, value: &str) {
-    out.push_str(&format!("| {field} | {} |\n", cell(value)));
-}
-
 fn scope_list(out: &mut String, title: &str, items: &[String]) {
     out.push_str(&format!("**{title}**\n\n"));
     if items.is_empty() {
@@ -636,38 +644,22 @@ fn deferral_text(deferral: &crate::task::Deferral) -> String {
     text
 }
 
-fn overlays_text(overlays: &Overlays) -> String {
-    let mut parts = Vec::new();
-    if let Some(overlay) = &overlays.blocked {
-        parts.push(overlay_text("blocked", overlay));
-    }
-    if let Some(overlay) = &overlays.deferred {
-        parts.push(overlay_text("deferred", overlay));
-    }
-    if let Some(overlay) = &overlays.cancelled {
-        parts.push(overlay_text("cancelled", overlay));
-    }
-    if parts.is_empty() {
+/// One overlay, labelled by its kind. The reason is prose, as the other
+/// reasons the record keeps; the actor and the time are code.
+fn overlay_item(out: &mut String, kind: &str, overlay: &Overlay) {
+    let reason = overlay.reason.trim();
+    let mut value = if reason.is_empty() {
         EMPTY.to_string()
     } else {
-        parts.join("<br>")
-    }
-}
-
-fn overlay_text(kind: &str, overlay: &Overlay) -> String {
-    let reason = overlay.reason.trim();
-    let mut text = format!(
-        "{}: {}",
-        code(kind),
-        if reason.is_empty() { EMPTY } else { reason }
-    );
+        reason.to_string()
+    };
     if !overlay.by.is_empty() {
-        text.push_str(&format!(" — by {}", code(&overlay.by)));
+        value.push_str(&format!(" — by {}", code(&overlay.by)));
     }
     if !overlay.at.is_empty() {
-        text.push_str(&format!(" at {}", code(&overlay.at)));
+        value.push_str(&format!(" at {}", code(&overlay.at)));
     }
-    text
+    prose_bullet(out, kind, &value);
 }
 
 fn claim_text(claim: &Claim) -> String {

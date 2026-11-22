@@ -394,21 +394,6 @@ fn headings(document: &str) -> Vec<&str> {
         .collect()
 }
 
-/// The cells of one table row. A pipe escaped by `cell()` does not split it.
-fn columns(line: &str) -> usize {
-    // GFM splits a row at every pipe that does not directly follow a
-    // backslash, whatever the backslashes before it.
-    let mut pipes = 0usize;
-    let mut previous = ' ';
-    for ch in line.chars() {
-        if ch == '|' && previous != '\\' {
-            pipes += 1;
-        }
-        previous = ch;
-    }
-    pipes.saturating_sub(1)
-}
-
 fn table_rows<'a>(document: &'a str, heading: &str) -> Vec<&'a str> {
     section(document, heading)
         .lines()
@@ -879,7 +864,7 @@ fn fixed_values_cannot_create_markdown_structure() {
         !document.contains("[link](https://example.com)"),
         "{document}"
     );
-    assert!(body.contains("`a\\|b`"), "{body}");
+    assert!(body.contains("`a|b`"), "{body}");
     assert!(body.contains("`` `tick` ``"), "{body}");
 
     let criteria = section(&document, "# Acceptance criteria");
@@ -975,12 +960,37 @@ fn the_header_names_the_kind_and_the_review_shows_the_budget() {
     let document = task_to_markdown(&task, &[]);
 
     let header = section(&document, "# Header");
-    assert!(header.contains("| kind | `bug` |"), "{header}");
+    assert!(header.contains("kind `bug`"), "{header}");
     let review = section(&document, "# Review");
     assert!(
         review.contains("- **budget:** `2/5` external rounds"),
         "{review}"
     );
+}
+
+#[test]
+fn the_header_lists_an_overlay_only_when_one_is_set() {
+    let task = minimal("TSK01");
+    let document = task_to_markdown(&task, &[]);
+    let header = section(&document, "# Header");
+    assert!(!header.contains("blocked"), "{header}");
+    assert!(header.contains("- **claim:** _none_"), "{header}");
+
+    let mut task = minimal("TSK01");
+    task.overlays.blocked = Some(Overlay {
+        reason: "Waiting on the lane table.".to_string(),
+        by: "creator-1".to_string(),
+        at: "2026-11-16T15:00:00Z".to_string(),
+    });
+    let document = task_to_markdown(&task, &[]);
+    let header = section(&document, "# Header");
+    assert!(
+        header.contains(
+            "- **blocked:** Waiting on the lane table. — by `creator-1` at `2026-11-16T15:00:00Z`"
+        ),
+        "{header}"
+    );
+    assert!(!header.contains("deferred"), "{header}");
 }
 
 fn finding(id: &str, severity: Severity) -> Finding {
@@ -1378,18 +1388,18 @@ fn a_newline_in_a_fixed_field_cannot_break_the_line_structure() {
 }
 
 #[test]
-fn every_pipe_is_escaped_whatever_precedes_it() {
+fn a_pipe_in_a_fixed_value_stays_in_its_code_span() {
     let mut task = minimal("TSK01");
     task.meta.tags = vec!["a\\||b".to_string()];
     let document = task_to_markdown(&task, &[]);
 
+    // The header is a card of list items, not a table: no cell rule applies,
+    // and the pipe is only ever inside its code span.
     assert!(
-        document.contains("| tags | `a\\\\|\\|b` |"),
-        "a pipe was left unescaped:\n{document}"
+        document.contains("- **tags:** `a\\||b`"),
+        "the tags are not one code span:\n{document}"
     );
-    for line in table_rows(&document, "# Header") {
-        assert_eq!(columns(line), 2, "{line}");
-    }
+    assert!(table_rows(&document, "# Header").is_empty(), "{document}");
 }
 
 #[test]
@@ -1472,22 +1482,10 @@ fn backslashes_before_pipes_never_split_a_table_row() {
             table_rows(&document, "# Acceptance criteria").is_empty(),
             "the criteria are still a table:\n{document}"
         );
-        for (heading, expected_columns, expected_rows) in [("# Header", 2, 10)] {
-            let rows = table_rows(&document, heading);
-            assert_eq!(
-                rows.len(),
-                expected_rows,
-                "{heading} has {} rows with {value}:\n{document}",
-                rows.len()
-            );
-            for line in rows {
-                assert_eq!(
-                    columns(line),
-                    expected_columns,
-                    "{heading} broke with {value}: {line}"
-                );
-            }
-        }
+        assert!(
+            table_rows(&document, "# Header").is_empty(),
+            "the header is a table with {value}:\n{document}"
+        );
     }
 }
 
@@ -1593,7 +1591,13 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
 
     assert_eq!(headings(&document), HEADINGS);
     assert!(document.contains("FIXED-ATTACK"), "{document}");
-    assert!(!document.lines().any(|line| line.starts_with("```")));
+    // The id leads the chips. An id that holds a fence is a code span of longer
+    // backticks, which is not a fence.
+    assert!(
+        !document
+            .lines()
+            .any(|line| line.starts_with("```") && !line.starts_with("````"))
+    );
 
     // The title is a label: escaped, not interpreted.
     let header = section(&document, "# Header");
@@ -1671,12 +1675,8 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
         );
     }
 
-    // The fixed-value attacks cannot open a cell or a row.
-    let rows = table_rows(&document, "# Header");
-    assert!(!rows.is_empty(), "the header has no table");
-    for line in rows {
-        assert_eq!(columns(line), 2, "{line}");
-    }
+    // The header is a card, so no fixed value can open a table row.
+    assert!(table_rows(&document, "# Header").is_empty(), "{document}");
     assert!(table_rows(&document, "# Acceptance criteria").is_empty());
 
     // The review is a history, not a table. Its shape is a round heading,
@@ -1727,13 +1727,16 @@ fn every_task_status_renders_as_one_code_span() {
 
         let document = task_to_markdown(&task, &[]);
         let header = section(&document, "# Header");
-        let line = header
+        let chips = header
             .lines()
-            .find(|line| line.starts_with("| status |"))
-            .unwrap_or_else(|| panic!("no status row:\n{header}"));
+            .find(|line| line.contains(" · "))
+            .unwrap_or_else(|| panic!("no chips line:\n{header}"));
 
-        assert_eq!(columns(line), 2, "{line}");
-        assert!(line.contains(&format!("`{}`", status.as_str())), "{line}");
+        assert_eq!(
+            chips.matches(&format!("`{}`", status.as_str())).count(),
+            1,
+            "{chips}"
+        );
     }
 }
 

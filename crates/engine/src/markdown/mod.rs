@@ -58,24 +58,6 @@ use spans::{
     push_inline_latex_span, push_mark_span,
 };
 
-pub const DEFAULT_LINK_MARKER: &str = "#";
-
-thread_local! {
-    static LINK_MARKER: std::cell::RefCell<String> =
-        std::cell::RefCell::new(DEFAULT_LINK_MARKER.to_string());
-}
-
-pub(crate) fn with_link_marker<R>(f: impl FnOnce(&str) -> R) -> R {
-    LINK_MARKER.with(|c| f(&c.borrow()))
-}
-
-#[cfg(test)]
-pub(crate) fn set_link_marker(marker: &str) {
-    LINK_MARKER.with(|c| {
-        c.borrow_mut().replace_range(.., marker);
-    });
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum LastBlock {
     Other,
@@ -772,7 +754,7 @@ pub fn parse_markdown_with_width(
             }
             MdEvent::SoftBreak | MdEvent::HardBreak => {}
             MdEvent::InlineHtml(raw) if !in_code => {
-                match handle_html_tag_event(raw.as_ref(), &mut inline, &mut spans) {
+                match handle_html_tag_event(raw.as_ref(), &mut inline, &mut spans, theme_colors) {
                     HtmlTagOutcome::Consumed => {}
                     HtmlTagOutcome::OpenStyleBuffer(kind) => {
                         if html_style_buffer.is_none() {

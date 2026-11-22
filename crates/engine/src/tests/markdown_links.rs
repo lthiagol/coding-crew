@@ -3,6 +3,7 @@ use crate::markdown::{
     LinkId, LinkSpan, display_width, highlight_line, highlight_matches_only, parse_markdown,
     parse_markdown_with_width, resolve_syntax,
 };
+use crate::theme::MarkdownTheme;
 use ratatui::{
     style::Style,
     text::{Line, Span},
@@ -33,7 +34,8 @@ fn span_destinations<'a>(spans: &[LinkSpan], urls: &'a [String]) -> Vec<&'a str>
 }
 
 fn table_link_marker_positions(lines: &[Line<'_>]) -> Vec<(usize, usize, char)> {
-    let link_icon = test_md_theme().link_icon;
+    let theme = test_md_theme();
+    let link_icon = theme.link_icon;
     lines
         .iter()
         .enumerate()
@@ -47,10 +49,11 @@ fn table_link_marker_positions(lines: &[Line<'_>]) -> Vec<(usize, usize, char)> 
             let mut markers = Vec::new();
             for span in &line.spans {
                 let content = span.content.as_ref();
-                if content == "#" && span.style.fg == Some(link_icon) {
+                if content == theme.link_glyph && span.style.fg == Some(link_icon) {
                     let label = text
                         .chars()
-                        .nth(col + 1)
+                        .skip(col + display_width(content))
+                        .find(|ch| !ch.is_whitespace())
                         .expect("fixture marker should be followed by a label");
                     markers.push((line_idx, col, label));
                 }
@@ -190,7 +193,7 @@ fn wrapped_repeated_destinations_keep_distinct_ids_and_continuations() {
     assert_eq!(
         first_rows,
         [
-            "#one two three ",
+            "→ one two three ",
             "four five six ",
             "seven ",
             "(https://example.t",
@@ -222,7 +225,7 @@ fn mixed_style_mapping_does_not_depend_on_link_color() {
         .collect();
     assert_eq!(
         covered,
-        "#bold and  code  and  mark  and  α  (https://example.test/mixed)"
+        "→ bold and  code  and  mark  and  α  (https://example.test/mixed)"
     );
 }
 
@@ -237,12 +240,12 @@ fn html_style_buffer_around_link_keeps_label_owned() {
         assert_eq!(links.len(), 2, "{md}: {links:?}");
         let (label, url) = &links[0];
         assert_eq!(url, "https://a.example", "{md}");
-        assert!(label.starts_with("# label"), "{md}: {label:?}");
+        assert!(label.starts_with("→ label"), "{md}: {label:?}");
         assert!(label.ends_with("(https://a.example)"), "{md}: {label:?}");
         assert_eq!(
             links[1],
             (
-                "#next (https://b.example)".into(),
+                "→ next (https://b.example)".into(),
                 "https://b.example".into()
             ),
             "{md}"
@@ -429,24 +432,21 @@ fn php_code_block_without_open_tag_is_highlighted() {
     );
 }
 
-struct LinkMarkerGuard;
-
-impl LinkMarkerGuard {
-    fn set(marker: &str) -> Self {
-        crate::markdown::set_link_marker(marker);
-        Self
-    }
-}
-
-impl Drop for LinkMarkerGuard {
-    fn drop(&mut self) {
-        crate::markdown::set_link_marker(crate::markdown::DEFAULT_LINK_MARKER);
+/// The test palette with its link glyph set; an empty glyph draws none.
+fn md_theme_with_link_glyph(glyph: &'static str) -> MarkdownTheme {
+    MarkdownTheme {
+        link_glyph: glyph,
+        ..test_md_theme()
     }
 }
 
 fn link_texts(md: &str, width: usize) -> Vec<(String, String)> {
+    link_texts_with(&test_md_theme(), md, width)
+}
+
+fn link_texts_with(md_theme: &MarkdownTheme, md: &str, width: usize) -> Vec<(String, String)> {
     let (ss, theme) = test_assets();
-    let parsed = parse_markdown_with_width(md, &ss, &theme, width, &test_md_theme(), false, true);
+    let parsed = parse_markdown_with_width(md, &ss, &theme, width, md_theme, false, true);
     parsed
         .link_spans
         .iter()
@@ -464,21 +464,37 @@ fn link_texts(md: &str, width: usize) -> Vec<(String, String)> {
 }
 
 #[test]
-fn custom_link_prefix_replaces_marker() {
-    let _guard = LinkMarkerGuard::set("→");
-    let links = link_texts("see [leaf](https://a.example)\n", 80);
+fn link_glyph_leads_the_text_with_one_space() {
+    let links = link_texts_with(
+        &md_theme_with_link_glyph("⇢"),
+        "see [leaf](https://a.example)\n",
+        80,
+    );
     assert_eq!(
         links,
         vec![(
-            "→leaf (https://a.example)".into(),
+            "⇢ leaf (https://a.example)".into(),
             "https://a.example".into()
         )]
     );
 }
 
 #[test]
+fn a_label_that_brings_its_own_space_takes_no_second_one() {
+    for (md, label) in [
+        ("see [`leaf`](https://a.example)\n", "→ leaf"),
+        ("see [ leaf](https://a.example)\n", "→ leaf"),
+        ("see [<mark>leaf</mark>](https://a.example)\n", "→ leaf"),
+    ] {
+        let links = link_texts(md, 80);
+        assert!(links[0].0.starts_with(label), "{md}: {links:?}");
+        assert!(!links[0].0.starts_with("→  "), "{md}: {links:?}");
+    }
+}
+
+#[test]
 fn empty_link_prefix_keeps_links_clickable() {
-    let _guard = LinkMarkerGuard::set("");
+    let md_theme = md_theme_with_link_glyph("");
     let md = "\
 aaaaaaaaaaaaaaaaaaaaaaaaaaa [xyzxyzxyz](https://a.example) and [second](https://b.example)
 
@@ -486,7 +502,7 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaa [xyzxyzxyz](https://a.example) and [second](https://
 | --- |
 | [cell](https://c.example) |
 ";
-    let links = link_texts(md, 30);
+    let links = link_texts_with(&md_theme, md, 30);
     let expected: Vec<(String, String)> = [
         ("xyzxyzxyz (https://a.example)", "https://a.example"),
         ("second (https://b.example)", "https://b.example"),
@@ -500,13 +516,13 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaa [xyzxyzxyz](https://a.example) and [second](https://
 
 #[test]
 fn empty_link_prefix_keeps_wrapped_table_links_clickable() {
-    let _guard = LinkMarkerGuard::set("");
+    let md_theme = md_theme_with_link_glyph("");
     let md = "\
 | a | b |
 | --- | --- |
 | x | lead [label](https://a.example) and [averyveryverylonglabel](https://b.example) |
 ";
-    let links = link_texts(md, 24);
+    let links = link_texts_with(&md_theme, md, 24);
     let mut urls: Vec<&str> = links.iter().map(|(_, u)| u.as_str()).collect();
     urls.dedup();
     assert_eq!(
@@ -529,8 +545,11 @@ fn empty_link_prefix_keeps_wrapped_table_links_clickable() {
 
 #[test]
 fn empty_link_prefix_keeps_code_label_clickable() {
-    let _guard = LinkMarkerGuard::set("");
-    let links = link_texts("see [`code`](https://a.example) end\n", 80);
+    let links = link_texts_with(
+        &md_theme_with_link_glyph(""),
+        "see [`code`](https://a.example) end\n",
+        80,
+    );
     assert_eq!(
         links,
         vec![(
@@ -548,17 +567,17 @@ fn display_math_keeps_link_ranges_of_the_flushed_paragraph() {
             80
         ),
         vec![
-            ("#a (https://a.test)".into(), "https://a.test".into()),
-            ("#b (https://b.test)".into(), "https://b.test".into()),
+            ("→ a (https://a.test)".into(), "https://a.test".into()),
+            ("→ b (https://b.test)".into(), "https://b.test".into()),
         ]
     );
-    let _guard = LinkMarkerGuard::set("");
+    let md_theme = md_theme_with_link_glyph("");
     for md in [
         "para\n\n[ ](https://x.test) $$x$$\n",
         "> para\n>\n> [ ](https://x.test) $$x$$\n",
     ] {
         // The blank label keeps its URL, and the URL keeps the link.
-        let links = link_texts(md, 40);
+        let links = link_texts_with(&md_theme, md, 40);
         assert_eq!(links.len(), 1, "{md}: {links:?}");
         assert!(links[0].0.ends_with("(https://x.test)"), "{md}: {links:?}");
     }
@@ -566,10 +585,9 @@ fn display_math_keeps_link_ranges_of_the_flushed_paragraph() {
 
 #[test]
 fn empty_link_prefix_keeps_urls_aligned_after_empty_label() {
-    let _guard = LinkMarkerGuard::set("");
     let md =
         "[](https://a.example) [label](https://b.example) some filler words to force wrapping\n";
-    let links = link_texts(md, 20);
+    let links = link_texts_with(&md_theme_with_link_glyph(""), md, 20);
     let label: String = links
         .iter()
         .filter(|(_, url)| url == "https://b.example")

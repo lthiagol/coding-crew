@@ -6,7 +6,6 @@ use ratatui::{
 use super::links::{LinkId, LinkedSpan};
 use super::tables::{CellFragment, CellInlineStyle};
 use super::width::{display_width, expand_tabs, iter_cluster_widths};
-use super::with_link_marker;
 
 pub(super) fn fragments_display_width(frags: &[CellFragment]) -> usize {
     frags.iter().map(|f| f.display_width()).sum()
@@ -39,7 +38,7 @@ pub(super) fn min_table_cell_floor(frags: &[CellFragment]) -> usize {
     for frag in frags {
         let w = match frag {
             CellFragment::Text(t, _, _, _) => widest(&expand_tabs(t, 0)),
-            CellFragment::LinkMarker(_) => with_link_marker(display_width),
+            CellFragment::LinkMarker(..) => frag.display_width(),
             CellFragment::HardBreak => 0,
             CellFragment::Code(..) | CellFragment::InlineMath(..) | CellFragment::Mark(..) => {
                 widest(&frag.rendered_text()) + 2
@@ -146,7 +145,7 @@ fn rebuild_fragment(frag: &CellFragment, text: String, link_id: Option<LinkId>) 
 
 fn break_row(lines: &mut Vec<Vec<CellFragment>>, current_line: &mut Vec<CellFragment>) -> usize {
     let marker = match current_line.last() {
-        Some(CellFragment::LinkMarker(_)) if current_line.len() > 1 => current_line.pop(),
+        Some(CellFragment::LinkMarker(..)) if current_line.len() > 1 => current_line.pop(),
         _ => None,
     };
     if marker.is_some()
@@ -168,7 +167,6 @@ pub(super) fn wrap_table_cell(frags: &[CellFragment], width: usize) -> Vec<Vec<C
     let mut lines: Vec<Vec<CellFragment>> = Vec::new();
     let mut current_line: Vec<CellFragment> = Vec::new();
     let mut current_width = 0usize;
-    let mut glue = false;
     let space_frag = |line: &[CellFragment], next: Option<LinkId>| {
         let owner = line
             .last()
@@ -189,10 +187,9 @@ pub(super) fn wrap_table_cell(frags: &[CellFragment], width: usize) -> Vec<Vec<C
                     let word_width = display_width(word);
 
                     if word_width > width {
-                        if !matches!(current_line.as_slice(), [] | [CellFragment::LinkMarker(_)]) {
+                        if !matches!(current_line.as_slice(), [] | [CellFragment::LinkMarker(..)]) {
                             current_width = break_row(&mut lines, &mut current_line);
                         }
-                        glue = false;
                         first_word = false;
                         let mut chunk = String::new();
                         let mut chunk_width = current_width;
@@ -220,8 +217,7 @@ pub(super) fn wrap_table_cell(frags: &[CellFragment], width: usize) -> Vec<Vec<C
 
                     let suppress = adj && first_word;
                     first_word = false;
-                    let needs_sep = current_width > 0 && !glue && !suppress;
-                    glue = false;
+                    let needs_sep = current_width > 0 && !suppress;
                     let sep = if needs_sep { 1 } else { 0 };
                     if current_width + sep + word_width > width && current_width > 0 {
                         current_width = break_row(&mut lines, &mut current_line);
@@ -233,8 +229,8 @@ pub(super) fn wrap_table_cell(frags: &[CellFragment], width: usize) -> Vec<Vec<C
                     current_width += word_width;
                 }
             }
-            CellFragment::LinkMarker(inline) => {
-                let marker_width = with_link_marker(display_width);
+            CellFragment::LinkMarker(inline, _) => {
+                let marker_width = frag.display_width();
                 let sep = if current_width == 0 { 0 } else { 1 };
                 if current_width + sep + marker_width > width && current_width > 0 {
                     lines.push(std::mem::take(&mut current_line));
@@ -246,12 +242,10 @@ pub(super) fn wrap_table_cell(frags: &[CellFragment], width: usize) -> Vec<Vec<C
                 }
                 current_line.push(frag.clone());
                 current_width += marker_width;
-                glue = true;
             }
             CellFragment::HardBreak => {
                 lines.push(std::mem::take(&mut current_line));
                 current_width = 0;
-                glue = false;
             }
             CellFragment::Code(_, adj, link_id)
             | CellFragment::InlineMath(_, adj, link_id)
@@ -266,7 +260,6 @@ pub(super) fn wrap_table_cell(frags: &[CellFragment], width: usize) -> Vec<Vec<C
                         lines.push(std::mem::take(&mut current_line));
                         current_width = 0;
                     }
-                    glue = false;
                     let inner = width.saturating_sub(2).max(1);
                     let mut chunk = String::new();
                     let mut chunk_width = 0usize;
@@ -353,17 +346,15 @@ pub(super) fn align_cell(
                 }
                 spans.push(LinkedSpan::new(Span::styled(expanded, style), *link_id));
             }
-            CellFragment::LinkMarker(inline) => {
-                with_link_marker(|marker| {
-                    let style = Style::default()
-                        .fg(theme.link_icon)
-                        .add_modifier(inline.modifiers());
-                    content_width += display_width(marker);
-                    spans.push(LinkedSpan::new(
-                        Span::styled(marker.to_string(), style),
-                        inline.link_id,
-                    ));
-                });
+            CellFragment::LinkMarker(inline, glyph) => {
+                let style = Style::default()
+                    .fg(theme.link_icon)
+                    .add_modifier(inline.modifiers());
+                content_width += display_width(glyph);
+                spans.push(LinkedSpan::new(
+                    Span::styled(glyph.to_string(), style),
+                    inline.link_id,
+                ));
             }
             CellFragment::HardBreak => {}
             CellFragment::Code(_, _, link_id)

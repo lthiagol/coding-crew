@@ -277,11 +277,12 @@ fn document_lines(
 }
 
 /// The engine's theme for the document: the theme's palette, with the task
-/// glyphs taken from the icon set the pane draws its statuses with.
+/// and link glyphs taken from the icon set the pane draws its icons with.
 fn markdown_theme(theme: &Theme, icons: IconSet) -> MarkdownTheme {
     MarkdownTheme {
         task_done_glyph: Icon::StatusDone.glyph(icons),
         task_open_glyph: Icon::StatusDraft.glyph(icons),
+        link_glyph: Icon::Link.glyph(icons),
         ..theme.markdown_theme()
     }
 }
@@ -1214,7 +1215,8 @@ mod tests {
             .find(|line| line_text(line).contains("TSK02"))
             .expect("the dependency line is not rendered");
         let link_text = line_text(link_line);
-        assert!(link_text.contains("# TSK02"), "{link_text}");
+        let glyph = Icon::Link.glyph(IconSet::Nerd);
+        assert!(link_text.contains(&format!("{glyph} TSK02")), "{link_text}");
         assert!(
             !link_text.contains('[') && !link_text.contains("]("),
             "{link_text}"

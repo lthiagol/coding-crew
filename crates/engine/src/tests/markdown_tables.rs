@@ -256,7 +256,7 @@ fn linked_table_inline_variants_retain_one_owner() {
         .collect();
     assert_eq!(
         covered,
-        "#bold  code   α   mark  (https://example.test/table-mixed)"
+        "→ bold  code   α   mark  (https://example.test/table-mixed)"
     );
 }
 
@@ -279,7 +279,7 @@ fn split_table_code_label_keeps_owner_on_every_row() {
     assert_eq!(
         rows,
         [
-            "#",
+            "→",
             " abcdefghijklmnopqr ",
             " stuvwxyz ",
             "(https://example.tes",

@@ -1,19 +1,10 @@
 ╭─ 󰈈 TSK13 · The detail pane paints the marked note ───────────────────────────────────────────────╮
 │▍ Header ─────────────────────────────────────────────────────────────────────────────────────────│
-│╭──────────┬─────────────────────────────────────────────────────────────────────────────────────╮│
-││ field    │ value                                                                               ││
-│├──────────┼─────────────────────────────────────────────────────────────────────────────────────┤│
-││ id       │  TSK13                                                                              ││
-││ title    │ The detail pane paints the marked note                                              ││
-││ status   │  code-review                                                                        ││
-││ kind     │  task                                                                               ││
-││ overlays │ none                                                                                ││
-││ claim    │ by  runner-01  in  session-runner-01  at  2026-11-10T09:00Z  — lease                ││
-││          │  2026-11-10T18:00Z                                                                  ││
-││ priority │  urgent                                                                             ││
-││ effort   │  S                                                                                  ││
-││ tags     │  mock ,  raul                                                                       ││
-│╰──────────┴─────────────────────────────────────────────────────────────────────────────────────╯│
+│The detail pane paints the marked note                                                            │
+│                                                                                                  │
+│ TSK13  ·  code-review  · kind  task  · priority  urgent  · effort  S                             │
+│• tags:  mock ,  raul                                                                             │
+│• claim: by  runner-01  in  session-runner-01  at  2026-11-10T09:00Z  — lease  2026-11-10T18:00Z  │
 │                                                                                                  │
 │▍ Intent ─────────────────────────────────────────────────────────────────────────────────────────│
 │Outcome                                                                                           │
@@ -133,8 +124,8 @@
 │                                                                                                  │
 │▍ Dependencies ───────────────────────────────────────────────────────────────────────────────────│
 │Waits on                                                                                          │
-│• # TSK22  —  done  — The terminal column table is generated from its rules                       │
-│• # TSK23  —  done  — The Needs you age says under a minute                                       │
+│• 󰌷 TSK22  —  done  — The terminal column table is generated from its rules                       │
+│• 󰌷 TSK23  —  done  — The Needs you age says under a minute                                       │
 │                                                                                                  │
 │Waits on this                                                                                     │
 │                                                                                                  │
@@ -142,6 +133,15 @@
 │                                                                                                  │
 │▍ Children ───────────────────────────────────────────────────────────────────────────────────────│
 │none                                                                                              │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

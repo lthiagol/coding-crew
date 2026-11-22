@@ -34,19 +34,19 @@ bytes cannot drift apart silently.
 | `src/markdown/fences.rs` | `e5810317dd42f09780ddbd800d6ef7d81e213461181f38096cc0821d554d6ce0` | `crates/engine/src/markdown/fences.rs` | `99cc29ba50ee9b591dded59ef745d03dbd6cc82ec5c910268246e81400242487` | 11, 12 |
 | `src/markdown/footnotes.rs` | `40a60dbff36117b6e4a6803bca6ba43b4b5965c523285d2d8471e89f9014ee76` | `crates/engine/src/markdown/footnotes.rs` | `0c4a012058588f9b34c6bfcef85382296a077fdb3c836e512a58636d32ca01aa` | 1, 4, 11 |
 | `src/markdown/frontmatter.rs` | `de8dd7ae2337ab6a2c7837e98826280f4e0374fa809c3cfbaf6af7f0918d1e8c` | `crates/engine/src/markdown/frontmatter.rs` | `de8dd7ae2337ab6a2c7837e98826280f4e0374fa809c3cfbaf6af7f0918d1e8c` | identical |
-| `src/markdown/highlight.rs` | `7e165aaf89a47d464dd2e1f460f1562db323ace19bf7ca619aad802bd8a6504d` | `crates/engine/src/markdown/highlight.rs` | `1f488429a62c25cc0aefa0e66f2472b394c8139cad4edb0f992084773356c249` | 1, 6, 11 |
+| `src/markdown/highlight.rs` | `7e165aaf89a47d464dd2e1f460f1562db323ace19bf7ca619aad802bd8a6504d` | `crates/engine/src/markdown/highlight.rs` | `98a1304ac81d7ec84edc8a1525a2857b6e050d521cfd336c0370e3ac14a750e6` | 1, 6, 7, 11 |
 | `src/markdown/latex.rs` | `33b46c28d939af3ef114e1743e6a0fd8630f9d85433c86297b6a57d52b6a8c21` | `crates/engine/src/markdown/latex.rs` | `7ee7f100464e49241553a60f4458ef3979a3e92fdea5f2e13392a04b7e86ad44` | 11, 12 |
 | `src/markdown/links.rs` | `59ec5ee1efa8d08023958f77d4e7b3859d37798831578c84dbc699299e4d856b` | `crates/engine/src/markdown/links.rs` | `6e4fb7072760b67ca8778b10234e67a15cb72f544ffc4141a7004f7cc9e38b77` | 1, 6, 9, 11 |
 | `src/markdown/lists.rs` | `dd16f32b5fbb766560e7c0e8395d00813496ba4ade00bb07bf330e1bff127f75` | `crates/engine/src/markdown/lists.rs` | `a3b96e07fa0b01dc5aed15cef9326700382c4e154fd4fc9840b7dfc17b6cba70` | 1, 4, 6, 11, 18 |
 | `src/markdown/markers.rs` | `2e9f315bad630b9c651d79bc1118e9ba5bcded9cebc81fd37e15472bfaf841ca` | `crates/engine/src/markdown/markers.rs` | `f07514a3ecb6d37ae767c49ec860986bda079e56e79d3b96e53b93491f8eaa79` | 1, 3, 10, 11 |
 | `src/markdown/mermaid.rs` | `dc2b217974a36dcd06dc0a5c199bdc7cadef743ec7719279f304e01a677df9da` | `crates/engine/src/markdown/mermaid.rs` | `f1aeaebd7a4ce303098046cffa017fdb0ab27939f594efed2f14f5c112b10274` | 1, 11, 12 |
-| `src/markdown/mod.rs` | `53177c3e6b309cdca9c9af0e9ef511e7bb7581c29248a4c489fa76b63bfbcebb` | `crates/engine/src/markdown/mod.rs` | `5844f1572212cc9a40d5ef71d3796d8be2264fdbd5ad45372c9e8329778dcc1c` | 1, 4, 5, 6, 7, 9, 11, 18, 19, 20, 21, 22 |
-| `src/markdown/spans.rs` | `51f40f57a3fbea5638ee3d74b157122c7616b3c480721b7888e6fedd3e2e3be6` | `crates/engine/src/markdown/spans.rs` | `91626cb0a60a71cd699568ea36826e265b9146db2a8f20762f8d608d20c105ca` | 11, 21 |
+| `src/markdown/mod.rs` | `53177c3e6b309cdca9c9af0e9ef511e7bb7581c29248a4c489fa76b63bfbcebb` | `crates/engine/src/markdown/mod.rs` | `66d0328d26037453ae6e6b4072c1be4697850e5810ea1881ce69ebd1d69b19bc` | 1, 4, 5, 6, 7, 9, 11, 18, 19, 20, 21, 22 |
+| `src/markdown/spans.rs` | `51f40f57a3fbea5638ee3d74b157122c7616b3c480721b7888e6fedd3e2e3be6` | `crates/engine/src/markdown/spans.rs` | `ef8844a9c341d9a5bc79d04e3129baa902d5b7daaaf95eeaecd746593ddd50a6` | 7, 11, 21, 24 |
 | `src/markdown/syntax.rs` | `b46409c050d4c9fc859be1acf958859958f000c77217cec453caff49b81e1403` | `crates/engine/src/markdown/syntax.rs` | `6c60870f950e420442734ce06fe612dcbd7813ba41a45443e3f85a11c72bfbf3` | 1, 6, 11, 12, 23 |
-| `src/markdown/table_layout.rs` | `05e2d328a05ae048f2d52c4f72eb365414e21fe621ac62e67f04f8b9f03703a7` | `crates/engine/src/markdown/table_layout.rs` | `d4aa956ce413798b643d89aa0e1ab60297397024a3c21c35c0c08d6c79059bbc` | 11, 12, 15, 21 |
-| `src/markdown/tables.rs` | `b824647992b0bb665f516e95b8537594ceba3b6846f2d845d66695febfa66a10` | `crates/engine/src/markdown/tables.rs` | `8fb79da01181d2b25824644d67978f06b46aca589cd56cae0558a4ae8ca4f5cd` | 2, 3, 5, 11, 15, 20, 21 |
+| `src/markdown/table_layout.rs` | `05e2d328a05ae048f2d52c4f72eb365414e21fe621ac62e67f04f8b9f03703a7` | `crates/engine/src/markdown/table_layout.rs` | `7f29379ec9fd0d9e65177c720770e5814008ccebbbdfbd2f499a92d76ad28306` | 7, 11, 12, 15, 21, 24 |
+| `src/markdown/tables.rs` | `b824647992b0bb665f516e95b8537594ceba3b6846f2d845d66695febfa66a10` | `crates/engine/src/markdown/tables.rs` | `9c2782f24a93aafc2f94ae555ae82e04dc00e907dc590f20f7906418699cd250` | 2, 3, 5, 7, 11, 15, 20, 21, 24 |
 | `src/markdown/toc.rs` | `68ae47f2387f7cb66ae50929d6554684a25312eb1a5323bbefdf5b82aadca0bd` | `crates/engine/src/markdown/toc.rs` | `9640a529ae05aff4ca96cdde1ff72772bceb7ca336294a81bf79722beec873e8` | 1, 4, 6, 9, 11 |
-| `src/markdown/width.rs` | `e577f4896abf16ec68a9c3a837ddd6e743e1f4da4e86c52b8fa9411b458a7ad2` | `crates/engine/src/markdown/width.rs` | `2e6464c3a7b2d6fd882708b08cda9efcfc9e10cd7c1744a5630b6aa6a163baf4` | 1, 6, 11 |
+| `src/markdown/width.rs` | `e577f4896abf16ec68a9c3a837ddd6e743e1f4da4e86c52b8fa9411b458a7ad2` | `crates/engine/src/markdown/width.rs` | `3becdd8c8c833d7deca5a027a9e29a585b7731109450af386737f32f0f0346bc` | 1, 6, 7, 11 |
 | `src/markdown/wrapping.rs` | `758c50ef5145f2d9d331f8ac0b9951ab4ea1e96ebf0160ff597ab4a9431d213d` | `crates/engine/src/markdown/wrapping.rs` | `6ca53158fc40769cd08f36ddbfbc40c557aee276c1b654163f44ba94e90848e0` | 11 |
 
 ## Upstream theme sources
@@ -159,29 +159,29 @@ Items the next unit and the ported tests need are `pub` instead of upstream's
   `width` itself stays a crate-private module;
 - `highlight_line`, `highlight_matches_only`;
 - `resolve_syntax`;
-- `DEFAULT_LINK_MARKER`;
 - `BULLET_L1`, `BULLET_L2`, `BULLET_DEEP`; and
 - `BLOCKQUOTE_BAR`.
 
-`DEFAULT_LINK_MARKER` is public because it is a harmless constant. The link
-marker itself is not: `set_link_marker` and `with_link_marker` stay
-`pub(crate)` because the marker is mutable thread-global state that changes
-every later parse on that thread. A public setter would make the output depend
-on hidden state rather than only on the arguments. The ported tests live
-inside the crate, so they can still set it; `set_link_marker` is compiled only
-for tests (deviation 7).
+The link glyph is not a module item: it is `MarkdownTheme::link_glyph`
+(deviation 7), so the output depends only on the arguments.
 
 Everything else keeps upstream's `pub(crate)`/`pub(super)` or private
 visibility. Nothing was renamed.
 
-### 7. Test-only link-marker setter
+### 7. The link glyph is configuration
 
-The crate has no `#![allow(dead_code)]`. The link-marker setter,
-`markdown::set_link_marker`, is compiled only under `cfg(test)` because only
-the ported link tests call it. No other dead code remains.
+Upstream keeps the link marker in a thread-local `#` that every parse reads and
+a test setter changes, so a later parse on the thread depends on hidden state.
+Here it is `MarkdownTheme::link_glyph`, set by the caller as the task glyphs
+are (deviation 18); the four presets draw `→`. `with_link_marker`,
+`set_link_marker` and `DEFAULT_LINK_MARKER` are gone. The marker's span, its
+modifiers, the table cell, the highlight and the searchable text read the
+theme's glyph, and `build_searchable_lines` takes the theme for it. raul sets
+the glyph from its icon table (`detail.rs`).
 
-A forced update rewrites `mod.rs` to upstream's unconditional setter, so it
-erases this deviation as well as deviation 10; reapply the `cfg(test)` gate.
+A forced update rewrites these files to upstream's thread-local marker. That
+erases this deviation and the ported link tests' setup (deviation 10); reapply
+the glyph.
 
 ### 8. Removed leaf root exports
 
@@ -314,8 +314,8 @@ clickable. `push_link_url` in `spans.rs` and `TableBuf::push_link_url` in
 `tables.rs` add it unless the link's text already is the URL, so an autolink
 shows once. A link inside `<mark>` or `<code>` flushes its buffered text first,
 so the URL follows the label; `handle_inline_style_event` takes the HTML buffer
-for that. `CellInlineStyle` gains `dim`, which `align_cell` applies. The link
-marker is unchanged.
+for that. `CellInlineStyle` gains `dim`, which `align_cell` applies. The glyph
+before the text is set by deviations 7 and 24.
 
 ### 22. Fenced code and diagrams round their frames, and dim their numbers
 
@@ -332,3 +332,14 @@ as the square ones.
 `Color::Reset`, and any other alpha as RGB, as before. A theme names the
 terminal's own colour that way, so a preset that paints no colour emits no RGB
 for its code tokens. raul's derived code themes are the only ones that do.
+
+### 24. A link's label takes a space after its glyph
+
+Upstream draws the glyph against its label, `#leaf`. Here the glyph is followed
+by one space, `→ leaf`, unless the label leads with one: a chip's padding is
+that space, and a text that leads with a space has its own. In prose the space
+is a span of its own, owned by the link, so a row that wraps after the glyph
+ends with it, as any spaced word does. In a table cell the space is the label's
+leading text, so the column measures it. The cell wrap no longer glues a label
+to its marker: the `glue` flag is gone, and the label's first text is separated
+by its own `adj` flag alone.

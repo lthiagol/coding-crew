@@ -54,7 +54,7 @@ pub(super) enum CellFragment {
     Text(String, CellInlineStyle, bool, Option<LinkId>),
     Code(String, bool, Option<LinkId>),
     InlineMath(String, bool, Option<LinkId>),
-    LinkMarker(CellInlineStyle),
+    LinkMarker(CellInlineStyle, &'static str),
     Mark(String, bool, Option<LinkId>),
     HardBreak,
 }
@@ -66,7 +66,7 @@ impl CellFragment {
             | CellFragment::Code(t, _, _)
             | CellFragment::Mark(t, _, _) => t.clone(),
             CellFragment::InlineMath(t, _, _) => latex::to_unicode(t),
-            CellFragment::LinkMarker(_) => super::with_link_marker(|m| m.to_string()),
+            CellFragment::LinkMarker(_, glyph) => glyph.to_string(),
             CellFragment::HardBreak => String::new(),
         }
     }
@@ -74,7 +74,7 @@ impl CellFragment {
     pub(super) fn display_width(&self) -> usize {
         let w = display_width(&self.rendered_text());
         match self {
-            CellFragment::Text(_, _, _, _) | CellFragment::LinkMarker(_) => w,
+            CellFragment::Text(_, _, _, _) | CellFragment::LinkMarker(..) => w,
             CellFragment::HardBreak => 0,
             _ => w + 2,
         }
@@ -86,7 +86,7 @@ impl CellFragment {
             | CellFragment::Code(_, _, id)
             | CellFragment::InlineMath(_, _, id)
             | CellFragment::Mark(_, _, id) => *id,
-            CellFragment::LinkMarker(style) => style.link_id,
+            CellFragment::LinkMarker(style, _) => style.link_id,
             CellFragment::HardBreak => None,
         }
     }
@@ -197,7 +197,7 @@ pub(super) fn handle_table_event(
         }
         MdEvent::Start(Tag::Link { dest_url, .. }) => {
             tb.inline_style.link_id = Some(register_link(link_urls, dest_url.as_ref()));
-            tb.push_link_marker();
+            tb.push_link_marker(theme.link_glyph);
             true
         }
         MdEvent::End(TagEnd::Link) => {
@@ -409,19 +409,34 @@ impl TableBuf {
             }
         }
     }
-    fn push_link_marker(&mut self) {
+    fn push_link_marker(&mut self, glyph: &'static str) {
         self.current_cell
-            .push(CellFragment::LinkMarker(self.inline_style));
+            .push(CellFragment::LinkMarker(self.inline_style, glyph));
     }
     // The URL follows the link's text, dim in parentheses, unless the text
     // already is the URL. The text is the cell's fragments owned by the link,
     // without the marker.
     fn push_link_url(&mut self, id: LinkId, url: &str) {
+        // The glyph takes a space of its own. A label's first text is not
+        // glued to the glyph, and the space is part of that text, so the
+        // column measures it. A chip is padded, and a text that leads with a
+        // space has one already.
+        let marker = self.current_cell.iter().position(|frag| {
+            frag.link_id() == Some(id)
+                && matches!(frag, CellFragment::LinkMarker(_, glyph) if !glyph.is_empty())
+        });
+        if let Some(CellFragment::Text(text, _, adj, _)) =
+            marker.and_then(|index| self.current_cell.get_mut(index + 1))
+            && !text.starts_with(char::is_whitespace)
+        {
+            text.insert(0, ' ');
+            *adj = false;
+        }
         let text: String = self
             .current_cell
             .iter()
             .filter(|frag| {
-                frag.link_id() == Some(id) && !matches!(frag, CellFragment::LinkMarker(_))
+                frag.link_id() == Some(id) && !matches!(frag, CellFragment::LinkMarker(..))
             })
             .map(CellFragment::rendered_text)
             .collect();
@@ -440,11 +455,11 @@ impl TableBuf {
         ));
     }
     fn update_link_marker_modifier(&mut self, f: impl Fn(&mut CellInlineStyle)) {
-        if let Some(CellFragment::LinkMarker(style)) = self
+        if let Some(CellFragment::LinkMarker(style, _)) = self
             .current_cell
             .iter_mut()
             .rev()
-            .find(|frag| matches!(frag, CellFragment::LinkMarker(_)))
+            .find(|frag| matches!(frag, CellFragment::LinkMarker(..)))
         {
             f(style);
         }

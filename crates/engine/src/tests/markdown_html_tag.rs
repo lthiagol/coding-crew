@@ -380,7 +380,7 @@ fn html_bold_inside_markdown_link_propagates_to_link_marker() {
     let marker = lines
         .iter()
         .flat_map(|l| l.spans.iter())
-        .find(|s| s.content.as_ref() == "#");
-    assert!(marker.is_some(), "expected link marker '#'");
+        .find(|s| s.content.as_ref() == "→");
+    assert!(marker.is_some(), "expected link marker '→'");
     assert!(marker.unwrap().style.add_modifier.contains(Modifier::BOLD));
 }

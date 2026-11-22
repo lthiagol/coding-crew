@@ -171,14 +171,15 @@ fn footnote_link_ranges_use_rendered_cell_widths() {
     assert_eq!(parsed.link_spans.len(), 1);
     let span = &parsed.link_spans[0];
     let text = crate::markdown::line_plain_text(&parsed.lines[span.line_idx]);
-    let start = text.find('#').expect("link marker");
+    let start = text.find('→').expect("link marker");
     // `ｶﾞ` is one grapheme that Ratatui renders as two cells.
     let marker_col =
         crate::markdown::width::rendered_span_width(&ratatui::text::Span::raw(&text[..start]));
+    // The marker, the space after it, the label and the URL.
     let url = " (https://a.example)";
     assert_eq!(
         (span.start_col, span.end_col),
-        (marker_col, marker_col + 4 + url.len())
+        (marker_col, marker_col + 5 + url.len())
     );
 }
 
@@ -198,7 +199,7 @@ fn footnote_link_rewrap_keeps_zero_width_clusters_in_the_label() {
     let rows: Vec<String> = parsed.lines[6..10].iter().map(line_plain_text).collect();
     assert_eq!(
         rows,
-        ["¹ #", "  aa\u{200b}bbbbbb", "  cccc\u{200b}dddd", "  dd"]
+        ["¹ → ", "  aa\u{200b}bbbbbb", "  cccc\u{200b}dddd", "  dd"]
     );
     let ranges: Vec<_> = parsed
         .link_spans
@@ -208,7 +209,8 @@ fn footnote_link_rewrap_keeps_zero_width_clusters_in_the_label() {
     assert_eq!(
         ranges,
         [
-            (6, 2, 3),
+            // The first row is the glyph and its space, which the link owns.
+            (6, 2, 4),
             (7, 2, 10),
             (8, 2, 10),
             (9, 2, 4),

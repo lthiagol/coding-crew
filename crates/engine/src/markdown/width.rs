@@ -1,3 +1,4 @@
+use crate::theme::MarkdownTheme;
 use ratatui::text::Line;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
@@ -63,13 +64,11 @@ fn line_searchable_text(line: &Line<'_>, marker: &str) -> String {
     collect_filtered(&spans[start..end])
 }
 
-pub fn build_searchable_lines(lines: &[Line<'_>]) -> Vec<String> {
-    super::with_link_marker(|marker| {
-        lines
-            .iter()
-            .map(|line| line_searchable_text(line, marker))
-            .collect()
-    })
+pub fn build_searchable_lines(lines: &[Line<'_>], theme: &MarkdownTheme) -> Vec<String> {
+    lines
+        .iter()
+        .map(|line| line_searchable_text(line, theme.link_glyph))
+        .collect()
 }
 
 pub fn truncate_display_width(text: &str, max_width: usize) -> String {

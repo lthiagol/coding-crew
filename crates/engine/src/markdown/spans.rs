@@ -7,7 +7,6 @@ use ratatui::{
 
 use super::latex;
 use super::links::{LinkId, LinkedSpan, register_link};
-use super::with_link_marker;
 
 #[derive(Clone, Copy, Default)]
 pub(super) struct InlineStyleState {
@@ -131,6 +130,7 @@ pub(super) fn handle_html_tag_event(
     raw: &str,
     inline: &mut InlineStyleState,
     spans: &mut [LinkedSpan],
+    theme: &MarkdownTheme,
 ) -> HtmlTagOutcome {
     let Some((tag, is_open)) = normalize_html_tag(raw) else {
         return HtmlTagOutcome::NotRecognized;
@@ -139,7 +139,7 @@ pub(super) fn handle_html_tag_event(
         (HtmlTagName::Bold, true) => {
             inline.in_strong = inline.in_strong.saturating_add(1);
             if inline.link_id.is_some() {
-                update_link_marker_modifier(spans, Modifier::BOLD);
+                update_link_marker_modifier(spans, theme, Modifier::BOLD);
             }
         }
         (HtmlTagName::Bold, false) => {
@@ -148,7 +148,7 @@ pub(super) fn handle_html_tag_event(
         (HtmlTagName::Italic, true) => {
             inline.in_em = inline.in_em.saturating_add(1);
             if inline.link_id.is_some() {
-                update_link_marker_modifier(spans, Modifier::ITALIC);
+                update_link_marker_modifier(spans, theme, Modifier::ITALIC);
             }
         }
         (HtmlTagName::Italic, false) => {
@@ -157,7 +157,7 @@ pub(super) fn handle_html_tag_event(
         (HtmlTagName::Strike, true) => {
             inline.in_strike = inline.in_strike.saturating_add(1);
             if inline.link_id.is_some() {
-                update_link_marker_modifier(spans, Modifier::CROSSED_OUT);
+                update_link_marker_modifier(spans, theme, Modifier::CROSSED_OUT);
             }
         }
         (HtmlTagName::Strike, false) => {
@@ -166,7 +166,7 @@ pub(super) fn handle_html_tag_event(
         (HtmlTagName::Underline, true) => {
             inline.in_underline = inline.in_underline.saturating_add(1);
             if inline.link_id.is_some() {
-                update_link_marker_modifier(spans, Modifier::UNDERLINED);
+                update_link_marker_modifier(spans, theme, Modifier::UNDERLINED);
             }
         }
         (HtmlTagName::Underline, false) => {
@@ -227,7 +227,7 @@ pub(super) fn handle_inline_style_event(
         MdEvent::Start(Tag::Strong) => {
             inline.in_strong = inline.in_strong.saturating_add(1);
             if inline.link_id.is_some() {
-                update_link_marker_modifier(spans, Modifier::BOLD);
+                update_link_marker_modifier(spans, theme, Modifier::BOLD);
             }
             true
         }
@@ -238,7 +238,7 @@ pub(super) fn handle_inline_style_event(
         MdEvent::Start(Tag::Emphasis) => {
             inline.in_em = inline.in_em.saturating_add(1);
             if inline.link_id.is_some() {
-                update_link_marker_modifier(spans, Modifier::ITALIC);
+                update_link_marker_modifier(spans, theme, Modifier::ITALIC);
             }
             true
         }
@@ -249,7 +249,7 @@ pub(super) fn handle_inline_style_event(
         MdEvent::Start(Tag::Strikethrough) => {
             inline.in_strike = inline.in_strike.saturating_add(1);
             if inline.link_id.is_some() {
-                update_link_marker_modifier(spans, Modifier::CROSSED_OUT);
+                update_link_marker_modifier(spans, theme, Modifier::CROSSED_OUT);
             }
             true
         }
@@ -338,12 +338,10 @@ pub(super) fn push_link_marker(
     if blockquote_depth > 0 {
         style = style.add_modifier(Modifier::ITALIC);
     }
-    with_link_marker(|m| {
-        spans.push(LinkedSpan::new(
-            Span::styled(m.to_string(), style),
-            inline.link_id,
-        ))
-    });
+    spans.push(LinkedSpan::new(
+        Span::styled(theme.link_glyph.to_string(), style),
+        inline.link_id,
+    ));
 }
 
 // The URL follows the link's text, dim in parentheses, unless the text already
@@ -357,11 +355,16 @@ fn push_link_url(spans: &mut Vec<LinkedSpan>, theme: &MarkdownTheme, id: LinkId,
     let owned = &spans[owned_start..];
     let marked = owned
         .first()
-        .is_some_and(|span| with_link_marker(|marker| span.span.content == marker));
+        .is_some_and(|span| span.span.content == theme.link_glyph);
     let text: String = owned[usize::from(marked)..]
         .iter()
         .map(|span| span.span.content.as_ref())
         .collect();
+    // The glyph takes one space of its own, unless the label leads with one or
+    // has no text: a chip's padding is the label's own space.
+    if marked && !theme.link_glyph.is_empty() && text.starts_with(|ch: char| !ch.is_whitespace()) {
+        spans.insert(owned_start + 1, LinkedSpan::new(Span::raw(" "), Some(id)));
+    }
     if text.trim() == url {
         return;
     }
@@ -374,14 +377,16 @@ fn push_link_url(spans: &mut Vec<LinkedSpan>, theme: &MarkdownTheme, id: LinkId,
     ));
 }
 
-pub(super) fn update_link_marker_modifier(spans: &mut [LinkedSpan], modifier: Modifier) {
-    with_link_marker(|marker| {
-        if let Some(LinkedSpan { span, .. }) = spans
-            .iter_mut()
-            .rev()
-            .find(|s| s.span.content.as_ref() == marker)
-        {
-            span.style = span.style.add_modifier(modifier);
-        }
-    });
+pub(super) fn update_link_marker_modifier(
+    spans: &mut [LinkedSpan],
+    theme: &MarkdownTheme,
+    modifier: Modifier,
+) {
+    if let Some(LinkedSpan { span, .. }) = spans
+        .iter_mut()
+        .rev()
+        .find(|s| s.span.content.as_ref() == theme.link_glyph)
+    {
+        span.style = span.style.add_modifier(modifier);
+    }
 }

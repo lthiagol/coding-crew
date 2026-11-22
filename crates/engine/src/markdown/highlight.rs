@@ -7,7 +7,6 @@ use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::width;
-use super::with_link_marker;
 
 pub(super) fn find_match_char_ranges(
     text_chars: &[char],
@@ -54,11 +53,11 @@ fn skip_ranges_ending_by(ranges: &[Range<usize>], index: &mut usize, pos: usize)
 }
 
 pub fn highlight_line<'a>(line: &Line<'a>, theme: &MarkdownTheme, query: &str) -> Line<'a> {
-    with_link_marker(|marker| highlight_line_with_marker(line, theme, query, marker, false))
+    highlight_line_with_marker(line, theme, query, theme.link_glyph, false)
 }
 
 pub fn highlight_matches_only<'a>(line: &Line<'a>, theme: &MarkdownTheme, query: &str) -> Line<'a> {
-    with_link_marker(|marker| highlight_line_with_marker(line, theme, query, marker, true))
+    highlight_line_with_marker(line, theme, query, theme.link_glyph, true)
 }
 
 fn highlight_line_with_marker<'a>(

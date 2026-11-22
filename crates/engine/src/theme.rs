@@ -64,6 +64,9 @@ pub struct MarkdownTheme {
     /// The glyphs of the five alerts, in GitHub's order: note, tip,
     /// important, warning, caution.
     pub alert_glyphs: [&'static str; 5],
+    /// The glyph a link's text is led by, followed by one space. Empty draws
+    /// no glyph.
+    pub link_glyph: &'static str,
 }
 
 impl Default for MarkdownTheme {
@@ -156,6 +159,7 @@ pub const ARCTIC: MarkdownTheme = MarkdownTheme {
     task_done_glyph: "✓",
     task_open_glyph: "○",
     alert_glyphs: ["ℹ", "✦", "!", "⚠", "✗"],
+    link_glyph: "→",
 };
 
 pub const FOREST: MarkdownTheme = MarkdownTheme {
@@ -209,6 +213,7 @@ pub const FOREST: MarkdownTheme = MarkdownTheme {
     task_done_glyph: "✓",
     task_open_glyph: "○",
     alert_glyphs: ["ℹ", "✦", "!", "⚠", "✗"],
+    link_glyph: "→",
 };
 
 pub const OCEAN_DARK: MarkdownTheme = MarkdownTheme {
@@ -262,6 +267,7 @@ pub const OCEAN_DARK: MarkdownTheme = MarkdownTheme {
     task_done_glyph: "✓",
     task_open_glyph: "○",
     alert_glyphs: ["ℹ", "✦", "!", "⚠", "✗"],
+    link_glyph: "→",
 };
 
 pub const SOLARIZED_DARK: MarkdownTheme = MarkdownTheme {
@@ -315,6 +321,7 @@ pub const SOLARIZED_DARK: MarkdownTheme = MarkdownTheme {
     task_done_glyph: "✓",
     task_open_glyph: "○",
     alert_glyphs: ["ℹ", "✦", "!", "⚠", "✗"],
+    link_glyph: "→",
 };
 
 /// Every built-in markdown preset, in leaf's order.

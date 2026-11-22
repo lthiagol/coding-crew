@@ -377,7 +377,7 @@ fn mermaid_content_is_searchable() {
         true,
     )
     .into();
-    let searchable = crate::markdown::width::build_searchable_lines(&lines);
+    let searchable = crate::markdown::width::build_searchable_lines(&lines, &test_md_theme());
 
     assert!(
         searchable.iter().any(|line| line.contains('A')),
