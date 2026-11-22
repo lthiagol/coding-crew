@@ -21,9 +21,7 @@ use coding_crew_core::harness::{self, HARNESSES, Harness};
 use coding_crew_core::runtime::{CrewMember, Runtime};
 use coding_crew_core::{Role, age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, tail_to, text_width};
-use coding_crew_theme::{
-    Icon, IconSet, Slot, Theme, chrome, phase_style, role_style, selected_line,
-};
+use coding_crew_theme::{Icon, IconSet, Slot, Theme, chrome, phase_style, picker, role_style};
 
 use crate::catalog::Catalog;
 use crate::config::{self, ConfigRead, ConfigState};
@@ -1673,99 +1671,72 @@ impl App {
         let Some(choice) = &self.choice else {
             return;
         };
-        let popup = choice_popup(area, choice.rows());
-        if popup.width < 4 || popup.height < 3 {
-            return;
-        }
-        frame.render_widget(Clear, popup);
-        let block = chrome::pane(
-            &choice.title,
-            role_icon(choice.role),
-            self.icons,
-            true,
-            &self.theme,
-        );
-        let inner = block.inner(popup);
-        frame.render_widget(block, popup);
-        let width = usize::from(inner.width);
-        let room = usize::from(inner.height);
-        if width == 0 || room == 0 {
-            return;
-        }
-        let mut lines = Vec::new();
-        match &choice.state {
-            ChoiceState::Reading => lines.push(Line::from(Span::styled(
-                cut_to(CATALOG_READING, width),
-                self.theme.text.dim,
-            ))),
+        let row = |text: &str, style: Style| picker::Row {
+            text: text.to_string(),
+            style,
+        };
+        let (lead, entries) = match &choice.state {
+            ChoiceState::Reading => (vec![row(CATALOG_READING, self.theme.text.dim)], Vec::new()),
             ChoiceState::Failed(error) => {
-                lines.push(Line::from(Span::styled(
-                    cut_to(CATALOG_UNREADABLE, width),
-                    self.theme.text.normal,
-                )));
-                lines.push(Line::from(Span::styled(
-                    cut_to(error, width),
-                    self.theme.semantic.error,
-                )));
-                if choice.field == Field::Model {
-                    let height = room.saturating_sub(lines.len());
-                    lines.extend(self.entry_lines(choice, width, height));
-                }
+                let lead = vec![
+                    row(CATALOG_UNREADABLE, self.theme.text.normal),
+                    row(error, self.theme.semantic.error),
+                ];
+                let entries = if choice.field == Field::Model {
+                    self.entry_rows(choice)
+                } else {
+                    Vec::new()
+                };
+                (lead, entries)
             }
             ChoiceState::Typing(text) => {
-                lines.push(Line::from(Span::styled(
-                    cut_to(&format!("> {text}_"), width),
-                    self.theme.text.normal,
-                )));
                 let (hint, style) = if text.is_empty() || pick::is_typed_id(text) {
                     (TYPE_HINT, self.theme.text.dim)
                 } else {
                     (NOT_A_MODEL_ID, self.theme.semantic.error)
                 };
-                lines.push(Line::from(Span::styled(cut_to(hint, width), style)));
+                let lead = vec![
+                    row(&format!("> {text}_"), self.theme.text.normal),
+                    row(hint, style),
+                ];
+                (lead, Vec::new())
             }
-            ChoiceState::Listed | ChoiceState::Empty => {
-                if choice.state == ChoiceState::Empty {
-                    lines.push(Line::from(Span::styled(
-                        cut_to(NO_MODELS, width),
-                        self.theme.text.dim,
-                    )));
-                }
-                let height = room.saturating_sub(lines.len());
-                lines.extend(self.entry_lines(choice, width, height));
-            }
-        }
-        frame.render_widget(Paragraph::new(lines), inner);
+            ChoiceState::Listed => (Vec::new(), self.entry_rows(choice)),
+            ChoiceState::Empty => (
+                vec![row(NO_MODELS, self.theme.text.dim)],
+                self.entry_rows(choice),
+            ),
+        };
+        picker::draw(
+            frame,
+            picker::popup(area, choice.rows()),
+            &choice.title,
+            role_icon(choice.role),
+            self.icons,
+            &self.theme,
+            &lead,
+            &entries,
+            choice.cursor,
+        );
     }
 
-    /// The choice's entries that fit in `height` rows, scrolled to keep the
-    /// cursor on screen. The entry under the cursor takes the selection's paint;
-    /// a harness the machine does not have is dim and says so.
-    fn entry_lines(&self, choice: &Choice, width: usize, height: usize) -> Vec<Line<'static>> {
-        if height == 0 {
-            return Vec::new();
-        }
-        let start = choice.cursor.saturating_sub(height - 1);
-        let end = (start + height).min(choice.entries.len());
-        choice.entries[start..end]
+    /// The choice's entries as the picker draws them: a harness the machine
+    /// does not have is dim and says so.
+    fn entry_rows(&self, choice: &Choice) -> Vec<picker::Row> {
+        choice
+            .entries
             .iter()
-            .enumerate()
-            .map(|(offset, entry)| {
-                let line = if entry.pickable {
-                    Line::from(Span::styled(
-                        cut_to(&entry.text, width),
-                        self.theme.text.normal,
-                    ))
+            .map(|entry| {
+                if entry.pickable {
+                    picker::Row {
+                        text: entry.text.clone(),
+                        style: self.theme.text.normal,
+                    }
                 } else {
-                    Line::from(Span::styled(
-                        cut_to(&format!("{} {NOT_INSTALLED}", entry.text), width),
-                        self.theme.text.dim,
-                    ))
-                };
-                if start + offset == choice.cursor {
-                    selected_line(line, width, &self.theme)
-                } else {
-                    line
+                    picker::Row {
+                        text: format!("{} {NOT_INSTALLED}", entry.text),
+                        style: self.theme.text.dim,
+                    }
                 }
             })
             .collect()
@@ -1904,28 +1875,6 @@ impl App {
 }
 
 /// The rows the choice's popup holds when the catalogue is longer.
-const CHOICE_ROWS: usize = 18;
-
-/// Where the choice sits: a small list, centred.
-fn choice_popup(area: Rect, rows: usize) -> Rect {
-    // The title and the footer stay on screen: the choice's keys are the
-    // window's footer, and a popup must not cover them.
-    let room = area.height.saturating_sub(2);
-    let height = u16::try_from(rows.saturating_add(2))
-        .unwrap_or(u16::MAX)
-        .min(CHOICE_ROWS as u16 + 2)
-        .min(room)
-        .max(3)
-        .min(area.height);
-    let width = 56.min(area.width);
-    Rect {
-        x: area.x + (area.width - width) / 2,
-        y: area.y + (area.height - height) / 2,
-        width,
-        height,
-    }
-}
-
 /// Where the help sits: three fifths of the window, centred.
 fn help_popup(area: Rect) -> Rect {
     let width = area.width.saturating_mul(3) / 5;

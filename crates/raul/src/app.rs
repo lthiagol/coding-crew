@@ -196,6 +196,28 @@ impl App {
                 _ => Action::Redraw,
             };
         }
+        if self.settings.picking() {
+            // A pick takes the keys that move over its choices and keep or drop
+            // it: the window's keys wait until it closes.
+            return match keys::binding(Scope::Picking, &key).map(|binding| binding.act) {
+                Some(Act::Exit) => Action::Quit,
+                Some(Act::StepPick(step)) => {
+                    self.settings.step_pick(step);
+                    self.apply_look();
+                    Action::Redraw
+                }
+                Some(Act::KeepPick) => {
+                    self.settings.keep_pick();
+                    Action::Redraw
+                }
+                Some(Act::DropPick) => {
+                    self.settings.drop_pick();
+                    self.apply_look();
+                    Action::Redraw
+                }
+                _ => Action::Redraw,
+            };
+        }
         if self.settings.editing() {
             // A value of the Settings tab takes the keys as its text, as the
             // filter line does.
@@ -306,13 +328,6 @@ impl App {
                 self.filter.clear();
                 Action::Redraw
             }
-            Some(Act::Change(step)) => {
-                if let Some(id) = self.cursor(work, now) {
-                    self.settings.change(&id, step);
-                }
-                self.apply_look();
-                Action::Redraw
-            }
             Some(Act::Begin) => {
                 if let Some(id) = self.cursor(work, now) {
                     self.settings.begin(&id);
@@ -334,13 +349,16 @@ impl App {
                 self.apply_look();
                 Action::Redraw
             }
-            // The keys of a value being typed and of the question answer in
-            // their own scopes, and the filter's keys answer in theirs.
+            // The keys of a pick, a value being typed and the question answer
+            // are in their own scopes, and the filter's keys answer in theirs.
             Some(
                 Act::KeepFilter
                 | Act::EraseFilter
                 | Act::TypeFilter
                 | Act::Back
+                | Act::StepPick(_)
+                | Act::KeepPick
+                | Act::DropPick
                 | Act::Keep
                 | Act::Drop
                 | Act::EraseValue
@@ -577,6 +595,9 @@ impl App {
         }
         self.draw_footer(frame, &rows, work, now, hidden);
 
+        if self.settings.picking() {
+            settings::render_pick(frame, area, &self.theme, self.icons, &self.settings);
+        }
         if self.help {
             let has_rows = self.ids(work, now).is_some_and(|ids| !ids.is_empty());
             let opens = self.tab.opens();
@@ -840,6 +861,15 @@ impl App {
                 Vec::new(),
             );
         }
+        if self.settings.picking() {
+            // The pick previews each choice: esc puts back the one in force.
+            let actions = vec![
+                chip("↑↓", "move"),
+                chip("enter", "keep"),
+                chip("esc", "restore"),
+            ];
+            return (actions, Vec::new());
+        }
         if self.settings.editing() {
             return (vec![chip("enter", "keep"), chip("esc", "drop")], Vec::new());
         }
@@ -852,7 +882,7 @@ impl App {
             actions.push(hidden_chip(hidden, &self.theme));
         }
         if self.tab == Tab::Settings {
-            // Enter edits and the arrows change a choice: both are named in
+            // Enter edits a value or opens a choice's list: both are named in
             // the help, and the footer names what changes the file. A file
             // that changed on disk under the draft is reloaded first.
             let reload = chip("r", "reload");
@@ -1094,17 +1124,13 @@ fn help_lines(
 ) -> Vec<(u8, Line<'static>)> {
     let line = |key: &str, says: &str| help_line(key, says, theme);
     let mut lines = vec![(7, line("1-6", "jump to a tab"))];
-    // On the Settings tab the arrows and h l change a choice, so they do not
-    // switch tabs there.
+    lines.push((3, line("← →", "switch tab")));
+    lines.push((1, line("h l", "switch tab")));
     if settings {
-        lines.push((4, line("← →", "change")));
-        lines.push((4, line("enter", "edit")));
+        lines.push((4, line("enter", "edit or pick")));
         lines.push((5, line("w", "save")));
         lines.push((5, line("u", "undo")));
         lines.push((5, line("r", "reload")));
-    } else {
-        lines.push((3, line("← →", "switch tab")));
-        lines.push((1, line("h l", "switch tab")));
     }
     lines.push((2, line("tab", "next tab")));
     lines.push((0, line("shift-tab", "previous tab")));
@@ -1701,7 +1727,7 @@ mod tests {
         assert!(!footer.contains("switch tab"), "{footer}");
         app.help = true;
         let help = render(&mut app, 160, 40).0.join("\n");
-        for works in ["change", "edit", "move", "page", "top/bottom", "1-6"] {
+        for works in ["pick", "edit", "move", "page", "top/bottom", "1-6"] {
             assert!(
                 help.contains(works),
                 "{works} is missing from the help: {help}"
@@ -1725,7 +1751,7 @@ mod tests {
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.settings = settings_panel("repaint");
         app.selection = Some("raul.theme".to_string());
-        app.on_key(key(KeyCode::Right), &work, now());
+        pick_next(&mut app, &work);
         assert_eq!(app.theme.preset, Preset::Nord);
         // The rule under the tab bar is the new theme's border.
         let (_, paint) = render(&mut app, 100, 20);
@@ -1739,7 +1765,7 @@ mod tests {
             "the window kept the old theme"
         );
         app.selection = Some("raul.tasks.sort".to_string());
-        app.on_key(key(KeyCode::Right), &work, now());
+        pick_next(&mut app, &work);
         assert_eq!(
             app.order,
             Order {
@@ -1784,7 +1810,7 @@ mod tests {
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.settings = settings_panel("asks");
         app.selection = Some("raul.theme".to_string());
-        app.on_key(key(KeyCode::Right), &work, now());
+        pick_next(&mut app, &work);
         // q does not quit: the footer asks, and the question is the footer.
         assert_eq!(
             app.on_key(key(KeyCode::Char('q')), &work, now()),
@@ -1810,7 +1836,7 @@ mod tests {
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.settings = settings_panel("leave");
         app.selection = Some("raul.theme".to_string());
-        app.on_key(key(KeyCode::Right), &work, now());
+        pick_next(&mut app, &work);
         app.on_key(key(KeyCode::Char('q')), &work, now());
         assert_eq!(
             app.on_key(key(KeyCode::Char('q')), &work, now()),
@@ -1828,7 +1854,7 @@ mod tests {
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.settings = settings_panel("leave-save");
         app.selection = Some("raul.theme".to_string());
-        app.on_key(key(KeyCode::Right), &work, now());
+        pick_next(&mut app, &work);
         app.on_key(key(KeyCode::Char('q')), &work, now());
         assert_eq!(
             app.on_key(key(KeyCode::Char('w')), &work, now()),
@@ -1849,7 +1875,7 @@ mod tests {
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.settings = settings_panel("refused");
         app.selection = Some("raul.theme".to_string());
-        app.on_key(key(KeyCode::Right), &work, now());
+        pick_next(&mut app, &work);
         let path = coding_crew_core::config::config_path(&settings_home("refused"));
         std::fs::write(
             &path,
@@ -1878,7 +1904,7 @@ mod tests {
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.settings = settings_panel("refused-elsewhere");
         app.selection = Some("raul.theme".to_string());
-        app.on_key(key(KeyCode::Right), &work, now());
+        pick_next(&mut app, &work);
         app.on_key(key(KeyCode::Char('4')), &work, now());
         assert_eq!(app.tab, Tab::Tasks);
         app.on_key(key(KeyCode::Char('q')), &work, now());
@@ -1908,10 +1934,60 @@ mod tests {
         app.settings = settings_panel("help");
         let rows = render(&mut app, 100, 40).0;
         let help = help_text(&rows, 100, 40);
-        for word in ["change", "edit", "save", "undo", "reload"] {
+        for word in ["pick", "edit", "save", "undo", "reload", "switch tab"] {
             assert!(help.contains(word), "{help}: {word} is missing");
         }
-        assert!(!help.contains("switch tab"), "{help}");
+        // The arrows switch tabs on Settings too: they change no choice.
+        assert!(!help.contains("change"), "{help}");
+    }
+
+    #[test]
+    fn the_arrows_switch_tabs_on_settings_as_on_the_others() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("arrows");
+        app.selection = Some("raul.icons".to_string());
+        app.on_key(key(KeyCode::Left), &work, now());
+        assert_eq!(app.tab, Tab::Backlog, "← did not switch tabs");
+        app.on_key(key(KeyCode::Char('6')), &work, now());
+        app.on_key(key(KeyCode::Char('h')), &work, now());
+        assert_eq!(app.tab, Tab::Backlog, "h did not switch tabs");
+        assert!(!app.settings.unsaved(), "an arrow changed a value");
+    }
+
+    #[test]
+    fn enter_on_a_choice_opens_a_picker_that_previews_and_esc_restores() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("picker-keys");
+        app.selection = Some("raul.theme".to_string());
+        app.on_key(key(KeyCode::Enter), &work, now());
+        assert!(app.settings.picking(), "enter did not open the picker");
+        let shown = render(&mut app, 100, 30).0.join("\n");
+        for preset in ["dark", "nord", "catppuccin", "dracula", "terminal"] {
+            assert!(shown.contains(preset), "{preset} is not listed: {shown}");
+        }
+        app.on_key(key(KeyCode::Down), &work, now());
+        assert_eq!(app.theme.preset, Preset::Nord, "the cursor did not preview");
+        // The keys that leave the tab wait until the pick closes.
+        app.on_key(key(KeyCode::Right), &work, now());
+        assert_eq!(app.tab, Tab::Settings, "a tab key worked under the pick");
+        app.on_key(key(KeyCode::Esc), &work, now());
+        assert!(!app.settings.picking(), "esc did not close the picker");
+        assert_eq!(app.theme.preset, Preset::Dark, "esc kept the preview");
+        assert!(!app.settings.unsaved());
+    }
+
+    #[test]
+    fn a_pick_that_is_kept_changes_the_window_and_the_draft() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("picker-kept");
+        app.selection = Some("raul.theme".to_string());
+        pick_next(&mut app, &work);
+        assert!(!app.settings.picking());
+        assert_eq!(app.theme.preset, Preset::Nord);
+        assert!(app.settings.unsaved(), "keep did not keep the choice");
     }
 
     #[test]
@@ -1959,6 +2035,22 @@ mod tests {
         settings::Panel::open(Some(&home), settings::Overrides::default())
     }
 
+    /// The keys that move a Settings choice one place on: enter opens its pick,
+    /// down moves the cursor, enter keeps it.
+    fn pick_next(app: &mut App, work: &Work) {
+        app.on_key(key(KeyCode::Enter), work, now());
+        app.on_key(key(KeyCode::Down), work, now());
+        app.on_key(key(KeyCode::Enter), work, now());
+    }
+
+    /// A Settings draft that differs from the file: the theme one choice on,
+    /// picked as a user does.
+    fn theme_changed(app: &mut App) {
+        app.settings.begin("raul.theme");
+        app.settings.step_pick(1);
+        app.settings.keep_pick();
+    }
+
     /// The name of a binding in a failure message: its act and its scopes.
     fn named(binding: &keys::Binding) -> String {
         format!("{:?} in {:?}", binding.act, binding.scopes)
@@ -1977,7 +2069,9 @@ mod tests {
                 // Settings keys on the Settings tab; the rest on Path.
                 let tab = match scope {
                     Scope::Tasks | Scope::Filter => Tab::Tasks,
-                    Scope::Settings | Scope::Value | Scope::Asking => Tab::Settings,
+                    Scope::Settings | Scope::Picking | Scope::Value | Scope::Asking => {
+                        Tab::Settings
+                    }
                     _ => Tab::Path,
                 };
                 let mut app = window(&theme, tab, false);
@@ -1991,7 +2085,10 @@ mod tests {
                     // The filter's keys answer while the line is open.
                     app.filter = "ab".to_string();
                     app.on_key(key(KeyCode::Char('/')), &work, now());
-                } else if matches!(scope, Scope::Settings | Scope::Value | Scope::Asking) {
+                } else if matches!(
+                    scope,
+                    Scope::Settings | Scope::Picking | Scope::Value | Scope::Asking
+                ) {
                     app.settings = settings_panel(&format!("every-{scope:?}"));
                     app.selection = Some(
                         if binding.act == Act::Begin {
@@ -2002,18 +2099,19 @@ mod tests {
                         .to_string(),
                     );
                     match scope {
+                        Scope::Picking => app.settings.begin("raul.theme"),
                         Scope::Value => app.settings.begin("agents.0.model"),
                         Scope::Asking => {
-                            app.settings.change("raul.theme", 1);
+                            theme_changed(&mut app);
                             app.settings.ask();
                         }
                         _ => {}
                     }
                     if binding.act == Act::Undo || binding.act == Act::Save {
-                        app.settings.change("raul.theme", 1);
+                        theme_changed(&mut app);
                     }
                     if binding.act == Act::Reload {
-                        app.settings.change("raul.theme", 1);
+                        theme_changed(&mut app);
                     }
                 } else {
                     match binding.act {
@@ -2071,15 +2169,19 @@ mod tests {
                     Act::TypeFilter => {
                         assert_eq!(app.filter, "abx", "{}", named(binding));
                     }
-                    Act::Change(step) => {
-                        // From the Dark theme, a step back is the last theme
-                        // and a step forward is the next one.
-                        let expected = if step < 0 {
-                            Preset::Terminal
-                        } else {
-                            Preset::Nord
-                        };
+                    Act::StepPick(step) => {
+                        // From the Dark theme, a step back stays on the first
+                        // choice and a step forward is the next one.
+                        let expected = if step < 0 { Preset::Dark } else { Preset::Nord };
                         assert_eq!(app.theme.preset, expected, "{}", named(binding));
+                        assert!(app.settings.picking(), "{} closed the pick", named(binding));
+                    }
+                    Act::KeepPick => {
+                        assert!(!app.settings.picking(), "{} kept the pick", named(binding));
+                    }
+                    Act::DropPick => {
+                        assert!(!app.settings.picking(), "{} kept the pick", named(binding));
+                        assert_eq!(app.theme.preset, Preset::Dark, "{}", named(binding));
                     }
                     Act::Begin => {
                         assert!(app.settings.editing(), "{} did not start", named(binding));
@@ -3479,7 +3581,7 @@ mod tests {
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.settings = settings_panel("typing-keys");
         // An unsaved change for w and u to act on, and a reload for r.
-        app.settings.change("raul.theme", 1);
+        theme_changed(&mut app);
         app.apply_look();
         app.selection = Some("agents.0.model".to_string());
         app.on_key(key(KeyCode::Enter), &work, now());

@@ -182,6 +182,20 @@ pub struct Detail {
     /// The rows of the document the pane last showed: a page, the distance
     /// `pgup` and `pgdn` move.
     pub page: u16,
+    /// The document as the engine last rendered it. A redraw that finds the same
+    /// markdown at the same width, theme and icon set reuses it.
+    rendered: Option<Rendered>,
+}
+
+/// The document the engine rendered, and what it was rendered from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Rendered {
+    /// The markdown the engine parsed: a change to the record changes it.
+    source: String,
+    width: usize,
+    theme: Theme,
+    icons: IconSet,
+    lines: Vec<Line<'static>>,
 }
 
 impl Detail {
@@ -193,6 +207,7 @@ impl Detail {
             selection,
             scroll: 0,
             page: 0,
+            rendered: None,
         }
     }
 
@@ -251,7 +266,7 @@ pub fn render(
         .border_type(BorderType::Rounded)
         .title(header_labels(detail, work, width, icons, theme))
         .border_style(theme.chrome.border_focus);
-    let lines = document_lines(work, detail, width, icons, theme);
+    let lines = cached_document(work, detail, width, icons, theme);
     // The scroll is clamped to the document, and the page is what the pane
     // actually holds: the next pgup/pgdn moves by the rows on display.
     let visible = usize::from(rows[0].height).saturating_sub(2);
@@ -285,32 +300,79 @@ fn document_lines(
     if width == 0 {
         return Vec::new();
     }
-    let Some(task) = work.task(&detail.id) else {
-        let line = if work.item(&detail.id).is_some() {
-            format!(
-                "the smaller task {} has no document yet",
-                escape_literal(&detail.id)
-            )
-        } else {
-            format!(
-                "the record {} is not in the work folder",
-                escape_literal(&detail.id)
-            )
-        };
-        // A notice is said quietly: both take `text.dim`, the paint the
-        // doc gives the empty state and other secondary text.
-        return vec![Line::from(Span::styled(
-            cut_to(&line, width),
-            theme.text.dim,
-        ))];
-    };
-    // The projection reads the whole work folder as its context: the
-    // reverse dependencies and the children's progress are the project's
-    // own facts.
-    let markdown = coding_crew_core::task_to_markdown(task, &work.tasks);
+    match work.task(&detail.id) {
+        Some(task) => render_markdown(
+            &coding_crew_core::task_to_markdown(task, &work.tasks),
+            width,
+            icons,
+            theme,
+        ),
+        None => notice_lines(work, detail, width, theme),
+    }
+}
+
+/// The document of the pane, as `document_lines` gives it, but reused from the
+/// pane when the record, the width, the theme and the icon set are the ones it
+/// was rendered with. A redraw of an unchanged pane does not run the engine.
+fn cached_document(
+    work: &Work,
+    detail: &mut Detail,
+    width: usize,
+    icons: IconSet,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
+    match work.task(&detail.id) {
+        Some(task) if width > 0 => {
+            let markdown = coding_crew_core::task_to_markdown(task, &work.tasks);
+            rendered_lines(detail, &markdown, width, icons, theme, || {
+                render_markdown(&markdown, width, icons, theme)
+            })
+        }
+        _ => document_lines(work, detail, width, icons, theme),
+    }
+}
+
+/// The lines of `markdown`: the pane's own, when it was rendered from the same
+/// markdown at the same width, theme and icon set; otherwise `render`'s, which
+/// the pane keeps for the next redraw.
+fn rendered_lines(
+    detail: &mut Detail,
+    markdown: &str,
+    width: usize,
+    icons: IconSet,
+    theme: &Theme,
+    render: impl FnOnce() -> Vec<Line<'static>>,
+) -> Vec<Line<'static>> {
+    if let Some(rendered) = &detail.rendered
+        && rendered.source == markdown
+        && rendered.width == width
+        && rendered.theme == *theme
+        && rendered.icons == icons
+    {
+        return rendered.lines.clone();
+    }
+    let lines = render();
+    detail.rendered = Some(Rendered {
+        source: markdown.to_string(),
+        width,
+        theme: *theme,
+        icons,
+        lines: lines.clone(),
+    });
+    lines
+}
+
+/// The engine's lines for a document: the markdown parsed at `width`, with the
+/// theme's palette and the icon set's glyphs.
+fn render_markdown(
+    markdown: &str,
+    width: usize,
+    icons: IconSet,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
     let (syntax, paired) = syntect(theme);
     parse_markdown_with_width(
-        &markdown,
+        markdown,
         syntax,
         &paired,
         width,
@@ -321,6 +383,28 @@ fn document_lines(
         true,
     )
     .lines
+}
+
+/// The lines that say why a document is not shown: the record is not in the
+/// folder, or it is a smaller task with no document of its own.
+fn notice_lines(work: &Work, detail: &Detail, width: usize, theme: &Theme) -> Vec<Line<'static>> {
+    let line = if work.item(&detail.id).is_some() {
+        format!(
+            "the smaller task {} has no document yet",
+            escape_literal(&detail.id)
+        )
+    } else {
+        format!(
+            "the record {} is not in the work folder",
+            escape_literal(&detail.id)
+        )
+    };
+    // A notice is said quietly: both take `text.dim`, the paint the
+    // doc gives the empty state and other secondary text.
+    vec![Line::from(Span::styled(
+        cut_to(&line, width),
+        theme.text.dim,
+    ))]
 }
 
 /// The engine's theme for the document: the theme's palette, with the task,
@@ -858,6 +942,48 @@ mod tests {
                     .collect::<String>()
             })
             .collect()
+    }
+
+    #[test]
+    fn a_redraw_of_an_unchanged_document_does_not_run_the_engine() {
+        // The engine runs once per document: a redraw of the same markdown at the
+        // same width, theme and icon set reuses the lines it gave, and any change
+        // to one of the four runs it again.
+        let dark = theme();
+        let mut detail = pane("TSK13");
+        let runs = std::cell::Cell::new(0);
+        let engine = || {
+            runs.set(runs.get() + 1);
+            vec![Line::from("the engine's line")]
+        };
+        let first = rendered_lines(&mut detail, "# A", 80, IconSet::Nerd, &dark, engine);
+        assert_eq!(runs.get(), 1);
+        let again = rendered_lines(&mut detail, "# A", 80, IconSet::Nerd, &dark, engine);
+        assert_eq!(runs.get(), 1, "an unchanged redraw ran the engine");
+        assert_eq!(again, first);
+        rendered_lines(&mut detail, "# B", 80, IconSet::Nerd, &dark, engine);
+        assert_eq!(runs.get(), 2, "a changed record was not rendered again");
+        rendered_lines(&mut detail, "# B", 60, IconSet::Nerd, &dark, engine);
+        assert_eq!(runs.get(), 3, "a new width was not rendered again");
+        let nord = Theme::preset(Preset::Nord);
+        rendered_lines(&mut detail, "# B", 60, IconSet::Nerd, &nord, engine);
+        assert_eq!(runs.get(), 4, "a new theme was not rendered again");
+        rendered_lines(&mut detail, "# B", 60, IconSet::Unicode, &nord, engine);
+        assert_eq!(runs.get(), 5, "a new icon set was not rendered again");
+    }
+
+    #[test]
+    fn the_cached_document_is_the_document_the_engine_gives() {
+        // The cache changes when the engine runs, never what the pane shows.
+        let work = mock_work();
+        let dark = theme();
+        let mut detail = pane("TSK13");
+        let fresh = document_lines(&work, &detail, 98, IconSet::Nerd, &dark);
+        let first = cached_document(&work, &mut detail, 98, IconSet::Nerd, &dark);
+        let second = cached_document(&work, &mut detail, 98, IconSet::Nerd, &dark);
+        assert_eq!(first, fresh);
+        assert_eq!(second, fresh);
+        assert!(detail.rendered.is_some(), "the pane kept no document");
     }
 
     #[test]

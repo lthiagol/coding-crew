@@ -6,6 +6,7 @@
 
 pub mod chrome;
 pub mod icons;
+pub mod picker;
 pub mod text;
 
 mod theme;

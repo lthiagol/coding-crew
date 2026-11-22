@@ -25,7 +25,7 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 | part | behaviour |
 |---|---|
 | header | the app's icon and name, a dim `·`, then the folder the tool reads |
-| tab bar | the six tabs, each its icon and name; `Needs you` and `Backlog` carry their counts as badges; the active tab is bold and underlined by a `▔` on the rule under the bar; `1`–`6`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` |
+| tab bar | the six tabs, each its icon and name; `Needs you` and `Backlog` carry their counts as badges; the active tab is bold and underlined by a `▔` on the rule under the bar; `1`–`6`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` on every tab, Settings included |
 | content pane | the active tab's rows; `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` |
 | detail pane | `enter` on a row opens the task as a full-screen overlay; `esc` returns to the tab and the selection it came from, and `enter` again reopens |
 | footer | the active tab's own keys, centred under a thin rule, then `? help · q quit` — never a key that does nothing. Navigation keys are in the `?` overlay, not the footer. When the content pane has no room for the hidden-rows announcement, the footer carries that count first, and the content pane says nothing about it — the same fact is never painted twice |
@@ -101,7 +101,7 @@ blocks it.
  │
  ├─ TSK09   Tempor incididunt ut labore et dolore
  │
-  ╵
+ ╵
  ├─ AWAITING APPROVAL · 2
  │   └─ TSK04   Consectetur adipiscing elit
  ├─ BLOCKED · 3
@@ -139,6 +139,9 @@ Rules:
   given up whole parts at a time, and the rounds are what a narrow row drops
   first.
 - The tree is drawn as styled lines with a spine, and it scrolls.
+- The trunk is one column: the spine's marker and bar, the fork `╵` and the
+  branch connectors `├` `└` all start in the column after the selection bar's.
+  A task under a branch hangs from that branch, one column further in.
 
 This is master-plan's shape with our statuses: its lanes were *awaiting
 approval*, *blocked*, *grooming* and *review*, and it grouped the blocked
@@ -243,13 +246,17 @@ A value written inline (`tasks = { … }`) or as a dotted key
 
 | value | how it changes |
 |---|---|
-| a choice (`theme`, `icons`, `role`, `harness`, `effort`, `sort`, a boolean) | `←` `→` cycle it in place; the line shows `◂ one · two · three ▸` while the cursor is on it. A `harness` cycles the harness table; an `effort` cycles the levels of the agent's harness |
+| a choice (`theme`, `icons`, `role`, `harness`, `effort`, `sort`, a boolean) | `enter` opens its list: the picker hugo's choices use, with the value in force under the cursor. `↑` `↓` (`j` `k`) move over the choices, `enter` keeps the one under the cursor, `esc` restores the value the list opened on. A `harness` lists the harness table; an `effort` lists the levels of the agent's harness |
 | text or a number (`model`, `name`, `round_limit`) | `enter` edits it inline in the line; `enter` keeps, `esc` drops |
 
-**A change previews at once** — pick `nord` and the screen repaints in Nord —
-and is written only by `w`. `u` undoes the unsaved changes; `r` reloads the
-file from disk. Quitting with unsaved changes asks first, in the footer: `w`
-save, `q` quit without saving, `esc` stay.
+The arrows and `h` `l` switch tabs on Settings as on every other tab: they
+change no value.
+
+**A change previews at once** — move the picker onto `nord` and the screen
+repaints in Nord; `esc` puts the old choice back — and is written only by `w`.
+`u` undoes the unsaved changes; `r` reloads the file from disk. Quitting with
+unsaved changes asks first, in the footer: `w` save, `q` quit without saving,
+`esc` stay.
 
 **A value is checked before it is kept.** A choice can only be one of its
 choices; a number must be in its range (`round_limit` ≥ 1); a `model` is one
@@ -323,6 +330,11 @@ The pane scrolls: `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` move through a
 document taller than the pane. The footer is `esc close · ? help · q quit`;
 `?` lists the pane's keys over it, scroll keys included. Scrolling back to the
 top shows the document as the unscrolled view shows it.
+
+The pane keeps the document it rendered, and a redraw reuses it while the
+record, the width, the theme and the icon set are unchanged. Keys that are
+queued together are answered before the next draw, so a burst of scrolling is
+one redraw.
 
 ## Derived, never stored
 

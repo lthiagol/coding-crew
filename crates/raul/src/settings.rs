@@ -2,10 +2,11 @@
 //!
 //! raul draws `~/.config/coding-crew/config.toml` the way the file reads: its
 //! comments dim, its headers strong, one `key = value` per line in the file's
-//! own order. Every value is editable. A choice cycles with ←/→ and lists its
-//! choices on the cursor's line; a word or a number is typed inline with enter.
-//! A change previews at once — the theme, the icons and the Tasks order repaint
-//! the window — and is written only by `w`.
+//! own order. Every value is editable. A choice opens a picker with enter, the
+//! same list hugo's choices use, and the picker previews each choice as the
+//! cursor moves, esc restoring the value it had; a word or a number is typed
+//! inline with enter. A change previews at once — the theme, the icons and the
+//! Tasks order repaint the window — and is written only by `w`.
 //!
 //! The file is what is on disk; the panel holds the draft being edited and what
 //! the file held when it was last read or saved. The cursor stops on the value
@@ -31,12 +32,13 @@ use coding_crew_core::config::{
 use coding_crew_core::harness;
 use coding_crew_theme::chrome;
 use coding_crew_theme::icons::ENV as ICONS_ENV;
+use coding_crew_theme::picker::{self, Row};
 use coding_crew_theme::text::{cut_to, text_width};
 use coding_crew_theme::{Icon, IconSet, Preset, Theme};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
-/// The words a role is written with, in the order ←/→ cycle them.
+/// The words a role is written with, in the order the picker lists them.
 const ROLES: [&str; 4] = ["creator", "runner", "reviewer", "orchestrator"];
 /// The words a boolean is written with.
 const BOOLEANS: [&str; 2] = ["true", "false"];
@@ -78,13 +80,13 @@ enum Field {
     Reverse,
 }
 
-/// How a value is typed, which decides how it is cycled or typed, and how it
-/// is written.
+/// How a value is edited, which decides whether it is picked from a list or
+/// typed, and how it is written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
-    /// One of a list of words, cycled with ←/→ and written as a string.
+    /// One of a list of words, picked from a list and written as a string.
     Choice,
-    /// `true` or `false`, cycled with ←/→.
+    /// `true` or `false`, picked from a list.
     Bool,
     /// A whole number, typed inline.
     Number,
@@ -157,8 +159,8 @@ impl Field {
         }
     }
 
-    /// The words a choice or a boolean takes, in the order ←/→ cycle them. An
-    /// effort takes the levels of the harness its agent runs in.
+    /// The words a choice or a boolean takes, in the order the picker lists
+    /// them. An effort takes the levels of the harness its agent runs in.
     fn options(self, config: &Config) -> Vec<&'static str> {
         match self {
             Field::Theme => Preset::ALL.iter().map(|preset| preset.name()).collect(),
@@ -350,6 +352,17 @@ struct Edit {
     text: String,
 }
 
+/// A choice open in the picker: the value it sets, the words it lists, the
+/// cursor on one of them, and the draft as it was before the pick opened, which
+/// esc restores.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Pick {
+    field: Field,
+    options: Vec<&'static str>,
+    cursor: usize,
+    before: Config,
+}
+
 /// The Settings tab's state: the file as it reads, the draft being edited, and
 /// what the pane says about them.
 #[derive(Debug)]
@@ -375,6 +388,8 @@ pub struct Panel {
     applied: Order,
     /// The value being typed in, when one is.
     edit: Option<Edit>,
+    /// The choice open in the picker, when one is.
+    pick: Option<Pick>,
     /// Why the last save was refused, in a line.
     notice: Option<String>,
     /// The file changed on disk since it was read: a reload is offered.
@@ -402,6 +417,7 @@ impl Panel {
             draft: defaults,
             applied: Order::default(),
             edit: None,
+            pick: None,
             notice: None,
             stale: false,
             asking: false,
@@ -453,6 +469,11 @@ impl Panel {
     /// Whether a value is being typed in.
     pub fn editing(&self) -> bool {
         self.edit.is_some()
+    }
+
+    /// Whether a choice is open in the picker.
+    pub fn picking(&self) -> bool {
+        self.pick.is_some()
     }
 
     /// The text being typed in, for a key to add to or erase from.
@@ -523,41 +544,80 @@ impl Panel {
             .collect()
     }
 
-    /// Cycle the choice at `id` by `step` words, wrapping. Nothing happens to
-    /// a value that is not a choice.
-    pub fn change(&mut self, id: &str, step: isize) {
+    /// Start the value at `id`. A choice opens the picker, with the cursor on
+    /// the choice in force; a word or a number is typed in. Nothing starts for
+    /// a value that is neither, or for a choice with no words to list.
+    pub fn begin(&mut self, id: &str) {
         let Some(field) = self.field_at(id) else {
             return;
         };
-        let options = field.options(&self.draft);
-        if options.is_empty() {
-            return;
+        match field.kind() {
+            Kind::Choice | Kind::Bool => {
+                let options = field.options(&self.draft);
+                if options.is_empty() {
+                    return;
+                }
+                let current = field.text(&self.draft);
+                let cursor = options
+                    .iter()
+                    .position(|option| *option == current)
+                    .unwrap_or(0);
+                self.pick = Some(Pick {
+                    field,
+                    options,
+                    cursor,
+                    before: self.draft.clone(),
+                });
+            }
+            Kind::Text | Kind::Number | Kind::Gates => {
+                self.edit = Some(Edit {
+                    field,
+                    text: field.text(&self.draft),
+                });
+            }
         }
-        let current = field.text(&self.draft);
-        let len = options.len() as isize;
-        let next = match options.iter().position(|option| *option == current) {
-            Some(index) => (index as isize + step).rem_euclid(len) as usize,
-            None if step < 0 => options.len() - 1,
-            None => 0,
+    }
+
+    /// Move the pick's cursor by `step`, clamped to its list, and preview the
+    /// choice under it in the draft.
+    pub fn step_pick(&mut self, step: isize) {
+        let Some(pick) = self.pick.as_mut() else {
+            return;
         };
-        let mut draft = self.draft.clone();
-        if field.apply(&mut draft, options[next]).is_ok() {
+        let last = pick.options.len().saturating_sub(1) as isize;
+        pick.cursor = (pick.cursor as isize + step).clamp(0, last) as usize;
+        let mut draft = pick.before.clone();
+        if pick
+            .field
+            .apply(&mut draft, pick.options[pick.cursor])
+            .is_ok()
+        {
             self.draft = draft;
         }
         self.notice = None;
     }
 
-    /// Start typing the value at `id`. A choice is cycled, not typed: nothing
-    /// starts for it.
-    pub fn begin(&mut self, id: &str) {
-        let Some(field) = self.field_at(id) else {
+    /// Keep the choice under the pick's cursor, and close the pick. A pick that
+    /// opened on a value outside its list has no preview yet, so the cursor's
+    /// choice is applied here, as `step_pick` would apply it.
+    pub fn keep_pick(&mut self) {
+        let Some(pick) = self.pick.take() else {
             return;
         };
-        if matches!(field.kind(), Kind::Text | Kind::Number | Kind::Gates) {
-            self.edit = Some(Edit {
-                field,
-                text: field.text(&self.draft),
-            });
+        let mut draft = pick.before.clone();
+        if pick
+            .field
+            .apply(&mut draft, pick.options[pick.cursor])
+            .is_ok()
+        {
+            self.draft = draft;
+        }
+    }
+
+    /// Drop the pick: the draft is what it was before the pick opened.
+    pub fn drop_pick(&mut self) {
+        if let Some(pick) = self.pick.take() {
+            self.draft = pick.before;
         }
     }
 
@@ -802,7 +862,7 @@ impl Panel {
         let mut pending: Vec<Line<'static>> = Vec::new();
         for part in self.parts() {
             let mine = part.stop.is_some() && part.stop.as_deref() == selected;
-            let (line, reason) = self.paint(&part, width, mine, theme);
+            let (line, reason) = self.paint(&part, width, theme);
             let main = if part.stop.is_some() {
                 view::barred(line, width, mine, icons, theme)
             } else {
@@ -842,7 +902,6 @@ impl Panel {
         &self,
         part: &Part,
         width: usize,
-        selected: bool,
         theme: &Theme,
     ) -> (Line<'static>, Option<Line<'static>>) {
         let room = width.saturating_sub(BAR);
@@ -855,21 +914,20 @@ impl Panel {
                 field,
                 value,
                 comment,
-            } => self.value_line(*field, value, comment.as_deref(), room, selected, theme),
+            } => self.value_line(*field, value, comment.as_deref(), room, theme),
         }
     }
 
-    /// A value's line: `key = value`, then its comment, the note of the flag
-    /// that overrides it, and the choices when the cursor is on it. A value the
-    /// file leaves out is dim, with the note that it is a default. The reason
-    /// line is the value's text, when the file cannot hold it.
+    /// A value's line: `key = value`, then its comment, and the note of the flag
+    /// that overrides it. A value the file leaves out is dim, with the note that
+    /// it is a default. The reason line is the value's text, when the file
+    /// cannot hold it.
     fn value_line(
         &self,
         field: Field,
         shown: &str,
         comment: Option<&str>,
         room: usize,
-        selected: bool,
         theme: &Theme,
     ) -> (Line<'static>, Option<Line<'static>>) {
         let dim = theme.text.dim;
@@ -924,9 +982,6 @@ impl Panel {
         }
         if let Some(note) = self.overridden(field, &current) {
             tails.push(vec![Span::styled(format!("  {note}"), dim)]);
-        }
-        if selected && matches!(field.kind(), Kind::Choice | Kind::Bool) {
-            tails.push(choices(&field.options(&self.draft), &current, theme));
         }
         let line = fit(spans, tails, room, theme);
         let reason = self.reason(field, &checked).map(|reason| {
@@ -1125,25 +1180,6 @@ fn paint_of(paint: Paint, theme: &Theme) -> Style {
     }
 }
 
-/// The choices of a value, with the one it holds in bold: `◂ dark · nord ▸`.
-fn choices(options: &[&'static str], current: &str, theme: &Theme) -> Vec<Span<'static>> {
-    let dim = theme.text.dim;
-    let mut spans = vec![Span::styled("  ◂ ", dim)];
-    for (index, option) in options.iter().enumerate() {
-        if index > 0 {
-            spans.push(Span::styled(" · ", dim));
-        }
-        let style = if *option == current {
-            theme.text.strong
-        } else {
-            dim
-        };
-        spans.push(Span::styled(*option, style));
-    }
-    spans.push(Span::styled(" ▸", dim));
-    spans
-}
-
 /// A line made of its spans and the tails that fit beside them, in the order
 /// given. A line too wide for the room is cut, and its tails are dropped.
 fn fit(
@@ -1291,6 +1327,33 @@ pub fn render_view(
     (hidden > 0 && !announced).then_some(hidden)
 }
 
+/// Draw the pick open over the window, when one is: the choices it lists, with
+/// the cursor on the one the draft holds.
+pub fn render_pick(frame: &mut Frame, area: Rect, theme: &Theme, icons: IconSet, panel: &Panel) {
+    let Some(pick) = panel.pick.as_ref() else {
+        return;
+    };
+    let rows: Vec<Row> = pick
+        .options
+        .iter()
+        .map(|option| Row {
+            text: option.to_string(),
+            style: theme.text.normal,
+        })
+        .collect();
+    picker::draw(
+        frame,
+        picker::popup(area, rows.len()),
+        &pick.field.id(),
+        Icon::TabSettings,
+        icons,
+        theme,
+        &[],
+        &rows,
+        pick.cursor,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use ratatui::Terminal;
@@ -1355,6 +1418,36 @@ mod tests {
                 );
             })
             .expect("drawing the settings tab");
+        let buffer = terminal.backend().buffer();
+        let area = *buffer.area();
+        (0..area.height)
+            .map(|y| {
+                (0..area.width)
+                    .map(|x| buffer.cell((x, y)).map_or(" ", |cell| cell.symbol()))
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// Pick the choice `step` places from the one in force: enter, the cursor,
+    /// then enter.
+    fn choose(panel: &mut Panel, id: &str, step: isize) {
+        panel.begin(id);
+        panel.step_pick(step);
+        panel.keep_pick();
+    }
+
+    /// The screen the open pick draws, as rows.
+    fn draw_pick(panel: &Panel, width: u16, height: u16) -> Vec<String> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
+        let theme = theme();
+        terminal
+            .draw(|frame| {
+                render_pick(frame, frame.area(), &theme, IconSet::Nerd, panel);
+            })
+            .expect("drawing the pick");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
         (0..area.height)
@@ -1552,48 +1645,112 @@ mod tests {
     }
 
     #[test]
-    fn a_choice_lists_its_choices_on_the_cursor_line() {
-        let (panel, _) = panel("choices");
-        let rows = draw(&panel, 100, 60, Some("raul.theme"));
-        let line = row_with(&rows, "theme = \"dark\"");
-        assert!(
-            line.contains("◂ dark · nord · catppuccin · dracula · terminal ▸"),
-            "{line}"
-        );
-        // Off the cursor, no choices are drawn.
-        let rows = draw(&panel, 100, 200, Some("round_limit"));
-        assert!(
-            rows.iter().all(|row| !row.contains("◂")),
-            "{}",
-            rows.join("\n")
-        );
+    fn a_choice_opens_a_picker_over_its_choices() {
+        let (mut panel, _) = panel("picker-open");
+        panel.begin("raul.theme");
+        assert!(panel.picking(), "enter did not open the picker");
+        assert!(!panel.editing(), "a choice was typed inline");
+        let rows = draw_pick(&panel, 100, 40);
+        let text = rows.join("\n");
+        assert!(text.contains("raul.theme"), "{text}");
+        for preset in ["dark", "nord", "catppuccin", "dracula", "terminal"] {
+            assert!(
+                rows.iter().any(|row| row.contains(preset)),
+                "{preset}: {text}"
+            );
+        }
+        // The cursor is on the choice in force, and the picker is the pane.
+        assert_eq!(panel.pick.as_ref().map(|pick| pick.cursor), Some(0));
+        panel.keep_pick();
+        assert!(!panel.picking());
     }
 
     #[test]
-    fn a_choice_cycles_with_wrap_and_a_change_is_only_a_draft() {
-        let (mut panel, path) = panel("cycle");
-        panel.change("raul.theme", 1);
-        assert_eq!(panel.theme(), Preset::Nord);
-        panel.change("raul.theme", -1);
-        panel.change("raul.theme", -1);
-        assert_eq!(panel.theme(), Preset::Terminal, "the cycle wraps backwards");
-        panel.change("raul.reverse", 1);
+    fn a_pick_previews_each_choice_and_keep_keeps_it() {
+        let (mut panel, path) = panel("picker-preview");
+        panel.begin("raul.theme");
+        panel.step_pick(1);
+        assert_eq!(panel.theme(), Preset::Nord, "the cursor did not preview");
         assert!(panel.unsaved());
+        panel.keep_pick();
+        assert_eq!(panel.theme(), Preset::Nord, "keep dropped the choice");
         // Nothing is written until save.
         assert!(
             fs::read_to_string(&path)
                 .expect("the file")
                 .contains("theme = \"dark\""),
-            "a change was written before save"
+            "a pick was written before save"
         );
         assert!(panel.title().contains("● modified"), "{}", panel.title());
     }
 
     #[test]
-    fn a_change_to_a_value_that_is_not_a_choice_does_nothing() {
+    fn a_pick_stops_at_either_end_of_its_list() {
+        let (mut panel, _) = panel("picker-ends");
+        panel.begin("raul.theme");
+        panel.step_pick(-1);
+        assert_eq!(panel.theme(), Preset::Dark, "the top moved past its end");
+        panel.step_pick(99);
+        assert_eq!(panel.theme(), Preset::Terminal, "the list ran past its end");
+        panel.step_pick(-99);
+        assert_eq!(panel.theme(), Preset::Dark);
+        panel.keep_pick();
+    }
+
+    #[test]
+    fn esc_restores_the_choice_the_pick_opened_on() {
+        let (mut panel, _) = panel("picker-restore");
+        panel.begin("raul.theme");
+        panel.step_pick(2);
+        assert_eq!(panel.theme(), Preset::Catppuccin);
+        panel.drop_pick();
+        assert!(!panel.picking());
+        assert_eq!(panel.theme(), Preset::Dark, "esc kept the preview");
+        assert!(!panel.unsaved(), "esc left a change in the draft");
+    }
+
+    #[test]
+    fn esc_keeps_a_change_made_before_the_pick_opened() {
+        let (mut panel, _) = panel("picker-before");
+        panel.begin("raul.tasks.reverse");
+        panel.step_pick(-1);
+        panel.keep_pick();
+        panel.begin("raul.theme");
+        panel.step_pick(1);
+        panel.drop_pick();
+        assert!(
+            panel.unsaved(),
+            "esc dropped a change the pick did not make"
+        );
+        assert!(panel.draft.raul.tasks.reverse);
+    }
+
+    #[test]
+    fn a_pick_starts_on_the_value_in_force() {
+        let (mut panel, _) = panel("picker-cursor");
+        panel.begin("raul.tasks.reverse");
+        assert_eq!(
+            panel.pick.as_ref().map(|pick| pick.cursor),
+            Some(1),
+            "false"
+        );
+        let rows = draw_pick(&panel, 100, 40);
+        let text = rows.join("\n");
+        assert!(text.contains("true") && text.contains("false"), "{text}");
+        panel.drop_pick();
+    }
+
+    #[test]
+    fn a_number_or_a_word_is_typed_not_picked() {
         let (mut panel, _) = panel("not-choice");
-        panel.change("round_limit", 1);
-        panel.change("agents.0.model", 1);
+        panel.begin("round_limit");
+        assert!(panel.editing());
+        assert!(!panel.picking());
+        panel.drop_edit();
+        panel.begin("agents.0.model");
+        assert!(panel.editing());
+        assert!(!panel.picking());
+        panel.drop_edit();
         assert!(!panel.unsaved());
     }
 
@@ -1620,37 +1777,56 @@ mod tests {
     }
 
     #[test]
-    fn a_harness_is_cycled_from_the_table_and_its_efforts_follow_it() {
+    fn a_harness_is_picked_from_the_table_and_its_efforts_follow_it() {
         let (mut panel, _) = panel("harness");
         // The builder runs claude at high: opencode is next in the table, and
         // its levels are low, medium and high, so the effort is still high.
-        panel.change("agents.0.harness", 1);
+        panel.begin("agents.0.harness");
+        panel.step_pick(1);
+        panel.keep_pick();
         assert_eq!(panel.draft.agents[0].harness, "opencode");
         assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("high"));
-        // The effort cycles through opencode's levels, wrapping forward.
-        panel.change("agents.0.effort", 1);
-        assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("low"));
-        // The harness the table ends on wraps back to the first.
-        panel.change("agents.0.harness", 1);
-        panel.change("agents.0.harness", 1);
-        assert_eq!(panel.draft.agents[0].harness, "claude");
-        let rows = draw(&panel, 100, 60, Some("agents.0.harness"));
+        // The effort is picked from opencode's levels; the cursor starts on high.
+        panel.begin("agents.0.effort");
+        let rows = draw_pick(&panel, 100, 40);
         assert!(
-            rows.iter()
-                .any(|row| row.contains("◂ claude · opencode · cursor-agent ▸")),
+            rows.iter().any(|row| row.contains("medium")),
             "{}",
             rows.join("\n")
         );
+        panel.step_pick(-1);
+        panel.keep_pick();
+        assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("medium"));
+        // The harness list ends at the last harness and does not wrap.
+        panel.begin("agents.0.harness");
+        panel.step_pick(9);
+        panel.keep_pick();
+        assert_eq!(panel.draft.agents[0].harness, "cursor-agent");
+    }
+
+    #[test]
+    fn enter_on_a_pick_opened_on_an_unset_effort_sets_the_first_level() {
+        let (mut panel, _) = panel("unset-effort");
+        // No effort in force: the pick opens on the harness's first level, and
+        // enter keeps that level rather than the old, unset value.
+        panel.draft.agents[0].effort = None;
+        panel.begin("agents.0.effort");
+        panel.keep_pick();
+        assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("low"));
+        assert!(!panel.picking());
     }
 
     #[test]
     fn an_effort_the_harness_does_not_take_is_refused_on_save() {
         let (mut panel, path) = panel("refused-effort");
         // claude's xhigh is not one of cursor-agent's levels.
-        panel.change("agents.0.effort", 1);
+        panel.begin("agents.0.effort");
+        panel.step_pick(1);
+        panel.keep_pick();
         assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("xhigh"));
-        panel.change("agents.0.harness", 1);
-        panel.change("agents.0.harness", 1);
+        panel.begin("agents.0.harness");
+        panel.step_pick(2);
+        panel.keep_pick();
         assert_eq!(panel.draft.agents[0].harness, "cursor-agent");
         assert!(
             !panel.save(),
@@ -1674,6 +1850,8 @@ mod tests {
         let (mut panel, _) = panel("no-type");
         panel.begin("raul.icons");
         assert!(!panel.editing());
+        assert!(panel.picking());
+        panel.drop_pick();
     }
 
     #[test]
@@ -1798,11 +1976,11 @@ mod tests {
     #[test]
     fn the_preview_follows_the_draft_and_the_flag_wins_in_it() {
         let (mut panel, _) = panel("preview");
-        panel.change("raul.icons", 1);
+        choose(&mut panel, "raul.icons", 1);
         assert_eq!(panel.icons(), IconSet::Unicode);
-        panel.change("raul.theme", 1);
+        choose(&mut panel, "raul.theme", 1);
         assert_eq!(panel.theme(), Preset::Nord);
-        panel.change("raul.tasks.sort", 1);
+        choose(&mut panel, "raul.tasks.sort", 1);
         assert_eq!(
             panel.order_changed(),
             Some(Order {
@@ -1824,7 +2002,7 @@ mod tests {
         );
         fs::write(&path, &before).expect("the edited file");
         panel.reload();
-        panel.change("raul.theme", 1);
+        choose(&mut panel, "raul.theme", 1);
         assert!(panel.save());
         assert!(!panel.unsaved());
         let after = fs::read_to_string(&path).expect("the file");
@@ -1839,7 +2017,7 @@ mod tests {
     #[test]
     fn a_save_refused_for_a_changed_file_is_named_and_offers_a_reload() {
         let (mut panel, path) = panel("stale");
-        panel.change("raul.theme", 1);
+        choose(&mut panel, "raul.theme", 1);
         fs::write(&path, nine()).expect("someone else's edit");
         assert!(!panel.save());
         assert!(panel.stale());
@@ -1859,7 +2037,7 @@ mod tests {
     #[test]
     fn undo_drops_the_unsaved_changes() {
         let (mut panel, _) = panel("undo");
-        panel.change("raul.theme", 1);
+        choose(&mut panel, "raul.theme", 1);
         assert!(panel.unsaved());
         panel.undo();
         assert!(!panel.unsaved());
@@ -1870,7 +2048,7 @@ mod tests {
     fn reload_takes_the_file_and_drops_the_draft() {
         let (mut panel, path) = panel("reload");
         fs::write(&path, seven()).expect("someone else's edit");
-        panel.change("raul.theme", 1);
+        choose(&mut panel, "raul.theme", 1);
         panel.reload();
         assert!(!panel.unsaved());
         assert_eq!(panel.draft.round_limit, 7);
@@ -1881,7 +2059,7 @@ mod tests {
     fn quit_asks_when_there_are_unsaved_changes() {
         let (mut panel, _) = panel("asks");
         assert!(!panel.asking());
-        panel.change("raul.theme", 1);
+        choose(&mut panel, "raul.theme", 1);
         panel.ask();
         assert!(panel.asking());
         panel.stay();
@@ -1910,7 +2088,7 @@ mod tests {
             "the defaults are not beside it: {text}"
         );
         // Nothing is changed, and nothing is written.
-        panel.change("raul.theme", 1);
+        choose(&mut panel, "raul.theme", 1);
         assert!(!panel.unsaved());
         assert!(!panel.save());
         assert_eq!(
@@ -1976,7 +2154,7 @@ mod tests {
     fn a_change_to_a_default_the_file_leaves_out_adds_its_key_on_save() {
         let (mut panel, path) = before_raul("no-raul-save");
         let old = fs::read_to_string(&path).expect("the file");
-        panel.change("raul.theme", 1);
+        choose(&mut panel, "raul.theme", 1);
         assert!(panel.unsaved(), "the default cannot be changed");
         assert!(panel.save());
         let saved = fs::read_to_string(&path).expect("the file");

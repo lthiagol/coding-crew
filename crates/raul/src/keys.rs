@@ -24,6 +24,9 @@ pub enum Scope {
     Filter,
     /// The Settings tab: its keys change the file's values.
     Settings,
+    /// A pick open on the Settings tab: its keys move over the choices and keep
+    /// or drop the pick, and no other key answers.
+    Picking,
     /// A value of the Settings tab, while it is typed in: its keys type, and no
     /// other key answers.
     Value,
@@ -72,8 +75,12 @@ pub enum Act {
     TypeFilter,
     /// Quit at once, without asking about unsaved changes.
     Exit,
-    /// Cycle the choice under the cursor: the step, forward on a positive one.
-    Change(isize),
+    /// Move the pick's cursor by the step, and preview the choice under it.
+    StepPick(isize),
+    /// Keep the pick's choice.
+    KeepPick,
+    /// Drop the pick: the value is what it was before the pick opened.
+    DropPick,
     /// Start typing the value under the cursor.
     Begin,
     /// Write the changes to the configuration file.
@@ -154,7 +161,7 @@ impl Binding {
 
 /// The keys of the window, in the order the groups read them: the window
 /// first, then the rows, then the filter line, then the detail pane.
-pub const BINDINGS: [Binding; 47] = [
+pub const BINDINGS: [Binding; 50] = [
     Binding {
         scopes: &[Scope::Window, Scope::Detail],
         chords: &[Chord::Key(KeyCode::Char('q'), false)],
@@ -298,22 +305,6 @@ pub const BINDINGS: [Binding; 47] = [
     },
     Binding {
         scopes: &[Scope::Settings],
-        chords: &[
-            Chord::Key(KeyCode::Left, false),
-            Chord::Key(KeyCode::Char('h'), false),
-        ],
-        act: Act::Change(-1),
-    },
-    Binding {
-        scopes: &[Scope::Settings],
-        chords: &[
-            Chord::Key(KeyCode::Right, false),
-            Chord::Key(KeyCode::Char('l'), false),
-        ],
-        act: Act::Change(1),
-    },
-    Binding {
-        scopes: &[Scope::Settings],
         chords: &[Chord::Key(KeyCode::Enter, false)],
         act: Act::Begin,
     },
@@ -372,6 +363,37 @@ pub const BINDINGS: [Binding; 47] = [
         scopes: &[Scope::Detail],
         chords: &[Chord::Key(KeyCode::Char('G'), false)],
         act: Act::Bottom,
+    },
+    Binding {
+        scopes: &[Scope::Picking],
+        chords: &[
+            Chord::Key(KeyCode::Up, false),
+            Chord::Key(KeyCode::Char('k'), false),
+        ],
+        act: Act::StepPick(-1),
+    },
+    Binding {
+        scopes: &[Scope::Picking],
+        chords: &[
+            Chord::Key(KeyCode::Down, false),
+            Chord::Key(KeyCode::Char('j'), false),
+        ],
+        act: Act::StepPick(1),
+    },
+    Binding {
+        scopes: &[Scope::Picking],
+        chords: &[Chord::Key(KeyCode::Enter, false)],
+        act: Act::KeepPick,
+    },
+    Binding {
+        scopes: &[Scope::Picking],
+        chords: &[Chord::Key(KeyCode::Esc, false)],
+        act: Act::DropPick,
+    },
+    Binding {
+        scopes: &[Scope::Picking],
+        chords: &[Chord::Key(KeyCode::Char('c'), true)],
+        act: Act::Exit,
     },
     Binding {
         scopes: &[Scope::Value],
@@ -496,7 +518,7 @@ mod tests {
             Scope::Window => 0,
             Scope::Rows | Scope::Tasks | Scope::Filter | Scope::Settings => 1,
             Scope::Detail => 2,
-            Scope::Value | Scope::Asking => 3,
+            Scope::Picking | Scope::Value | Scope::Asking => 3,
         };
         let mut last = 0;
         for binding in BINDINGS {
@@ -530,6 +552,7 @@ mod tests {
             Scope::Detail,
             Scope::Filter,
             Scope::Settings,
+            Scope::Picking,
             Scope::Value,
             Scope::Asking,
         ] {

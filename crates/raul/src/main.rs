@@ -22,6 +22,7 @@ mod view;
 
 use std::io::{Stdout, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Result, bail};
 use crossterm::event::{self, Event, KeyEventKind};
@@ -336,14 +337,22 @@ fn run(
         let now = coding_crew_core::now_rfc3339();
         terminal.draw(|frame| app.draw(frame, &work, &now))?;
 
-        if let Event::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-            && app.on_key(key, &work, &now) == Action::Quit
-        {
-            break;
+        // The key that woke the loop, and every key already queued behind it,
+        // are answered before the next draw: a burst of wheel scrolls costs one
+        // redraw, not one per key.
+        let mut keys = vec![event::read()?];
+        while event::poll(Duration::ZERO)? {
+            keys.push(event::read()?);
+        }
+        for event in keys {
+            if let Event::Key(key) = event
+                && key.kind == KeyEventKind::Press
+                && app.on_key(key, &work, &now) == Action::Quit
+            {
+                return Ok(());
+            }
         }
     }
-    Ok(())
 }
 
 /// Print the screen as text and exit.

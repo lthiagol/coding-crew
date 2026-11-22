@@ -1135,10 +1135,10 @@ fn bar(theme: &Theme) -> Line<'static> {
 
 /// The mark of the place where the branches fork off.
 ///
-/// The fork sits one column right of the trunk, as the sketch of the spec
-/// has it.
+/// The fork sits on the trunk's column, so the bar above it, the fork and the
+/// branch headers that hang from it run in one column.
 fn fork_line(theme: &Theme) -> Line<'static> {
-    Line::from(Span::styled("  ╵", theme.text.dim))
+    Line::from(Span::styled(" ╵", theme.text.dim))
 }
 
 /// The fork: the bar that holds it, and the fork itself.
@@ -1842,8 +1842,8 @@ mod tests {
             phase_glyph("approved")
         );
         assert!(rows.iter().any(|row| row.starts_with(&spine)), "{rows:?}");
-        // The fork sits one column right of the trunk.
-        assert!(rows.iter().any(|row| row.starts_with("  ╵")), "{rows:?}");
+        // The fork sits on the trunk.
+        assert!(rows.iter().any(|row| row.starts_with(" ╵")), "{rows:?}");
         // The branch headers hang on the trunk.
         assert!(
             rows.iter().any(|row| {
@@ -1961,6 +1961,50 @@ mod tests {
         assert!(text.len() > 2, "the row wraps: {text:?}");
         for line in &text[1..] {
             assert!(line.starts_with(" │ "), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn the_trunk_is_one_column_on_every_row_at_40_and_100() {
+        // The spine's marker, its bar, the fork and the branch headers hang on
+        // one trunk: each starts in the trunk's column, at every width. A task
+        // under a branch hangs on that branch, not on the trunk, so it is not
+        // checked here.
+        let next = Icon::Next.glyph(IconSet::Nerd);
+        let labels = [
+            "AWAITING APPROVAL",
+            "BLOCKED",
+            "RUNNING",
+            "REVIEW",
+            "ESCALATED",
+        ];
+        for width in [40, 100] {
+            let rows = inner(&draw(&mock_work(), width, 40));
+            let mut on_trunk = 0;
+            for row in &rows {
+                // Column 0 is the selection bar's: the first mark after it is the row's.
+                let Some((at, glyph)) = row.chars().enumerate().skip(1).find(|(_, c)| *c != ' ')
+                else {
+                    continue;
+                };
+                let header = labels.iter().any(|label| row.contains(label));
+                let trunk = row.trim() == "│"
+                    || row.trim() == "╵"
+                    || next.starts_with(glyph)
+                    || (header && ['├', '└'].contains(&glyph));
+                if trunk {
+                    assert_eq!(at, 1, "width {width}: the trunk is in column {at}: {row:?}");
+                    on_trunk += 1;
+                }
+            }
+            assert!(
+                on_trunk >= 3,
+                "width {width}: the trunk shows {on_trunk} rows"
+            );
+            assert!(
+                rows.iter().any(|row| row.starts_with(" ╵")),
+                "width {width}: no fork: {rows:?}"
+            );
         }
     }
 
