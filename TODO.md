@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 66.
+Updated 2026-11-22 by the orchestrator, after unit 67.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–66 and 63b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–67 and 63b are closed; their record is in
 `DONE.md`.
 
-- 67 · hugo has depth, and selection is soft (M)
 - 68 · The document in colour (L)
 
 ---
@@ -101,6 +100,10 @@ Queued in `docs/plan.md`, in order. Units 49–66 and 63b are closed; their reco
   says `pick an effort` on the warning slot. `task-model.md` and `screens.md`
   say so. This replaces the earlier note that an absent effort runs on the
   harness's default.
+- **Recessed surfaces** (2026-11-22, unit 67). The human ruled hugo's sidebar
+  surface a step darker than the base, not lighter, so the 3:1 floor holds in
+  every colour preset. The surface is the base mixed 30% toward black; the
+  selected tint is the surface mixed 10% toward the accent.
 
 ---
 
@@ -178,6 +181,19 @@ None blocking. Carried from the closed units.
   the popup should be taller.
 - **hugo has no width sweep** (2026-11-22, unit 66). The footer sweep covers
   raul at 40–120 columns. hugo's footer is pinned at 40, 60 and 100 only.
+- **The palette rules 2 and 9 were amended for unit 67** (2026-11-22, unit 67).
+  Rule 2 makes the selection a tint and rule 9 allows two derived backgrounds.
+  The human confirms the amended wording in `docs/tui/palettes.md`.
+- **The derivation shares are the builder's** (2026-11-22, unit 67). The brief
+  said "about 25%"; the build uses 30% for the surface and 10% for the tint,
+  because 25% met neither the floor nor the step. The human confirms the figures.
+- **Dracula's selected tint clears 3:1 by a hair** (2026-11-22, unit 67). The
+  comment grey reads 3.00004:1 on the tint. The words test pins it, so a palette
+  change that drifts it will fail the gate.
+- **The crew has no blocked state** (2026-11-22, unit 67). `AgentState` holds
+  idle, executing and reviewing only (`crates/core/src/runtime.rs`), so hugo
+  paints no `semantic.warn` for a blocked agent. Recommendation: add the state
+  in core first, then wire the colour.
 
 - **The document overflows below 14 columns** (2026-11-22). The header table
   is 11 columns wide, so an inner width of 10 (a 12-column pane) overflows; a

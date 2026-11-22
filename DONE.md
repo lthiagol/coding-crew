@@ -1243,6 +1243,21 @@ follows item 2 of the job, so its footer is `esc close · ? help · q quit` and
 `?` opens an overlay that lists the scroll keys. No one was there to ask, so
 the build took it; TODO.md asks the human to confirm. Commit `52f6d33`.
 
+Unit closed: hugo has depth, and selection is soft (plan 67). One build round
+and five fix rounds, the sixth review clean. Four new slots - `chrome.surface`,
+`text.selected_bg` and the three role slots - in every preset, and the derived
+backgrounds are recorded in `docs/tui/palettes.md`. Selection in both TUIs is
+the `▌` bar and a subtle tint, with the text keeping its own colours. hugo's
+sidebar sits on its surface, its groups are accent headers with a rule, and the
+budget bar colours by what is spent. The review stalled on the 3:1 floor for
+four rounds: Nord's error and Dracula's muted text fell below it on the tint. The human ruled
+**recessed surfaces**: the surface is a step darker than the base, not lighter.
+The surface is the base mixed 30% toward black and the tint is the surface mixed
+10% toward the accent, which clears the floor in every colour preset. The brief
+said "about 25%"; 25% could not meet both the floor and the step. The
+`palettes.md` rules 2 and 9 were amended to allow this. The unit ran on the
+herdr-crew skill. Commit `9f60719`.
+
 ---
 
 ## Lessons
