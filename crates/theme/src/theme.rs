@@ -268,6 +268,17 @@ impl Theme {
         document_palette(self.preset)
     }
 
+    /// The style a document role paints outside the engine: its colour, and
+    /// in the terminal preset the attributes that tell it apart from the
+    /// other roles. The colour presets paint the colour alone.
+    pub fn document_style(&self, role: DocRole) -> Style {
+        let style = Style::new().fg(self.document().paint(role, DocSide::One));
+        match self.preset {
+            Preset::Terminal => style.add_modifier(terminal_attribute(role)),
+            _ => style,
+        }
+    }
+
     /// The markdown engine's theme, painted from the document's roles.
     ///
     /// The engine has its own palettes; raul and hugo do not use them. Every
@@ -769,6 +780,23 @@ pub fn document_palette(preset: Preset) -> DocPalette {
         Preset::Catppuccin => catppuccin_document(),
         Preset::Dracula => dracula_document(),
         Preset::Terminal => DocPalette::reset(),
+    }
+}
+
+/// The attributes a document role paints in the terminal preset, where every
+/// colour is the terminal's own. A syntax role takes one, so its tokens read
+/// apart from the body; the section heading takes the bold the engine gives a
+/// heading. Every other role takes none.
+fn terminal_attribute(role: DocRole) -> Modifier {
+    match role {
+        DocRole::HeadingSection | DocRole::SyntaxKeyword => Modifier::BOLD,
+        DocRole::SyntaxString => Modifier::UNDERLINED,
+        DocRole::SyntaxNumber => Modifier::ITALIC,
+        DocRole::SyntaxFunction => Modifier::BOLD | Modifier::UNDERLINED,
+        DocRole::SyntaxType => Modifier::ITALIC | Modifier::UNDERLINED,
+        DocRole::SyntaxComment => Modifier::DIM,
+        DocRole::SyntaxTag => Modifier::DIM | Modifier::ITALIC,
+        _ => Modifier::empty(),
     }
 }
 

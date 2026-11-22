@@ -289,9 +289,14 @@ can and cannot do:
   three shapes no semantic slot holds, so a role does not read as a phase.
 - **the document loses its distinctions.** `MarkdownTheme` carries colours
   only, so every field becomes `Color::Reset`: a checked task, an unchecked
-  task, a warning and a caution are painted alike. Only the engine's own
-  modifiers survive — bold on headings and strong text, underlined on links
+  task, a warning and a caution are painted alike. Inside the engine only its
+  own modifiers survive — bold on headings and strong text, underlined on links
   among them.
+- **the syntax roles are told apart outside the engine.**
+  `Theme::document_style` adds an attribute to each code token's role: keyword
+  bold, string underlined, number italic, function bold and underlined, type
+  italic and underlined, comment dim, tag dim and italic. A variable takes none.
+  The engine does not carry these; they come from `document_style` alone.
 - **some roles are weaker than they would be with a colour.** `semantic.info`
   is bold and dim, so the heading is louder than the `draft` row under it,
   which is dim alone; with a colour it would be a hue of its own.

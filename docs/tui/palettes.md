@@ -876,9 +876,10 @@ A declared role is not dead colour: dead colour would be a role the document
 ### The terminal preset
 
 The terminal preset paints none of the twenty-seven roles: every one resolves to
-`Color::Reset`, and what still tells one role from another is the engine's
-own modifiers. The document says the same thing in every preset; only the
-paint changes.
+`Color::Reset`. What still tells one role from another is the engine's own
+modifiers and, for the syntax roles, the attributes `Theme::document_style`
+adds outside the engine ([theme.md](theme.md#the-terminal-preset)). The document
+says the same thing in every preset; only the paint changes.
 
 ## The code's syntax
 

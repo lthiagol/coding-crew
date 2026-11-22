@@ -39,7 +39,7 @@ use coding_crew_theme::chrome;
 use coding_crew_theme::icons::ENV as ICONS_ENV;
 use coding_crew_theme::picker::{self, Row};
 use coding_crew_theme::text::{cut_to, text_width};
-use coding_crew_theme::{Icon, IconSet, Preset, Theme};
+use coding_crew_theme::{DocRole, Icon, IconSet, Preset, Theme};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -845,7 +845,7 @@ impl Panel {
     fn first_reason(&self) -> Option<String> {
         self.parts().iter().find_map(|part| match &part.shape {
             Shape::Value { field, .. } => self.reason(*field, &field.text(&self.draft)),
-            Shape::Text(..) => None,
+            Shape::Text(..) | Shape::Toml(_) => None,
         })
     }
 
@@ -869,20 +869,30 @@ impl Panel {
     /// The read-only view: the problem, the file as it is, and the defaults in
     /// use. Every line is a cursor stop, so the window scrolls them.
     fn read_only_parts(&self, problem: &str) -> Vec<Part> {
-        let mut lines = vec![(problem.to_string(), Paint::Error)];
+        let mut shapes = vec![Shape::Text(problem.to_string(), Paint::Error)];
         if self.path.is_some() {
-            lines.push(("the file, as it is:".to_string(), Paint::Strong));
-            lines.extend(self.text.iter().map(|line| (line.clone(), Paint::Normal)));
-            lines.push((String::new(), Paint::Dim));
+            shapes.push(Shape::Text(
+                "the file, as it is:".to_string(),
+                Paint::Strong,
+            ));
+            shapes.extend(self.text.iter().map(|line| Shape::Toml(line.clone())));
+            shapes.push(Shape::Text(String::new(), Paint::Dim));
         }
-        lines.push(("the defaults in use:".to_string(), Paint::Strong));
+        shapes.push(Shape::Text(
+            "the defaults in use:".to_string(),
+            Paint::Strong,
+        ));
         let defaults = Config::default().to_toml();
-        lines.extend(defaults.lines().map(|line| (line.to_string(), Paint::Dim)));
-        lines
+        shapes.extend(
+            defaults
+                .lines()
+                .map(|line| Shape::Text(line.to_string(), Paint::Dim)),
+        );
+        shapes
             .into_iter()
             .enumerate()
-            .map(|(index, (text, paint))| Part {
-                shape: Shape::Text(text, paint),
+            .map(|(index, shape)| Part {
+                shape,
                 stop: Some(format!("line:{index}")),
                 section: LINES.to_string(),
             })
@@ -902,7 +912,7 @@ impl Panel {
             let trimmed = raw.trim();
             let shape = if trimmed.starts_with('[') {
                 place = header(trimmed, &mut agents, &mut steps, &crew);
-                Shape::Text(raw.clone(), Paint::Strong)
+                Shape::Toml(raw.clone())
             } else if let Some((field, value)) = assignment(trimmed, &place) {
                 let (value, comment) = split_comment(value.trim_start());
                 Shape::Value {
@@ -910,14 +920,12 @@ impl Panel {
                     value: value.to_string(),
                     comment: comment.map(str::to_string),
                 }
-            } else if trimmed.starts_with('#') {
-                Shape::Text(raw.clone(), Paint::Dim)
             } else {
-                Shape::Text(raw.clone(), Paint::Normal)
+                Shape::Toml(raw.clone())
             };
             let stop = match &shape {
                 Shape::Value { field, .. } => Some(field.id()),
-                Shape::Text(..) => None,
+                Shape::Text(..) | Shape::Toml(_) => None,
             };
             let section = if place.name.is_empty() {
                 TOP.to_string()
@@ -1060,6 +1068,7 @@ impl Panel {
                 Line::from(Span::styled(cut_to(text, room), paint_of(*paint, theme))),
                 None,
             ),
+            Shape::Toml(text) => (Line::from(cut_spans(toml_spans(text, theme), room)), None),
             Shape::Value {
                 field,
                 value,
@@ -1071,7 +1080,7 @@ impl Panel {
     /// A value's line: `key = value`, then its comment, and the note of the flag
     /// that overrides it. A value the file leaves out is dim, with the note that
     /// it is a default. The reason line is the value's text, when the file
-    /// cannot hold it.
+    /// cannot hold it, and keeps the error colour.
     fn value_line(
         &self,
         field: Field,
@@ -1081,27 +1090,35 @@ impl Panel {
         theme: &Theme,
     ) -> (Line<'static>, Option<Line<'static>>) {
         let dim = theme.text.dim;
-        let strong = theme.text.strong;
         let current = field.text(&self.draft);
         let typing = self.edit.as_ref().filter(|edit| edit.field == field);
         let absent = self.absent(field);
-        let mut spans = vec![
-            Span::styled(field.key(), if absent { dim } else { theme.text.normal }),
-            Span::styled(" = ", dim),
-        ];
+        let key = if absent {
+            dim
+        } else {
+            theme.document_style(DocRole::SyntaxVariable)
+        };
+        let equals = if absent {
+            dim
+        } else {
+            theme.document_style(DocRole::Text)
+        };
+        let mut spans = vec![Span::styled(field.key(), key), Span::styled(" = ", equals)];
         let checked = match typing {
             Some(edit) => {
                 let quoted = field.kind() == Kind::Text;
-                if quoted {
-                    spans.push(Span::styled("\"", strong));
-                }
-                spans.push(Span::styled(edit.text.clone(), strong));
+                let open = if quoted {
+                    format!("\"{}", edit.text)
+                } else {
+                    edit.text.clone()
+                };
+                spans.extend(value_spans(&open, theme));
                 spans.push(Span::styled(
                     " ",
                     Style::default().add_modifier(Modifier::REVERSED),
                 ));
                 if quoted {
-                    spans.push(Span::styled("\"", strong));
+                    spans.extend(value_spans("\"", theme));
                 }
                 edit.text.clone()
             }
@@ -1117,14 +1134,18 @@ impl Panel {
                 } else {
                     self.written(field, &current)
                 };
-                let painted = if absent || none { dim } else { strong };
-                spans.push(Span::styled(written, painted));
+                if absent || none {
+                    spans.push(Span::styled(written, dim));
+                } else {
+                    spans.extend(value_spans(&written, theme));
+                }
                 current.clone()
             }
         };
         let mut tails: Vec<Vec<Span<'static>>> = Vec::new();
         if let Some(comment) = comment {
-            tails.push(vec![Span::styled(format!("  {comment}"), dim)]);
+            let style = theme.document_style(DocRole::SyntaxComment);
+            tails.push(vec![Span::styled(format!("  {comment}"), style)]);
         }
         if absent {
             let note = if current == field.text(&Config::default()) {
@@ -1137,7 +1158,7 @@ impl Panel {
         if let Some(note) = self.overridden(field, &current) {
             tails.push(vec![Span::styled(format!("  {note}"), dim)]);
         }
-        let line = fit(spans, tails, room, theme);
+        let line = fit(spans, tails, room);
         let reason = self.reason(field, &checked).map(|reason| {
             Line::from(Span::styled(
                 cut_to(&format!("  {reason}"), room),
@@ -1209,6 +1230,9 @@ struct Part {
 enum Shape {
     /// A line of text, painted as given.
     Text(String, Paint),
+    /// A line of the file that is not a value the tab edits: a header, a
+    /// comment, or a line the tab does not read. Painted on its syntax roles.
+    Toml(String),
     /// A value the tab edits: its field, the value as the file writes it, and
     /// the comment the line ends with.
     Value {
@@ -1221,7 +1245,6 @@ enum Shape {
 /// How a line of text is painted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Paint {
-    Normal,
     Dim,
     Strong,
     Error,
@@ -1400,7 +1423,6 @@ fn split_comment(value: &str) -> (&str, Option<&str>) {
 /// The paint of a line of text.
 fn paint_of(paint: Paint, theme: &Theme) -> Style {
     match paint {
-        Paint::Normal => theme.text.normal,
         Paint::Dim => theme.text.dim,
         Paint::Strong => theme.text.strong,
         Paint::Error => theme.semantic.error,
@@ -1413,14 +1435,12 @@ fn fit(
     mut spans: Vec<Span<'static>>,
     tails: Vec<Vec<Span<'static>>>,
     room: usize,
-    theme: &Theme,
 ) -> Line<'static> {
     let width = |spans: &[Span<'static>]| -> usize {
         spans.iter().map(|span| text_width(&span.content)).sum()
     };
     if width(&spans) > room {
-        let plain: String = spans.iter().map(|span| span.content.as_ref()).collect();
-        return Line::from(Span::styled(cut_to(&plain, room), theme.text.normal));
+        return Line::from(cut_spans(spans, room));
     }
     for tail in tails {
         if width(&spans) + width(&tail) <= room {
@@ -1428,6 +1448,134 @@ fn fit(
         }
     }
     Line::from(spans)
+}
+
+/// The spans cut to `room` columns, each keeping its own style. A cut is marked
+/// with `…`, as `cut_to` marks one.
+fn cut_spans(spans: Vec<Span<'static>>, room: usize) -> Vec<Span<'static>> {
+    let plain: String = spans.iter().map(|span| span.content.as_ref()).collect();
+    let cut = cut_to(&plain, room);
+    if cut == plain {
+        return spans;
+    }
+    let Some(head) = cut.strip_suffix('…') else {
+        return Vec::new();
+    };
+    let mut left = head.len();
+    let mut last = spans.first().map_or(Style::default(), |span| span.style);
+    let mut out = Vec::new();
+    for span in spans {
+        if left == 0 {
+            break;
+        }
+        let take = span.content.len().min(left);
+        out.push(Span::styled(span.content[..take].to_string(), span.style));
+        left -= take;
+        last = span.style;
+    }
+    out.push(Span::styled("…", last));
+    out
+}
+
+/// A line of the file on its syntax roles: a `[section]` header is the section
+/// heading, a `key = value` line takes the key, the `=` and the value's tokens,
+/// and a comment line is a comment.
+fn toml_spans(line: &str, theme: &Theme) -> Vec<Span<'static>> {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with('[') {
+        let style = theme.document_style(DocRole::HeadingSection);
+        return vec![Span::styled(line.to_string(), style)];
+    }
+    let Some(at) = line.find('=').filter(|_| !trimmed.starts_with('#')) else {
+        return value_spans(line, theme);
+    };
+    let key = &line[..at];
+    let name = key.trim();
+    let bare = !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
+    if !bare {
+        return value_spans(line, theme);
+    }
+    let lead = key.len() - key.trim_start().len();
+    let trail = key.len() - key.trim_end().len();
+    let text = theme.document_style(DocRole::Text);
+    let mut spans = vec![Span::styled(key[..lead].to_string(), text)];
+    spans.push(Span::styled(
+        name.to_string(),
+        theme.document_style(DocRole::SyntaxVariable),
+    ));
+    spans.push(Span::styled(key[key.len() - trail..].to_string(), text));
+    spans.push(Span::styled("=", text));
+    spans.extend(value_spans(&line[at + 1..], theme));
+    spans
+}
+
+/// Text on its syntax roles: a string, a number or a boolean, and a `#` comment
+/// to the end of the line. Every other character is body text.
+fn value_spans(text: &str, theme: &Theme) -> Vec<Span<'static>> {
+    let mut runs: Vec<(usize, DocRole)> = Vec::new();
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
+        let first = rest.chars().next().unwrap_or_default();
+        let (len, role) = if first == '#' {
+            (rest.len(), DocRole::SyntaxComment)
+        } else if first == '"' || first == '\'' {
+            (string_len(rest, first), DocRole::SyntaxString)
+        } else if first.is_ascii_alphanumeric() || matches!(first, '-' | '+') {
+            let word = rest
+                .find(|c: char| {
+                    !(c.is_ascii_alphanumeric() || matches!(c, '-' | '+' | '.' | '_' | ':'))
+                })
+                .unwrap_or(rest.len());
+            let unsigned = rest[..word].trim_start_matches(['-', '+']);
+            let number = matches!(&rest[..word], "true" | "false")
+                || unsigned.starts_with(|c: char| c.is_ascii_digit());
+            let role = if number {
+                DocRole::SyntaxNumber
+            } else {
+                DocRole::Text
+            };
+            (word, role)
+        } else {
+            (first.len_utf8(), DocRole::Text)
+        };
+        runs.push((at, role));
+        at += len;
+    }
+    // Adjacent runs of one role are one span.
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for (index, (start, role)) in runs.iter().enumerate() {
+        let end = runs.get(index + 1).map_or(text.len(), |next| next.0);
+        let style = theme.document_style(*role);
+        match spans.last_mut() {
+            Some(span) if span.style == style => {
+                span.content = format!("{}{}", span.content, &text[*start..end]).into();
+            }
+            _ => spans.push(Span::styled(text[*start..end].to_string(), style)),
+        }
+    }
+    spans
+}
+
+/// The length of the quoted string that opens `text` with `quote`: up to its
+/// closing quote, or to the end of the text when it is not closed.
+fn string_len(text: &str, quote: char) -> usize {
+    let mut escaped = false;
+    for (index, c) in text.char_indices().skip(1) {
+        match c {
+            '\\' if quote == '"' && !escaped => {
+                escaped = true;
+                continue;
+            }
+            c if c == quote && !escaped => return index + c.len_utf8(),
+            _ => {}
+        }
+        escaped = false;
+    }
+    text.len()
 }
 
 /// A line with the selection bar's column left empty.
@@ -1594,10 +1742,25 @@ pub fn render_pick(
 mod tests {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
+    use ratatui::buffer::{Buffer, Cell};
     use ratatui::style::Color;
 
     use super::*;
     use coding_crew_core::harness::CuratedModel;
+    use coding_crew_theme::DocSide;
+
+    /// The defaults, with a comment past a value and a long comment on top: every
+    /// token kind the tab paints.
+    fn tokens() -> String {
+        let defaults = Config::default().to_toml().replacen(
+            "round_limit = 5",
+            "round_limit = 5  # the rounds",
+            1,
+        );
+        format!(
+            "# a comment\n# a long comment that the pane cannot hold at forty columns\n{defaults}"
+        )
+    }
 
     fn theme() -> Theme {
         Theme::preset(Preset::Dark)
@@ -1742,11 +1905,24 @@ mod tests {
             .unwrap_or_else(|| panic!("no row holds {needle}: {}", rows.join("\n")))
     }
 
-    /// The colour of the first cell of `needle`, on the row that holds it.
-    fn colour_of(theme: &Theme, needle: &str) -> Option<Color> {
-        let mut terminal = Terminal::new(TestBackend::new(100, 200)).expect("a test terminal");
+    /// A panel over a file written as `text`.
+    fn panel_with(name: &str, text: &str) -> Panel {
+        let home = scratch(name);
+        fs::create_dir_all(home_at(&home)).expect("the config folder");
+        fs::write(config_path(&home), text).expect("the config file");
+        Panel::open(Some(&home), Overrides::default())
+    }
+
+    /// The buffer the tab draws at a size, with the cursor on `selected`.
+    fn buffer_of(
+        panel: &Panel,
+        theme: &Theme,
+        width: u16,
+        height: u16,
+        selected: Option<&str>,
+    ) -> Buffer {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         let mut view = View::default();
-        let (panel, _) = panel("colour");
         terminal
             .draw(|frame| {
                 render_view(
@@ -1754,24 +1930,31 @@ mod tests {
                     frame.area(),
                     theme,
                     IconSet::Nerd,
-                    None,
+                    selected,
                     &mut view,
-                    &panel,
+                    panel,
                 );
             })
             .expect("drawing the settings tab");
-        let buffer = terminal.backend().buffer();
+        terminal.backend().buffer().clone()
+    }
+
+    /// The cell that starts the first `token` on the row that holds `line`.
+    fn cell_on<'a>(buffer: &'a Buffer, line: &str, token: &str) -> &'a Cell {
         let area = *buffer.area();
         for y in 0..area.height {
             let row: String = (0..area.width)
                 .map(|x| buffer.cell((x, y)).map_or(" ", |cell| cell.symbol()))
                 .collect();
-            if let Some(byte) = row.find(needle) {
-                let column = row[..byte].chars().count() as u16;
-                return buffer.cell((column, y)).map(|cell| cell.fg);
+            if row.contains(line) {
+                let at = row
+                    .find(token)
+                    .unwrap_or_else(|| panic!("no {token} on the row of {line}"));
+                let column = row[..at].chars().count() as u16;
+                return buffer.cell((column, y)).expect("a cell");
             }
         }
-        None
+        panic!("no row holds {line}");
     }
 
     #[test]
@@ -1798,17 +1981,163 @@ mod tests {
     }
 
     #[test]
-    fn the_comments_are_dim_and_the_headers_strong() {
+    fn each_token_kind_takes_its_syntax_role() {
         let theme = theme();
+        let palette = theme.document();
+        let paint = |role| palette.paint(role, DocSide::One);
+        let panel = panel_with("tokens", &tokens());
+        let buffer = buffer_of(&panel, &theme, 100, 200, None);
+        let fg = |line: &str, token: &str| cell_on(&buffer, line, token).fg;
         assert_eq!(
-            colour_of(&theme, "# coding-crew's"),
-            theme.text.dim.fg,
-            "a comment is not dim"
+            fg("[raul]", "[raul]"),
+            paint(DocRole::HeadingSection),
+            "a header"
         );
         assert_eq!(
-            colour_of(&theme, "[raul.tasks]"),
-            theme.text.strong.fg,
-            "a header is not strong"
+            fg("round_limit = ", "round_limit"),
+            paint(DocRole::SyntaxVariable),
+            "a key"
+        );
+        assert_eq!(fg("round_limit = ", " = "), paint(DocRole::Text), "the =");
+        assert_eq!(
+            fg("round_limit = ", "5"),
+            paint(DocRole::SyntaxNumber),
+            "a number"
+        );
+        assert_eq!(
+            fg("theme = ", "\"dark\""),
+            paint(DocRole::SyntaxString),
+            "a string"
+        );
+        assert_eq!(
+            fg("reverse = ", "false"),
+            paint(DocRole::SyntaxNumber),
+            "a boolean"
+        );
+        assert_eq!(
+            fg("# a comment", "# a comment"),
+            paint(DocRole::SyntaxComment),
+            "a comment"
+        );
+        assert_eq!(
+            fg("round_limit = ", "# the rounds"),
+            paint(DocRole::SyntaxComment),
+            "a comment after a value"
+        );
+    }
+
+    #[test]
+    fn the_terminal_preset_tells_the_tokens_apart_by_attribute() {
+        let theme = Theme::preset(Preset::Terminal);
+        let panel = panel_with("terminal", &tokens());
+        let buffer = buffer_of(&panel, &theme, 100, 200, None);
+        let cell = |line: &str, token: &str| cell_on(&buffer, line, token);
+        assert!(
+            cell("[raul]", "[raul]").modifier.contains(Modifier::BOLD),
+            "a header"
+        );
+        assert_eq!(
+            cell("round_limit = ", "round_limit").modifier,
+            Modifier::empty(),
+            "a key"
+        );
+        assert!(
+            cell("theme = ", "\"dark\"")
+                .modifier
+                .contains(Modifier::UNDERLINED),
+            "a string"
+        );
+        assert!(
+            cell("round_limit = ", "5")
+                .modifier
+                .contains(Modifier::ITALIC),
+            "a number"
+        );
+        assert!(
+            cell("reverse = ", "false")
+                .modifier
+                .contains(Modifier::ITALIC),
+            "a boolean"
+        );
+        assert!(
+            cell("# a comment", "# a comment")
+                .modifier
+                .contains(Modifier::DIM),
+            "a comment"
+        );
+        assert_eq!(
+            cell("theme = ", "\"dark\"").fg,
+            Color::Reset,
+            "the terminal's own colour"
+        );
+    }
+
+    #[test]
+    fn the_selected_line_keeps_its_bar_and_its_tint_over_the_colours() {
+        let theme = theme();
+        let palette = theme.document();
+        let panel = panel_with("selected", &tokens());
+        let buffer = buffer_of(&panel, &theme, 100, 200, Some("round_limit"));
+        let tint = theme.text.selected_bg.bg.expect("a tint");
+        assert_eq!(
+            cell_on(&buffer, "round_limit = ", "▌").symbol(),
+            "▌",
+            "the bar"
+        );
+        for token in ["round_limit", "5"] {
+            let cell = cell_on(&buffer, "round_limit = ", token);
+            assert_eq!(cell.bg, tint, "the tint under {token}");
+        }
+        assert_eq!(
+            cell_on(&buffer, "round_limit = ", "5").fg,
+            palette.paint(DocRole::SyntaxNumber, DocSide::One),
+            "the number keeps its colour on the tint"
+        );
+    }
+
+    #[test]
+    fn a_value_with_an_error_keeps_the_error_colour() {
+        let theme = theme();
+        let (mut panel, _) = panel("error-colour");
+        type_a_model(&mut panel);
+        panel.typing().expect("the text").replace_range(.., "");
+        let buffer = buffer_of(&panel, &theme, 100, 200, Some("agents.builder.model"));
+        assert_eq!(
+            cell_on(&buffer, "a model is one word", "a model").fg,
+            theme.semantic.error.fg.expect("the error colour"),
+        );
+    }
+
+    #[test]
+    fn the_colours_hold_at_40_and_100_columns() {
+        let theme = theme();
+        let palette = theme.document();
+        let paint = |role| palette.paint(role, DocSide::One);
+        let panel = panel_with("widths", &tokens());
+        for width in [40, 100] {
+            let buffer = buffer_of(&panel, &theme, width, 200, None);
+            assert_eq!(
+                cell_on(&buffer, "round_limit = ", "round_limit").fg,
+                paint(DocRole::SyntaxVariable),
+                "a key at {width} columns"
+            );
+            assert_eq!(
+                cell_on(&buffer, "theme = ", "\"dark\"").fg,
+                paint(DocRole::SyntaxString),
+                "a string at {width} columns"
+            );
+        }
+        // A comment too wide for forty columns is cut, and stays a comment.
+        let buffer = buffer_of(&panel, &theme, 40, 200, None);
+        let long = "# a long comment";
+        assert_eq!(
+            cell_on(&buffer, long, "#").fg,
+            paint(DocRole::SyntaxComment),
+            "a cut comment"
+        );
+        assert_eq!(
+            cell_on(&buffer, long, "…").fg,
+            paint(DocRole::SyntaxComment)
         );
     }
 
