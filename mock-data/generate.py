@@ -1484,6 +1484,16 @@ def claimable(item, by_id):
     return not lease_is_live(item.get("claim"))
 
 
+def open_findings(tasks):
+    """Every open finding of the fixtures, in the order the tasks hold them."""
+    return [
+        finding
+        for item in tasks
+        for finding in item["review"]["findings"]
+        if finding["status"] == "open"
+    ]
+
+
 def runtime_record(tasks):
     """The flow's runtime, from the fixtures' own state.
 
@@ -1491,7 +1501,8 @@ def runtime_record(tasks):
     claimed, the reviewer the first task waiting for its external round.
     The queue is every claimable task nobody holds. The round is the review
     the reviewer is on. The budget counts the external rounds of the live
-    tasks that have rounds; the findings count the open ones.
+    tasks that have rounds; the findings count the open ones, and the
+    severities break the same count down.
     """
     by_id = {item["id"]: item for item in tasks}
     runner_task = next(item for item in tasks if item["status"] == "executing")
@@ -1548,12 +1559,15 @@ def runtime_record(tasks):
             ),
             "total": sum(item["review"]["max_rounds"] for item in live),
         },
-        "findings": sum(
-            1
-            for item in tasks
-            for finding in item["review"]["findings"]
-            if finding["status"] == "open"
-        ),
+        "findings": len(open_findings(tasks)),
+        "severities": {
+            severity: sum(
+                1
+                for finding in open_findings(tasks)
+                if finding["severity"] == severity
+            )
+            for severity in ("high", "medium", "low")
+        },
         "stamp": {"runs": True},
     }
 
@@ -1591,12 +1605,10 @@ def check_runtime(record, tasks, events):
         ),
         "total": sum(item["review"]["max_rounds"] for item in live),
     }, record["budget"]
-    assert record["findings"] == sum(
-        1
-        for item in tasks
-        for finding in item["review"]["findings"]
-        if finding["status"] == "open"
-    ), record["findings"]
+    assert record["findings"] == len(open_findings(tasks)), record["findings"]
+    # The severities break the open findings down, and nothing else.
+    assert sum(record["severities"].values()) == record["findings"], record
+    assert set(record["severities"]) == {"high", "medium", "low"}, record
 
     # The round in flight is the reviewer's task, at the next external round.
     round_ = record["round"]

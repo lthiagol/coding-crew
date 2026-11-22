@@ -103,6 +103,7 @@ Every value is computed from the fixtures:
 | the round | the reviewer's task, at the next round after its last one |
 | the budget | 18 external rounds of 45, over the nine live tasks that have rounds |
 | the findings | 17 open findings |
+| the severities | the open findings by severity: 8 high, 8 medium, 1 low |
 | the stamp | the flow runs |
 
 The record's tasks are the fixtures' tasks: a held task is never in the queue,

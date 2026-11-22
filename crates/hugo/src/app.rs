@@ -16,14 +16,14 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use coding_crew_core::config::{CONFIG_FILE, Config};
-use coding_crew_core::runtime::{AgentState, CrewMember, Runtime};
+use coding_crew_core::runtime::{CrewMember, Runtime};
 use coding_crew_core::{Role, age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, tail_to, text_width};
-use coding_crew_theme::{Icon, IconSet, Theme, chrome, phase_style, selected_line};
+use coding_crew_theme::{Icon, IconSet, Slot, Theme, chrome, phase_style, selected_line};
 
 use crate::catalog::{Catalog, base_of};
 use crate::config::{self, ConfigRead, ConfigState};
-use crate::sidebar;
+use crate::sidebar::{self, role_icon};
 
 /// The columns the sidebar takes when it is shown, its border included.
 pub const SIDEBAR_WIDTH: u16 = 32;
@@ -97,6 +97,12 @@ pub const FINDINGS_TITLE: &str = "findings";
 /// The narrowest the main pane draws its blocks with boxes. Under it the
 /// words matter more than the chrome.
 const MIN_BOXED_WIDTH: u16 = 20;
+/// The cells of the budget's progress bar.
+const BUDGET_CELLS: usize = 10;
+/// The columns of the crew table: role, model, task, hold and state.
+const CREW_COLUMNS: usize = 5;
+/// The space between two cells of the crew table.
+const CREW_GAP: usize = 1;
 
 /// What a key asks the window to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -243,8 +249,9 @@ impl App {
         }
     }
 
-    /// Draw the window.
-    pub fn draw(&mut self, frame: &mut Frame, runtime: &RuntimeRead, now: &str) {
+    /// Draw the window. `now` is the instant holds are measured at, and `tick`
+    /// is the frame the spinner shows.
+    pub fn draw(&mut self, frame: &mut Frame, runtime: &RuntimeRead, now: &str, tick: usize) {
         let screen = screen(frame.area());
         frame.render_widget(self.title_line(screen.title.width), screen.title);
         if let Some(area) = screen.announcement {
@@ -254,7 +261,7 @@ impl App {
             .sidebar
             .is_some_and(|area| self.config_pane(frame, area));
         match runtime {
-            RuntimeRead::Record(runtime) => self.flow(frame, screen.flow, runtime, now),
+            RuntimeRead::Record(runtime) => self.flow(frame, screen.flow, runtime, now, tick),
             RuntimeRead::Absent => self.empty_pane(frame, screen.flow, FLOW_TITLE, FLOW_EMPTY),
             RuntimeRead::Unreadable(error) => self.unreadable_pane(frame, screen.flow, error),
         }
@@ -614,22 +621,22 @@ impl App {
     }
 
     /// The main pane: the flow's blocks, with the stamp at the foot.
-    fn flow(&self, frame: &mut Frame, area: Rect, runtime: &Runtime, now: &str) {
+    fn flow(&self, frame: &mut Frame, area: Rect, runtime: &Runtime, now: &str, tick: usize) {
         if area.height == 0 || area.width == 0 {
             return;
         }
         if area.height < 3 || area.width < 4 {
-            self.flow_body(frame, area, runtime, now);
+            self.flow_body(frame, area, runtime, now, tick);
             return;
         }
         let block = chrome::pane(FLOW_TITLE, FLOW_ICON, self.icons, false, &self.theme);
         let inner = block.inner(area);
         frame.render_widget(block, area);
-        self.flow_body(frame, inner, runtime, now);
+        self.flow_body(frame, inner, runtime, now, tick);
     }
 
     /// The blocks inside the flow's box, and the stamp on the last row.
-    fn flow_body(&self, frame: &mut Frame, inner: Rect, runtime: &Runtime, now: &str) {
+    fn flow_body(&self, frame: &mut Frame, inner: Rect, runtime: &Runtime, now: &str, tick: usize) {
         if inner.height == 0 || inner.width == 0 {
             return;
         }
@@ -652,14 +659,14 @@ impl App {
         // The blocks keep their boxes while there is room for them. Under
         // that, the words stay and the chrome goes.
         if body.width >= MIN_BOXED_WIDTH {
-            let sections = self.sections(runtime, body.width.saturating_sub(2), now);
+            let sections = self.sections(runtime, body.width.saturating_sub(2), now, tick);
             let boxed: usize = sections.iter().map(|section| section.lines.len() + 2).sum();
             if boxed <= usize::from(body.height) {
                 self.draw_boxed(frame, body, &sections);
                 return;
             }
         }
-        let sections = self.sections(runtime, body.width, now);
+        let sections = self.sections(runtime, body.width, now, tick);
         self.draw_words(frame, body, &sections);
     }
 
@@ -727,13 +734,13 @@ impl App {
 
     /// The blocks of the main pane, in the order they are read: the crew
     /// first, then the queue, the round, the budget and the findings.
-    fn sections(&self, runtime: &Runtime, width: u16, now: &str) -> Vec<Section> {
+    fn sections(&self, runtime: &Runtime, width: u16, now: &str, tick: usize) -> Vec<Section> {
         let width = usize::from(width);
         vec![
             Section {
                 title: CREW_TITLE,
                 icon: Icon::RoleOrchestrator,
-                lines: self.crew_lines(runtime, width, now),
+                lines: self.crew_lines(runtime, width, now, tick),
             },
             Section {
                 title: QUEUE_TITLE,
@@ -748,93 +755,150 @@ impl App {
             Section {
                 title: BUDGET_TITLE,
                 icon: Icon::Clock,
-                lines: vec![self.budget_line(runtime, width)],
+                lines: self.budget_lines(runtime, width),
             },
             Section {
                 title: FINDINGS_TITLE,
                 icon: Icon::Finding,
-                lines: vec![self.findings_line(runtime, width)],
+                lines: self.findings_lines(runtime, width),
             },
         ]
     }
 
-    /// The crew: one entry per agent, and the composition that says who
-    /// reviews.
+    /// The crew: a table with one row per agent, and the composition that says
+    /// who reviews.
     ///
-    /// The entry is one line while the facts fit it; a narrower pane gives
-    /// it two lines, then three. The facts are never dropped.
-    fn crew_lines(&self, runtime: &Runtime, width: usize, now: &str) -> Vec<Line<'static>> {
+    /// The columns line up while the table fits the pane, under a dim header
+    /// that names them. Where it does not, each row is drawn alone, with its
+    /// task and hold in words, and a row too wide for one line takes two, then
+    /// three. No fact is dropped with the width.
+    fn crew_lines(
+        &self,
+        runtime: &Runtime,
+        width: usize,
+        now: &str,
+        tick: usize,
+    ) -> Vec<Line<'static>> {
+        let rows: Vec<CrewRow> = runtime
+            .crew
+            .iter()
+            .map(|member| self.crew_row(member, now, tick))
+            .collect();
+        let header = self.crew_header();
+        let columns: Vec<[(String, Style); CREW_COLUMNS]> =
+            rows.iter().map(CrewRow::columns).collect();
+        let mut widths = [0; CREW_COLUMNS];
+        for cells in std::iter::once(&header).chain(&columns) {
+            for (column_width, (text, _)) in widths.iter_mut().zip(cells) {
+                *column_width = (*column_width).max(text_width(text));
+            }
+        }
+        let aligned = columns_width(&widths) <= width;
         let mut lines = Vec::new();
-        for member in &runtime.crew {
-            lines.extend(self.crew_entry(member, width, now));
+        if aligned {
+            lines.push(self.fit(row_spans(&header, &widths), width));
+        }
+        for (row, cells) in rows.iter().zip(&columns) {
+            if aligned {
+                lines.push(self.fit(row_spans(cells, &widths), width));
+                continue;
+            }
+            let alone = row.alone();
+            let own = alone.each_ref().map(|(text, _)| text_width(text));
+            if columns_width(&own) <= width {
+                lines.push(self.fit(row_spans(&alone, &own), width));
+            } else {
+                lines.extend(self.crew_wrapped(row, width));
+            }
         }
         lines.push(self.fit(
             vec![(
                 runtime.composition().says().to_string(),
-                self.theme.text.normal,
+                self.theme.text.dim,
             )],
             width,
         ));
         lines
     }
 
-    /// One agent's entry.
-    fn crew_entry(&self, member: &CrewMember, width: usize, now: &str) -> Vec<Line<'static>> {
-        let role = member.role.as_str();
-        let model = short_model(&member.model);
-        let holds = member.holds.as_deref().unwrap_or("—");
-        let held = held_length(member.since.as_deref(), now);
-        let state = member.state.as_str();
-        let state_style = match member.state {
-            AgentState::Idle => self.theme.text.dim,
-            AgentState::Executing | AgentState::Reviewing => self.theme.semantic.agent,
+    /// The crew table's header: the name of each column, dim.
+    fn crew_header(&self) -> [(String, Style); CREW_COLUMNS] {
+        ["role", "model", "task", "held", "state"]
+            .map(|name| (name.to_string(), self.theme.text.dim))
+    }
+
+    /// One agent's row of the crew table.
+    ///
+    /// A working agent carries the spinner's frame before its state; an idle
+    /// one is dim, the row and its state alike.
+    fn crew_row(&self, member: &CrewMember, now: &str, tick: usize) -> CrewRow {
+        let working = member.state.is_working();
+        let normal = if working {
+            self.theme.text.normal
+        } else {
+            self.theme.text.dim
         };
-        let normal = self.theme.text.normal;
-        let dim = self.theme.text.dim;
-
-        // One line: role, model, what it holds, how long, and its state.
-        let one = format!("{role}  {model}  {holds}  held {held}  {state}");
-        if text_width(&one) <= width {
-            return vec![self.fit(
-                vec![
-                    (role.to_string(), normal),
-                    ("  ".to_string(), Style::default()),
-                    (model.to_string(), dim),
-                    ("  ".to_string(), Style::default()),
-                    (holds.to_string(), normal),
-                    ("  ".to_string(), Style::default()),
-                    (format!("held {held}"), dim),
-                    ("  ".to_string(), Style::default()),
-                    (state.to_string(), state_style),
-                ],
-                width,
-            )];
-        }
-
-        // Two lines: the agent and its state, then what it holds.
-        let head = format!("{role}  {model}  {state}");
-        let tail = format!("  holds {holds} · held {held}");
-        if text_width(&head) <= width && text_width(&tail) <= width {
-            return vec![
-                self.fit(
-                    vec![
-                        (role.to_string(), normal),
-                        ("  ".to_string(), Style::default()),
-                        (model.to_string(), dim),
-                        ("  ".to_string(), Style::default()),
-                        (state.to_string(), state_style),
-                    ],
-                    width,
+        let state = if working {
+            format!("{} {}", chrome::spinner_frame(tick), member.state.as_str())
+        } else {
+            member.state.as_str().to_string()
+        };
+        let state_style = if working {
+            self.theme.semantic.agent
+        } else {
+            self.theme.text.dim
+        };
+        let held = held_length(member.since.as_deref(), now);
+        let phrase = match &member.holds {
+            Some(task) => format!("holds {task} · held {held}"),
+            None => "holds nothing".to_string(),
+        };
+        let hold = if member.since.is_none() {
+            held
+        } else {
+            format!("{} {held}", Icon::Clock.glyph(self.icons))
+        };
+        CrewRow {
+            role: (
+                format!(
+                    "{} {}",
+                    role_icon(member.role).glyph(self.icons),
+                    member.role.as_str()
                 ),
-                self.fit(vec![(tail, dim)], width),
-            ];
+                normal,
+            ),
+            model: (short_model(&member.model).to_string(), self.theme.text.dim),
+            holds: (
+                member.holds.clone().unwrap_or_else(|| "—".to_string()),
+                normal,
+            ),
+            hold: (hold, self.theme.text.dim),
+            state: (state, state_style),
+            phrase: (phrase, normal),
         }
+    }
 
-        // Three lines: the agent's state, its model, and what it holds.
+    /// A row too wide for one line, on two lines, then three: the agent and
+    /// its state, then what it holds. Every line under the agent is indented
+    /// the same two columns.
+    fn crew_wrapped(&self, row: &CrewRow, width: usize) -> Vec<Line<'static>> {
+        let [role, model, phrase, state] = row.alone();
+        let gap = |text: &str| (text.to_string(), Style::default());
+        let two = vec![
+            role.clone(),
+            gap("  "),
+            model.clone(),
+            gap("  "),
+            state.clone(),
+        ];
+        let tail = vec![gap("  "), phrase.clone()];
+        if spans_width(&two) <= width && spans_width(&tail) <= width {
+            return vec![self.fit(two, width), self.fit(tail, width)];
+        }
         vec![
-            self.fit(vec![(format!("{role} · {state}"), normal)], width),
-            self.fit(vec![(format!("  {model}"), dim)], width),
-            self.fit(vec![(tail, dim)], width),
+            self.fit(vec![role, gap(" · "), state], width),
+            self.fit(vec![gap("  "), model], width),
+            self.fit(tail, width),
         ]
     }
 
@@ -888,47 +952,94 @@ impl App {
         }
     }
 
-    /// The external rounds spent of their budget.
-    fn budget_line(&self, runtime: &Runtime, width: usize) -> Line<'static> {
-        self.fit(
-            vec![
-                ("external rounds ".to_string(), self.theme.text.dim),
-                (runtime.budget.spent.to_string(), self.theme.text.strong),
-                (" of ".to_string(), self.theme.text.dim),
-                (runtime.budget.total.to_string(), self.theme.text.strong),
-            ],
-            width,
-        )
+    /// The external rounds spent of their budget, as a bar and the numbers in
+    /// words. A line too narrow for both wraps the bar under its label.
+    fn budget_lines(&self, runtime: &Runtime, width: usize) -> Vec<Line<'static>> {
+        let spent = runtime.budget.spent as usize;
+        let total = runtime.budget.total as usize;
+        let bar = chrome::progress_bar(spent, total, BUDGET_CELLS, Slot::TextStrong, &self.theme)
+            .into_iter()
+            .map(|span| (span.content.into_owned(), span.style));
+        let numbers = vec![
+            (" ".to_string(), Style::default()),
+            (spent.to_string(), self.theme.text.strong),
+            (" of ".to_string(), self.theme.text.dim),
+            (total.to_string(), self.theme.text.strong),
+        ];
+        let label = ("external rounds ".to_string(), self.theme.text.dim);
+        let bar_and_numbers: Vec<(String, Style)> = bar.chain(numbers).collect();
+        let mut one = vec![label.clone()];
+        one.extend(bar_and_numbers.iter().cloned());
+        if spans_width(&one) <= width {
+            return vec![self.fit(one, width)];
+        }
+        vec![
+            self.fit(vec![label], width),
+            self.fit(bar_and_numbers, width),
+        ]
     }
 
-    /// The open findings, as a count.
-    fn findings_line(&self, runtime: &Runtime, width: usize) -> Line<'static> {
+    /// The open findings, as a count and, when the record holds them, the
+    /// count of each severity on its own slot. A line too narrow for both
+    /// wraps the severities under the count.
+    fn findings_lines(&self, runtime: &Runtime, width: usize) -> Vec<Line<'static>> {
         if runtime.findings == 0 {
-            return self.fit(
+            return vec![self.fit(
                 vec![("no open findings".to_string(), self.theme.text.dim)],
                 width,
-            );
+            )];
         }
-        self.fit(
+        let count = vec![
+            (runtime.findings.to_string(), self.theme.text.strong),
+            (" open findings".to_string(), self.theme.text.normal),
+        ];
+        let Some(severities) = runtime.severities else {
+            return vec![self.fit(count, width)];
+        };
+        let parts = [
+            (severities.high, self.theme.semantic.error, "high"),
+            (severities.medium, self.theme.semantic.warn, "medium"),
+            (severities.low, self.theme.semantic.info, "low"),
+        ]
+        .map(|(number, slot, word)| {
             vec![
-                (runtime.findings.to_string(), self.theme.text.strong),
-                (" open findings".to_string(), self.theme.text.normal),
-            ],
-            width,
-        )
+                (number.to_string(), slot),
+                (format!(" {word}"), self.theme.text.normal),
+            ]
+        });
+        let mut breakdown = Vec::new();
+        for (index, part) in parts.into_iter().enumerate() {
+            if index > 0 {
+                breakdown.push((" · ".to_string(), self.theme.text.dim));
+            }
+            breakdown.extend(part);
+        }
+        let mut one = count.clone();
+        one.push((" · ".to_string(), self.theme.text.dim));
+        one.extend(breakdown.iter().cloned());
+        if spans_width(&one) <= width {
+            return vec![self.fit(one, width)];
+        }
+        vec![self.fit(count, width), self.fit(breakdown, width)]
     }
 
     /// The stamp: whether the automation runs, and why when it does not.
     fn stamp_line(&self, runtime: &Runtime, width: u16) -> Line<'static> {
-        let (says, style) = if runtime.stamp.runs {
+        let (icon, says, style) = if runtime.stamp.runs {
             (
-                format!("● running since {}", runtime.started_at),
+                Icon::Running,
+                format!("running since {}", runtime.started_at),
                 self.theme.semantic.ok,
             )
         } else {
             let why = runtime.stamp.why.as_deref().unwrap_or("no reason given");
-            (format!("● not running: {why}"), self.theme.semantic.error)
+            (
+                Icon::Stopped,
+                format!("not running: {why}"),
+                self.theme.semantic.warn,
+            )
         };
+        let says = format!("{} {says}", icon.glyph(self.icons));
         self.fit(vec![(says, style)], usize::from(width))
     }
 
@@ -1270,6 +1381,69 @@ fn held_length(since: Option<&str>, now: &str) -> String {
     age_text(now - since)
 }
 
+/// One agent's cells in the crew table: the text of each and its paint. The
+/// phrase is the same task and hold in words, for a row drawn alone.
+struct CrewRow {
+    role: (String, Style),
+    model: (String, Style),
+    holds: (String, Style),
+    hold: (String, Style),
+    state: (String, Style),
+    phrase: (String, Style),
+}
+
+impl CrewRow {
+    /// The cells in the table's column order.
+    fn columns(&self) -> [(String, Style); CREW_COLUMNS] {
+        [
+            self.role.clone(),
+            self.model.clone(),
+            self.holds.clone(),
+            self.hold.clone(),
+            self.state.clone(),
+        ]
+    }
+
+    /// The cells of a row drawn alone, where no header names the columns.
+    fn alone(&self) -> [(String, Style); 4] {
+        [
+            self.role.clone(),
+            self.model.clone(),
+            self.phrase.clone(),
+            self.state.clone(),
+        ]
+    }
+}
+
+/// A row's cells padded to the columns' widths. The last column is not
+/// padded: nothing follows it.
+fn row_spans(cells: &[(String, Style)], widths: &[usize]) -> Vec<(String, Style)> {
+    let mut spans = Vec::new();
+    for (column, (text, style)) in cells.iter().enumerate() {
+        if column > 0 {
+            spans.push((" ".repeat(CREW_GAP), Style::default()));
+        }
+        let text = if column + 1 == cells.len() {
+            text.clone()
+        } else {
+            let pad = widths[column].saturating_sub(text_width(text));
+            format!("{text}{}", " ".repeat(pad))
+        };
+        spans.push((text, *style));
+    }
+    spans
+}
+
+/// The width of a crew table's columns with the gaps between them.
+fn columns_width(widths: &[usize]) -> usize {
+    widths.iter().sum::<usize>() + CREW_GAP * widths.len().saturating_sub(1)
+}
+
+/// The width of a line of spans.
+fn spans_width(spans: &[(String, Style)]) -> usize {
+    spans.iter().map(|(text, _)| text_width(text)).sum()
+}
+
 /// The stage of a review, in words.
 fn stage_word(stage: coding_crew_core::RoundKind) -> &'static str {
     match stage {
@@ -1358,8 +1532,9 @@ mod tests {
     use super::*;
     use coding_crew_core::RoundKind;
     use coding_crew_core::config::LEGACY_CONFIG_FILE;
+    use coding_crew_core::runtime::AgentState;
     use coding_crew_core::runtime::{
-        Budget, Composition, CrewMember, QueueItem, RuntimeRound, Stamp,
+        Budget, Composition, CrewMember, QueueItem, RuntimeRound, Severities, Stamp,
     };
     use coding_crew_core::{Role, Status};
     use coding_crew_theme::Preset;
@@ -1442,7 +1617,12 @@ mod tests {
                 spent: 18,
                 total: 45,
             },
-            findings: 21,
+            findings: 17,
+            severities: Some(Severities {
+                high: 8,
+                medium: 8,
+                low: 1,
+            }),
             stamp: Stamp {
                 runs: true,
                 why: None,
@@ -1487,16 +1667,27 @@ mod tests {
         render_app(&mut app, width, height, runtime)
     }
 
-    /// Draw a window of the caller's own.
+    /// Draw a window of the caller's own, at the first frame of the spinner.
     fn render_app(
         app: &mut App,
         width: u16,
         height: u16,
         runtime: &RuntimeRead,
     ) -> (Vec<String>, Vec<Vec<Paint>>) {
+        render_frame(app, width, height, runtime, 0)
+    }
+
+    /// Draw a window of the caller's own at a frame of the spinner.
+    fn render_frame(
+        app: &mut App,
+        width: u16,
+        height: u16,
+        runtime: &RuntimeRead,
+        tick: usize,
+    ) -> (Vec<String>, Vec<Vec<Paint>>) {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| app.draw(frame, runtime, RENDER_NOW))
+            .draw(|frame| app.draw(frame, runtime, RENDER_NOW, tick))
             .expect("drawing the window");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -1553,6 +1744,21 @@ mod tests {
         rows.iter()
             .position(|row| row.contains(needle))
             .unwrap_or_else(|| panic!("{needle} is not on screen: {}", rows.join("\n")))
+    }
+
+    /// The column where `needle` starts on row `row`.
+    fn column_at(rows: &[String], row: usize, needle: &str) -> usize {
+        rows[row]
+            .find(needle)
+            .map(|at| rows[row][..at].chars().count())
+            .unwrap_or_else(|| panic!("{needle} is not on row {row}"))
+    }
+
+    /// The column where a row's content starts, past the borders and the gap.
+    fn leading(row: &str) -> usize {
+        row.chars()
+            .position(|c| c != '│' && c != ' ')
+            .unwrap_or_else(|| panic!("{row:?} has no content"))
     }
 
     #[test]
@@ -1947,8 +2153,14 @@ mod tests {
         let (rows, _) = render_runtime(100, 40, &runtime);
         let text = rows.join("\n");
         assert!(text.contains("TSK13 · external · round 2"), "{text}");
-        assert!(text.contains("external rounds 18 of 45"), "{text}");
-        assert!(text.contains("21 open findings"), "{text}");
+        assert!(
+            text.contains("external rounds ████░░░░░░ 18 of 45"),
+            "{text}"
+        );
+        assert!(
+            text.contains("17 open findings · 8 high · 8 medium · 1 low"),
+            "{text}"
+        );
 
         // An empty review and no findings still have words.
         let mut empty = runtime.clone();
@@ -1969,6 +2181,10 @@ mod tests {
             .find(|row| row.contains("running since"))
             .expect("the stamp");
         assert!(stamp.contains("2026-11-09T08:30Z"), "{stamp}");
+        assert!(
+            stamp.contains(Icon::Running.glyph(IconSet::Nerd)),
+            "{stamp}"
+        );
         assert_eq!(
             colour_of(&rows, &paint, "running since"),
             theme().semantic.ok.fg.expect("the ok colour")
@@ -1987,7 +2203,11 @@ mod tests {
         assert!(!text.contains("running since"), "{text}");
         assert_eq!(
             colour_of(&rows, &paint, "not running"),
-            theme().semantic.error.fg.expect("the error colour")
+            theme().semantic.warn.fg.expect("the warn colour")
+        );
+        assert!(
+            text.contains(Icon::Stopped.glyph(IconSet::Nerd)),
+            "the stopped icon is not on screen: {text}"
         );
 
         // A stop with no reason still says a word.
@@ -2001,6 +2221,162 @@ mod tests {
             "{}",
             rows.join("\n")
         );
+    }
+
+    #[test]
+    fn the_crew_is_a_table_whose_columns_line_up_while_they_fit() {
+        // At 100 the five columns fit the pane, so every task and hold starts
+        // in the same column whichever agent holds it.
+        let runtime = runtime();
+        let (rows, _) = render_runtime(100, 40, &runtime);
+        let runner = row_of(&rows, "TSK10 󰥔 10d");
+        let reviewer = row_of(&rows, "TSK13 󰥔 8d");
+        assert_eq!(
+            column_at(&rows, runner, "TSK10"),
+            column_at(&rows, reviewer, "TSK13"),
+            "{rows:?}"
+        );
+        assert_eq!(
+            column_at(&rows, runner, "󰥔 10d"),
+            column_at(&rows, reviewer, "󰥔 8d"),
+            "{rows:?}"
+        );
+    }
+
+    #[test]
+    fn the_aligned_crew_table_names_its_columns_in_a_dim_header() {
+        // The header sits over the columns it names: a task starts under
+        // `task`, a hold under `held`, and the header is dim.
+        let runtime = runtime();
+        let (rows, paint) = render_runtime(100, 40, &runtime);
+        let header = rows
+            .iter()
+            .position(|row| row.contains("held") && row.contains("state"))
+            .unwrap_or_else(|| panic!("no header: {rows:?}"));
+        let runner = row_of(&rows, "TSK10 󰥔 10d");
+        assert_eq!(
+            column_at(&rows, header, "task"),
+            column_at(&rows, runner, "TSK10"),
+            "{rows:?}"
+        );
+        assert_eq!(
+            column_at(&rows, header, "held"),
+            column_at(&rows, runner, "󰥔 10d"),
+            "{rows:?}"
+        );
+        let at = column_at(&rows, header, "held");
+        assert_eq!(
+            paint[header][at].fg,
+            theme().text.dim.fg.expect("the dim colour"),
+            "{}",
+            rows[header]
+        );
+    }
+
+    #[test]
+    fn a_row_drawn_alone_says_what_it_holds_in_words() {
+        // With no header to name the columns, the task and the hold are words
+        // in the row at 60 and 40, and nothing says `—` for the hold.
+        for width in [60u16, 40] {
+            let runtime = runtime();
+            let (rows, _) = render_runtime(width, 40, &runtime);
+            let text = rows.join("\n");
+            assert!(text.contains("holds TSK10 · held 10d"), "{width}: {text}");
+            assert!(text.contains("holds TSK13 · held 8d"), "{width}: {text}");
+            assert!(text.contains("holds nothing"), "{width}: {text}");
+            assert!(!text.contains("model"), "{width}: {text}");
+        }
+    }
+
+    #[test]
+    fn every_line_under_a_wrapped_agent_is_indented_under_it() {
+        // The runner takes two lines at 60 and three at 40; each line under
+        // the runner's first sits the same two columns in, so none reads as
+        // an agent of its own.
+        for width in [60u16, 40] {
+            let runtime = runtime();
+            let (rows, _) = render_runtime(width, 40, &runtime);
+            let runner = row_of(&rows, "runner");
+            let reviewer = row_of(&rows, "reviewer");
+            assert!(reviewer > runner + 1, "{width}: {rows:?}");
+            let agent = leading(&rows[runner]);
+            for row in &rows[runner + 1..reviewer] {
+                assert_eq!(leading(row), agent + 2, "{width}: {row:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_working_agent_turns_the_spinner_and_an_idle_one_does_not() {
+        let runtime = runtime();
+        let mut app = app();
+        // The spinner turns with the frame: the third frame is ⠸.
+        let (rows, paint) =
+            render_frame(&mut app, 100, 40, &RuntimeRead::Record(runtime.clone()), 3);
+        assert!(
+            rows.join("\n").contains("⠸ executing"),
+            "{}",
+            rows.join("\n")
+        );
+        assert_eq!(
+            colour_of(&rows, &paint, "⠸"),
+            theme().semantic.agent.fg.expect("the agent colour")
+        );
+        // The idle orchestrator has no spinner, on any frame.
+        let idle = row_of(&rows, "orchestrator glm-5.3#high");
+        let frames = chrome::SPINNER.concat();
+        assert!(
+            !rows[idle].chars().any(|c| frames.contains(c)),
+            "{}",
+            rows[idle]
+        );
+        // A render is the first frame, so a pinned screen does not move.
+        let (first, _) = render_runtime(100, 40, &runtime);
+        assert!(
+            first.join("\n").contains("⠋ executing"),
+            "{}",
+            first.join("\n")
+        );
+    }
+
+    #[test]
+    fn the_findings_name_each_severity_on_its_own_slot() {
+        let runtime = runtime();
+        let (rows, paint) = render_runtime(100, 40, &runtime);
+        assert_eq!(
+            colour_of(&rows, &paint, "8 high"),
+            theme().semantic.error.fg.expect("the error colour")
+        );
+        assert_eq!(
+            colour_of(&rows, &paint, "8 medium"),
+            theme().semantic.warn.fg.expect("the warn colour")
+        );
+        assert_eq!(
+            colour_of(&rows, &paint, "1 low"),
+            theme().semantic.info.fg.expect("the info colour")
+        );
+    }
+
+    #[test]
+    fn a_record_without_severities_names_the_plain_count() {
+        let mut runtime = runtime();
+        runtime.severities = None;
+        let (rows, _) = render_runtime(100, 40, &runtime);
+        let text = rows.join("\n");
+        assert!(text.contains("17 open findings"), "{text}");
+        assert!(!text.contains("8 high"), "{text}");
+    }
+
+    #[test]
+    fn a_narrow_pane_wraps_the_severities_and_keeps_them() {
+        // At 40 the count and the breakdown do not share a line: the breakdown
+        // wraps under the count, and no severity is cut.
+        let runtime = runtime();
+        let (rows, _) = render_runtime(40, 40, &runtime);
+        let text = rows.join("\n");
+        assert!(text.contains("17 open findings"), "{text}");
+        assert!(text.contains("8 high · 8 medium · 1 low"), "{text}");
+        assert!(!text.contains("…"), "{text}");
     }
 
     #[test]
@@ -2029,8 +2405,9 @@ mod tests {
                 "runner",
                 "deepseek-v4.1-flash#high",
                 "TSK10",
-                "held 10d",
+                "10d",
                 "executing",
+                "⠋",
             ] {
                 assert!(text.contains(fact), "{width}: {fact} is gone: {text}");
             }
@@ -2042,9 +2419,10 @@ mod tests {
         let runtime = runtime();
         let (rows, _) = render_runtime(100, 40, &runtime);
         let text = rows.join("\n");
-        // Ten days and eight days before the render's instant.
-        assert!(text.contains("held 10d"), "{text}");
-        assert!(text.contains("held 8d"), "{text}");
+        // Ten days and eight days before the render's instant, on the clock.
+        let clock = Icon::Clock.glyph(IconSet::Nerd);
+        assert!(text.contains(&format!("{clock} 10d")), "{text}");
+        assert!(text.contains(&format!("{clock} 8d")), "{text}");
         // A clock reading is not a length: the row does not drop the date
         // and paint a time of day.
         assert!(!text.contains("since 09:00Z"), "{text}");
@@ -2105,7 +2483,8 @@ mod tests {
                 );
             }
         }
-        // The crew's five rows go with the crew, and the announcement says so.
+        // The crew's five lines go with the crew, and the announcement says so:
+        // three agents, the runner on two lines, and the composition.
         let (rows, _) = render_runtime(60, 8, &runtime());
         let text = rows.join("\n");
         assert!(text.contains("crew (5 hidden)"), "{text}");
@@ -2453,6 +2832,7 @@ mod tests {
                 round: None,
                 budget: Budget::default(),
                 findings: 0,
+                severities: None,
                 stamp: Stamp {
                     runs: true,
                     why: None,

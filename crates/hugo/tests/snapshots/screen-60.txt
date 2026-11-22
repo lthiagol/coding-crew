@@ -2,10 +2,11 @@
  sidebar not shown: configuration (it needs 80 columns)
 ╭─ 󰑮 flow ─────────────────────────────────────────────────╮
 │╭─ 󰚩 crew ───────────────────────────────────────────────╮│
-││orchestrator  glm-5.3#high  —  held —  idle             ││
-││runner  deepseek-v4.1-flash#high  executing             ││
+││󰚩 orchestrator glm-5.3#high holds nothing idle          ││
+││󰖷 runner  deepseek-v4.1-flash#high  ⠋ executing         ││
 ││  holds TSK10 · held 10d                                ││
-││reviewer  glm-5.3#high  TSK13  held 8d  reviewing       ││
+││󰈈 reviewer  glm-5.3#high  ⠋ reviewing                   ││
+││  holds TSK13 · held 8d                                 ││
 ││one per role · the reviewer reviews                     ││
 │╰────────────────────────────────────────────────────────╯│
 │╭─ 󰚇 queue ──────────────────────────────────────────────╮│
@@ -16,10 +17,10 @@
 ││TSK13 · external · round 1                              ││
 │╰────────────────────────────────────────────────────────╯│
 │╭─ 󰥔 budget ─────────────────────────────────────────────╮│
-││external rounds 18 of 45                                ││
+││external rounds ████░░░░░░ 18 of 45                     ││
 │╰────────────────────────────────────────────────────────╯│
 │╭─ 󰅚 findings ───────────────────────────────────────────╮│
-││17 open findings                                        ││
+││17 open findings · 8 high · 8 medium · 1 low            ││
 │╰────────────────────────────────────────────────────────╯│
 │                                                          │
 │                                                          │
@@ -34,7 +35,6 @@
 │                                                          │
 │                                                          │
 │                                                          │
-│                                                          │
-│● running since 2026-11-09T08:30Z                         │
+│󰑮 running since 2026-11-09T08:30Z                         │
 ╰──────────────────────────────────────────────────────────╯
  q  quit   r  reload   ?  help

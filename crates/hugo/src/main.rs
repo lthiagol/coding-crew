@@ -44,10 +44,25 @@ const CATALOG_POLL: Duration = Duration::from_millis(50);
 /// this tick rather than only when a key or a resize arrives.
 const TICK: Duration = Duration::from_secs(1);
 
+/// The spinner's pace while an agent works: a frame every 120 milliseconds.
+const WORKING_TICK: Duration = Duration::from_millis(120);
+
 /// How long the loop waits for an event before it redraws: a short look while
-/// a catalogue is being read, otherwise the tick.
-fn next_wait(catalog_pending: bool) -> Duration {
-    if catalog_pending { CATALOG_POLL } else { TICK }
+/// a catalogue is being read, the spinner's pace while an agent works, and
+/// otherwise the tick.
+fn next_wait(catalog_pending: bool, working: bool) -> Duration {
+    if catalog_pending {
+        CATALOG_POLL
+    } else if working {
+        WORKING_TICK
+    } else {
+        TICK
+    }
+}
+
+/// Whether an agent of the crew is executing or reviewing, so the spinner turns.
+fn someone_works(runtime: &RuntimeRead) -> bool {
+    matches!(runtime, RuntimeRead::Record(record) if record.crew.iter().any(|member| member.state.is_working()))
 }
 
 fn main() -> Result<()> {
@@ -180,13 +195,16 @@ fn preset_of(name: &str) -> Result<Preset> {
 fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Result<()> {
     let located = locate_runtime();
     app.project = located.label(std::env::current_dir().ok().as_deref());
+    // The frame counter drives the spinner: every redraw is the next frame.
+    let mut tick: usize = 0;
     loop {
         let runtime = read_runtime(&located);
         // One clock read per frame, as in raul: the crews' holds and every
         // key that answers the draw see the instant the screen was measured
         // at. No other module under `src/` reads a clock.
         let now = coding_crew_core::now_rfc3339();
-        terminal.draw(|frame| app.draw(frame, &runtime, &now))?;
+        terminal.draw(|frame| app.draw(frame, &runtime, &now, tick))?;
+        tick = tick.wrapping_add(1);
         // The catalogue is a harness's, so it is read beside the window: while
         // a read is in flight the loop polls for the answer as well as for a
         // key, so a slow tool never leaves raw mode without a reader.
@@ -194,7 +212,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Resul
             continue;
         }
         // A wait that ends with no event redraws: the record is read again.
-        if !event::poll(next_wait(app.catalog_pending()))? {
+        if !event::poll(next_wait(app.catalog_pending(), someone_works(&runtime)))? {
             continue;
         }
         if let Event::Key(key) = event::read()?
@@ -220,7 +238,9 @@ fn render_plain(options: Options, mut app: App) -> Result<()> {
     app.project = located.label(std::env::current_dir().ok().as_deref());
     let runtime = read_runtime(&located);
     let mut terminal = Terminal::new(TestBackend::new(options.width, options.height))?;
-    terminal.draw(|frame| app.draw(frame, &runtime, RENDER_NOW))?;
+    // A render is the first frame of the spinner, so a pinned screen is the
+    // same bytes on every run.
+    terminal.draw(|frame| app.draw(frame, &runtime, RENDER_NOW, 0))?;
     let text = plain_text(terminal.backend().buffer());
     let mut stdout = std::io::stdout();
     stdout.write_all(text.as_bytes())?;
@@ -328,6 +348,8 @@ fn config_home() -> Option<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use coding_crew_core::Role;
+    use coding_crew_core::runtime::{AgentState, CrewMember};
 
     #[test]
     fn the_theme_is_the_dark_one_by_default() {
@@ -539,8 +561,46 @@ mod tests {
     fn the_loop_redraws_on_a_tick_when_no_catalogue_is_read() {
         // Without a tick the window waits on a key, and the record and the
         // holds it shows go stale. A catalogue read is polled faster.
-        assert_eq!(next_wait(false), TICK);
-        assert!(next_wait(true) < next_wait(false));
+        assert_eq!(next_wait(false, false), TICK);
+        assert!(next_wait(true, false) < next_wait(false, false));
+    }
+
+    #[test]
+    fn the_spinner_turns_faster_while_an_agent_works() {
+        // An agent that works turns the spinner at its own pace; an idle crew
+        // keeps the slow tick, so the loop costs little CPU when nothing runs.
+        assert_eq!(next_wait(false, true), WORKING_TICK);
+        assert!(next_wait(false, true) < next_wait(false, false));
+        assert_eq!(next_wait(true, true), CATALOG_POLL);
+    }
+
+    #[test]
+    fn only_a_working_agent_turns_the_spinner() {
+        let member = |state| CrewMember {
+            role: Role::Runner,
+            model: "m".to_string(),
+            holds: None,
+            since: None,
+            state,
+        };
+        let record = |crew: Vec<CrewMember>| {
+            RuntimeRead::Record(Runtime {
+                started_at: "2026-11-09T08:30Z".to_string(),
+                crew,
+                queue: Vec::new(),
+                round: None,
+                budget: Default::default(),
+                findings: 0,
+                severities: None,
+                stamp: Default::default(),
+            })
+        };
+        assert!(!someone_works(&record(vec![member(AgentState::Idle)])));
+        assert!(someone_works(&record(vec![
+            member(AgentState::Idle),
+            member(AgentState::Reviewing),
+        ])));
+        assert!(!someone_works(&RuntimeRead::Absent));
     }
 
     #[test]

@@ -263,7 +263,7 @@ fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> 
 
 /// The icon of a role. A creator grooms with a human, so it takes the
 /// human's icon: the table has no creator of its own.
-fn role_icon(role: Role) -> Icon {
+pub fn role_icon(role: Role) -> Icon {
     match role {
         Role::Creator => Icon::RoleHuman,
         Role::Runner => Icon::RoleRunner,

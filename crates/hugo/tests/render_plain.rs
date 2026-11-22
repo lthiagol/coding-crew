@@ -201,10 +201,8 @@ fn the_crew_leads_the_main_pane_the_shell_has_content() {
         "runner".to_string(),
         "reviewer".to_string(),
         "one per role · the reviewer reviews".to_string(),
-        format!(
-            "external rounds {} of {}",
-            runtime.budget.spent, runtime.budget.total
-        ),
+        "external rounds".to_string(),
+        format!("{} of {}", runtime.budget.spent, runtime.budget.total),
         format!("{} open findings", runtime.findings),
         "running since".to_string(),
     ];

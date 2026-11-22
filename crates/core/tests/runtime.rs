@@ -8,8 +8,10 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use coding_crew_core::runtime::{AgentState, Composition};
-use coding_crew_core::{Activity, Role, Runtime, Status, Store, Task, parse_rfc3339};
+use coding_crew_core::runtime::{AgentState, Composition, Severities};
+use coding_crew_core::{
+    Activity, FindingStatus, Role, Runtime, Severity, Status, Store, Task, parse_rfc3339,
+};
 
 /// The instant the fixtures are read with, as in `mock_data.rs`.
 const NOW: &str = "2026-11-19T08:00:00Z";
@@ -220,6 +222,32 @@ fn the_budget_and_the_findings_are_the_fixtures_own_counts() {
     let open: u32 = tasks.values().map(|task| task.open_findings() as u32).sum();
     assert_eq!(runtime.findings, open);
     assert!(runtime.findings > 0, "no fixture carries an open finding");
+}
+
+#[test]
+fn the_severities_break_the_open_findings_down_by_their_own_severity() {
+    let runtime = runtime();
+    let tasks = tasks();
+    let severities = runtime
+        .severities
+        .expect("the mock holds the severity breakdown");
+    let mut counted = Severities::default();
+    for finding in tasks
+        .values()
+        .flat_map(|task| task.review.findings.iter())
+        .filter(|finding| finding.status == FindingStatus::Open)
+    {
+        match finding.severity {
+            Severity::High => counted.high += 1,
+            Severity::Medium => counted.medium += 1,
+            Severity::Low => counted.low += 1,
+        }
+    }
+    assert_eq!(severities, counted);
+    assert_eq!(
+        severities.high + severities.medium + severities.low,
+        runtime.findings
+    );
 }
 
 #[test]

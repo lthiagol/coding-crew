@@ -581,6 +581,7 @@ The file is one object.
 | `round` | the review in flight: the `task`, the `stage` (`self` or `external`) and the round's `number` |
 | `budget` | the external rounds `spent` of the `total` |
 | `findings` | the open findings, as a count |
+| `severities` | the open findings by `high`, `medium` and `low`, when the writer holds them; they sum to `findings` |
 | `stamp` | whether the automation `runs`, and `why` when it does not |
 
 A crew entry:

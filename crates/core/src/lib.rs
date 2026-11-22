@@ -25,7 +25,7 @@ pub use lifecycle::{Event, Overlay, Overlays, Reason, Status, TransitionContext,
 pub use markdown::{escape_literal, task_to_markdown};
 pub use runtime::{
     AgentState, Budget, Composition, CrewMember, QueueItem, Runtime, RuntimeError, RuntimeRound,
-    Stamp,
+    Severities, Stamp,
 };
 pub use store::{Store, StoreError};
 pub use task::{

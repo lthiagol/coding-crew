@@ -17,9 +17,9 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
  󰚩 hugo · mock-data
 ╭─ 󰒓 configuration ────────────╮╭─ 󰑮 flow ─────────────────────────────────────────────────────────╮
 │ AGENTS                       ││╭─ 󰚩 crew ───────────────────────────────────────────────────────╮│
-│▌󰖷 builder · runner           │││orchestrator  glm-5.3#high  —  held —  idle                     ││
-│   opencode-go                │││runner  deepseek-v4.1-flash#high  TSK10  held 10d  executing    ││
-│   deepseek-v4.1-flash#high   │││reviewer  glm-5.3#high  TSK13  held 8d  reviewing               ││
+│▌󰖷 builder · runner           │││󰚩 orchestrator glm-5.3#high             —     —     idle        ││
+│   opencode-go                │││󰖷 runner       deepseek-v4.1-flash#high TSK10 󰥔 10d ⠋ executing ││
+│   deepseek-v4.1-flash#high   │││󰈈 reviewer     glm-5.3#high             TSK13 󰥔 8d  ⠋ reviewing ││
 │ 󰈈 reviewer                   │││one per role · the reviewer reviews                             ││
 │   opencode-go                ││╰────────────────────────────────────────────────────────────────╯│
 │   glm-5.3#high               ││╭─ 󰚇 queue ──────────────────────────────────────────────────────╮│
@@ -30,10 +30,10 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 │ opencode                     │││TSK13 · external · round 1                                      ││
 │   --standalone · role config ││╰────────────────────────────────────────────────────────────────╯│
 │ ROUNDS                       ││╭─ 󰥔 budget ─────────────────────────────────────────────────────╮│
-│ 5 build-and-fix rounds       │││external rounds 18 of 45                                        ││
+│ 5 build-and-fix rounds       │││external rounds ████░░░░░░ 18 of 45                             ││
 │ ORDER                        ││╰────────────────────────────────────────────────────────────────╯│
 │ 1 groom · creator            ││╭─ 󰅚 findings ───────────────────────────────────────────────────╮│
-│   groomed → approved         │││17 open findings                                                ││
+│   groomed → approved         │││17 open findings · 8 high · 8 medium · 1 low                    ││
 │ 2 build · runner             ││╰────────────────────────────────────────────────────────────────╯│
 │   approved → executing       ││                                                                  │
 │ 3 self-review · runner       ││                                                                  │
@@ -51,7 +51,7 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 │                              ││                                                                  │
 │                              ││                                                                  │
 │                              ││                                                                  │
-│                              ││● running since 2026-11-09T08:30Z                                 │
+│                              ││󰑮 running since 2026-11-09T08:30Z                                 │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
  q  quit   r  reload   ↑↓ j/k  move   ?  help
 ```
@@ -77,11 +77,11 @@ The blocks are read in this order; the crew leads.
 
 | order | block | shows |
 |---|---|---|
-| 1 | `crew` | one entry per agent: its role, the model it runs, the task it holds (or `—`), how long it has held it, and its state; then the composition, in words |
+| 1 | `crew` | a table under a header, one row per agent: its role's icon and role, the model it runs, the task it holds (or `—`), the hold, and its state; then the composition, in words. Drawn alone, a row says `holds …` in words instead |
 | 2 | `queue` | **the automation's queue**: the unclaimed work, an id and a status — never a title, a note or an intent |
 | 3 | `round` | the review in flight: the task, the stage and the round's number; `no review in flight` when there is none |
-| 4 | `budget` | the external rounds spent of the total |
-| 5 | `findings` | the open findings, as a count |
+| 4 | `budget` | the external rounds spent of the total, as a bar and the numbers |
+| 5 | `findings` | the open findings, as a count, and by severity when the record holds them |
 | 6 | stamp | at the foot: whether the automation runs, **and why** when it does not |
 
 **The crew's size is a composition, not a number.** Three agents are one per
@@ -94,7 +94,7 @@ no such rule: the pane says `more than one agent per role` rather than
 claiming a rule the crew does not follow.
 
 **A held task belongs to the crew, not the queue.** It appears in its agent's
-entry and never in the queue, even when a writer left it in both.
+row and never in the queue, even when a writer left it in both.
 
 **The same fact is painted once.** A count appears once, the queue's count is
 the unclaimed work, and the round's task is named as the review, not counted
@@ -102,23 +102,34 @@ again.
 
 The queue's row is an id and a status. Its count names its set: `the
 automation's queue · 1 task`. The budget's count names its set: `external
-rounds 18 of 45`. The findings' count names its set: `21 open findings`.
+rounds ████░░░░░░ 18 of 45`. The findings' count names its set: `17 open
+findings`. When the record holds the breakdown, it follows on the same count:
+`· 8 high · 8 medium · 1 low`, each count in its severity's slot — `high` on
+`semantic.error`, `medium` on `semantic.warn`, `low` on `semantic.info`. A
+narrow pane wraps the breakdown under the count rather than cutting it.
 
-The stamp is a line: `● running since 2026-11-09T08:30Z` when the automation
-runs, `● not running: <why>` when it does not. A stop with no reason still
-says a word: `not running: no reason given`.
+The stamp is a line: `󰑮 running since 2026-11-09T08:30Z` on `semantic.ok` when
+the automation runs, `󰏤 not running: <why>` on `semantic.warn` when it does
+not. A stop with no reason still says a word: `not running: no reason given`.
 
-An agent's entry is one line while its facts fit; a narrower pane gives it
-two lines, then three. No fact is dropped with the width: the model, the
-held task, the length of the hold and the state are all on the entry at every
-width the pane is drawn at. The model is the model's own name; the provider
-belongs to the configuration the sidebar shows.
+**The crew is a table.** A dim header names its columns — `role model task
+held state` — and the columns are as wide as their widest cell, so the rows
+line up under it while the table fits the pane. A working agent carries the
+spinner's frame before its state; an idle one is dim, the row and its state
+alike. The spinner turns on the loop's tick: every 120 milliseconds while an
+agent works, once a second otherwise. A render shows the first frame, so a
+pinned screen does not move. Where the table does not fit, the header goes and
+each row is drawn alone, with its task and hold in words: `holds TSK10 · held
+10d`, or `holds nothing`. A row too wide for one line takes two, then three,
+and every line under the agent is indented two columns. No fact is dropped
+with the width. The model is the model's own name; the provider belongs to the
+configuration the sidebar shows.
 
-The hold is a length, not a clock reading: `held 10d`, from the record's
-`since` and the frame's one instant. It is written in whole days, hours or
-minutes; a hold that is under a minute says `held under a minute` rather than
-`0m`. The pane reads the clock once per frame, in `main.rs`, and every module
-below it takes the instant it is given.
+The hold is a length, not a clock reading: `󰥔 10d`, from the record's `since`
+and the frame's one instant. It is written in whole days, hours or minutes; a
+hold that is under a minute says `󰥔 under a minute` rather than `0m`. A row
+with no hold shows `—`. The pane reads the clock once per frame, in `main.rs`,
+and every module below it takes the instant it is given.
 
 A block that does not fit the pane is left out whole, and one line says
 `not shown:` with each block's name **and what it held**: `crew (5 hidden)`,

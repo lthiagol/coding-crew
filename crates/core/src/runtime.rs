@@ -38,6 +38,9 @@ pub struct Runtime {
     /// The open findings, as a count.
     #[serde(default)]
     pub findings: u32,
+    /// The open findings by severity, when the record holds them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub severities: Option<Severities>,
     /// Whether the automation runs, and why when it does not.
     pub stamp: Stamp,
 }
@@ -105,6 +108,11 @@ impl AgentState {
             AgentState::Reviewing => "reviewing",
         }
     }
+
+    /// Whether the agent is doing something: executing or reviewing.
+    pub fn is_working(self) -> bool {
+        !matches!(self, AgentState::Idle)
+    }
 }
 
 /// One item of the unclaimed queue: an id and a status, never a title.
@@ -130,6 +138,14 @@ pub struct RuntimeRound {
 pub struct Budget {
     pub spent: u32,
     pub total: u32,
+}
+
+/// The open findings by severity. The total is the record's `findings`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Severities {
+    pub high: u32,
+    pub medium: u32,
+    pub low: u32,
 }
 
 /// Whether the automation runs, and why when it does not.
@@ -233,6 +249,7 @@ mod tests {
             round: None,
             budget: Budget { spent: 0, total: 5 },
             findings: 0,
+            severities: None,
             stamp: Stamp {
                 runs: true,
                 why: None,
@@ -385,6 +402,37 @@ mod tests {
     #[test]
     fn a_crew_with_no_agent_leaves_the_review_to_the_human() {
         assert_eq!(composition(&[]), Composition::HumanReviews);
+    }
+
+    #[test]
+    fn severities_are_optional_and_the_count_stays_the_total() {
+        let text = r#"{
+          "started_at": "2026-11-16T12:00Z",
+          "findings": 17,
+          "severities": {"high": 8, "medium": 8, "low": 1},
+          "stamp": {"runs": true}
+        }"#;
+        let runtime: Runtime = serde_json::from_str(text).expect("a runtime record");
+        assert_eq!(runtime.findings, 17);
+        assert_eq!(
+            runtime.severities,
+            Some(Severities {
+                high: 8,
+                medium: 8,
+                low: 1,
+            })
+        );
+        // A record that holds no breakdown says so by leaving it out.
+        let plain = record(Vec::new(), Vec::new());
+        let json = serde_json::to_string(&plain).expect("a record");
+        assert!(!json.contains("severities"), "{json}");
+    }
+
+    #[test]
+    fn an_agent_that_executes_or_reviews_is_working() {
+        assert!(!AgentState::Idle.is_working());
+        assert!(AgentState::Executing.is_working());
+        assert!(AgentState::Reviewing.is_working());
     }
 
     #[test]

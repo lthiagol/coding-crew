@@ -1,25 +1,25 @@
  󰚩 hugo · mock-data
 ╭─ 󰒓 configuration ────────────╮╭─ 󰑮 flow ─────────────────────────────────────────────────────────╮
 │ AGENTS                       ││╭─ 󰚩 crew ───────────────────────────────────────────────────────╮│
-│▌󰖷 builder · runner           │││orchestrator  glm-5.3#high  —  held —  idle                     ││
-│   opencode-go                │││runner  deepseek-v4.1-flash#high  TSK10  held 10d  executing    ││
-│   deepseek-v4.1-flash#high   │││reviewer  glm-5.3#high  TSK13  held 8d  reviewing               ││
-│ 󰈈 reviewer                   │││one per role · the reviewer reviews                             ││
-│   opencode-go                ││╰────────────────────────────────────────────────────────────────╯│
-│   glm-5.3#high               ││╭─ 󰚇 queue ──────────────────────────────────────────────────────╮│
-│ 󰚩 orchestrator               │││the automation's queue · 1 task                                 ││
-│   opencode-go                │││TSK29  approved                                                 ││
+│▌󰖷 builder · runner           │││role           model                    task  held  state       ││
+│   opencode-go                │││󰚩 orchestrator glm-5.3#high             —     —     idle        ││
+│   deepseek-v4.1-flash#high   │││󰖷 runner       deepseek-v4.1-flash#high TSK10 󰥔 10d ⠋ executing ││
+│ 󰈈 reviewer                   │││󰈈 reviewer     glm-5.3#high             TSK13 󰥔 8d  ⠋ reviewing ││
+│   opencode-go                │││one per role · the reviewer reviews                             ││
 │   glm-5.3#high               ││╰────────────────────────────────────────────────────────────────╯│
-│ HARNESS                      ││╭─ 󰈈 round ──────────────────────────────────────────────────────╮│
-│ opencode                     │││TSK13 · external · round 1                                      ││
-│   --standalone · role config ││╰────────────────────────────────────────────────────────────────╯│
-│ ROUNDS                       ││╭─ 󰥔 budget ─────────────────────────────────────────────────────╮│
-│ 5 build-and-fix rounds       │││external rounds 18 of 45                                        ││
-│ ORDER                        ││╰────────────────────────────────────────────────────────────────╯│
-│ 1 groom · creator            ││╭─ 󰅚 findings ───────────────────────────────────────────────────╮│
-│   groomed → approved         │││17 open findings                                                ││
-│ 2 build · runner             ││╰────────────────────────────────────────────────────────────────╯│
-│   approved → executing       ││                                                                  │
+│ 󰚩 orchestrator               ││╭─ 󰚇 queue ──────────────────────────────────────────────────────╮│
+│   opencode-go                │││the automation's queue · 1 task                                 ││
+│   glm-5.3#high               │││TSK29  approved                                                 ││
+│ HARNESS                      ││╰────────────────────────────────────────────────────────────────╯│
+│ opencode                     ││╭─ 󰈈 round ──────────────────────────────────────────────────────╮│
+│   --standalone · role config │││TSK13 · external · round 1                                      ││
+│ ROUNDS                       ││╰────────────────────────────────────────────────────────────────╯│
+│ 5 build-and-fix rounds       ││╭─ 󰥔 budget ─────────────────────────────────────────────────────╮│
+│ ORDER                        │││external rounds ████░░░░░░ 18 of 45                             ││
+│ 1 groom · creator            ││╰────────────────────────────────────────────────────────────────╯│
+│   groomed → approved         ││╭─ 󰅚 findings ───────────────────────────────────────────────────╮│
+│ 2 build · runner             │││17 open findings · 8 high · 8 medium · 1 low                    ││
+│   approved → executing       ││╰────────────────────────────────────────────────────────────────╯│
 │ 3 self-review · runner       ││                                                                  │
 │   executing → code-review    ││                                                                  │
 │ 4 review · reviewer          ││                                                                  │
@@ -35,6 +35,6 @@
 │                              ││                                                                  │
 │                              ││                                                                  │
 │                              ││                                                                  │
-│                              ││● running since 2026-11-09T08:30Z                                 │
+│                              ││󰑮 running since 2026-11-09T08:30Z                                 │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
  q  quit   r  reload   ↑↓ j/k  move   ?  help

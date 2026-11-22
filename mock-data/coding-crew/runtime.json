@@ -37,6 +37,11 @@
     "total": 45
   },
   "findings": 17,
+  "severities": {
+    "high": 8,
+    "medium": 8,
+    "low": 1
+  },
   "stamp": {
     "runs": true
   }
