@@ -305,21 +305,27 @@ The document carries the task's sections, in reading order:
 | scope | in and out |
 | acceptance criteria | each: description, verification, status, evidence, deferral, failure reason |
 | steps | each: action, done_when, status, deviation |
-| review | the budget and verdict, the rounds — kind, focus, verdict, findings — and the findings' threads |
+| review | the budget and verdict; each round — kind, number, verdict, reviewer, focus — with its findings grouped by severity, and each finding's comments |
 | questions | open and resolved |
 | notes | what the execution learned |
 | dependencies | what it waits on, what waits on it |
 | children | child tasks and their progress |
 
 The projection is the shape, not the wording: each of the ten sections is a
-level-one heading, an item under one a level-two, and a finding under its round
-a level-three; the header a card: the title, then one list item per field — id,
-status, kind, priority, effort, tags, claim and each overlay; each criterion a heading with its id and
-status, its fields a list, as the steps are; each review round a heading with
-its own fields and the findings it raised under it; the
-verification commands as code, with a rule before a fenced one. The evidence is
-quoted in a blockquote, the children are a task list — `[x]` for a done subtask,
-`[ ]` for one that is not — and a dependency is a link to its record. The
+level-one heading, an item under one a level-two; the header a card: the title,
+then one list item per field — id, status, kind, priority, effort, tags, claim
+and each overlay; each criterion a heading with its id and status, its fields a
+list, as the steps are; each review round a level-two heading with its kind,
+number, verdict and reviewer, its own fields under it, and the findings it
+raised after them. The findings are grouped by severity under a bold label,
+most urgent first, and a group with no finding has no label. Each finding is a
+list item with its id and status; its details and resolution sit under it, and
+its comments one level deeper again, each comment's body under its own id. The
+groups and the rounds are set apart by a blank line; a comment sits under the
+finding it comments on. The verification commands are code, with a rule before
+a fenced one. The evidence is quoted in a blockquote, the children are a task
+list — `[x]` for a done subtask, `[ ]` for one that is not — and a dependency is
+a link to its record. The
 task's own free text — the intent, the criterion descriptions, the notes — is
 markdown in its own right and is rendered as such; the title is a label, never
 a heading and never a link, and is escaped like the other fields that must not
@@ -393,7 +399,8 @@ sketch is the tool's own output, not a drawing of it.
 one file per width, and fails when a line is wider than its width. The gate
 runs it. The Overview is pinned byte for byte at 40, 60 and 100 columns in
 `crates/raul/tests/snapshots/`, and so is the detail pane of TSK13 at 100 columns
-(`detail.txt`). The detail document reads at 14 columns and up.
+(`detail.txt`). The detail document reads at 16 columns and up: below that a comment's id, nested
+at the third list depth, is wider than the pane.
 
 ## Not defined yet
 

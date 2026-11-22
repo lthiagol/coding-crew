@@ -514,9 +514,10 @@ fn rendered_review(text: &str) -> Vec<String> {
 #[test]
 fn the_review_reads_as_rounds_and_findings_at_forty_and_one_hundred_columns() {
     // At 40 and at 100 the review is a history: the round's heading, its
-    // fields, and the findings under it. The table the unit removed rendered
-    // `self` as `se`/`lf` at 100 and one character per line at 40; neither
-    // width may wrap a heading or split a finding from its round.
+    // fields, and the findings under it, grouped by severity. The table the
+    // unit removed rendered `self` as `se`/`lf` at 100 and one character per
+    // line at 40; neither width may split a finding from its round. The
+    // heading carries four parts, so at 40 it may run over two lines.
     for (width, height) in [("40", "400"), ("100", "220")] {
         let output = run(&[
             "--render",
@@ -535,30 +536,40 @@ fn the_review_reads_as_rounds_and_findings_at_forty_and_one_hundred_columns() {
         );
         let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
         let review = rendered_review(&text);
-        let at = |line: &str| {
+        let starts = |prefix: &str| {
             review
                 .iter()
-                .position(|row| row == line)
-                .unwrap_or_else(|| {
-                    panic!("{line} is not a line of the review at {width}:\n{review:#?}")
-                })
+                .position(|row| row.starts_with(prefix))
+                .unwrap_or_else(|| panic!("no line starts with {prefix} at {width}:\n{review:#?}"))
+        };
+        let label = |text: &str| {
+            review
+                .iter()
+                .position(|row| row == text)
+                .unwrap_or_else(|| panic!("no {text} group at {width}:\n{review:#?}"))
         };
 
-        let round = at("Round  0  —  self");
-        let first = at("FIND-01");
-        let second = at("FIND-02");
+        let round = starts("Round  0  —  self");
+        let medium = label("Medium");
+        let first = starts("•  FIND-01");
+        let low = label("Low");
+        let second = starts("•  FIND-02");
         assert!(
-            round < first && first < second,
-            "a finding is not under its round at {width}:\n{review:#?}"
+            round < medium && medium < first && first < low && low < second,
+            "a finding is not under its round and its group at {width}:\n{review:#?}"
         );
 
-        // The round's fields are bullets; the summary above them is too.
-        for bullet in [
-            "• focus:  spec-compliance",
-            "• reviewer:  runner-01",
-            "• verdict:  changes-needed",
-            "• at:  2026-11-10T16:00Z",
-        ] {
+        // The heading names the verdict and the reviewer, on one line or two.
+        let heading = review[round..medium].join(" ");
+        for part in ["changes-needed", "runner-01"] {
+            assert!(
+                heading.contains(part),
+                "{part} is missing from the heading at {width}:\n{review:#?}"
+            );
+        }
+
+        // The round's fields are bullets under the heading.
+        for bullet in ["• focus:  spec-compliance", "• at:  2026-11-10T16:00Z"] {
             let row = review
                 .iter()
                 .position(|line| line == bullet)

@@ -88,51 +88,40 @@ lane the human is working in.
 
 **Rounds**
 
-## Round `1` — `self`
+## Round `1` — `self` — `ok` — `runner-1`
 
 - **focus:** `spec-compliance`
-- **reviewer:** `runner-1`
-- **verdict:** `ok`
 - **at:** `2026-11-16T16:30:00Z`
 - **notes:** Read the diff against the criteria.
 - **findings:** _none_
 
-## Round `2` — `external`
+## Round `2` — `external` — `changes-needed` — `reviewer-1`
 
 - **focus:** `edge-cases`
-- **reviewer:** `reviewer-1`
-- **verdict:** `changes-needed`
 - **at:** `2026-11-16T17:00:00Z`
 - **notes:** The empty lane is counted before the filter.
 
-### `FIND-01`
+**High**
 
-- **severity:** `high`
-- **status:** `open`
-- **created:** `2026-11-16T17:00:00Z`
-- **resolved:** _none_
-- **description:** An empty lane counts the rows it does not show.
-- **resolution:** _none_
-
-**Comments**
-
-- `CMT-01` — `reviewer-1` at `2026-11-16T17:01:00Z`
-  The count is drawn from the unfiltered list.
+- `FIND-01` — `open`
+  - **created:** `2026-11-16T17:00:00Z`
+  - **resolved:** _none_
+  - **description:** An empty lane counts the rows it does not show.
+  - **resolution:** _none_
+  - **comments:**
+    - `CMT-01` — `reviewer-1` at `2026-11-16T17:01:00Z`
+      The count is drawn from the unfiltered list.
 
 **Findings not in a round**
 
-## `FIND-02`
+**Low**
 
-- **severity:** `low`
-- **status:** `fixed`
-- **created:** `2026-11-16T14:00:00Z`
-- **resolved:** `2026-11-16T14:30:00Z`
-- **description:** The selector's label is one column too wide.
-- **resolution:** Cut the label at the column that fits.
-
-**Comments**
-
-_none_
+- `FIND-02` — `fixed`
+  - **created:** `2026-11-16T14:00:00Z`
+  - **resolved:** `2026-11-16T14:30:00Z`
+  - **description:** The selector's label is one column too wide.
+  - **resolution:** Cut the label at the column that fits.
+  - **comments:** _none_
 
 # Questions
 

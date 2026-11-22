@@ -286,10 +286,12 @@ None blocking. Carried from the closed units.
   paints no `semantic.warn` for a blocked agent. Recommendation: add the state
   in core first, then wire the colour.
 
-- **The document overflows below 14 columns** (2026-11-22). The header table
-  is 11 columns wide, so an inner width of 10 (a 12-column pane) overflows; a
+- **The document overflows below 16 columns** (2026-11-22). A comment's id,
+  nested at the third list depth (the review's comments sit one level under
+  their findings), is wider than a pane under 16 columns. The header table is
+  11 columns wide, so an inner width of 10 (a 12-column pane) overflows; a
   quoted code line overflows at 11 inner (13 columns). The detail test checks
-  the body at 12 and the overflow only from 14 up.
+  the body at 12 and the overflow only from 16 up.
 - **The document's roles are slots in the rule's sense** (2026-11-21). Rule 1
   means every colour is named by something the theme crate owns and a preset
   decides — so the document's eighteen roles are slots, and the rules bind

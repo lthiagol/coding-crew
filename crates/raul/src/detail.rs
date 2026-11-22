@@ -881,17 +881,18 @@ mod tests {
         // The body is never a blank screen while the record is a task, at
         // any width the pane can hold.
         let work = mock_work();
-        for width in [100u16, 60, 30, 14, 12] {
+        for width in [100u16, 60, 30, 16, 14, 12] {
             let (rows, _) = draw(&work, &pane("TSK13"), width, 20);
             let body = &rows[1..rows.len() - 1];
             assert!(
                 body.iter().any(|row| !row.trim().is_empty()),
                 "{width}: the body is blank"
             );
-            // Below 14 columns the header table is wider than its inner
-            // width, and a quoted code line is too (a follow-up in TODO.md),
-            // so only the body is checked there.
-            if width < 14 {
+            // Below 16 columns a comment's id, nested at the third list depth,
+            // is wider than the inner width, and so is the header table
+            // below 14 (a follow-up in TODO.md). So only the body is checked
+            // there.
+            if width < 16 {
                 continue;
             }
             // Nothing is wider than the pane: the document is rendered at

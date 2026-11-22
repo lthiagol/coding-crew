@@ -244,12 +244,7 @@ fn review(out: &mut String, task: &Task) {
     }
     if !orphans.is_empty() {
         out.push_str("\n**Findings not in a round**\n\n");
-        for (index, finding) in orphans.iter().enumerate() {
-            if index > 0 {
-                out.push('\n');
-            }
-            finding_block(out, finding, 2);
-        }
+        severity_groups(out, &orphans);
     }
 }
 
@@ -468,13 +463,13 @@ fn blockquote(out: &mut String, value: &str) {
 /// again says nothing.
 fn round_block(out: &mut String, round: &Round, findings: &[Finding], shown: &mut HashSet<String>) {
     out.push_str(&format!(
-        "## Round {} — {}\n\n",
+        "## Round {} — {} — {} — {}\n\n",
         code(&round.n.to_string()),
         code(round_kind_str(round.kind)),
+        code(verdict_str(round.verdict)),
+        code(&round.reviewer),
     ));
     fixed_bullet(out, "focus", &code(focus_str(round.focus)));
-    fixed_bullet(out, "reviewer", &code(&round.reviewer));
-    fixed_bullet(out, "verdict", &code(verdict_str(round.verdict)));
     fixed_bullet(out, "at", &code(&round.at));
     prose_bullet(out, "notes", &round.notes);
 
@@ -502,44 +497,91 @@ fn round_block(out: &mut String, round: &Round, findings: &[Finding], shown: &mu
     for id in missing {
         fixed_bullet(out, "missing finding", &code(id));
     }
-    for finding in raised {
+    if !raised.is_empty() {
         out.push('\n');
-        finding_block(out, finding, 3);
+        severity_groups(out, &raised);
     }
 }
 
-fn finding_block(out: &mut String, finding: &Finding, level: usize) {
-    out.push_str(&"#".repeat(level));
-    out.push(' ');
-    out.push_str(&code(&finding.id));
-    out.push_str("\n\n");
-    fixed_bullet(out, "severity", &code(severity_str(finding.severity)));
-    fixed_bullet(out, "status", &code(finding_status_str(finding.status)));
-    fixed_bullet(out, "created", &code(&finding.created));
-    fixed_bullet(out, "resolved", &code(&finding.resolved));
-    prose_bullet(out, "description", &finding.description);
-    prose_bullet(out, "resolution", &finding.resolution);
+/// The findings grouped by severity, the most urgent group first. A group is
+/// a bold label over its findings, and a severity with no finding has no
+/// label. A label is set apart by a blank line from the group before it.
+fn severity_groups(out: &mut String, findings: &[&Finding]) {
+    let mut first = true;
+    for severity in [Severity::High, Severity::Medium, Severity::Low] {
+        let group: Vec<&&Finding> = findings
+            .iter()
+            .filter(|finding| finding.severity == severity)
+            .collect();
+        if group.is_empty() {
+            continue;
+        }
+        if !first {
+            out.push('\n');
+        }
+        first = false;
+        out.push_str(&format!("**{}**\n\n", severity_str(severity)));
+        for finding in group {
+            finding_item(out, finding);
+        }
+    }
+}
 
-    out.push_str("\n**Comments**\n\n");
+/// One finding: a list item with its id and status, its details beneath it,
+/// and its comments one level deeper than the details.
+fn finding_item(out: &mut String, finding: &Finding) {
+    item_at(
+        out,
+        1,
+        &format!(
+            "{} — {}",
+            code(&finding.id),
+            code(finding_status_str(finding.status)),
+        ),
+    );
+    fixed_at(out, 2, "created", &code(&finding.created));
+    fixed_at(out, 2, "resolved", &code(&finding.resolved));
+    prose_at(out, 2, "description", &finding.description);
+    prose_at(out, 2, "resolution", &finding.resolution);
+
     if finding.comments.is_empty() {
-        out.push_str(EMPTY);
-        out.push('\n');
+        fixed_at(out, 2, "comments", EMPTY);
         return;
     }
+    item_at(out, 2, "**comments:**");
     for comment in &finding.comments {
-        out.push_str(&format!(
-            "- {} — {} at {}\n",
+        let mut text = format!(
+            "{} — {} at {}",
             code(&comment.id),
             code(&comment.author),
             code(&comment.at),
-        ));
+        );
         let body = comment.body.trim();
-        if body.is_empty() {
-            out.push_str(&format!("  {EMPTY}\n"));
-        } else {
-            out.push_str(&format!("  {}\n", body.replace('\n', "\n  ")));
-        }
+        text.push('\n');
+        text.push_str(if body.is_empty() { EMPTY } else { body });
+        item_at(out, 3, &text);
     }
+}
+
+/// A list item at `depth`, the top level being 1. Its marker sits two spaces
+/// in for each level below the top, and every line of its text after the first
+/// starts at the marker's content column, so a line of a value stays under the
+/// item it belongs to.
+fn item_at(out: &mut String, depth: usize, text: &str) {
+    out.push_str(&"  ".repeat(depth - 1));
+    out.push_str("- ");
+    out.push_str(&text.replace('\n', &format!("\n{}", "  ".repeat(depth))));
+    out.push('\n');
+}
+
+fn fixed_at(out: &mut String, depth: usize, label: &str, value: &str) {
+    item_at(out, depth, &format!("**{label}:** {}", cell(value)));
+}
+
+fn prose_at(out: &mut String, depth: usize, label: &str, value: &str) {
+    let value = value.trim();
+    let value = if value.is_empty() { EMPTY } else { value };
+    item_at(out, depth, &format!("**{label}:** {value}"));
 }
 
 fn question_block(out: &mut String, question: &Question) {
@@ -902,11 +944,12 @@ fn verdict_str(verdict: Verdict) -> &'static str {
     }
 }
 
+/// The label of a severity group.
 fn severity_str(severity: Severity) -> &'static str {
     match severity {
-        Severity::Low => "low",
-        Severity::Medium => "medium",
-        Severity::High => "high",
+        Severity::Low => "Low",
+        Severity::Medium => "Medium",
+        Severity::High => "High",
     }
 }
 

@@ -1073,16 +1073,21 @@ fn the_review_nests_a_finding_under_the_round_that_raised_it() {
         .find("## Round `1` — `external`")
         .unwrap_or_else(|| panic!("no second round heading:\n{review}"));
     let nested = review
-        .find("### `FIND-01`")
+        .find("- `FIND-01`")
         .unwrap_or_else(|| panic!("the finding is not under its round:\n{review}"));
     assert!(first < second && second < nested, "{review}");
 
-    // The round's fields are bullets under its heading.
+    // The heading names the round's verdict and reviewer; its fields are
+    // bullets under it.
+    assert!(
+        review[second..].lines().next().is_some_and(|line| {
+            line == "## Round `1` — `external` — `changes-needed` — `reviewer-1`"
+        }),
+        "{review}"
+    );
     let external = &review[second..nested];
     for bullet in [
         "- **focus:** `spec-compliance`",
-        "- **reviewer:** `reviewer-1`",
-        "- **verdict:** `changes-needed`",
         "- **at:** `2026-11-14T11:00:00Z`",
         "- **notes:** The notes of round 1.",
     ] {
@@ -1092,11 +1097,15 @@ fn the_review_nests_a_finding_under_the_round_that_raised_it() {
         );
     }
 
-    // The finding is shown once, and its fields are under it.
+    // The finding is shown once, under its severity label, and its details
+    // are under it.
     assert_eq!(review.matches("`FIND-01`").count(), 1, "{review}");
+    assert!(external.contains("**High**"), "{review}");
     let finding = &review[nested..];
-    assert!(finding.contains("- **severity:** `high`"), "{review}");
-    assert!(finding.contains("The defect FIND-01 names."), "{review}");
+    assert!(
+        finding.contains("  - **description:** The defect FIND-01 names."),
+        "{review}"
+    );
 }
 
 #[test]
@@ -1141,19 +1150,19 @@ fn a_finding_that_belongs_to_no_round_is_shown_after_the_rounds() {
     let review = section(&document, "# Review");
 
     let nested = review
-        .find("### `FIND-01`")
+        .find("- `FIND-01`")
         .unwrap_or_else(|| panic!("FIND-01 is not nested:\n{review}"));
     let label = review
         .find("**Findings not in a round**")
         .unwrap_or_else(|| panic!("the orphan findings have no block:\n{review}"));
     let orphan = review
-        .find("## `FIND-02`")
+        .find("- `FIND-02`")
         .unwrap_or_else(|| panic!("FIND-02 is dropped:\n{review}"));
     assert!(nested < label && label < orphan, "{review}");
-    assert!(
-        review[orphan..].contains("- **severity:** `low`"),
-        "{review}"
-    );
+    let low = review
+        .find("**Low**")
+        .unwrap_or_else(|| panic!("FIND-02 has no severity group:\n{review}"));
+    assert!(label < low && low < orphan, "{review}");
     assert_eq!(review.matches("`FIND-02`").count(), 1, "{review}");
 }
 
@@ -1170,7 +1179,7 @@ fn a_finding_is_shown_when_the_record_holds_no_rounds() {
 
     assert!(review.contains("**Rounds**\n\n_none_"), "{review}");
     assert!(review.contains("**Findings not in a round**"), "{review}");
-    assert!(review.contains("## `FIND-01`"), "{review}");
+    assert!(review.contains("- `FIND-01`"), "{review}");
 }
 
 #[test]
@@ -1213,16 +1222,99 @@ fn a_finding_claimed_by_two_rounds_is_shown_under_the_first_one() {
         .find("## Round `1` — `external`")
         .unwrap_or_else(|| panic!("no first round:\n{review}"));
     let nested = review
-        .find("### `FIND-01`")
+        .find("- `FIND-01`")
         .unwrap_or_else(|| panic!("the finding is not shown:\n{review}"));
     let second = review
         .find("## Round `2` — `external`")
         .unwrap_or_else(|| panic!("no second round:\n{review}"));
     assert!(first < nested && nested < second, "{review}");
-    assert_eq!(review.matches("### `FIND-01`").count(), 1, "{review}");
+    assert_eq!(review.matches("- `FIND-01`").count(), 1, "{review}");
     assert!(
         !review[second..].contains("FIND-01"),
         "the second round claims the finding again:\n{review}"
+    );
+}
+
+#[test]
+fn the_findings_are_grouped_by_severity_most_urgent_first() {
+    let mut task = minimal("TSK01");
+    task.review = Review {
+        max_rounds: 5,
+        rounds: vec![round(
+            1,
+            RoundKind::External,
+            &["FIND-01", "FIND-02", "FIND-03"],
+        )],
+        findings: vec![
+            finding("FIND-01", Severity::Low),
+            finding("FIND-02", Severity::High),
+            finding("FIND-03", Severity::Low),
+        ],
+        ..Review::default()
+    };
+
+    let document = task_to_markdown(&task, &[]);
+    let review = section(&document, "# Review");
+
+    let high = review
+        .find("**High**")
+        .unwrap_or_else(|| panic!("{review}"));
+    let low = review.find("**Low**").unwrap_or_else(|| panic!("{review}"));
+    assert!(high < low, "{review}");
+    assert!(
+        !review.contains("**Medium**"),
+        "an empty group is written:\n{review}"
+    );
+    assert!(review.find("- `FIND-02`").unwrap() < low, "{review}");
+    assert!(low < review.find("- `FIND-01`").unwrap(), "{review}");
+    // A group is set apart from what is before it by a blank line.
+    assert!(review.contains("\n\n**High**\n\n"), "{review}");
+    assert!(review.contains("\n\n**Low**\n\n"), "{review}");
+}
+
+#[test]
+fn a_finding_nests_its_details_and_its_comments_one_level_deeper() {
+    let mut task = minimal("TSK01");
+    let mut raised = finding("FIND-01", Severity::High);
+    raised.resolution = "Cut the label.".to_string();
+    raised.comments = vec![Comment {
+        id: "CMT-01".to_string(),
+        author: "reviewer-1".to_string(),
+        body: "First line.\n\nSecond paragraph.".to_string(),
+        at: "2026-11-14T10:05:00Z".to_string(),
+    }];
+    task.review = Review {
+        max_rounds: 5,
+        rounds: vec![round(1, RoundKind::External, &["FIND-01"])],
+        findings: vec![raised],
+        ..Review::default()
+    };
+
+    let document = task_to_markdown(&task, &[]);
+    let review = section(&document, "# Review");
+
+    // The finding is the top-level item; its details sit two spaces in, and
+    // its comments one level deeper again.
+    assert!(review.contains("\n- `FIND-01` — `open`\n"), "{review}");
+    assert!(
+        review.contains("\n  - **description:** The defect FIND-01 names.\n"),
+        "{review}"
+    );
+    assert!(
+        review.contains("\n  - **resolution:** Cut the label.\n"),
+        "{review}"
+    );
+    assert!(review.contains("\n  - **comments:**\n"), "{review}");
+    assert!(
+        review.contains("\n    - `CMT-01` — `reviewer-1` at `2026-11-14T10:05:00Z`\n"),
+        "{review}"
+    );
+    // The body is part of its comment, under the comment's own indent, with
+    // its paragraphs kept.
+    assert!(review.contains("\n      First line.\n"), "{review}");
+    assert!(
+        review.contains("\n      \n      Second paragraph.\n"),
+        "{review}"
     );
 }
 
@@ -1714,15 +1806,15 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
     assert!(table_rows(&document, "# Acceptance criteria").is_empty());
 
     // The review is a history, not a table. Its shape is a round heading,
-    // the round's fields, and the finding under it one level deeper. The
+    // the round's fields, and the finding under it as a list item. The
     // attacked values stay in their code spans, so the shape holds.
     let review = section(&document, "# Review");
     assert!(table_rows(&document, "# Review").is_empty(), "{review}");
     assert!(
-        review.contains("## Round `1` — `external`"),
+        review.contains("## Round `1` — `external` — `changes-needed` — ````FIXED-ATTACK"),
         "the round heading was broken:\n{review}"
     );
-    for label in ["focus", "reviewer", "verdict", "at", "notes"] {
+    for label in ["focus", "at", "notes"] {
         assert!(
             review.contains(&format!("- **{label}:**")),
             "the round lost its {label}:\n{review}"
@@ -1731,7 +1823,7 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
     assert!(
         review
             .lines()
-            .any(|line| line.starts_with("### `") && line.contains("FIXED-ATTACK")),
+            .any(|line| line.starts_with("- `") && line.contains("FIXED-ATTACK")),
         "the finding is not nested under the round:\n{review}"
     );
     assert_eq!(

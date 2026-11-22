@@ -72,37 +72,29 @@
 │                                                                                                  │
 │Rounds                                                                                            │
 │                                                                                                  │
-│▸ Round  0  —  self                                                                               │
+│▸ Round  0  —  self  —  changes-needed  —  runner-01                                              │
 │• focus:  spec-compliance                                                                         │
-│• reviewer:  runner-01                                                                            │
-│• verdict:  changes-needed                                                                        │
 │• at:  2026-11-10T16:00Z                                                                          │
 │• notes: The pre-screen found the row and the mark before the external round spent budget.        │
 │                                                                                                  │
-│ FIND-01                                                                                          │
-│• severity:  medium                                                                               │
-│• status:  open                                                                                   │
-│• created:  2026-11-10T16:00Z                                                                     │
-│• resolved: none                                                                                  │
-│• description: At forty columns the round’s notes wrap into the next column and the reader loses  │
-│  the verdict.                                                                                    │
-│• resolution: none                                                                                │
+│Medium                                                                                            │
+│•  FIND-01  —  open                                                                               │
+│  ◦ created:  2026-11-10T16:00Z                                                                   │
+│  ◦ resolved: none                                                                                │
+│  ◦ description: At forty columns the round’s notes wrap into the next column and the reader loses│
+│    the verdict.                                                                                  │
+│  ◦ resolution: none                                                                              │
+│  ◦ comments: none                                                                                │
 │                                                                                                  │
-│Comments                                                                                          │
-│                                                                                                  │
-│none                                                                                              │
-│                                                                                                  │
-│ FIND-02                                                                                          │
-│• severity:  low                                                                                  │
-│• status:  fixed                                                                                  │
-│• created:  2026-11-10T16:00Z                                                                     │
-│• resolved:  2026-11-10T16:30Z                                                                    │
-│• description: The mark’s background says nothing about the selection.                            │
-│• resolution: The mark now reads the selection’s two slots, foreground and background.            │
-│                                                                                                  │
-│Comments                                                                                          │
-│•  CMT-01  —  runner-01  at  2026-11-10T16:10Z                                                    │
-│  Took the slots from the pane rather than inventing a third colour.                              │
+│Low                                                                                               │
+│•  FIND-02  —  fixed                                                                              │
+│  ◦ created:  2026-11-10T16:00Z                                                                   │
+│  ◦ resolved:  2026-11-10T16:30Z                                                                  │
+│  ◦ description: The mark’s background says nothing about the selection.                          │
+│  ◦ resolution: The mark now reads the selection’s two slots, foreground and background.          │
+│  ◦ comments:                                                                                     │
+│    ▸  CMT-01  —  runner-01  at  2026-11-10T16:10Z                                                │
+│      Took the slots from the pane rather than inventing a third colour.                          │
 │                                                                                                  │
 │▍ Questions ──────────────────────────────────────────────────────────────────────────────────────│
 │Open                                                                                              │
@@ -136,6 +128,14 @@
 │                                                                                                  │
 │▍ Children ───────────────────────────────────────────────────────────────────────────────────────│
 │none                                                                                              │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
