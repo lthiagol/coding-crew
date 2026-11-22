@@ -14,7 +14,7 @@ mod skill;
 
 use std::io::{Stdout, Write};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
 use crossterm::event::{self, Event, KeyEventKind};
@@ -265,17 +265,44 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Resul
         }
         // A wait that ends with no event redraws: the record is read again.
         let busy = app.catalog_pending() || app.start_pending();
-        if !event::poll(next_wait(busy, someone_works(&runtime)))? {
-            continue;
-        }
-        if let Event::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-            && app.on_key(key) == Action::Quit
-        {
-            break;
+        let deadline = Instant::now() + next_wait(busy, someone_works(&runtime));
+        // The wait ends at the tick or at an event that changes the screen. An
+        // event that changes nothing, as a pointer moving over the window does,
+        // is read and the wait goes on to the same tick.
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() || !event::poll(left)? {
+                break;
+            }
+            // The event that woke the loop and every event queued behind it are
+            // answered before the next draw: a burst of wheel notches costs one
+            // redraw, not one per notch.
+            let mut events = vec![event::read()?];
+            while event::poll(Duration::ZERO)? {
+                events.push(event::read()?);
+            }
+            let mut changed = false;
+            for event in events {
+                match event {
+                    Event::Key(key) if key.kind == KeyEventKind::Press => {
+                        if app.on_key(key) == Action::Quit {
+                            return Ok(());
+                        }
+                        changed = true;
+                    }
+                    Event::Mouse(mouse) => {
+                        changed |= app.on_mouse(mouse) != Action::Idle;
+                    }
+                    Event::Key(_) => {}
+                    // A resize, focus change or paste: the screen is drawn again.
+                    _ => changed = true,
+                }
+            }
+            if changed {
+                break;
+            }
         }
     }
-    Ok(())
 }
 
 /// Print the screen as text and exit.

@@ -22,7 +22,7 @@ use coding_crew_core::{Status, Task};
 use crate::announce;
 use crate::data::{STATUSES, Work};
 use crate::filter::Filter;
-use crate::view::{self, View};
+use crate::view::{self, Lines, View};
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, pad, text_width};
 use coding_crew_theme::{Icon, IconSet, Theme, phase_style, selected_line};
@@ -369,7 +369,7 @@ pub fn render_view(
     let line_cells = cells(&groups);
     let ids: Vec<String> = rows.iter().map(|row| row.id.clone()).collect();
     let (rows_drawn, announced) = view.draw(&ids, selected, |first| {
-        let (lines_drawn, announced, shown, whole) = window(
+        window(
             &groups,
             &rows,
             &line_cells,
@@ -380,8 +380,7 @@ pub fn render_view(
             icons,
             selected,
             first,
-        );
-        ((lines_drawn, announced), shown, whole)
+        )
     });
     frame.render_widget(
         Paragraph::new(rows_drawn)
@@ -393,8 +392,9 @@ pub fn render_view(
     (hidden > 0 && !announced).then_some(hidden)
 }
 
-/// The lines of the tab from the row at `first`, the rows they show, whether
-/// the pane announced what it hides, and whether the window may stop there.
+/// The lines of the tab from the row at `first`, each with the row it belongs
+/// to, whether the pane announced what it hides, the rows they show, and whether
+/// the window may stop there.
 ///
 /// The announcement sits at the foot of the pane and names what the window
 /// leaves out, group by group under a categorical order and as one count
@@ -414,9 +414,9 @@ fn window(
     icons: IconSet,
     selected: Option<&str>,
     first: usize,
-) -> (Vec<Line<'static>>, bool, Vec<usize>, bool) {
+) -> (Lines, bool, Vec<usize>, bool) {
     if height == 0 {
-        return (Vec::new(), false, Vec::new(), false);
+        return (Lines::default(), false, Vec::new(), false);
     }
     let total = rows.len();
     let start = lines
@@ -434,20 +434,16 @@ fn window(
         if matches!(taken.last(), Some(Cell::Heading(_))) {
             taken.pop();
         }
-        let mut out = Vec::new();
+        let mut out = Lines::default();
         let mut shown = Vec::new();
         for cell in taken {
             match cell {
-                Cell::Heading(group) => out.push(heading(&groups[group], width, theme)),
+                Cell::Heading(group) => out.push(heading(&groups[group], width, theme), None),
                 Cell::Row(index) => {
-                    out.push(row_line(
-                        rows[index],
-                        width,
-                        columns,
-                        icons,
-                        theme,
-                        selected,
-                    ));
+                    out.push(
+                        row_line(rows[index], width, columns, icons, theme, selected),
+                        Some(index),
+                    );
                     shown.push(index);
                 }
             }
@@ -470,7 +466,7 @@ fn window(
         let room = height - out.len();
         let (said, cut) = foot(groups, &shown, total - shown.len(), width, room, theme);
         let announced = !said.is_empty();
-        out.extend(said);
+        out.extend(said, None);
         (out, announced, shown, cut)
     };
     let (out, announced, shown, _) = (1..height)

@@ -8,6 +8,7 @@
 use std::io::Stdout;
 
 use crossterm::cursor::Show;
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -45,12 +46,12 @@ pub fn plain_text(buffer: &Buffer) -> String {
     text
 }
 
-/// Enter raw mode and the alternate screen.
+/// Enter raw mode, the alternate screen and mouse capture.
 pub fn setup() -> std::io::Result<Terminal<CrosstermBackend<Stdout>>> {
     chain_hook(leave_terminal);
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     Terminal::new(CrosstermBackend::new(stdout))
 }
 
@@ -65,16 +66,27 @@ pub fn chain_hook(leave: fn()) {
     }));
 }
 
-/// Leave raw mode and the alternate screen, and show the cursor again.
+/// Leave mouse capture, the alternate screen and raw mode, and show the cursor
+/// again.
 fn leave_terminal() {
     let _ = disable_raw_mode();
-    let _ = execute!(std::io::stdout(), LeaveAlternateScreen, Show);
+    let _ = execute!(
+        std::io::stdout(),
+        DisableMouseCapture,
+        LeaveAlternateScreen,
+        Show
+    );
 }
 
-/// Leave the alternate screen and raw mode, and show the cursor again.
+/// Leave mouse capture, the alternate screen and raw mode, and show the cursor
+/// again.
 pub fn restore(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> std::io::Result<()> {
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(
+        terminal.backend_mut(),
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    )?;
     terminal.show_cursor()?;
     Ok(())
 }

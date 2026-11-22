@@ -337,6 +337,23 @@ record, the width, the theme and the icon set are unchanged. Keys that are
 queued together are answered before the next draw, so a burst of scrolling is
 one redraw.
 
+## Mouse
+
+The mouse works where the keys do. Capture is on while raul runs and off when
+it exits, and on a panic.
+
+| gesture | does |
+|---|---|
+| wheel | scrolls what is under the pointer, three rows a notch: the detail pane, a list tab's rows, Settings, a picker |
+| click a tab label | switches to that tab; a bar that shows only the active tab takes no clicks |
+| click a row | selects it; a second click on the selected row opens it, as `enter` does |
+| click a picker entry | moves the picker to it, previewing it; a second click keeps it, as `enter` does |
+
+A click outside these regions does nothing. The pointer waits while the help,
+a question, or a typed filter or value holds the keys. The regions are the ones
+the last frame drew, so a click lands on what is on screen. Most terminals keep
+their own text selection for a drag held with shift.
+
 ## Derived, never stored
 
 Every view above is computed from the task files.

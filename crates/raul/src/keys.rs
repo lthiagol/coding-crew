@@ -466,6 +466,12 @@ pub fn typed(key: &KeyEvent) -> Option<char> {
     }
 }
 
+/// The key a second click on the cursor's row answers as: `enter`, which opens
+/// the row or edits the value.
+pub fn enter() -> KeyEvent {
+    KeyEvent::from(KeyCode::Enter)
+}
+
 /// The digit a key press names, when it names one.
 pub fn digit(key: &KeyEvent) -> Option<usize> {
     match key.code {

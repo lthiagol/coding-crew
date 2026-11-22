@@ -17,7 +17,7 @@ use coding_crew_core::{Status, Task};
 use crate::data::{Work, has_overlay, live_claim};
 use crate::review_state::{self, Part};
 use crate::tabs::Tab;
-use crate::view::{self, View};
+use crate::view::{self, Lines, View};
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, first_grapheme, head_to, text_width};
 use coding_crew_theme::{Icon, IconSet, Theme, phase_style};
@@ -398,9 +398,7 @@ pub fn render_view(
     let height = usize::from(area.height).saturating_sub(BORDER);
     let ids = tree.row_ids();
     let (rows, announced) = view.draw(&ids, selected, |first| {
-        let (lines, announced, shown, whole) =
-            window(&tree, width, height, theme, icons, selected, first);
-        ((lines, announced), shown, whole)
+        window(&tree, width, height, theme, icons, selected, first)
     });
     frame.render_widget(
         Paragraph::new(rows).wrap(Wrap { trim: false }).block(block),
@@ -444,6 +442,18 @@ struct Chunk {
     tasks: usize,
 }
 
+impl Chunk {
+    /// The block's lines, each with the row it belongs to: the lines that head
+    /// the block belong to no row.
+    fn drawn(&self) -> Lines {
+        let mut drawn = Lines::default();
+        for (at, line) in self.lines.iter().enumerate() {
+            drawn.push(line.clone(), (at >= self.lead).then_some(self.row));
+        }
+        drawn
+    }
+}
+
 /// A branch, ready to be drawn.
 struct BranchPiece {
     /// The header of the branch.
@@ -475,7 +485,7 @@ struct Candidate {
     announced: bool,
     /// The rows of the tree, before the announcement.
     tree_rows: usize,
-    lines: Vec<Line<'static>>,
+    lines: Lines,
     /// The rows of the tree the layout shows.
     rows: Vec<usize>,
 }
@@ -490,7 +500,9 @@ fn lines(
     icons: IconSet,
     selected: Option<&str>,
 ) -> Vec<Line<'static>> {
-    window(tree, width, height, theme, icons, selected, 0).0
+    window(tree, width, height, theme, icons, selected, 0)
+        .0
+        .lines
 }
 
 /// The lines of the tree, from the row at `first`, and the rows they show.
@@ -516,7 +528,7 @@ fn window(
     icons: IconSet,
     selected: Option<&str>,
     first: usize,
-) -> (Vec<Line<'static>>, bool, Vec<usize>, bool) {
+) -> (Lines, bool, Vec<usize>, bool) {
     let pieces = pieces(tree, width, theme, icons, selected);
     let all = tree.row_ids();
     // The tree that is shown is the one that still leaves room to say what
@@ -558,7 +570,7 @@ fn window(
                 mark_last(&mut summary_rows, width, theme);
             }
             let announced = !summary_rows.is_empty();
-            out.append(&mut summary_rows);
+            out.extend(summary_rows, None);
             let candidate = Candidate {
                 has_cursor,
                 whole,
@@ -587,14 +599,14 @@ fn window(
         && chunk.lines.len() - chunk.lead <= height
     {
         return (
-            chunk.lines[chunk.lead..].to_vec(),
+            Lines::of(chunk.lines[chunk.lead..].to_vec(), Some(cursor)),
             false,
             vec![cursor],
             false,
         );
     }
     best.map_or_else(
-        || (Vec::new(), false, Vec::new(), false),
+        || (Lines::default(), false, Vec::new(), false),
         |best| {
             (
                 best.lines,
@@ -617,8 +629,8 @@ fn layout(
     bars: bool,
     theme: &Theme,
     first: usize,
-) -> (Vec<Line<'static>>, Vec<Dropped>, Vec<usize>) {
-    let mut out: Vec<Line<'static>> = Vec::new();
+) -> (Lines, Vec<Dropped>, Vec<usize>) {
+    let mut out = Lines::default();
     let mut dropped: Vec<Dropped> = Vec::new();
     let mut shown_rows: Vec<usize> = Vec::new();
     let mut used = 0usize;
@@ -653,7 +665,7 @@ fn layout(
     // The head: the heading and the spine. The heading belongs to the top
     // of the tree: a window that starts lower does not repeat it.
     if first == 0 {
-        out.push(head.heading.clone());
+        out.push(head.heading.clone(), None);
         used += 1;
     }
     let mut shown_tasks = 0usize;
@@ -664,13 +676,13 @@ fn layout(
         let rows = chunk.lines.len();
         if bars && used + 1 + rows <= capacity {
             // The bar that holds the row, and the row.
-            out.push(bar(theme));
+            out.push(bar(theme), None);
             used += 1;
         } else if used + rows > capacity {
             // The row does not fit: the spine is cut here.
             break;
         }
-        out.extend(chunk.lines.iter().cloned());
+        out.append(chunk.drawn());
         used += rows;
         shown_tasks += chunk.tasks;
         shown_rows.push(chunk.row);
@@ -739,8 +751,8 @@ fn layout(
                 used += fork_rows;
                 forked = true;
             }
-            out.push(header);
-            out.extend(whole);
+            out.push(header, None);
+            out.append(whole);
             used += 1 + whole_height;
             shown_rows.extend(whole_rows);
             continue;
@@ -752,14 +764,12 @@ fn layout(
             if !forked {
                 fork(&mut out, fork_rows, theme);
             }
-            out.push(header);
-            out.extend(rows);
-            out.push(announcement(
-                branch.count - shown,
-                &branch.prefix,
-                width,
-                theme,
-            ));
+            out.push(header, None);
+            out.append(rows);
+            out.push(
+                announcement(branch.count - shown, &branch.prefix, width, theme),
+                None,
+            );
             shown_rows.extend(row_indices);
         } else if room >= 2 {
             // No row of the branch fits: it keeps its header, and says how
@@ -767,8 +777,11 @@ fn layout(
             if !forked {
                 fork(&mut out, fork_rows, theme);
             }
-            out.push(header);
-            out.push(announcement(branch.count, &branch.prefix, width, theme));
+            out.push(header, None);
+            out.push(
+                announcement(branch.count, &branch.prefix, width, theme),
+                None,
+            );
         } else {
             // The branch does not fit: it is not shown at all.
             dropped.push(Dropped {
@@ -805,12 +818,8 @@ fn cursor_chunk(pieces: &[Piece], cursor: usize) -> Option<&Chunk> {
 ///
 /// The first `skip` rows of the branch are above the window and are left
 /// out.
-fn take(
-    blocks: &[Chunk],
-    room: usize,
-    skip: usize,
-) -> (Vec<Line<'static>>, usize, usize, Vec<usize>) {
-    let mut lines: Vec<Line<'static>> = Vec::new();
+fn take(blocks: &[Chunk], room: usize, skip: usize) -> (Lines, usize, usize, Vec<usize>) {
+    let mut lines = Lines::default();
     let mut tasks = 0usize;
     let mut height = 0usize;
     let mut rows: Vec<usize> = Vec::new();
@@ -820,7 +829,7 @@ fn take(
         }
         height += block.lines.len();
         tasks += block.tasks;
-        lines.extend(block.lines.iter().cloned());
+        lines.append(block.drawn());
         rows.push(block.row);
     }
     (lines, tasks, height, rows)
@@ -1142,11 +1151,11 @@ fn fork_line(theme: &Theme) -> Line<'static> {
 }
 
 /// The fork: the bar that holds it, and the fork itself.
-fn fork(out: &mut Vec<Line<'static>>, rows: usize, theme: &Theme) {
+fn fork(out: &mut Lines, rows: usize, theme: &Theme) {
     if rows >= 2 {
-        out.push(bar(theme));
+        out.push(bar(theme), None);
     }
-    out.push(fork_line(theme));
+    out.push(fork_line(theme), None);
 }
 
 /// The header of a branch: its status icon, its name, and the number of tasks
@@ -1580,7 +1589,7 @@ mod tests {
                 for height in [4usize, 6, 10, 16] {
                     let (rows, _, shown, _) =
                         window(&tree, width, height, &theme(), IconSet::Nerd, None, first);
-                    let text: Vec<String> = rows.iter().map(text_of_line).collect();
+                    let text: Vec<String> = rows.lines.iter().map(text_of_line).collect();
                     let text = text.join("\n");
                     let Some((_, summary)) = text.split_once("not shown:") else {
                         continue;
@@ -1632,6 +1641,7 @@ mod tests {
         let tree = tree(&mock_work(), now());
         let (rows, _, shown, _) = window(&tree, 58, 7, &theme(), IconSet::Nerd, None, 10);
         let text = rows
+            .lines
             .iter()
             .map(text_of_line)
             .collect::<Vec<String>>()

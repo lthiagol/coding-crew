@@ -19,7 +19,7 @@ use crate::announce;
 use crate::data::{Reason, Work};
 use crate::review_state::{self, Part};
 use crate::tabs::Tab;
-use crate::view::{self, View};
+use crate::view::{self, Lines, View};
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, pad};
 use coding_crew_theme::{Icon, IconSet, Theme, reason_style, selected_line};
@@ -111,9 +111,7 @@ pub fn render_view(
     let height = usize::from(area.height).saturating_sub(BORDER);
     let ids = row_ids(work, now);
     let (rows, announced) = view.draw(&ids, selected, |first| {
-        let (lines, announced, shown, whole) =
-            window(work, width, height, theme, icons, selected, first, now);
-        ((lines, announced), shown, whole)
+        window(work, width, height, theme, icons, selected, first, now)
     });
     frame.render_widget(
         Paragraph::new(rows).wrap(Wrap { trim: false }).block(block),
@@ -197,7 +195,9 @@ fn lines(
     selected: Option<&str>,
     now: &str,
 ) -> Vec<Line<'static>> {
-    window(work, width, height, theme, icons, selected, 0, now).0
+    window(work, width, height, theme, icons, selected, 0, now)
+        .0
+        .lines
 }
 
 /// The lines of the tab, from the row at `first`, and the rows they show.
@@ -221,18 +221,18 @@ fn window(
     selected: Option<&str>,
     first: usize,
     now: &str,
-) -> (Vec<Line<'static>>, bool, Vec<usize>, bool) {
+) -> (Lines, bool, Vec<usize>, bool) {
     let groups = groups(work, now);
     let ages = age_width(&groups);
     let all: Vec<String> = groups
         .iter()
         .flat_map(|group| group.rows.iter().map(|row| row.id.clone()))
         .collect();
-    let mut out: Vec<Line<'static>> = Vec::new();
+    let mut out = Lines::default();
     if height == 0 {
         return (out, false, Vec::new(), false);
     }
-    out.push(headline(work, width, theme));
+    out.push(headline(work, width, theme), None);
     let rest = height - 1;
     if rest == 0 {
         // The pane holds one line: the cursor's row is worth more than the
@@ -240,15 +240,22 @@ fn window(
         if let Some(id) = selected
             && let Some((index, line)) = cursor_row(&groups, width, ages, icons, theme, id)
         {
-            return (vec![line], false, vec![index], false);
+            return (
+                Lines::of(vec![line], Some(index)),
+                false,
+                vec![index],
+                false,
+            );
         }
         return (out, false, Vec::new(), false);
     }
     let wanted: usize = groups.iter().map(|group| 1 + group.rows.len()).sum();
     if first == 0 && wanted <= rest {
         // Everything fits: there is nothing to say.
+        let mut start = 0;
         for group in &groups {
-            push_group(&mut out, group, width, ages, icons, theme, selected);
+            push_group(&mut out, group, start, width, ages, icons, theme, selected);
+            start += group.rows.len();
         }
         return (out, false, (0..all.len()).collect(), true);
     }
@@ -258,13 +265,14 @@ fn window(
     // announcement cut, and then it says that too. The cursor's row is the
     // one row the window may not leave out: a cut layout that shows it wins
     // over the shortest one.
-    let mut shortest: Option<(Vec<Line<'static>>, Vec<Line<'static>>, Vec<usize>)> = None;
-    let mut with_cursor: Option<(Vec<Line<'static>>, Vec<Line<'static>>, Vec<usize>)> = None;
+    let mut shortest: Option<(Lines, Lines, Vec<usize>)> = None;
+    let mut with_cursor: Option<(Lines, Lines, Vec<usize>)> = None;
     for budget in (0..=rest).rev() {
         let (rows, omitted, shown) =
             layout(&groups, budget, width, ages, icons, theme, selected, first);
         let room = rest.saturating_sub(rows.len());
-        let (said, cut) = announcement(&omitted, width, room, theme);
+        let (word, cut) = announcement(&omitted, width, room, theme);
+        let said = Lines::of(word, None);
         let has_cursor = selected.is_none_or(|id| {
             shown
                 .iter()
@@ -291,8 +299,8 @@ fn window(
             continue;
         }
         let announced = !said.is_empty();
-        out.extend(rows);
-        out.extend(said);
+        out.append(rows);
+        out.append(said);
         return (out, announced, shown, true);
     }
     if let Some((rows, said, shown)) = with_cursor.or(shortest) {
@@ -304,17 +312,17 @@ fn window(
             // The rows took every line and said nothing about what they hid.
             // The cursor's row is drawn, the headline gives way first, and the
             // rest of the pane names every reason and what it hides.
-            let mut rows = Vec::new();
+            let mut rows = Lines::default();
             if height >= 3 {
-                rows.push(headline(work, width, theme));
+                rows.push(headline(work, width, theme), None);
             }
-            rows.push(line);
+            rows.push(line, Some(index));
             let room = height - rows.len();
             if room > 0 {
                 let omitted = omitted_with_only(&groups, index);
-                let (word, _) = announcement(&omitted, width, room, theme);
+                let word = announcement(&omitted, width, room, theme).0;
                 if !word.is_empty() {
-                    rows.extend(word);
+                    rows.append(Lines::of(word, None));
                     return (rows, true, vec![index], false);
                 }
             }
@@ -328,26 +336,26 @@ fn window(
             // The pane is too short for the cursor's row and the layout: the
             // row is drawn, the headline gives way, and what is left says what
             // the pane hides. Only a pane of one line shows the row alone.
-            let mut rows = Vec::new();
+            let mut rows = Lines::default();
             if height >= 3 {
-                rows.push(headline(work, width, theme));
+                rows.push(headline(work, width, theme), None);
             }
-            rows.push(line);
+            rows.push(line, Some(index));
             let room = height - rows.len();
             let mut announced = false;
             if room > 0 {
                 let omitted = omitted_with_only(&groups, index);
-                let (word, _) = announcement(&omitted, width, room, theme);
+                let word = announcement(&omitted, width, room, theme).0;
                 if !word.is_empty() {
                     announced = true;
-                    rows.extend(word);
+                    rows.append(Lines::of(word, None));
                 }
             }
             return (rows, announced, vec![index], false);
         }
         let announced = !said.is_empty();
-        out.extend(rows);
-        out.extend(said);
+        out.append(rows);
+        out.append(said);
         return (out, announced, shown, false);
     }
     // No layout was chosen: the pane is too short to say anything. The
@@ -355,7 +363,12 @@ fn window(
     if let Some(id) = selected
         && let Some((index, line)) = cursor_row(&groups, width, ages, icons, theme, id)
     {
-        return (vec![line], false, vec![index], false);
+        return (
+            Lines::of(vec![line], Some(index)),
+            false,
+            vec![index],
+            false,
+        );
     }
     (out, false, Vec::new(), false)
 }
@@ -413,8 +426,8 @@ fn layout(
     theme: &Theme,
     selected: Option<&str>,
     first: usize,
-) -> (Vec<Line<'static>>, [usize; 3], Vec<usize>) {
-    let mut out: Vec<Line<'static>> = Vec::new();
+) -> (Lines, [usize; 3], Vec<usize>) {
+    let mut out = Lines::default();
     let mut omitted = [0usize; 3];
     let mut shown_rows: Vec<usize> = Vec::new();
     let mut used = 0usize;
@@ -436,14 +449,18 @@ fn layout(
             omitted[index] = group.rows.len();
             continue;
         }
-        out.push(header(group, width, theme));
+        out.push(header(group, width, theme), None);
         used += 1;
         let skip = first.saturating_sub(start).min(group.rows.len());
         let visible = group.rows.len() - skip;
         let shown = (capacity - used).min(visible);
         for (offset, row) in group.rows.iter().skip(skip).take(shown).enumerate() {
-            out.push(row_line(row, width, age_width, icons, theme, selected));
-            shown_rows.push(start + skip + offset);
+            let index = start + skip + offset;
+            out.push(
+                row_line(row, width, age_width, icons, theme, selected),
+                Some(index),
+            );
+            shown_rows.push(index);
         }
         used += shown;
         if shown < group.rows.len() {
@@ -539,19 +556,25 @@ fn header(group: &Group, width: usize, theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(cut_to(group.reason.label(), width), style))
 }
 
-/// The header of a group and its rows.
+/// The header of a group and its rows, the first of which is the tab's row
+/// `start`.
+#[allow(clippy::too_many_arguments)]
 fn push_group(
-    out: &mut Vec<Line<'static>>,
+    out: &mut Lines,
     group: &Group,
+    start: usize,
     width: usize,
     age_width: usize,
     icons: IconSet,
     theme: &Theme,
     selected: Option<&str>,
 ) {
-    out.push(header(group, width, theme));
-    for row in &group.rows {
-        out.push(row_line(row, width, age_width, icons, theme, selected));
+    out.push(header(group, width, theme), None);
+    for (offset, row) in group.rows.iter().enumerate() {
+        out.push(
+            row_line(row, width, age_width, icons, theme, selected),
+            Some(start + offset),
+        );
     }
 }
 
@@ -1392,6 +1415,7 @@ mod tests {
         // left out.
         assert_eq!(omitted, [0, 2, 3]);
         let headers = rows
+            .lines
             .iter()
             .map(|row| {
                 row.spans

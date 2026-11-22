@@ -93,14 +93,18 @@ struct Row {
     spans: Vec<(String, Style)>,
     /// The cursor is on this row.
     selected: bool,
+    /// The cursor position this row is, when the row is an agent's field: the
+    /// row a click on it moves the cursor to.
+    pick: Option<usize>,
 }
 
 impl Row {
-    /// A row of one span, painted in one style.
+    /// A row of one span, painted in one style, that no click picks.
     fn plain(text: String, style: Style, selected: bool) -> Self {
         Row {
             spans: vec![(text, style)],
             selected,
+            pick: None,
         }
     }
 }
@@ -118,6 +122,9 @@ pub struct Drawn {
     pub lines: Vec<Line<'static>>,
     /// The agents group is drawn: the cursor has rows to be on.
     pub agents: bool,
+    /// The lines an agent's field takes, each with the cursor position it is, as
+    /// [`cursor_of`] numbers it: the lines a click picks.
+    pub picks: Vec<(usize, usize)>,
 }
 
 /// The sidebar's lines, at a width and a height, cut to fit.
@@ -146,6 +153,7 @@ pub fn lines(
         return Drawn {
             lines: Vec::new(),
             agents: false,
+            picks: Vec::new(),
         };
     }
     // Each prefix row carries the short name a marker uses for it when the
@@ -219,6 +227,7 @@ pub fn lines(
                 .take(height)
                 .collect(),
             agents: false,
+            picks: Vec::new(),
         },
     }
 }
@@ -319,6 +328,7 @@ fn agent_rows(
         rows.push(Row {
             spans,
             selected: false,
+            pick: None,
         });
         for field in FIELDS {
             let key = if differs(agent, was, field) {
@@ -348,6 +358,7 @@ fn agent_rows(
                     (value, style),
                 ],
                 selected: cursor_of(index, field) == cursor,
+                pick: Some(cursor_of(index, field)),
             });
         }
     }
@@ -401,10 +412,13 @@ fn fits(
     let total: usize = groups.iter().map(|group| group.rows.len() + 1).sum();
     if prefix.len() + total <= height {
         let mut lines: Vec<Line<'static>> = prefix.into_iter().map(|(_, line)| line).collect();
-        lines.extend(drawn(&groups, width, icons, theme));
+        let (rows, picks) = drawn(&groups, width, icons, theme);
+        let at = lines.len();
+        lines.extend(rows);
         return Drawn {
             lines,
             agents: !groups.is_empty(),
+            picks: shifted(picks, at),
         };
     }
     // One row is the announcement's: what fits beside it is drawn whole, and
@@ -425,6 +439,7 @@ fn fits(
             return Drawn {
                 lines,
                 agents: false,
+                picks: Vec::new(),
             };
         }
     } else {
@@ -441,7 +456,9 @@ fn fits(
         used += held;
         shown += 1;
     }
-    lines.extend(drawn(&groups[..shown], width, icons, theme));
+    let at = lines.len();
+    let (rows, picks) = drawn(&groups[..shown], width, icons, theme);
+    lines.extend(rows);
     let mut hidden: Vec<String> = prefix[kept..]
         .iter()
         .map(|(name, _)| name.clone())
@@ -461,20 +478,40 @@ fn fits(
     Drawn {
         lines,
         agents: shown >= 1,
+        picks: shifted(picks, at),
     }
 }
 
+/// The picks of a group of lines that begin at `at`, as the lines of the whole.
+fn shifted(picks: Vec<(usize, usize)>, at: usize) -> Vec<(usize, usize)> {
+    picks
+        .into_iter()
+        .map(|(line, pick)| (line + at, pick))
+        .collect()
+}
+
 /// The groups drawn: each title, then its rows. The cursor's row takes the
-/// selection's bar and tint, bar to the pane's edge.
-fn drawn(groups: &[Group], width: usize, icons: IconSet, theme: &Theme) -> Vec<Line<'static>> {
+/// selection's bar and tint, bar to the pane's edge. Also returns the line of
+/// each row a click picks, with its cursor position, counted from the first
+/// line drawn.
+fn drawn(
+    groups: &[Group],
+    width: usize,
+    icons: IconSet,
+    theme: &Theme,
+) -> (Vec<Line<'static>>, Vec<(usize, usize)>) {
     let mut lines = Vec::new();
+    let mut picks = Vec::new();
     for group in groups {
         lines.push(group_line(group.title, group.tag, width, theme));
         for row in &group.rows {
+            if let Some(pick) = row.pick {
+                picks.push((lines.len(), pick));
+            }
             lines.push(row_line(&row.spans, row.selected, width, icons, theme));
         }
     }
-    lines
+    (lines, picks)
 }
 
 /// A group's title: the label bold on the accent, its tag dim after it when it

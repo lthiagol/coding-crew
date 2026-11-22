@@ -48,6 +48,15 @@ pub fn popup(area: Rect, rows: usize) -> Rect {
     }
 }
 
+/// What a picker drew: its popup, and the line each drawn entry took, with the
+/// entry's index. A click is answered from these, so the mouse acts on the
+/// layout on screen. A popup that was not drawn has no entries.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Picked {
+    pub area: Rect,
+    pub entries: Vec<(Rect, usize)>,
+}
+
 /// Draw a picker in `popup`, which [`popup`] sized: the `lead` lines first, then
 /// the `entries`, the one at `cursor` painted as the selection. The entries
 /// scroll to keep the cursor in view. A popup too small to hold a line is not
@@ -63,9 +72,9 @@ pub fn draw(
     lead: &[Row],
     entries: &[Row],
     cursor: usize,
-) {
+) -> Picked {
     if popup.width < 4 || popup.height < 3 {
-        return;
+        return Picked::default();
     }
     frame.render_widget(Clear, popup);
     let block = chrome::pane(title, icon, icons, true, theme);
@@ -74,7 +83,10 @@ pub fn draw(
     let width = usize::from(inner.width);
     let room = usize::from(inner.height);
     if width == 0 || room == 0 {
-        return;
+        return Picked {
+            area: popup,
+            entries: Vec::new(),
+        };
     }
     let mut lines: Vec<Line<'static>> = lead
         .iter()
@@ -82,8 +94,35 @@ pub fn draw(
         .map(|row| Line::from(Span::styled(cut_to(&row.text, width), row.style)))
         .collect();
     let height = room.saturating_sub(lines.len());
+    let top = lines.len();
+    let hits = window_range(entries, cursor, height)
+        .enumerate()
+        .map(|(line, index)| {
+            let rect = Rect {
+                x: inner.x,
+                y: inner.y + (top + line) as u16,
+                width: inner.width,
+                height: 1,
+            };
+            (rect, index)
+        })
+        .collect();
     lines.extend(window(entries, cursor, width, height, theme));
     frame.render_widget(Paragraph::new(lines), inner);
+    Picked {
+        area: popup,
+        entries: hits,
+    }
+}
+
+/// The range of entries the window shows in `height` lines: the entries from the
+/// top, or scrolled so the cursor is the last of them.
+fn window_range(entries: &[Row], cursor: usize, height: usize) -> std::ops::Range<usize> {
+    if height == 0 {
+        return 0..0;
+    }
+    let start = cursor.saturating_sub(height - 1).min(entries.len());
+    start..(start + height).min(entries.len())
 }
 
 /// The entries that fit in `height` lines, from the top or scrolled so the
@@ -96,16 +135,13 @@ fn window(
     height: usize,
     theme: &Theme,
 ) -> Vec<Line<'static>> {
-    if height == 0 {
-        return Vec::new();
-    }
-    let start = cursor.saturating_sub(height - 1);
-    entries
+    let shown = window_range(entries, cursor, height);
+    let first = shown.start;
+    entries[shown]
         .iter()
         .enumerate()
-        .skip(start)
-        .take(height)
-        .map(|(index, row)| {
+        .map(|(offset, row)| {
+            let index = first + offset;
             let line = Line::from(Span::styled(cut_to(&row.text, width), row.style));
             if index == cursor {
                 selected_line(line, width, theme)

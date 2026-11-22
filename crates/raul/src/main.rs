@@ -337,19 +337,36 @@ fn run(
         let now = coding_crew_core::now_rfc3339();
         terminal.draw(|frame| app.draw(frame, &work, &now))?;
 
-        // The key that woke the loop, and every key already queued behind it,
-        // are answered before the next draw: a burst of wheel scrolls costs one
-        // redraw, not one per key.
-        let mut keys = vec![event::read()?];
-        while event::poll(Duration::ZERO)? {
-            keys.push(event::read()?);
-        }
-        for event in keys {
-            if let Event::Key(key) = event
-                && key.kind == KeyEventKind::Press
-                && app.on_key(key, &work, &now) == Action::Quit
-            {
-                return Ok(());
+        // The loop waits for an event that changes the window. An event that
+        // changes nothing, as a pointer moving over it does, is read without a
+        // draw, and the folder is not read again for it.
+        loop {
+            // The key that woke the loop, and every key already queued behind
+            // it, are answered before the next draw: a burst of wheel scrolls
+            // costs one redraw, not one per key.
+            let mut keys = vec![event::read()?];
+            while event::poll(Duration::ZERO)? {
+                keys.push(event::read()?);
+            }
+            let mut changed = false;
+            for event in keys {
+                match event {
+                    Event::Key(key) if key.kind == KeyEventKind::Press => {
+                        if app.on_key(key, &work, &now) == Action::Quit {
+                            return Ok(());
+                        }
+                        changed = true;
+                    }
+                    Event::Mouse(mouse) => {
+                        changed |= app.on_mouse(mouse, &work, &now) != Action::Idle;
+                    }
+                    Event::Key(_) => {}
+                    // A resize, focus change or paste: the window is drawn again.
+                    _ => changed = true,
+                }
+            }
+            if changed {
+                break;
             }
         }
     }

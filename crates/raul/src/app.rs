@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use crossterm::event::{KeyEvent, KeyEventKind};
+use crossterm::event::{KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Margin, Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
@@ -22,14 +22,36 @@ use crate::tabs::Tab;
 use crate::tasks::{self, Order};
 use crate::view::View;
 use coding_crew_theme::chrome;
+use coding_crew_theme::picker::Picked;
 use coding_crew_theme::text::text_width;
 use coding_crew_theme::{Icon, IconSet, Theme, block_title_style};
+
+/// The rows one notch of the wheel moves.
+const WHEEL_ROWS: isize = 3;
 
 /// What a key asks the window to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     Quit,
     Redraw,
+    /// Nothing changed: the loop reads the next event without a draw.
+    Idle,
+}
+
+/// The regions the last frame drew, where the pointer can reach them. The draw
+/// stores them and a mouse event is answered from them, so a click lands on what
+/// is on screen and nothing is recomputed.
+#[derive(Debug, Default)]
+struct Hits {
+    /// The tab bar's labels, each with the tab it switches to. Empty when the
+    /// bar shows only the active tab.
+    tabs: Vec<(Rect, Tab)>,
+    /// The content pane, its border included.
+    body: Rect,
+    /// The lines of a list tab, each with the id of the row it draws.
+    rows: Vec<(Rect, String)>,
+    /// The Settings picker, when one is open.
+    pick: Picked,
 }
 
 /// The state of the window.
@@ -62,6 +84,8 @@ pub struct App {
     pub notice: Option<String>,
     /// The configuration file, as the Settings tab shows and edits it.
     pub settings: settings::Panel,
+    /// The regions the last frame drew, that a mouse event is answered from.
+    hits: Hits,
 }
 
 impl App {
@@ -81,6 +105,7 @@ impl App {
             typing: false,
             notice: None,
             settings: settings::Panel::open(None, settings::Overrides::default()),
+            hits: Hits::default(),
         }
     }
 
@@ -369,6 +394,97 @@ impl App {
         }
     }
 
+    /// Handle a mouse event. The wheel scrolls what is under the pointer by
+    /// `WHEEL_ROWS` a notch: the detail pane, the Settings picker, or the rows of
+    /// a list tab. A left click picks a tab, a row, or an entry of the picker;
+    /// a second click on the row the cursor is on answers as `enter` does. A
+    /// click anywhere else does nothing.
+    ///
+    /// The regions are the ones the last frame drew, so the pointer acts on what
+    /// is on screen. While the help, a question, a typed filter or a typed value
+    /// takes the keys, the pointer waits for them. A move or a drag, and a
+    /// button's release, change nothing: they answer `Idle`, so a pointer
+    /// passing over the window costs no redraw.
+    pub fn on_mouse(&mut self, mouse: MouseEvent, work: &Work, now: &str) -> Action {
+        if self.help || self.typing || self.settings.asking() || self.settings.editing() {
+            return Action::Idle;
+        }
+        let at = Position::new(mouse.column, mouse.row);
+        let step = match mouse.kind {
+            MouseEventKind::ScrollDown => WHEEL_ROWS,
+            MouseEventKind::ScrollUp => -WHEEL_ROWS,
+            MouseEventKind::Down(MouseButton::Left) => return self.click(at, work, now),
+            _ => return Action::Idle,
+        };
+        if let Some(detail) = self.detail.as_mut() {
+            // The pane covers the window: the wheel scrolls it wherever it is.
+            detail.scroll_rows(step);
+        } else if self.settings.picking() {
+            if self.hits.pick.area.contains(at) {
+                self.settings.step_pick(step);
+                self.apply_look();
+            }
+        } else if self.hits.body.contains(at) && self.tab.lists() {
+            self.move_selection(work, step, now);
+        }
+        Action::Redraw
+    }
+
+    /// Answer a left click at `at` from the regions the last frame drew.
+    fn click(&mut self, at: Position, work: &Work, now: &str) -> Action {
+        if self.detail.is_some() {
+            return Action::Redraw;
+        }
+        if self.settings.picking() {
+            let entry = self
+                .hits
+                .pick
+                .entries
+                .iter()
+                .find(|(rect, _)| rect.contains(at))
+                .map(|(_, index)| *index);
+            let (Some(index), Some(cursor)) = (entry, self.settings.pick_cursor()) else {
+                return Action::Redraw;
+            };
+            // The first click moves the picker to the entry, which previews it;
+            // a click on the entry the picker is on keeps it, as `enter` does.
+            if index == cursor {
+                self.settings.keep_pick();
+            } else {
+                self.settings.step_pick(index as isize - cursor as isize);
+                self.apply_look();
+            }
+            return Action::Redraw;
+        }
+        if let Some(tab) = self
+            .hits
+            .tabs
+            .iter()
+            .find(|(rect, _)| rect.contains(at))
+            .map(|(_, tab)| *tab)
+        {
+            return if tab == self.tab {
+                Action::Redraw
+            } else {
+                self.go_to(tab)
+            };
+        }
+        let row = self
+            .hits
+            .rows
+            .iter()
+            .find(|(rect, _)| rect.contains(at))
+            .map(|(_, id)| id.clone());
+        let Some(id) = row else {
+            return Action::Redraw;
+        };
+        if self.cursor(work, now).as_deref() == Some(id.as_str()) {
+            return self.on_key(keys::enter(), work, now);
+        }
+        self.selection = Some(id);
+        Action::Redraw
+    }
+
     /// Quit, unless there are unsaved changes: then the footer asks first, and
     /// the next key answers.
     fn quit(&mut self) -> Action {
@@ -479,6 +595,8 @@ impl App {
     /// cursor's row order, the rows that are painted and the footer's
     /// question all answer from one instant.
     pub fn draw(&mut self, frame: &mut Frame, work: &Work, now: &str) {
+        self.hits = Hits::default();
+        self.view.forget_lines();
         let area = frame.area();
         // The notice row is there only while a notice is: a window without one
         // keeps the layout it always had. The footer is a rule and one line,
@@ -497,7 +615,19 @@ impl App {
             Constraint::Length(u16::try_from(footer_rows).unwrap_or(2)),
         ])
         .split(area);
-        let (tabs, rule) = self.tab_bar(rows[1].width, work, now);
+        let (tabs, rule, labels) = self.tab_bar(rows[1].width, work, now);
+        self.hits.tabs = labels
+            .into_iter()
+            .map(|(start, columns, tab)| {
+                let rect = Rect {
+                    x: rows[1].x + start,
+                    y: rows[1].y,
+                    width: columns,
+                    height: 1,
+                };
+                (rect, tab)
+            })
+            .collect();
 
         frame.render_widget(self.title_line(rows[0].width, work, now), rows[0]);
         frame.render_widget(tabs, rows[1]);
@@ -507,6 +637,7 @@ impl App {
             frame.render_widget(Line::from(line), rows[3]);
         }
         let body = rows[4];
+        self.hits.body = body;
         // The row the cursor is on is the row enter opens: the highlight
         // and the key agree, including before the first move.
         let selected = self.cursor(work, now);
@@ -566,6 +697,22 @@ impl App {
                 &self.settings,
             ),
         };
+        if self.tab.lists() {
+            // The lines the pane drew are the rows a click answers to.
+            let inner = body.inner(Margin::new(1, 1));
+            self.hits.rows = (0..inner.height)
+                .filter_map(|line| {
+                    let id = self.view.row_at(usize::from(line))?.to_string();
+                    let rect = Rect {
+                        x: inner.x,
+                        y: inner.y + line,
+                        width: inner.width,
+                        height: 1,
+                    };
+                    Some((rect, id))
+                })
+                .collect();
+        }
         if let Some(detail) = self.detail.as_mut() {
             // The pane covers the whole window: its own footer is the one
             // on display, and the help overlay, when it is open, is drawn
@@ -596,7 +743,8 @@ impl App {
         self.draw_footer(frame, &rows, work, now, hidden);
 
         if self.settings.picking() {
-            settings::render_pick(frame, area, &self.theme, self.icons, &self.settings);
+            self.hits.pick =
+                settings::render_pick(frame, area, &self.theme, self.icons, &self.settings);
         }
         if self.help {
             let has_rows = self.ids(work, now).is_some_and(|ids| !ids.is_empty());
@@ -716,7 +864,15 @@ impl App {
     ///
     /// A terminal too narrow for the six tabs gets the active tab alone.
     /// The parts are dropped whole: no label is ever cut in half.
-    fn tab_bar(&self, width: u16, work: &Work, now: &str) -> (Line<'static>, Line<'static>) {
+    /// The tab bar and the rule under it, and the columns each tab's label takes
+    /// on the bar, as `(start, columns, tab)`. A bar too narrow for the six tabs
+    /// shows the active one alone and takes no clicks.
+    fn tab_bar(
+        &self,
+        width: u16,
+        work: &Work,
+        now: &str,
+    ) -> (Line<'static>, Line<'static>, Vec<(u16, u16, Tab)>) {
         let cells: Vec<Vec<Span<'static>>> = Tab::ALL
             .iter()
             .map(|tab| self.tab_cell(*tab, work, now))
@@ -731,6 +887,7 @@ impl App {
             let mut spans = Vec::new();
             let mut start = 0;
             let mut underline = None;
+            let mut labels = Vec::new();
             for (index, (tab, cell)) in Tab::ALL.iter().zip(cells).enumerate() {
                 if index > 0 {
                     spans.push(Span::raw(" "));
@@ -740,10 +897,11 @@ impl App {
                 if *tab == self.tab {
                     underline = Some((start, columns));
                 }
+                labels.push((start as u16, columns as u16, *tab));
                 start += columns;
                 spans.extend(cell);
             }
-            return (Line::from(spans), self.rule(width, underline));
+            return (Line::from(spans), self.rule(width, underline), labels);
         }
         // Too narrow for the six tabs: the active tab, marked. The parts
         // are dropped whole, from the least to the most useful.
@@ -774,10 +932,15 @@ impl App {
                 return (
                     Line::from(Span::styled(part, style)),
                     self.rule(width, underline),
+                    Vec::new(),
                 );
             }
         }
-        (Line::from(Span::raw("")), self.rule(width, None))
+        (
+            Line::from(Span::raw("")),
+            self.rule(width, None),
+            Vec::new(),
+        )
     }
 
     /// One tab in the bar: its icon and name, and its badge when it has one.
@@ -1483,7 +1646,7 @@ mod tests {
     fn a_narrow_tab_bar_drops_whole_parts() {
         let app = app();
         for width in 0..=24 {
-            let (bar, _) = app.tab_bar(width, &mock_work(), now());
+            let (bar, _, _) = app.tab_bar(width, &mock_work(), now());
             let text = bar
                 .spans
                 .iter()
@@ -1585,7 +1748,7 @@ mod tests {
         // The dropped tab is not back.
         assert!(!bar.contains("Autopilot"), "{bar}");
         // Too narrow for the bar, the index counts to six.
-        let (narrow, _) = app().tab_bar(8, &work, now());
+        let (narrow, _, _) = app().tab_bar(8, &work, now());
         let text = narrow
             .spans
             .iter()
@@ -2587,7 +2750,8 @@ mod tests {
             .collect()
     }
 
-    /// Every tab that is a list with rows: the row tabs and Settings.
+    /// Every tab that is a list with rows that `rows_of` names: the row tabs.
+    /// Settings' rows are its file's lines, so it has its own tests.
     fn list_tabs() -> Vec<Tab> {
         let work = mock_work();
         Tab::ALL
@@ -2643,7 +2807,7 @@ mod tests {
                 ids.last().map(String::as_str),
                 "{tab:?}: G did not reach the last row"
             );
-            let bottom = app.view;
+            let bottom = app.view.clone();
             assert_eq!(
                 bottom.first() + bottom.page(),
                 ids.len(),
@@ -3799,5 +3963,480 @@ mod tests {
             !path.contains("keep the filter"),
             "Path names the filter: {path}"
         );
+    }
+
+    /// A mouse event at a cell.
+    fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    /// A left click at a cell.
+    fn click_at(app: &mut App, work: &Work, column: u16, row: u16) -> Action {
+        app.on_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left), column, row),
+            work,
+            now(),
+        )
+    }
+
+    /// A wheel notch at a cell: down, or up.
+    fn wheel_at(app: &mut App, work: &Work, down: bool, column: u16, row: u16) -> Action {
+        let kind = if down {
+            MouseEventKind::ScrollDown
+        } else {
+            MouseEventKind::ScrollUp
+        };
+        app.on_mouse(mouse(kind, column, row), work, now())
+    }
+
+    /// The cell of the first drawn occurrence of `needle` on the window drawn
+    /// at `width` by `height`, as `(column, row)`.
+    fn drawn_cell(app: &mut App, work: &Work, width: u16, height: u16, needle: &str) -> (u16, u16) {
+        let rows = render_work(app, work, width, height, now()).0;
+        let (row, column) = cell_of(&rows, needle).unwrap_or_else(|| panic!("{needle} not drawn"));
+        (column as u16, row as u16)
+    }
+
+    /// The cell where a row is drawn, as `(column, row)`: its id, or where the
+    /// pane shows no ids (`by_title`), the start of its title. A needle drawn
+    /// on more than one line names no row, so the row is not found rather
+    /// than guessed.
+    fn row_cell(rows: &[String], work: &Work, id: &str, by_title: bool) -> Option<(u16, u16)> {
+        let needle = if by_title {
+            work.record_title(id)?.chars().take(12).collect()
+        } else {
+            id.to_string()
+        };
+        match rows.iter().filter(|row| row.contains(&needle)).count() {
+            1 => {
+                let (row, column) = cell_of(rows, &needle)?;
+                Some((column as u16, row as u16))
+            }
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn a_click_on_a_tab_label_switches_to_it_at_100_columns() {
+        let work = mock_work();
+        let mut app = app();
+        let (column, row) = drawn_cell(&mut app, &work, 100, 40, "Path");
+        assert_eq!(row, 1, "the tab bar is the second row");
+        assert_eq!(app.tab, Tab::Overview);
+        click_at(&mut app, &work, column, row);
+        assert_eq!(app.tab, Tab::Path, "a click on the Path label");
+    }
+
+    #[test]
+    fn a_narrow_tab_bar_takes_no_clicks_at_40_columns() {
+        // At 40 columns the bar shows the active tab alone, so no label is
+        // on screen to click: every cell of the bar leaves the tab where it is.
+        let work = mock_work();
+        let mut app = app();
+        app.tab = Tab::Tasks;
+        render_work(&mut app, &work, 40, 40, now());
+        for column in 0..40 {
+            click_at(&mut app, &work, column, 1);
+            assert_eq!(app.tab, Tab::Tasks, "a click at column {column} switched");
+        }
+    }
+
+    #[test]
+    fn every_drawn_row_of_a_list_tab_answers_a_click_at_40_and_100() {
+        // Each row a list tab draws is the row a click on its line selects:
+        // the rows are found on the screen, not in the model, and the row
+        // under the cursor is left for the test that opens it.
+        let work = mock_work();
+        for tab in list_tabs() {
+            for width in [40u16, 100] {
+                let ids = {
+                    let app = window(&Theme::preset(Preset::Dark), tab, false);
+                    app.ids(&work, now()).expect("a list tab has rows")
+                };
+                let mut found = 0;
+                // A pane that shows no ids (the Backlog's narrow rows) is found
+                // by the start of each row's title.
+                let by_title = {
+                    let mut app = window(&Theme::preset(Preset::Dark), tab, false);
+                    let rows = render_work(&mut app, &work, width, 40, now()).0;
+                    !ids.iter().any(|id| rows.iter().any(|row| row.contains(id)))
+                };
+                for id in ids.iter().skip(1) {
+                    let mut app = window(&Theme::preset(Preset::Dark), tab, false);
+                    let rows = render_work(&mut app, &work, width, 40, now()).0;
+                    let Some((column, row)) = row_cell(&rows, &work, id, by_title) else {
+                        continue;
+                    };
+                    found += 1;
+                    click_at(&mut app, &work, column, row);
+                    assert_eq!(
+                        app.selection.as_deref(),
+                        Some(id.as_str()),
+                        "{tab:?} at {width}: a click on {id} selected another row"
+                    );
+                }
+                assert!(
+                    found >= 3,
+                    "{tab:?} at {width}: only {found} rows were on screen to click"
+                );
+            }
+        }
+    }
+
+    /// A Settings line's text, without the pane's border, cursor bar and
+    /// padding.
+    fn settings_text(row: &str) -> &str {
+        row.trim_matches(|c: char| !c.is_ascii_graphic())
+    }
+
+    /// The cell where a Settings value is drawn, as `(column, row)`: its key's
+    /// line under its table's header, since a key such as `model` is named in
+    /// each agent's table. The search stops at the next header, so a value the
+    /// pane does not show is not found in another table.
+    fn settings_cell(rows: &[String], id: &str) -> Option<(u16, u16)> {
+        let (section, key) = id.rsplit_once('.').unwrap_or(("", id));
+        let start = if section.is_empty() {
+            0
+        } else {
+            let header = format!("[{section}]");
+            rows.iter().position(|row| settings_text(row) == header)? + 1
+        };
+        let needle = format!("{key} = ");
+        let row = rows[start..]
+            .iter()
+            .take_while(|row| !settings_text(row).starts_with('['))
+            .position(|row| settings_text(row).starts_with(&needle))?
+            + start;
+        let byte = rows[row].find(&needle)?;
+        Some((rows[row][..byte].chars().count() as u16, row as u16))
+    }
+
+    #[test]
+    fn every_drawn_settings_value_answers_a_click_at_40_and_100() {
+        // A click on a value's line selects that value, and a second click
+        // edits it, as enter does.
+        let work = mock_work();
+        let fresh = |width: u16| {
+            let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+            app.settings = settings_panel("clicks");
+            let rows = render_work(&mut app, &work, width, 40, now()).0;
+            (app, rows)
+        };
+        for width in [40u16, 100] {
+            let ids = fresh(width).0.settings.ids();
+            let mut found = 0;
+            // The first value is under the cursor from the start, so a click on
+            // it would be the second: it is left for the edit below.
+            for id in ids.iter().skip(1) {
+                let (mut app, rows) = fresh(width);
+                let Some((column, row)) = settings_cell(&rows, id) else {
+                    continue;
+                };
+                found += 1;
+                click_at(&mut app, &work, column, row);
+                assert_eq!(
+                    app.selection.as_deref(),
+                    Some(id.as_str()),
+                    "{width}: a click on {id} selected another value"
+                );
+                assert!(app.detail.is_none(), "{width}: a click opened a record");
+                click_at(&mut app, &work, column, row);
+                assert!(
+                    app.settings.editing() || app.settings.picking(),
+                    "{width}: the second click did not edit {id}"
+                );
+            }
+            assert!(
+                found >= 3,
+                "{width}: only {found} values were on screen to click"
+            );
+        }
+    }
+
+    #[test]
+    fn the_wheel_over_settings_moves_its_cursor_three_values() {
+        let work = mock_work();
+        for width in [40u16, 100] {
+            let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+            app.settings = settings_panel("wheel");
+            let ids = app.settings.ids();
+            let rows = render_work(&mut app, &work, width, 40, now()).0;
+            let (column, row) = settings_cell(&rows, "round_limit").expect("a value is drawn");
+            wheel_at(&mut app, &work, true, column, row);
+            assert_eq!(
+                app.selection.as_deref(),
+                Some(ids[3].as_str()),
+                "{width}: a notch is three values down"
+            );
+            wheel_at(&mut app, &work, false, column, row);
+            assert_eq!(
+                app.selection.as_deref(),
+                Some(ids[0].as_str()),
+                "{width}: a notch is three values up"
+            );
+        }
+    }
+
+    #[test]
+    fn a_pointer_that_only_moves_changes_nothing_and_asks_no_redraw() {
+        // A move, a drag and a release leave the window as it is and answer
+        // Idle, so a pointer passing over the window costs no redraw.
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        let ids = app.ids(&work, now()).expect("rows");
+        let rows = render_work(&mut app, &work, 100, 40, now()).0;
+        let (column, row) = row_cell(&rows, &work, &ids[2], false).expect("the row is drawn");
+        let before = (app.tab, app.selection.clone(), app.view.first());
+        for kind in [
+            MouseEventKind::Moved,
+            MouseEventKind::Drag(MouseButton::Left),
+            MouseEventKind::Up(MouseButton::Left),
+        ] {
+            assert_eq!(
+                app.on_mouse(mouse(kind, column, row), &work, now()),
+                Action::Idle,
+                "{kind:?} asked for a redraw"
+            );
+        }
+        assert_eq!((app.tab, app.selection.clone(), app.view.first()), before);
+        assert!(app.detail.is_none(), "a move opened a record");
+    }
+
+    #[test]
+    fn a_second_click_on_the_selected_row_opens_it_like_enter() {
+        // A row tab's second click on the row the cursor is on opens the
+        // record, as `enter` does, and esc returns to the row.
+        let work = mock_work();
+        for tab in row_tabs() {
+            for width in [40u16, 100] {
+                let mut app = window(&Theme::preset(Preset::Dark), tab, false);
+                let ids = app.ids(&work, now()).expect("rows");
+                let id = ids[2].clone();
+                let rows = render_work(&mut app, &work, width, 40, now()).0;
+                let by_title = !rows.iter().any(|row| row.contains(&id));
+                let (column, row) = row_cell(&rows, &work, &id, by_title)
+                    .unwrap_or_else(|| panic!("{tab:?} at {width}: {id} not drawn"));
+                click_at(&mut app, &work, column, row);
+                assert!(app.detail.is_none(), "{tab:?}: one click opened {id}");
+                assert_eq!(app.selection.as_deref(), Some(id.as_str()));
+                click_at(&mut app, &work, column, row);
+                let opened = app.detail.as_ref().map(|detail| detail.id.clone());
+                assert_eq!(
+                    opened,
+                    Some(id),
+                    "{tab:?} at {width}: the second click did not open"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_wheel_notch_moves_the_rows_under_the_pointer_by_three() {
+        let work = mock_work();
+        for width in [40u16, 100] {
+            let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+            let ids = app.ids(&work, now()).expect("rows");
+            render_work(&mut app, &work, width, 40, now());
+            // A pointer on the title row is outside the rows: the wheel does
+            // nothing there.
+            wheel_at(&mut app, &work, true, 5, 0);
+            assert_eq!(app.selection, None, "the wheel moved on the title row");
+            wheel_at(&mut app, &work, true, 5, 12);
+            assert_eq!(app.selection.as_deref(), Some(ids[3].as_str()), "{width}");
+            wheel_at(&mut app, &work, false, 5, 12);
+            assert_eq!(app.selection.as_deref(), Some(ids[0].as_str()), "{width}");
+        }
+    }
+
+    #[test]
+    fn a_burst_of_wheel_notches_moves_every_notch_before_the_next_draw() {
+        // The loop answers a burst of events with one draw: each notch is
+        // still counted, so ten of them move thirty rows.
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        let ids = app.ids(&work, now()).expect("rows");
+        render_work(&mut app, &work, 100, 40, now());
+        for _ in 0..10 {
+            wheel_at(&mut app, &work, true, 5, 12);
+        }
+        let last = ids.len().min(31) - 1;
+        assert_eq!(app.selection.as_deref(), Some(ids[last].as_str()));
+    }
+
+    #[test]
+    fn a_click_outside_the_panes_does_nothing() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        let ids = app.ids(&work, now()).expect("rows");
+        render_work(&mut app, &work, 100, 40, now());
+        app.selection = Some(ids[1].clone());
+        // The title row, the rule under the tabs, and the footer.
+        for row in [0u16, 2, 39] {
+            click_at(&mut app, &work, 1, row);
+        }
+        assert_eq!(app.tab, Tab::Tasks);
+        assert_eq!(app.selection.as_deref(), Some(ids[1].as_str()));
+        assert!(app.detail.is_none());
+    }
+
+    #[test]
+    fn the_pointer_answers_the_frame_on_screen_and_not_the_last_one() {
+        // The rows a click answers are the ones the last frame drew: after
+        // the tab changes, a click where the old rows were selects nothing.
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        let ids = app.ids(&work, now()).expect("rows");
+        let (column, row) = drawn_cell(&mut app, &work, 100, 40, &ids[4]);
+        app.on_key(key(KeyCode::Char('1')), &work, now());
+        render_work(&mut app, &work, 100, 40, now());
+        click_at(&mut app, &work, column, row);
+        assert_eq!(app.tab, Tab::Overview);
+        assert_eq!(
+            app.selection, None,
+            "a click on the Overview selected a row"
+        );
+    }
+
+    #[test]
+    fn a_help_overlay_takes_the_pointer_away() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, true);
+        render_work(&mut app, &work, 100, 40, now());
+        click_at(&mut app, &work, 5, 1);
+        wheel_at(&mut app, &work, true, 5, 12);
+        assert_eq!(app.tab, Tab::Tasks);
+        assert_eq!(app.selection, None);
+    }
+
+    #[test]
+    fn the_detail_pane_takes_the_wheel_and_no_click() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        let ids = app.ids(&work, now()).expect("rows");
+        app.detail = Some(Detail::opened(ids[0].clone(), Tab::Tasks, None));
+        render_work(&mut app, &work, 100, 40, now());
+        wheel_at(&mut app, &work, true, 5, 30);
+        assert_eq!(app.detail.as_ref().expect("the pane").scroll, 3);
+        click_at(&mut app, &work, 1, 1);
+        assert!(app.detail.is_some(), "a click closed the pane");
+        assert_eq!(app.tab, Tab::Tasks);
+    }
+
+    #[test]
+    fn the_settings_picker_takes_clicks_and_wheel_at_40_and_100() {
+        let work = mock_work();
+        for width in [40u16, 100] {
+            let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+            app.settings = settings_panel("picker-mouse");
+            app.selection = Some("raul.theme".to_string());
+            app.on_key(key(KeyCode::Enter), &work, now());
+            assert!(app.settings.picking(), "enter did not open the picker");
+            let (column, row) = drawn_cell(&mut app, &work, width, 30, "nord");
+            // A click on the entry the picker is not on moves its cursor and
+            // previews the choice; a click on it again keeps it.
+            click_at(&mut app, &work, column, row);
+            assert_eq!(
+                app.theme.preset,
+                Preset::Nord,
+                "{width}: the click did not preview"
+            );
+            assert!(
+                app.settings.picking(),
+                "{width}: the first click closed the pick"
+            );
+            click_at(&mut app, &work, column, row);
+            assert!(
+                !app.settings.picking(),
+                "{width}: the second click did not keep"
+            );
+            assert_eq!(
+                app.theme.preset,
+                Preset::Nord,
+                "{width}: the kept choice was lost"
+            );
+        }
+    }
+
+    #[test]
+    fn a_click_outside_the_settings_picker_keeps_it_open() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("picker-outside");
+        app.selection = Some("raul.theme".to_string());
+        app.on_key(key(KeyCode::Enter), &work, now());
+        render_work(&mut app, &work, 100, 30, now());
+        click_at(&mut app, &work, 0, 0);
+        wheel_at(&mut app, &work, true, 0, 0);
+        assert!(
+            app.settings.picking(),
+            "a click outside the picker closed it"
+        );
+        assert_eq!(
+            app.theme.preset,
+            Preset::Dark,
+            "a click outside moved the pick"
+        );
+    }
+
+    #[test]
+    fn the_wheel_over_the_settings_picker_moves_its_cursor() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("picker-wheel");
+        app.selection = Some("raul.theme".to_string());
+        app.on_key(key(KeyCode::Enter), &work, now());
+        let (column, row) = drawn_cell(&mut app, &work, 100, 30, "nord");
+        wheel_at(&mut app, &work, true, column, row);
+        assert_eq!(
+            app.settings.pick_cursor(),
+            Some(3),
+            "three notches past the top"
+        );
+        assert_eq!(
+            app.theme.preset,
+            Preset::Dracula,
+            "the wheel did not preview"
+        );
+    }
+
+    #[test]
+    fn a_click_on_a_continuation_line_selects_the_row_it_belongs_to() {
+        // A row is drawn in all its lines, and each line answers for the row:
+        // the line under a Path row's title, and the line under a Backlog
+        // row's title at 100 columns, select that row.
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Path, false);
+        let rows = render_work(&mut app, &work, 40, 40, now()).0;
+        let (row, column) = cell_of(&rows, "TSK04").expect("TSK04 is drawn at 40");
+        assert!(
+            rows[row + 1].contains("says the review"),
+            "the line under TSK04 is its continuation: {:?}",
+            rows[row + 1]
+        );
+        click_at(&mut app, &work, column as u16, row as u16 + 1);
+        assert_eq!(app.selection.as_deref(), Some("TSK04"));
+
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Backlog, false);
+        let ids = app.ids(&work, now()).expect("rows");
+        let rows = render_work(&mut app, &work, 100, 40, now()).0;
+        // The first drawn row whose next line is not another row's: its body.
+        let id = ids
+            .iter()
+            .find(|id| {
+                row_cell(&rows, &work, id, false).is_some_and(|(_, line)| {
+                    let below = &rows[usize::from(line) + 1];
+                    !ids.iter().any(|other| below.contains(other.as_str()))
+                })
+            })
+            .expect("a Backlog row with a body is drawn at 100")
+            .clone();
+        let (column, line) = row_cell(&rows, &work, &id, false).expect("drawn");
+        click_at(&mut app, &work, column, line + 1);
+        assert_eq!(app.selection.as_deref(), Some(id.as_str()));
     }
 }

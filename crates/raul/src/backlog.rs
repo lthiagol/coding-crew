@@ -14,7 +14,7 @@ use coding_crew_core::{Item, ItemKind, ItemStatus, Status, Task};
 
 use crate::data::Work;
 use crate::tabs::Tab;
-use crate::view::{self, View};
+use crate::view::{self, Lines, View};
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, pad, text_width};
 use coding_crew_theme::{Icon, IconSet, Theme, phase_style, selected_line};
@@ -228,9 +228,7 @@ pub fn render_view(
     let height = usize::from(area.height).saturating_sub(BORDER);
     let ids = row_ids(work);
     let (rows, announced) = view.draw(&ids, selected, |first| {
-        let (lines, announced, shown, whole) =
-            window(&groups, width, height, theme, icons, selected, first);
-        ((lines, announced), shown, whole)
+        window(&groups, width, height, theme, icons, selected, first)
     });
     frame.render_widget(
         Paragraph::new(rows).wrap(Wrap { trim: false }).block(block),
@@ -338,7 +336,9 @@ fn lines(
     icons: IconSet,
     selected: Option<&str>,
 ) -> Vec<Line<'static>> {
-    window(groups, width, height, theme, icons, selected, 0).0
+    window(groups, width, height, theme, icons, selected, 0)
+        .0
+        .lines
 }
 
 /// The lines of the tab, from the row at `first`, and the rows they show.
@@ -362,9 +362,9 @@ fn window(
     icons: IconSet,
     selected: Option<&str>,
     first: usize,
-) -> (Vec<Line<'static>>, bool, Vec<usize>, bool) {
+) -> (Lines, bool, Vec<usize>, bool) {
     if height == 0 {
-        return (Vec::new(), false, Vec::new(), false);
+        return (Lines::default(), false, Vec::new(), false);
     }
     let total: usize = groups.iter().map(|group| group.rows.len()).sum();
     // The pane counts lines, and a row with a body is two of them.
@@ -386,14 +386,15 @@ fn window(
     // the announcement alone is shown, so no omission goes unsaid. The
     // cursor's row is the one row the window may not leave out: a cut
     // layout that shows it wins over the shortest one.
-    let mut shortest: Option<(Vec<Line<'static>>, Vec<Line<'static>>, Vec<usize>)> = None;
-    let mut with_cursor: Option<(Vec<Line<'static>>, Vec<Line<'static>>, Vec<usize>)> = None;
+    let mut shortest: Option<(Lines, Lines, Vec<usize>)> = None;
+    let mut with_cursor: Option<(Lines, Lines, Vec<usize>)> = None;
     for capacity in (0..=height).rev() {
         let (rows, omitted, headers, shown) =
             layout_groups(groups, capacity, width, icons, theme, selected, first);
         let room = height.saturating_sub(rows.len());
         let present = present_groups(groups, &shown);
-        let (said, cut) = announcement(&omitted, &headers, &present, width, room, theme);
+        let (word, cut) = announcement(&omitted, &headers, &present, width, room, theme);
+        let said = Lines::of(word, None);
         let has_cursor =
             selected.is_none_or(|id| shown.iter().any(|index| row_id(groups, *index) == id));
         if cut {
@@ -416,7 +417,7 @@ fn window(
         }
         let mut out = rows;
         let announced = !said.is_empty();
-        out.extend(said);
+        out.append(said);
         return (out, announced, shown, true);
     }
     if let Some((mut out, said, shown)) = with_cursor.or(shortest) {
@@ -438,7 +439,7 @@ fn window(
                 let headers = [false; 3];
                 let (word, _) = announcement(&omitted, &headers, &present, width, room, theme);
                 announced = !word.is_empty();
-                rows.extend(word);
+                rows.append(Lines::of(word, None));
             }
             return (rows, announced, vec![index], false);
         }
@@ -458,12 +459,12 @@ fn window(
             let room = height - rows.len();
             let (word, _) = announcement(&omitted, &headers, &present, width, room, theme);
             if !word.is_empty() {
-                rows.extend(word);
+                rows.append(Lines::of(word, None));
                 return (rows, true, vec![cursor], false);
             }
         }
         let announced = !said.is_empty();
-        out.extend(said);
+        out.append(said);
         return (out, announced, shown, false);
     }
     // No layout was chosen: the pane is too narrow to draw a header and too
@@ -474,7 +475,7 @@ fn window(
         rows.truncate(height);
         return (rows, false, vec![index], false);
     }
-    (Vec::new(), false, Vec::new(), false)
+    (Lines::default(), false, Vec::new(), false)
 }
 
 /// What each group hides when only the row at `cursor` is shown.
@@ -528,7 +529,7 @@ fn cursor_lines(
     icons: IconSet,
     theme: &Theme,
     id: &str,
-) -> Option<(usize, Vec<Line<'static>>)> {
+) -> Option<(usize, Lines)> {
     let mut index = 0;
     for group in groups {
         let metrics = group_metrics(groups, group, width);
@@ -536,7 +537,10 @@ fn cursor_lines(
             if row.id == id {
                 return Some((
                     index,
-                    row_lines(row, width, metrics, icons, theme, Some(id)),
+                    Lines::of(
+                        row_lines(row, width, metrics, icons, theme, Some(id)),
+                        Some(index),
+                    ),
                 ));
             }
             index += 1;
@@ -564,13 +568,16 @@ fn all_lines(
     icons: IconSet,
     theme: &Theme,
     selected: Option<&str>,
-) -> Vec<Line<'static>> {
-    let mut out = Vec::new();
+) -> Lines {
+    let mut out = Lines::default();
+    let mut index = 0;
     for group in groups {
         let metrics = group_metrics(groups, group, width);
-        out.push(header(group, width, theme));
+        out.push(header(group, width, theme), None);
         for row in &group.rows {
-            out.extend(row_lines(row, width, metrics, icons, theme, selected));
+            let lines = row_lines(row, width, metrics, icons, theme, selected);
+            out.extend(lines, Some(index));
+            index += 1;
         }
     }
     out
@@ -596,8 +603,8 @@ fn layout_groups(
     theme: &Theme,
     selected: Option<&str>,
     first: usize,
-) -> (Vec<Line<'static>>, [usize; 3], [bool; 3], Vec<usize>) {
-    let mut out = Vec::new();
+) -> (Lines, [usize; 3], [bool; 3], Vec<usize>) {
+    let mut out = Lines::default();
     let mut omitted = [0usize; 3];
     let mut headers = [false; 3];
     let mut shown_rows = Vec::new();
@@ -618,7 +625,7 @@ fn layout_groups(
             continue;
         }
         let metrics = group_metrics(groups, group, width);
-        out.push(header(group, width, theme));
+        out.push(header(group, width, theme), None);
         headers[index] = true;
         used += 1;
         let skip = first.saturating_sub(start).min(group.rows.len());
@@ -628,8 +635,12 @@ fn layout_groups(
             if used + height > capacity {
                 break;
             }
-            out.extend(row_lines(row, width, metrics, icons, theme, selected));
-            shown_rows.push(start + skip + offset);
+            let at = start + skip + offset;
+            out.extend(
+                row_lines(row, width, metrics, icons, theme, selected),
+                Some(at),
+            );
+            shown_rows.push(at);
             used += height;
             shown += 1;
         }
@@ -2208,7 +2219,7 @@ mod tests {
                     "{width}x{height}: {} lines",
                     built.len()
                 );
-                let texts: Vec<String> = built.iter().map(line_text).collect();
+                let texts: Vec<String> = built.lines.iter().map(line_text).collect();
                 for index in &shown {
                     let row = rows[*index];
                     let metrics = metrics_of(&groups, &row.id, width);
@@ -2242,7 +2253,7 @@ mod tests {
             window(&groups, 98, 5, &theme(), IconSet::Nerd, None, 0);
         assert!(announced && whole, "the window did not choose to announce");
         assert_eq!(shown, vec![0], "the window shows one row");
-        let text = text_of(&built);
+        let text = text_of(&built.lines);
         assert!(text.contains("ITM01"), "{text}");
         assert!(text.contains("The activity block"), "{text}");
         assert!(!text.contains("ITM02"), "{text}");
@@ -2309,7 +2320,10 @@ mod tests {
                 for line in row_lines(row, 98, metrics, IconSet::Nerd, &theme, Some(id)) {
                     let text = line_text(&line);
                     assert!(
-                        built.iter().any(|built_line| line_text(built_line) == text),
+                        built
+                            .lines
+                            .iter()
+                            .any(|built_line| line_text(built_line) == text),
                         "{id} at {height}: the cursor's row is drawn in half: {built:#?}"
                     );
                 }
@@ -2321,7 +2335,7 @@ mod tests {
             assert!(!announced, "{id}: a one-line pane announced");
             assert_eq!(shown, vec![index], "{id}: the cursor's row is not counted");
             assert_eq!(
-                line_text(&built[0]),
+                line_text(&built.lines[0]),
                 line_text(&row_line(row, 98, metrics, IconSet::Nerd, &theme, Some(id))),
                 "{id}: a one-line pane did not draw the row"
             );

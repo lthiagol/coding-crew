@@ -367,6 +367,24 @@ harness, model and effort, and no start is in flight.
 The note sits on its own row above the footer's rule while a start has
 something to say. The last thing a start said stays until the next start.
 
+## Mouse
+
+The mouse works where the keys do. The wheel scrolls what is under the
+pointer, three rows a notch, and a burst of notches costs one redraw.
+
+| gesture | does |
+|---|---|
+| wheel over the sidebar | moves the agents' cursor, and takes the focus as a click does |
+| wheel over the queue | moves the queue's cursor, and takes the focus |
+| click a sidebar row | moves the cursor to that field; a second click on it opens its choice, as `enter` does |
+| click a queue row | moves the queue's cursor to it and takes the focus; a second click on it marks the task, as `space` does |
+| click a choice or crew-size entry | moves the picker to it; a second click picks it, as `enter` does |
+
+The sidebar takes no clicks where the window drops it, below 80 columns. A
+click outside these regions does nothing, and while the help or the id input
+holds the keys the pointer waits. Most terminals keep their own text selection
+for a drag held with shift.
+
 ## The layout
 
 The sidebar is 32 columns wide, its border included. At 80 columns and wider

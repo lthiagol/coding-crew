@@ -10,9 +10,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
@@ -21,6 +23,7 @@ use coding_crew_core::config::{Agent, Config};
 use coding_crew_core::harness::{self, HARNESSES, Harness};
 use coding_crew_core::runtime::{CrewMember, QueueItem, Runtime};
 use coding_crew_core::{FlowRole, Status, age_text, parse_rfc3339};
+use coding_crew_theme::picker::Picked;
 use coding_crew_theme::text::{cut_to, head_to, tail_to, text_width};
 use coding_crew_theme::{
     Icon, IconSet, Slot, Theme, chrome, phase_style, picker, role_style, selected_line,
@@ -32,6 +35,8 @@ use crate::launch::{self, LaunchRequest, Launcher, Start};
 use crate::pick;
 use crate::sidebar::{self, Field, role_icon};
 
+/// The rows one notch of the wheel moves.
+const WHEEL_ROWS: isize = 3;
 /// The columns the sidebar takes when it is shown, its border included.
 pub const SIDEBAR_WIDTH: u16 = 32;
 /// The narrowest the main pane is drawn beside the sidebar.
@@ -173,6 +178,8 @@ const CREW_GAP: usize = 1;
 pub enum Action {
     Quit,
     Redraw,
+    /// Nothing changed: the loop waits on without a draw.
+    Idle,
 }
 
 /// A choice: the list of one agent's field, and the cursor on it.
@@ -330,6 +337,25 @@ fn agent_of(agents: &[Agent], role: FlowRole) -> Option<Agent> {
     agents.iter().find(|agent| agent.role == role).cloned()
 }
 
+/// The regions the last frame drew, where the pointer can reach them. The draw
+/// stores them and a mouse event is answered from them, so a click lands on what
+/// is on screen and nothing is recomputed.
+#[derive(Debug, Default)]
+struct Hits {
+    /// The sidebar's pane, its border included, when one is drawn.
+    sidebar: Rect,
+    /// The sidebar's lines a click picks, each with the cursor position it is.
+    picks: Vec<(Rect, usize)>,
+    /// The queue's section, its heading included, when one is drawn.
+    queue_area: Rect,
+    /// The queue's lines, each with the waiting task it is.
+    queue: Vec<(Rect, usize)>,
+    /// The choice's popup and the entries it drew, when a choice is open.
+    choice: Picked,
+    /// The crew-size selector's popup and the entries it drew, when it is open.
+    crew: Picked,
+}
+
 /// The state of the window.
 pub struct App {
     /// The colours of the window.
@@ -379,6 +405,8 @@ pub struct App {
     /// The waiting tasks marked with `space`, in the order they were marked.
     /// Session-only: a reload or a restart drops them.
     marked: Vec<String>,
+    /// The regions the last frame drew, that a mouse event is answered from.
+    hits: Hits,
     /// The line the start last said, on the note row.
     note: Option<Note>,
     /// The project's folder as the title line names it, when one is found.
@@ -429,6 +457,7 @@ impl App {
             focus: Focus::Configuration,
             queue_cursor: 0,
             marked: Vec::new(),
+            hits: Hits::default(),
             note: None,
             project: None,
             root: None,
@@ -645,9 +674,99 @@ impl App {
         }
     }
 
+    /// Handle a mouse event. The wheel scrolls what is under the pointer by
+    /// `WHEEL_ROWS` a notch: the sidebar's rows, the queue, or a picker's
+    /// entries. A left click picks a sidebar row, a queue row or a picker entry;
+    /// a second click on the row the cursor is on answers as `enter` does (a
+    /// sidebar row opens its choice) or as `space` does (a queue row marks its
+    /// task). A click anywhere else does nothing.
+    ///
+    /// The regions are the ones the last frame drew. While the help or the id
+    /// input takes the keys, the pointer waits for them. A move or a drag, and
+    /// a button's release, change nothing: they answer `Idle`, so a pointer
+    /// passing over the window costs no redraw.
+    pub fn on_mouse(&mut self, mouse: MouseEvent) -> Action {
+        if self.help || self.typing() {
+            return Action::Idle;
+        }
+        let at = Position::new(mouse.column, mouse.row);
+        let step = match mouse.kind {
+            MouseEventKind::ScrollDown => WHEEL_ROWS,
+            MouseEventKind::ScrollUp => -WHEEL_ROWS,
+            MouseEventKind::Down(MouseButton::Left) => return self.click(at),
+            _ => return Action::Idle,
+        };
+        if self.choice.is_some() {
+            if self.hits.choice.area.contains(at) {
+                self.move_choice(step);
+            }
+        } else if self.crew_cursor.is_some() {
+            if self.hits.crew.area.contains(at) {
+                self.move_crew(step);
+            }
+        } else if self.hits.sidebar.contains(at) {
+            // The pointer takes the focus, as a click does.
+            self.focus = Focus::Configuration;
+            self.move_cursor(step);
+        } else if self.hits.queue_area.contains(at) && !self.queued.is_empty() {
+            self.focus = Focus::Queue;
+            self.move_queue(step);
+        }
+        Action::Redraw
+    }
+
+    /// Answer a left click at `at` from the regions the last frame drew.
+    fn click(&mut self, at: Position) -> Action {
+        if self.choice.is_some() {
+            if let Some(index) = hit(&self.hits.choice.entries, at) {
+                let cursor = self.choice.as_ref().map_or(0, |choice| choice.cursor);
+                if index == cursor {
+                    self.pick();
+                } else {
+                    self.move_choice(index as isize - cursor as isize);
+                }
+            }
+            return Action::Redraw;
+        }
+        if self.crew_cursor.is_some() {
+            if let Some(index) = hit(&self.hits.crew.entries, at) {
+                if self.crew_cursor == Some(index) {
+                    if let Some(cursor) = self.crew_cursor.take() {
+                        self.set_crew(cursor + 1);
+                    }
+                } else {
+                    self.crew_cursor = Some(index);
+                }
+            }
+            return Action::Redraw;
+        }
+        if let Some(row) = hit(&self.hits.picks, at) {
+            // The second click on the row the cursor is on opens its choice,
+            // as `enter` does on it.
+            let selected = self.focus == Focus::Configuration && self.cursor == row;
+            self.focus = Focus::Configuration;
+            self.cursor = row;
+            if selected {
+                self.open_choice();
+            }
+        } else if let Some(task) = hit(&self.hits.queue, at) {
+            // The second click on the task the cursor is on marks it, as
+            // `space` does on it.
+            let selected = self.focus == Focus::Queue && self.queue_cursor == task;
+            self.focus = Focus::Queue;
+            self.queue_cursor = task;
+            if selected {
+                self.mark_cursor();
+            }
+        }
+        Action::Redraw
+    }
+
     /// Draw the window. `now` is the instant holds are measured at, and `tick`
     /// is the frame the spinner shows.
     pub fn draw(&mut self, frame: &mut Frame, runtime: &RuntimeRead, now: &str, tick: usize) {
+        // The regions are the ones this frame draws: a click answers to them.
+        self.hits = Hits::default();
         // The queue `s` starts the orchestrator over is the one drawn: the
         // waiting work, in order. Held and done tasks are not in it.
         self.queued = match runtime {
@@ -713,6 +832,7 @@ impl App {
         if area.height == 0 || area.width == 0 {
             return false;
         }
+        self.hits.sidebar = area;
         let (inner, width, height) = if area.height >= 3 && area.width >= 4 {
             let block = chrome::pane(SIDEBAR_TITLE, Icon::Config, self.icons, false, &self.theme)
                 .style(self.theme.chrome.surface);
@@ -737,6 +857,23 @@ impl App {
             usize::from(height),
             cursor,
         );
+        // Each line of an agent's field is a row a click picks.
+        self.hits.picks = drawn
+            .picks
+            .iter()
+            .filter_map(|(line, pick)| {
+                let line = u16::try_from(*line)
+                    .ok()
+                    .filter(|line| *line < inner.height)?;
+                let rect = Rect {
+                    x: inner.x,
+                    y: inner.y + line,
+                    width: inner.width,
+                    height: 1,
+                };
+                Some((rect, *pick))
+            })
+            .collect();
         frame.render_widget(
             Paragraph::new(drawn.lines).style(self.theme.chrome.surface),
             inner,
@@ -1602,7 +1739,7 @@ impl App {
     }
 
     /// The main pane: the flow's blocks, with the stamp at the foot.
-    fn flow(&self, frame: &mut Frame, area: Rect, runtime: &Runtime, now: &str, tick: usize) {
+    fn flow(&mut self, frame: &mut Frame, area: Rect, runtime: &Runtime, now: &str, tick: usize) {
         if area.height == 0 || area.width == 0 {
             return;
         }
@@ -1617,7 +1754,14 @@ impl App {
     }
 
     /// The blocks inside the flow's box, and the stamp on the last row.
-    fn flow_body(&self, frame: &mut Frame, inner: Rect, runtime: &Runtime, now: &str, tick: usize) {
+    fn flow_body(
+        &mut self,
+        frame: &mut Frame,
+        inner: Rect,
+        runtime: &Runtime,
+        now: &str,
+        tick: usize,
+    ) {
         if inner.height == 0 || inner.width == 0 {
             return;
         }
@@ -1652,7 +1796,7 @@ impl App {
     }
 
     /// The blocks in boxes, one under another, in the order they are read.
-    fn draw_boxed(&self, frame: &mut Frame, body: Rect, sections: &[Section]) {
+    fn draw_boxed(&mut self, frame: &mut Frame, body: Rect, sections: &[Section]) {
         let mut constraints: Vec<Constraint> = sections
             .iter()
             .map(|section| Constraint::Length((section.lines.len() + 2) as u16))
@@ -1662,6 +1806,36 @@ impl App {
         for (section, area) in sections.iter().zip(areas.iter()) {
             let block = self.main_title(section.title, section.icon);
             frame.render_widget(Paragraph::new(section.lines.clone()).block(block), *area);
+            // The box's border is one cell all round: its lines sit inside it.
+            let inner = Rect {
+                x: area.x + 1,
+                y: area.y + 1,
+                width: area.width.saturating_sub(2),
+                height: area.height.saturating_sub(2),
+            };
+            self.record_section(section, *area, inner);
+        }
+    }
+
+    /// Record where a drawn section's lines are, for the pointer: the queue's
+    /// section and each of its rows. `area` is the section as drawn, `inner` its
+    /// lines.
+    fn record_section(&mut self, section: &Section, area: Rect, inner: Rect) {
+        if section.title == QUEUE_TITLE {
+            self.hits.queue_area = area;
+        }
+        for (line, index) in &section.picks {
+            let line = u16::try_from(*line).unwrap_or(u16::MAX);
+            if line >= inner.height {
+                continue;
+            }
+            let rect = Rect {
+                x: inner.x,
+                y: inner.y + line,
+                width: inner.width,
+                height: 1,
+            };
+            self.hits.queue.push((rect, *index));
         }
     }
 
@@ -1669,7 +1843,7 @@ impl App {
     ///
     /// A block that does not fit is left out whole, and one line names what
     /// is not shown. A block is never cut in the middle without a word.
-    fn draw_words(&self, frame: &mut Frame, body: Rect, sections: &[Section]) {
+    fn draw_words(&mut self, frame: &mut Frame, body: Rect, sections: &[Section]) {
         let heights: Vec<usize> = sections
             .iter()
             .map(|section| section.lines.len() + 1)
@@ -1694,12 +1868,26 @@ impl App {
         };
         let mut lines: Vec<Line<'static>> = Vec::new();
         for section in &sections[..shown] {
+            // Each block's heading is the row its lines start below.
+            let heading_row = lines.len();
             let heading = format!("{} {}", section.icon.glyph(self.icons), section.title);
             lines.push(Line::from(Span::styled(
                 heading,
                 self.theme.chrome.tab_active,
             )));
             lines.extend(section.lines.clone());
+            let area = Rect {
+                x: body.x,
+                y: body.y + heading_row as u16,
+                width: body.width,
+                height: (section.lines.len() + 1) as u16,
+            };
+            let inner = Rect {
+                y: area.y + 1,
+                height: section.lines.len() as u16,
+                ..area
+            };
+            self.record_section(section, area, inner);
         }
         if !hidden.is_empty() {
             // Each block gives way whole: its count is the rows it held.
@@ -1720,6 +1908,8 @@ impl App {
     /// first, then the queue, the round, the budget and the findings.
     fn sections(&self, runtime: &Runtime, width: u16, now: &str, tick: usize) -> Vec<Section> {
         let width = usize::from(width);
+        let (queue, queue_picks) =
+            self.captioned_picks(QUEUE_CAPTION, self.queue_lines(runtime, width), width);
         vec![
             Section {
                 title: CREW_TITLE,
@@ -1729,26 +1919,31 @@ impl App {
                     self.crew_lines(runtime, width, now, tick),
                     width,
                 ),
+                picks: Vec::new(),
             },
             Section {
                 title: QUEUE_TITLE,
                 icon: Icon::TabBacklog,
-                lines: self.captioned(QUEUE_CAPTION, self.queue_lines(runtime, width), width),
+                lines: queue,
+                picks: queue_picks,
             },
             Section {
                 title: ROUND_TITLE,
                 icon: Icon::RoleReviewer,
                 lines: self.captioned(ROUND_CAPTION, self.round_lines(runtime, width, tick), width),
+                picks: Vec::new(),
             },
             Section {
                 title: BUDGET_TITLE,
                 icon: Icon::Clock,
                 lines: self.captioned(BUDGET_CAPTION, self.budget_lines(runtime, width), width),
+                picks: Vec::new(),
             },
             Section {
                 title: FINDINGS_TITLE,
                 icon: Icon::Finding,
                 lines: self.captioned(FINDINGS_CAPTION, self.findings_lines(runtime, width), width),
+                picks: Vec::new(),
             },
         ]
     }
@@ -1761,9 +1956,25 @@ impl App {
         lines: Vec<Line<'static>>,
         width: usize,
     ) -> Vec<Line<'static>> {
+        self.captioned_picks(caption, (lines, Vec::new()), width).0
+    }
+
+    /// [`captioned`] for a block with rows a click picks: the picks move down
+    /// by the lines the caption takes, so each is the line it is drawn on.
+    fn captioned_picks(
+        &self,
+        caption: &str,
+        (lines, picks): (Vec<Line<'static>>, Vec<(usize, usize)>),
+        width: usize,
+    ) -> (Vec<Line<'static>>, Vec<(usize, usize)>) {
         let mut out = vec![self.fit(vec![(caption.to_string(), self.theme.text.dim)], width)];
+        let at = out.len();
         out.extend(lines);
-        out
+        let picks = picks
+            .into_iter()
+            .map(|(line, index)| (line + at, index))
+            .collect();
+        (out, picks)
     }
 
     /// The crew: a table with one row per agent, and the composition that says
@@ -1897,8 +2108,13 @@ impl App {
     /// The queue: the waiting work, in order, with an id and a status, and the
     /// count with the set it counts. The task under the cursor is marked with
     /// the cursor's bar while the queue has focus; a task that is marked
-    /// carries `[x]`.
-    fn queue_lines(&self, runtime: &Runtime, width: usize) -> Vec<Line<'static>> {
+    /// carries `[x]`. Also returns the line each task is drawn on, counted from
+    /// the count line, with the task's place in the queue.
+    fn queue_lines(
+        &self,
+        runtime: &Runtime,
+        width: usize,
+    ) -> (Vec<Line<'static>>, Vec<(usize, usize)>) {
         let items: Vec<&QueueItem> = runtime.waiting().collect();
         let done = runtime
             .queue
@@ -1916,8 +2132,10 @@ impl App {
             count.push((" done".to_string(), self.theme.text.dim));
         }
         let mut lines = vec![self.fit(count, width)];
+        let mut picks = Vec::new();
         let focused = self.focus == Focus::Queue;
         for (index, item) in items.into_iter().enumerate() {
+            picks.push((lines.len(), index));
             let selected = focused && index == self.queue_cursor;
             let (bar, bar_style) = if selected {
                 (
@@ -1951,7 +2169,7 @@ impl App {
                 row
             });
         }
-        lines
+        (lines, picks)
     }
 
     /// The review in flight, as a timeline of the task in flight: the task and
@@ -2216,7 +2434,7 @@ impl App {
     /// says it is reading; one that cannot be filled says why on the failure
     /// slot rather than opening empty. The id input shows the id typed, and
     /// whether it has the shape of one.
-    fn choice_pane(&self, frame: &mut Frame, area: Rect) {
+    fn choice_pane(&mut self, frame: &mut Frame, area: Rect) {
         let Some(choice) = &self.choice else {
             return;
         };
@@ -2263,7 +2481,7 @@ impl App {
                 self.entry_rows(choice),
             ),
         };
-        picker::draw(
+        let picked = picker::draw(
             frame,
             picker::popup(area, choice.rows()),
             &choice.title,
@@ -2274,11 +2492,12 @@ impl App {
             &entries,
             choice.cursor,
         );
+        self.hits.choice = picked;
     }
 
     /// The crew-size selector: one line per size, the roles it has drawn as
     /// their icons and the roles it leaves out as empty circles, then the hint.
-    fn crew_pane(&self, frame: &mut Frame, area: Rect) {
+    fn crew_pane(&mut self, frame: &mut Frame, area: Rect) {
         let Some(cursor) = self.crew_cursor else {
             return;
         };
@@ -2288,7 +2507,7 @@ impl App {
                 style: self.theme.text.normal,
             })
             .collect();
-        picker::draw(
+        let picked = picker::draw(
             frame,
             picker::popup(area, entries.len()),
             CREW_SIZE_TITLE,
@@ -2299,6 +2518,7 @@ impl App {
             &entries,
             cursor,
         );
+        self.hits.crew = picked;
     }
 
     /// One size's line in the selector: the glyph of each role the size has,
@@ -2541,6 +2761,14 @@ impl App {
     }
 }
 
+/// The index a click at `at` picks, from the regions a frame drew.
+fn hit(regions: &[(Rect, usize)], at: Position) -> Option<usize> {
+    regions
+        .iter()
+        .find(|(rect, _)| rect.contains(at))
+        .map(|(_, index)| *index)
+}
+
 /// Where the help sits: three fifths of the window, centred.
 fn help_popup(area: Rect) -> Rect {
     let width = area.width.saturating_mul(3) / 5;
@@ -2558,6 +2786,9 @@ struct Section {
     title: &'static str,
     icon: Icon,
     lines: Vec<Line<'static>>,
+    /// The lines a click picks, each with the queue row it is: the queue's
+    /// only.
+    picks: Vec<(usize, usize)>,
 }
 
 /// The slot the budget bar is filled in: `semantic.ok` under half spent,
@@ -6356,5 +6587,280 @@ mod tests {
     fn answer_choice_for(window: &mut App, agent: usize, loaded: Result<Catalog, String>) {
         window.show(agent, Field::Model, Vec::new(), 0, ChoiceState::Reading);
         window.fill_choice(loaded);
+    }
+
+    /// A mouse event at a cell.
+    fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    /// A left click at a cell.
+    fn click(window: &mut App, column: u16, row: u16) -> Action {
+        window.on_mouse(mouse(MouseEventKind::Down(MouseButton::Left), column, row))
+    }
+
+    /// A wheel notch at a cell: down, or up.
+    fn wheel(window: &mut App, down: bool, column: u16, row: u16) -> Action {
+        let kind = if down {
+            MouseEventKind::ScrollDown
+        } else {
+            MouseEventKind::ScrollUp
+        };
+        window.on_mouse(mouse(kind, column, row))
+    }
+
+    /// The cell where `needle` is drawn, as `(column, row)`.
+    fn at(rows: &[String], needle: &str) -> (u16, u16) {
+        let row = row_of(rows, needle);
+        (column_at(rows, row, needle) as u16, row as u16)
+    }
+
+    #[test]
+    fn a_click_on_a_sidebar_row_moves_the_cursor_and_a_second_opens_its_choice() {
+        let mut window = app();
+        let (column, row) = at(
+            &render_app(&mut window, 100, 40, &RuntimeRead::Absent).0,
+            "  harness",
+        );
+        let before = window.cursor;
+        click(&mut window, column, row);
+        assert!(window.choice.is_none(), "one click opened a choice");
+        assert_ne!(window.cursor, before, "the click did not move the cursor");
+        let picked = window.cursor;
+        click(&mut window, column, row);
+        assert!(
+            window.choice.is_some(),
+            "the second click did not open the choice"
+        );
+        assert_eq!(window.cursor, picked);
+    }
+
+    #[test]
+    fn the_wheel_over_the_sidebar_moves_its_cursor_three_rows() {
+        let mut window = app();
+        let rows = render_app(&mut window, 100, 40, &RuntimeRead::Absent).0;
+        let (column, row) = at(&rows, "  harness");
+        let rows_of_config = sidebar::pick_rows(window.session().expect("a configuration"));
+        let before = window.cursor;
+        wheel(&mut window, true, column, row);
+        assert_eq!(window.cursor, (before + 3).min(rows_of_config - 1));
+        // One notch back up is three rows back: the cursor returns to where it
+        // started, and a notch past the top stops there.
+        wheel(&mut window, false, column, row);
+        assert_eq!(window.cursor, before);
+        wheel(&mut window, false, column, row);
+        wheel(&mut window, false, column, row);
+        assert_eq!(window.cursor, 0, "the wheel went up past the top");
+    }
+
+    #[test]
+    fn no_sidebar_is_clickable_where_the_window_drops_it() {
+        // Below the sidebar's width the sidebar is not drawn: the pointer over
+        // its place does nothing.
+        let mut window = app();
+        render_app(&mut window, 40, 40, &RuntimeRead::Absent);
+        let before = window.cursor;
+        for row in 0..40 {
+            click(&mut window, 2, row);
+            wheel(&mut window, true, 2, row);
+        }
+        assert_eq!(window.cursor, before);
+        assert!(window.choice.is_none());
+    }
+
+    #[test]
+    fn a_click_on_a_queue_row_selects_it_and_a_second_marks_it_at_40_and_100() {
+        for width in [40u16, 100] {
+            let mut window = app();
+            let runtime = RuntimeRead::Record(queued_runtime());
+            let rows = render_app(&mut window, width, 40, &runtime).0;
+            // The waiting tasks are TSK29, TSK07 and TSK08, in queue order.
+            let (column, row) = at(&rows, "TSK07");
+            click(&mut window, column, row);
+            assert_eq!(
+                window.focus,
+                Focus::Queue,
+                "{width}: the click did not take the queue"
+            );
+            assert_eq!(
+                window.queue_cursor, 1,
+                "{width}: the wrong task is selected"
+            );
+            assert!(
+                window.marked.is_empty(),
+                "{width}: one click marked the task"
+            );
+            click(&mut window, column, row);
+            assert_eq!(
+                window.marked,
+                vec!["TSK07".to_string()],
+                "{width}: the second click"
+            );
+        }
+    }
+
+    #[test]
+    fn the_wheel_over_the_queue_moves_its_cursor_and_takes_the_focus() {
+        for width in [40u16, 100] {
+            let mut window = app();
+            let runtime = RuntimeRead::Record(queued_runtime());
+            let rows = render_app(&mut window, width, 40, &runtime).0;
+            let (column, row) = at(&rows, "TSK29");
+            wheel(&mut window, true, column, row);
+            assert_eq!(window.focus, Focus::Queue, "{width}");
+            assert_eq!(
+                window.queue_cursor, 2,
+                "{width}: the wheel stops at the last task"
+            );
+            wheel(&mut window, false, column, row);
+            assert_eq!(window.queue_cursor, 0, "{width}: a notch is three rows up");
+        }
+    }
+
+    #[test]
+    fn a_pointer_that_only_moves_changes_nothing_and_asks_no_redraw() {
+        // A move, a drag and a release leave the window as it is and answer
+        // Idle, so a pointer passing over the window costs no draw.
+        let mut window = app();
+        let rows = render_app(&mut window, 100, 40, &RuntimeRead::Absent).0;
+        let (column, row) = at(&rows, "  harness");
+        let (cursor, focus) = (window.cursor, window.focus);
+        for kind in [
+            MouseEventKind::Moved,
+            MouseEventKind::Drag(MouseButton::Left),
+            MouseEventKind::Up(MouseButton::Left),
+        ] {
+            assert_eq!(
+                window.on_mouse(mouse(kind, column, row)),
+                Action::Idle,
+                "{kind:?} asked for a redraw"
+            );
+        }
+        assert_eq!(window.cursor, cursor, "a move changed the cursor");
+        assert_eq!(window.focus, focus, "a move changed the focus");
+        assert!(window.choice.is_none(), "a move opened a choice");
+    }
+
+    #[test]
+    fn each_queue_pick_is_the_line_its_task_is_drawn_on() {
+        // A pick is the line the draw recorded for its task, under the caption:
+        // the click answers to what is drawn there.
+        let window = app();
+        let queue = window
+            .sections(&queued_runtime(), 100, RENDER_NOW, 0)
+            .into_iter()
+            .find(|section| section.title == QUEUE_TITLE)
+            .expect("the queue section");
+        let waiting = ["TSK29", "TSK07", "TSK08"];
+        assert_eq!(queue.picks.len(), waiting.len());
+        for (line, index) in &queue.picks {
+            let text: String = queue.lines[*line]
+                .spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect();
+            assert!(
+                text.contains(waiting[*index]),
+                "task {index} is picked on line {line}, drawn as {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_click_on_a_choice_entry_moves_the_cursor_and_a_second_picks_it_at_40_and_100() {
+        let home = scratch("choice-mouse");
+        for width in [40u16, 100] {
+            let mut window = on_orchestrator(Some(home.clone()));
+            answer_choice(
+                &mut window,
+                Ok(Catalog::from_lines(
+                    "claude-sonnet-5-5\nclaude-opus-5-5\nclaude-haiku-5-5\n",
+                )),
+            );
+            // The choice opens on the model in force, Opus. The first entry is
+            // the one a first click moves to: its name is drawn only in the
+            // picker, as the sidebar shows the other agents' models.
+            let models = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"];
+            let target = 0;
+            assert_ne!(window.choice.as_ref().expect("the choice").cursor, target);
+            let rows = render_app(&mut window, width, 40, &RuntimeRead::Absent).0;
+            let (column, row) = at(&rows, models[target]);
+            click(&mut window, column, row);
+            assert_eq!(
+                window.choice.as_ref().expect("the choice").cursor,
+                target,
+                "{width}: the first click did not move"
+            );
+            assert!(window.choice.is_some(), "{width}: the first click picked");
+            click(&mut window, column, row);
+            assert!(
+                window.choice.is_none(),
+                "{width}: the second click did not pick"
+            );
+            assert_eq!(
+                model_of(&window, "orchestrator"),
+                Some(models[target]),
+                "{width}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_click_on_a_crew_size_entry_sets_the_crew_on_a_second_click_at_40_and_100() {
+        for width in [40u16, 100] {
+            let mut window = app();
+            window.on_key(press(KeyCode::Char('c')));
+            let rows = render_app(&mut window, width, 40, &RuntimeRead::Absent).0;
+            let (column, row) = at(&rows, "single agent");
+            click(&mut window, column, row);
+            assert_eq!(
+                window.crew_cursor,
+                Some(0),
+                "{width}: the first click did not move"
+            );
+            click(&mut window, column, row);
+            assert_eq!(
+                window.crew_cursor, None,
+                "{width}: the second click did not pick"
+            );
+            assert_eq!(
+                crew_size_of(window.session().expect("a configuration")),
+                Some(1),
+                "{width}: the crew is not the single agent"
+            );
+        }
+    }
+
+    #[test]
+    fn a_click_outside_the_panes_does_nothing() {
+        let mut window = app();
+        let runtime = RuntimeRead::Record(queued_runtime());
+        render_app(&mut window, 100, 40, &runtime);
+        let before = (window.cursor, window.focus, window.choice.is_some());
+        // The title row, the rule over the footer, and the footer itself.
+        for row in [0u16, 37, 39] {
+            click(&mut window, 60, row);
+        }
+        assert_eq!(
+            (window.cursor, window.focus, window.choice.is_some()),
+            before
+        );
+    }
+
+    #[test]
+    fn the_help_takes_the_pointer_away() {
+        let mut window = app();
+        let rows = render_app(&mut window, 100, 40, &RuntimeRead::Absent).0;
+        let (column, row) = at(&rows, "  harness");
+        window.on_key(press(KeyCode::Char('?')));
+        let before = window.cursor;
+        click(&mut window, column, row);
+        wheel(&mut window, true, column, row);
+        assert_eq!(window.cursor, before);
     }
 }

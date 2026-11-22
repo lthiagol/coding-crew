@@ -67,19 +67,78 @@ pub fn barred(
     selected_row(Line::from(spans), width, selected, theme)
 }
 
+/// The row a drawn line belongs to, by its index in the tab's rows; `None` for
+/// a heading, an announcement or any line that is not a row.
+pub type Owner = Option<usize>;
+
+/// The lines a window draws, each with the row it belongs to. A window adds
+/// its lines through `push` and `extend` only, so a line and its owner cannot
+/// drift apart.
+#[derive(Debug, Clone, Default)]
+pub struct Lines {
+    pub lines: Vec<Line<'static>>,
+    pub owners: Vec<Owner>,
+}
+
+impl Lines {
+    /// One line, and the row it belongs to.
+    pub fn push(&mut self, line: Line<'static>, owner: Owner) {
+        self.lines.push(line);
+        self.owners.push(owner);
+    }
+
+    /// Lines that all belong to one row, or to none, as they are.
+    pub fn of(lines: Vec<Line<'static>>, owner: Owner) -> Self {
+        let mut drawn = Lines::default();
+        drawn.extend(lines, owner);
+        drawn
+    }
+
+    /// Lines that all belong to one row, or to none.
+    pub fn extend(&mut self, lines: Vec<Line<'static>>, owner: Owner) {
+        self.owners.extend(lines.iter().map(|_| owner));
+        self.lines.extend(lines);
+    }
+
+    /// The lines of another window, after these.
+    pub fn append(&mut self, other: Lines) {
+        self.lines.extend(other.lines);
+        self.owners.extend(other.owners);
+    }
+
+    /// Keep the first `count` lines, and their owners.
+    pub fn truncate(&mut self, count: usize) {
+        self.lines.truncate(count);
+        self.owners.truncate(count);
+    }
+
+    /// The number of lines drawn.
+    pub fn len(&self) -> usize {
+        self.lines.len()
+    }
+
+    /// Whether no line is drawn.
+    pub fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+}
+
 /// The window over a tab's rows.
 ///
 /// The fields are private and `settle` is private: a tab reaches the window
 /// only through [`View::draw`]. A copy of the ids-to-cursor-to-settle-to-page
 /// block planted in another module cannot write the window back and does not
 /// build, so the block has one home.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct View {
     /// The index of the first row the content pane shows.
     first: usize,
     /// The rows the pane showed at the last draw: the distance a page key
     /// moves.
     page: usize,
+    /// The row each line the pane drew at the last draw belongs to, by id, in
+    /// the order the lines are drawn. A click on a line is answered from this.
+    lines: Vec<Option<String>>,
 }
 
 impl View {
@@ -100,30 +159,48 @@ impl View {
         *self = View::default();
     }
 
+    /// The id of the row the pane drew on its `line`th line at the last draw,
+    /// or `None` when that line is not a row.
+    pub fn row_at(&self, line: usize) -> Option<&str> {
+        self.lines.get(line)?.as_deref()
+    }
+
+    /// Forget the lines drawn: a frame that draws no rows leaves none to click.
+    pub fn forget_lines(&mut self) {
+        self.lines.clear();
+    }
+
     /// Draw a tab's rows through the window the keys move.
     ///
     /// `ids` are the tab's rows in the order they are drawn; `window` returns
-    /// the lines a window at the given first row would draw, the rows that
-    /// window shows, and whether it is complete. The window is settled so the
-    /// cursor is on a row the pane shows, and the lines of the settled window
-    /// are returned ready to draw. This is the one place a row tab finds the
-    /// cursor, settles the window, re-windows at it, and measures the page.
-    pub fn draw<T>(
+    /// the lines a window at the given first row would draw, whether the pane
+    /// announced what it hides, the rows that window shows, and whether it is
+    /// complete. The window is settled so the cursor is on a row the pane
+    /// shows, and the lines of the settled window are returned ready to draw,
+    /// with whether they announce. This is the one place a row tab finds the
+    /// cursor, settles the window, re-windows at it, measures the page, and
+    /// keeps which row each line is.
+    pub fn draw(
         &mut self,
         ids: &[String],
         selected: Option<&str>,
-        mut window: impl FnMut(usize) -> (T, Vec<usize>, bool),
-    ) -> T {
+        mut window: impl FnMut(usize) -> (Lines, bool, Vec<usize>, bool),
+    ) -> (Vec<Line<'static>>, bool) {
         let cursor = selected
             .and_then(|id| ids.iter().position(|other| other == id))
             .unwrap_or(0);
         let first = self.settle(ids.len(), cursor, |first| {
-            let (_, shown, whole) = window(first);
+            let (_, _, shown, whole) = window(first);
             (shown, whole)
         });
-        let (rows, shown, _) = window(first);
+        let (drawn, announced, shown, _) = window(first);
         self.page = shown.len();
-        rows
+        self.lines = drawn
+            .owners
+            .into_iter()
+            .map(|owner| owner.and_then(|index| ids.get(index).cloned()))
+            .collect();
+        (drawn.lines, announced)
     }
 
     /// The first row to show so that the cursor is on a visible row.
@@ -219,7 +296,11 @@ mod tests {
 
     #[test]
     fn the_window_of_an_empty_list_is_at_the_top() {
-        let mut view = View { first: 4, page: 3 };
+        let mut view = View {
+            first: 4,
+            page: 3,
+            ..View::default()
+        };
         assert_eq!(view.settle(0, 0, |_| (Vec::new(), true)), 0);
         assert_eq!(view.first, 0);
         assert_eq!(view.page, 0);
@@ -242,7 +323,11 @@ mod tests {
 
     #[test]
     fn a_pane_that_holds_every_row_scrolls_nowhere() {
-        let mut view = View { first: 4, page: 3 };
+        let mut view = View {
+            first: 4,
+            page: 3,
+            ..View::default()
+        };
         assert_eq!(view.settle(10, 0, |_| ((0..10).collect(), true)), 0);
         assert_eq!(view.first, 0);
         assert_eq!(view.page, 10);

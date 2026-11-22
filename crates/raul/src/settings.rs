@@ -24,7 +24,7 @@ use ratatui::widgets::Paragraph;
 
 use crate::announce;
 use crate::tasks::{Key, Order};
-use crate::view::{self, BAR, View};
+use crate::view::{self, BAR, Lines, View};
 use coding_crew_core::FlowRole;
 use coding_crew_core::catalog::{
     Catalog, Levels, TYPE_A_LEVEL, TYPE_AN_ID, effort_word, is_typed_level, keeps_effort,
@@ -541,6 +541,11 @@ impl Panel {
     /// Whether a choice is open in the picker.
     pub fn picking(&self) -> bool {
         self.pick.is_some()
+    }
+
+    /// The index of the choice the picker's cursor is on, when one is open.
+    pub fn pick_cursor(&self) -> Option<usize> {
+        self.pick.as_ref().map(|pick| pick.cursor)
     }
 
     /// The text being typed in, for a key to add to or erase from.
@@ -1241,7 +1246,7 @@ struct Block {
 /// The lines a window draws, the stops it shows, whether it may stop there
 /// (every hidden row is said, or none is hidden), and whether it said them.
 struct Window {
-    lines: Vec<Line<'static>>,
+    lines: Lines,
     shown: Vec<usize>,
     whole: bool,
     announced: bool,
@@ -1435,26 +1440,29 @@ fn indented(line: Line<'static>) -> Line<'static> {
 /// The lines of the blocks from the stop `first` that fit in `capacity`, and
 /// the stops they show. A block taller than the pane shows its last lines, so
 /// its own line stays on screen.
-fn layout(blocks: &[Block], first: usize, capacity: usize) -> (Vec<Line<'static>>, Vec<usize>) {
+fn layout(blocks: &[Block], first: usize, capacity: usize) -> (Lines, Vec<usize>) {
     let start = blocks
         .iter()
         .enumerate()
         .filter(|(_, block)| block.stop.is_some())
         .nth(first)
         .map_or(0, |(index, _)| index);
-    let mut lines = Vec::new();
+    let mut lines = Lines::default();
     let mut shown = Vec::new();
     let mut stop = first;
     for block in &blocks[start..] {
+        // A block with a stop is the row the stop names: its lines belong to
+        // that row. A block without one is a heading, and belongs to none.
+        let owner = block.stop.as_ref().map(|_| stop);
         if lines.len() + block.lines.len() > capacity {
             if lines.is_empty() && block.stop.is_some() && capacity > 0 {
                 let skip = block.lines.len() - capacity;
-                lines.extend(block.lines[skip..].iter().cloned());
+                lines.extend(block.lines[skip..].to_vec(), owner);
                 shown.push(stop);
             }
             break;
         }
-        lines.extend(block.lines.iter().cloned());
+        lines.extend(block.lines.clone(), owner);
         if block.stop.is_some() {
             shown.push(stop);
             stop += 1;
@@ -1512,7 +1520,7 @@ fn window(blocks: &[Block], first: usize, height: usize, width: usize, theme: &T
     let groups = hidden_groups(blocks, first, shown.len(), theme);
     let (said, cut) = announce::lines(&groups, width.saturating_sub(BAR), room, theme);
     let announced = !said.is_empty();
-    lines.extend(said.into_iter().map(indented));
+    lines.extend(said.into_iter().map(indented).collect(), None);
     Window {
         lines,
         shown,
@@ -1542,7 +1550,7 @@ pub fn render_view(
         .collect();
     let (rows, announced) = view.draw(&ids, selected, |first| {
         let window = window(&blocks, first, height, width, theme);
-        ((window.lines, window.announced), window.shown, window.whole)
+        (window.lines, window.announced, window.shown, window.whole)
     });
     frame.render_widget(Paragraph::new(rows).block(block), area);
     let hidden = ids.len().saturating_sub(view.page());
@@ -1551,9 +1559,15 @@ pub fn render_view(
 
 /// Draw the pick open over the window, when one is: the choices it lists, with
 /// the cursor on the one the draft holds.
-pub fn render_pick(frame: &mut Frame, area: Rect, theme: &Theme, icons: IconSet, panel: &Panel) {
+pub fn render_pick(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    icons: IconSet,
+    panel: &Panel,
+) -> picker::Picked {
     let Some(pick) = panel.pick.as_ref() else {
-        return;
+        return picker::Picked::default();
     };
     let rows: Vec<Row> = pick
         .options
@@ -1573,7 +1587,7 @@ pub fn render_pick(frame: &mut Frame, area: Rect, theme: &Theme, icons: IconSet,
         &[],
         &rows,
         pick.cursor,
-    );
+    )
 }
 
 #[cfg(test)]
