@@ -60,6 +60,8 @@ pub struct App {
     /// A line the window shows under the rule, until the session ends: the
     /// configuration problem raul started past.
     pub notice: Option<String>,
+    /// The configuration file, as the Settings tab shows and edits it.
+    pub settings: settings::Panel,
 }
 
 impl App {
@@ -78,14 +80,14 @@ impl App {
             filter: String::new(),
             typing: false,
             notice: None,
+            settings: settings::Panel::open(None, settings::Overrides::default()),
         }
     }
 
     /// Handle a key. Returns what the window does next.
     ///
-    /// Every key is looked up in the key table, and the table is what the
-    /// Settings tab lists: a key that is handled but not listed, or listed
-    /// but not handled, cannot pass the gate.
+    /// Every key is looked up in the key table: a key the table does not list
+    /// does nothing, and the gate checks that every row does its act.
     ///
     /// `now` is the frame's instant: the one the screen on display was drawn
     /// with. The rows a key moves through are the rows that were painted, so
@@ -94,11 +96,39 @@ impl App {
         if key.kind != KeyEventKind::Press {
             return Action::Redraw;
         }
+        if self.settings.asking() {
+            // Quit waits for an answer: the keys that answer it are the only
+            // ones that do something.
+            return match keys::binding(Scope::Asking, &key).map(|binding| binding.act) {
+                Some(Act::Quit | Act::Exit) => Action::Quit,
+                Some(Act::Save) => {
+                    if self.settings.save() {
+                        Action::Quit
+                    } else {
+                        // The refusal is said in the Settings footer, so the
+                        // window goes there: asked from another tab, the
+                        // save would fail with no reason on screen.
+                        self.settings.stay();
+                        self.detail = None;
+                        if self.tab != Tab::Settings {
+                            self.go_to(Tab::Settings);
+                        }
+                        Action::Redraw
+                    }
+                }
+                Some(Act::Stay) => {
+                    self.settings.stay();
+                    Action::Redraw
+                }
+                _ => Action::Redraw,
+            };
+        }
         if let Some(detail) = self.detail.as_mut() {
             // The pane is modal: the keys its footer names are the only
             // ones that do something, and every other key is left alone.
             return match keys::binding(Scope::Detail, &key).map(|binding| binding.act) {
-                Some(Act::Quit) => Action::Quit,
+                Some(Act::Quit) => self.quit(),
+                Some(Act::Exit) => Action::Quit,
                 Some(Act::Back) => {
                     self.close_detail();
                     Action::Redraw
@@ -129,7 +159,8 @@ impl App {
             self.help = false;
             let overlay = keys::leaves_overlay(&key);
             return match keys::binding(Scope::Window, &key).map(|binding| binding.act) {
-                Some(Act::Quit) if !overlay => Action::Quit,
+                Some(Act::Quit) if !overlay => self.quit(),
+                Some(Act::Exit) => Action::Quit,
                 _ => Action::Redraw,
             };
         }
@@ -137,7 +168,7 @@ impl App {
             // The filter line takes the keys as its text: no other key of the
             // window answers while it is open.
             return match keys::binding(Scope::Filter, &key).map(|binding| binding.act) {
-                Some(Act::Quit) => Action::Quit,
+                Some(Act::Exit) => Action::Quit,
                 Some(Act::KeepFilter) => {
                     self.typing = false;
                     Action::Redraw
@@ -160,9 +191,40 @@ impl App {
                 _ => Action::Redraw,
             };
         }
+        if self.settings.editing() {
+            // A value of the Settings tab takes the keys as its text, as the
+            // filter line does.
+            return match keys::binding(Scope::Value, &key).map(|binding| binding.act) {
+                Some(Act::Exit) => Action::Quit,
+                Some(Act::Keep) => {
+                    self.settings.keep();
+                    self.apply_look();
+                    Action::Redraw
+                }
+                Some(Act::Drop) => {
+                    self.settings.drop_edit();
+                    Action::Redraw
+                }
+                Some(Act::EraseValue) => {
+                    if let Some(text) = self.settings.typing() {
+                        erase_grapheme(text);
+                    }
+                    Action::Redraw
+                }
+                Some(Act::TypeValue) => {
+                    if let (Some(letter), Some(text)) = (keys::typed(&key), self.settings.typing())
+                    {
+                        text.push(letter);
+                    }
+                    Action::Redraw
+                }
+                _ => Action::Redraw,
+            };
+        }
         // The row keys are for the tabs that are lists; the window keys work
         // everywhere. The Settings tab is a list too, though enter opens
-        // nothing there.
+        // nothing there: enter edits, and the keys that change a choice
+        // answer before the window's tab keys do.
         // The Tasks tab's order and filter keys are its own scope: no other
         // tab answers them, so the footer and the help name them there alone.
         // With a filter in force, esc clears it before it quits the window.
@@ -171,6 +233,11 @@ impl App {
             .flatten()
             .filter(|binding| binding.act == Act::ClearFilter);
         let act = clearing
+            .or_else(|| {
+                (self.tab == Tab::Settings)
+                    .then(|| keys::binding(Scope::Settings, &key))
+                    .flatten()
+            })
             .or_else(|| keys::binding(Scope::Window, &key))
             .or_else(|| {
                 self.tab
@@ -185,7 +252,8 @@ impl App {
             })
             .map(|binding| binding.act);
         match act {
-            Some(Act::Quit) => Action::Quit,
+            Some(Act::Quit) => self.quit(),
+            Some(Act::Exit) => Action::Quit,
             Some(Act::Help) => {
                 self.help = true;
                 Action::Redraw
@@ -233,10 +301,78 @@ impl App {
                 self.filter.clear();
                 Action::Redraw
             }
-            // The filter's keys answer while the line is open, in its scope.
-            Some(Act::KeepFilter | Act::EraseFilter | Act::TypeFilter | Act::Back) | None => {
+            Some(Act::Change(step)) => {
+                if let Some(id) = self.cursor(work, now) {
+                    self.settings.change(&id, step);
+                }
+                self.apply_look();
                 Action::Redraw
             }
+            Some(Act::Begin) => {
+                if let Some(id) = self.cursor(work, now) {
+                    self.settings.begin(&id);
+                }
+                Action::Redraw
+            }
+            Some(Act::Save) => {
+                self.settings.save();
+                self.apply_look();
+                Action::Redraw
+            }
+            Some(Act::Undo) => {
+                self.settings.undo();
+                self.apply_look();
+                Action::Redraw
+            }
+            Some(Act::Reload) => {
+                self.settings.reload();
+                self.apply_look();
+                Action::Redraw
+            }
+            // The keys of a value being typed and of the question answer in
+            // their own scopes, and the filter's keys answer in theirs.
+            Some(
+                Act::KeepFilter
+                | Act::EraseFilter
+                | Act::TypeFilter
+                | Act::Back
+                | Act::Keep
+                | Act::Drop
+                | Act::EraseValue
+                | Act::TypeValue
+                | Act::Stay,
+            )
+            | None => Action::Redraw,
+        }
+    }
+
+    /// Quit, unless there are unsaved changes: then the footer asks first, and
+    /// the next key answers.
+    fn quit(&mut self) -> Action {
+        if self.settings.unsaved() {
+            self.settings.ask();
+            Action::Redraw
+        } else {
+            Action::Quit
+        }
+    }
+
+    /// Repaint the window from the Settings draft: the theme and the icons at
+    /// once, and the Tasks order when the draft's changed.
+    fn apply_look(&mut self) {
+        self.theme = Theme::preset(self.settings.theme());
+        self.icons = self.settings.icons();
+        if let Some(order) = self.settings.order_changed() {
+            self.order = order;
+        }
+    }
+
+    /// The rows the cursor moves through on the tab, when it has rows. The
+    /// Settings tab's rows are the value lines of the file.
+    fn ids(&self, work: &Work, now: &str) -> Option<Vec<String>> {
+        match self.tab {
+            Tab::Settings => Some(self.settings.ids()),
+            tab => rows_of(work, tab, now, self.order, &self.filter),
         }
     }
 
@@ -269,7 +405,7 @@ impl App {
     /// The row the cursor is on: the selection, or the tab's first row when
     /// nothing is selected yet.
     fn cursor(&self, work: &Work, now: &str) -> Option<String> {
-        let ids = rows_of(work, self.tab, now, self.order, &self.filter)?;
+        let ids = self.ids(work, now)?;
         let selected = self.selection.clone().filter(|id| ids.contains(id));
         selected.or_else(|| ids.into_iter().next())
     }
@@ -277,7 +413,7 @@ impl App {
     /// Move the cursor one row, clamped to the tab's rows. A tab without
     /// rows has nowhere to move.
     fn move_selection(&mut self, work: &Work, step: isize, now: &str) -> Action {
-        let Some(ids) = rows_of(work, self.tab, now, self.order, &self.filter) else {
+        let Some(ids) = self.ids(work, now) else {
             return Action::Redraw;
         };
         if ids.is_empty() {
@@ -295,7 +431,7 @@ impl App {
     /// Move the cursor to a row, clamped to the tab's rows. The first and
     /// the last row are the ends the `g` and `G` keys reach.
     fn move_to(&mut self, work: &Work, index: usize, now: &str) -> Action {
-        let Some(ids) = rows_of(work, self.tab, now, self.order, &self.filter) else {
+        let Some(ids) = self.ids(work, now) else {
             return Action::Redraw;
         };
         let Some(id) = ids.get(index.min(ids.len().saturating_sub(1))) else {
@@ -398,7 +534,7 @@ impl App {
                 self.icons,
                 selected,
                 &mut self.view,
-                self.order,
+                &self.settings,
             ),
         };
         if let Some(detail) = self.detail.as_mut() {
@@ -407,15 +543,19 @@ impl App {
             // takes the mutable detail: the draw clamps its scroll to the
             // document and measures the page the next keys move by.
             detail::render(frame, area, work, detail, self.icons, &self.theme);
+            // A question about unsaved changes is asked over the pane's footer.
+            if self.settings.asking() {
+                frame.render_widget(self.footer(rows[5].width, work, now, None), rows[5]);
+            }
             return;
         }
         frame.render_widget(self.footer(rows[5].width, work, now, hidden), rows[5]);
 
         if self.help {
-            let has_rows = rows_of(work, self.tab, now, self.order, &self.filter)
-                .is_some_and(|ids| !ids.is_empty());
+            let has_rows = self.ids(work, now).is_some_and(|ids| !ids.is_empty());
             let tasks = self.tab == Tab::Tasks;
-            render_help(frame, area, &self.theme, has_rows, tasks, tasks);
+            let settings = self.tab == Tab::Settings;
+            render_help(frame, area, &self.theme, has_rows, tasks, tasks, settings);
         }
     }
 
@@ -644,8 +784,27 @@ impl App {
     /// keys, and the content pane says nothing about it — the same fact is
     /// never painted twice.
     fn footer(&self, width: u16, work: &Work, now: &str, hidden: Option<usize>) -> Line<'static> {
+        if self.settings.asking() {
+            // Quit is waiting for an answer: the footer is the question.
+            let parts = vec![
+                self.part(0, "w", "save", true),
+                self.part(1, "q", "quit", true),
+                self.part(2, "esc", "stay", true),
+            ];
+            return footer_line(parts, width);
+        }
         if self.typing {
             return footer_line(self.filter_parts(work, usize::from(width)), width);
+        }
+        if self.settings.editing() {
+            let parts = vec![
+                self.part(0, "enter", "keep", true),
+                self.part(1, "esc", "drop", true),
+            ];
+            return footer_line(parts, width);
+        }
+        if self.tab == Tab::Settings {
+            return self.settings_footer(width, hidden);
         }
         // A key chip, parted from the chip before it by two spaces.
         let chip = |key: &str, action: &str| {
@@ -719,6 +878,75 @@ impl App {
         // The tab pair is the last optional part: a pane too narrow for
         // everything gives it up before a key that works on the tab.
         parts.push((2, chip("←→", "switch tab"), false));
+        footer_line(parts, width)
+    }
+
+    /// A key chip as a footer part, parted from the chip before it by two
+    /// spaces unless it is the first.
+    fn part(
+        &self,
+        at: usize,
+        key: &str,
+        action: &str,
+        needed: bool,
+    ) -> (usize, Vec<Span<'static>>, bool) {
+        let mut spans = Vec::new();
+        if at > 0 {
+            spans.push(Span::raw("  "));
+        }
+        spans.extend(chrome::key_chip(key, action, &self.theme));
+        (at, spans, needed)
+    }
+
+    /// The Settings tab's footer: the keys that change the file, the hidden
+    /// count, and the notice of the last refused change or save. A file that
+    /// cannot be used offers no change, and says the reload is what it can do.
+    fn settings_footer(&self, width: u16, hidden: Option<usize>) -> Line<'static> {
+        let mut parts = vec![self.part(0, "q", "quit", true)];
+        if let Some(hidden) = hidden {
+            parts.push((
+                1,
+                vec![
+                    Span::raw("  "),
+                    Span::styled(hidden.to_string(), self.theme.text.strong),
+                    Span::styled(" hidden", self.theme.chrome.footer),
+                ],
+                true,
+            ));
+        }
+        if let Some(notice) = self.settings.notice() {
+            // A refused save or change says why, and the reload is offered
+            // when the file changed on disk under the draft.
+            let mut spans = vec![
+                Span::raw("  "),
+                Span::styled(notice.to_string(), self.theme.semantic.warn),
+            ];
+            if self.settings.stale() {
+                spans.extend(self.part(0, "r", "reload", true).1);
+            }
+            parts.push((1, spans, true));
+        }
+        parts.push(self.part(2, "1-6", "tab", true));
+        if !self.settings.read_only() {
+            parts.push(self.part(3, "←→", "change", true));
+            parts.push(self.part(4, "enter", "edit", true));
+            parts.push(self.part(5, "w", "save", true));
+        }
+        // The movement keys come before the keys that change the file again:
+        // a narrow footer gives up the rarer keys first.
+        parts.push(self.part(6, "g/G", "top/bottom", false));
+        parts.push(self.part(7, "↑↓ j/k", "move", false));
+        parts.push(self.part(8, "pgup/pgdn", "page", false));
+        if !self.settings.read_only() {
+            parts.push(self.part(9, "u", "undo", false));
+        }
+        if !self.settings.stale() {
+            parts.push(self.part(10, "r", "reload", false));
+        }
+        parts.push(self.part(11, "?", "help", true));
+        if self.help {
+            parts.push(self.part(12, "esc", "close help", true));
+        }
         footer_line(parts, width)
     }
 
@@ -873,16 +1101,16 @@ pub(crate) fn footer_line(
 
 /// The rows a tab holds, when it holds rows the cursor moves through.
 ///
-/// The Overview is a summary, not a list: it has no rows. The Settings tab
-/// lists what is true, so it has rows too, though enter opens nothing there.
+/// The rows a tab holds, when it holds rows the cursor moves through. The
+/// Overview is a summary, not a list: it has no rows.
 fn rows_of(work: &Work, tab: Tab, now: &str, order: Order, filter: &str) -> Option<Vec<String>> {
     match tab {
         Tab::NeedsYou => Some(needs::row_ids(work, now)),
         Tab::Path => Some(path::row_ids(work, now)),
         Tab::Tasks => Some(tasks::row_ids(work, order, filter)),
         Tab::Backlog => Some(backlog::row_ids(work)),
-        Tab::Settings => Some(settings::row_ids()),
-        Tab::Overview => None,
+        // The Settings rows are the file's value lines: see `App::ids`.
+        Tab::Settings | Tab::Overview => None,
     }
 }
 
@@ -911,6 +1139,7 @@ fn help_lines(
     has_rows: bool,
     sorts: bool,
     filter: bool,
+    settings: bool,
 ) -> Vec<(u8, Line<'static>)> {
     let line = |key: &str, says: &str| {
         Line::from(vec![
@@ -918,13 +1147,21 @@ fn help_lines(
             Span::styled(format!(" {says}"), theme.text.normal),
         ])
     };
-    let mut lines = vec![
-        (7, line("1-6", "jump to a tab")),
-        (3, line("← →", "switch tab")),
-        (1, line("h l", "switch tab")),
-        (2, line("tab", "next tab")),
-        (0, line("shift-tab", "previous tab")),
-    ];
+    let mut lines = vec![(7, line("1-6", "jump to a tab"))];
+    // On the Settings tab the arrows and h l change a choice, so they do not
+    // switch tabs there.
+    if settings {
+        lines.push((4, line("← →", "change")));
+        lines.push((4, line("enter", "edit")));
+        lines.push((5, line("w", "save")));
+        lines.push((5, line("u", "undo")));
+        lines.push((5, line("r", "reload")));
+    } else {
+        lines.push((3, line("← →", "switch tab")));
+        lines.push((1, line("h l", "switch tab")));
+    }
+    lines.push((2, line("tab", "next tab")));
+    lines.push((0, line("shift-tab", "previous tab")));
     if has_rows {
         // The movement keys work on a tab with rows: the help names the
         // same keys as the footer, and never one that does nothing.
@@ -970,12 +1207,13 @@ fn render_help(
     has_rows: bool,
     sorts: bool,
     filter: bool,
+    settings: bool,
 ) {
     let popup = help_popup(area);
     // The border takes one row at the top and one at the bottom.
     let inner_width = usize::from(popup.width).saturating_sub(2);
     let room = usize::from(popup.height).saturating_sub(2);
-    let lines = help_lines(theme, has_rows, sorts, filter);
+    let lines = help_lines(theme, has_rows, sorts, filter, settings);
     let lines: Vec<Line<'static>> = if inner_width == 0 {
         Vec::new()
     } else {
@@ -1453,135 +1691,244 @@ mod tests {
     }
 
     #[test]
-    fn the_settings_tab_lists_the_three_groups() {
-        let rows = render(
-            &mut window(&Theme::preset(Preset::Dark), Tab::Settings, false),
-            100,
-            60,
-        )
-        .0;
+    fn the_settings_tab_shows_the_file_as_its_lines() {
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("shows");
+        let rows = render(&mut app, 100, 200).0;
         let text = rows.join("\n");
-        for group in [
-            "theme · 5".to_string(),
-            format!("keys · {}", keys::BINDINGS.len()),
-            "sort · 6".to_string(),
-        ] {
-            assert!(text.contains(&group), "{group} is missing: {text}");
+        for line in ["[raul.tasks]", "round_limit = 5", "# raul's own settings"] {
+            assert!(text.contains(line), "{line} is missing: {text}");
         }
-        // The groups say what is true, derived from their own sources.
-        assert!(text.contains("Catppuccin"), "{text}");
-        assert!(text.contains("terminal colours"), "{text}");
-        assert!(text.contains("(window, detail)"), "{text}");
-        assert!(text.contains("longest wait first"), "{text}");
-        assert!(text.contains("claimable, then branches"), "{text}");
-        // The placeholder is gone.
+        assert!(text.contains("~/.config/coding-crew/config.toml"), "{text}");
         assert!(!text.contains("nothing to set yet"), "{text}");
-        assert!(!text.contains("not built yet"), "{text}");
     }
 
     #[test]
-    fn the_settings_tab_has_rows_but_enter_opens_nothing() {
+    fn enter_edits_a_value_on_the_settings_tab_and_opens_no_record() {
         let work = mock_work();
-        let ids =
-            rows_of(&work, Tab::Settings, now(), Order::default(), "").expect("Settings is a list");
-        assert!(!ids.is_empty(), "Settings has no rows");
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("enter");
+        app.selection = Some("harness.driven".to_string());
         app.on_key(key(KeyCode::Enter), &work, now());
+        assert!(app.settings.editing(), "enter did not start the edit");
         assert!(app.detail.is_none(), "enter opened a record on Settings");
-        assert!(app.selection.is_none(), "Settings selected a row");
+        app.on_key(key(KeyCode::Esc), &work, now());
+        assert!(!app.settings.editing(), "esc did not drop the edit");
         // The rows still move: the tab scrolls like the other lists.
         app.on_key(key(KeyCode::Down), &work, now());
-        assert_eq!(app.selection.as_deref(), Some(ids[1].as_str()));
+        assert_ne!(app.selection.as_deref(), Some("harness.driven"));
     }
 
     #[test]
-    fn the_settings_footer_names_the_scroll_keys_and_no_open_key() {
-        let rows = render(
-            &mut window(&Theme::preset(Preset::Dark), Tab::Settings, false),
-            100,
-            20,
-        )
-        .0;
-        let footer = rows.last().expect("a footer row").trim_end().to_string();
-        for works in ["quit", "1-6", "help", "move", "page", "top/bottom"] {
+    fn the_settings_footer_names_the_keys_that_change_the_file() {
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("footer");
+        let footer = render(&mut app, 160, 20)
+            .0
+            .last()
+            .expect("a footer row")
+            .trim_end()
+            .to_string();
+        for works in [
+            "quit",
+            "1-6",
+            "change",
+            "edit",
+            "save",
+            "undo",
+            "reload",
+            "move",
+            "page",
+            "top/bottom",
+            "help",
+        ] {
             assert!(footer.contains(works), "{footer}: {works} is missing");
         }
-        for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
-            assert!(footer.contains(key), "{footer}: {key} is missing");
-        }
-        // This tab reads: the footer names no open key.
-        assert!(!footer.contains("enter"), "{footer}");
-        assert!(!footer.contains("open"), "{footer}");
-        // The tab pair gives way first in a crowded footer; a wider one
-        // keeps it.
-        let wide = render(
-            &mut window(&Theme::preset(Preset::Dark), Tab::Settings, false),
-            120,
-            20,
-        )
-        .0;
-        let wide = wide.last().expect("a footer row").trim_end().to_string();
-        assert!(wide.contains("switch tab"), "{wide}");
-        assert!(!wide.contains("enter") && !wide.contains("open"), "{wide}");
-        // The help names the scroll keys too, and no open key.
-        let rows = render(
-            &mut window(&Theme::preset(Preset::Dark), Tab::Settings, true),
-            100,
-            20,
-        )
-        .0;
-        let help = help_text(&rows, 100, 20);
-        for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
-            assert!(help.contains(key), "{help}: {key} is missing");
-        }
-        assert!(!help.contains("enter"), "{help}");
-        assert!(!help.contains("open"), "{help}");
+        // The arrows change a choice here, so they do not switch tabs.
+        assert!(!footer.contains("switch tab"), "{footer}");
+        // A file that cannot be used offers no change: the reload is left.
+        let mut read_only = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        let footer = render(&mut read_only, 160, 20)
+            .0
+            .last()
+            .expect("a footer row")
+            .trim_end()
+            .to_string();
+        assert!(!footer.contains("save"), "{footer}");
+        assert!(footer.contains("reload"), "{footer}");
     }
 
     #[test]
-    fn the_settings_theme_in_use_is_marked_once() {
-        let theme = Theme::preset(Preset::Dark);
-        let mut app = window(&theme, Tab::Settings, false);
-        // The cursor starts on the first row; move it off the theme group so
-        // the mark's own paint is on display. The pane is tall enough for
-        // every row: the scroll would otherwise hide the theme at the top.
-        app.selection = Some("sort:settings".to_string());
-        let (rows, paint) = render(&mut app, 100, 60);
-        // The icon set in force is marked too, on its own group's rows: the
-        // theme's rows are the ones that say what kind of theme they are.
-        let mark = Icon::InUse.glyph(IconSet::Nerd);
-        let marked: Vec<usize> = rows
-            .iter()
-            .enumerate()
-            .filter(|(_, row)| {
-                row.contains(mark) && (row.contains("palette") || row.contains("terminal colours"))
-            })
-            .map(|(index, _)| index)
-            .collect();
-        assert_eq!(marked.len(), 1, "{}", rows.join("\n"));
-        let row = &rows[marked[0]];
-        assert!(row.contains("Dark"), "{row}");
-        let column = row[..row.find(mark).expect("the mark")].chars().count();
+    fn a_choice_repaints_the_whole_window_and_the_tasks_order() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("repaint");
+        app.selection = Some("raul.theme".to_string());
+        app.on_key(key(KeyCode::Right), &work, now());
+        assert_eq!(app.theme.preset, Preset::Nord);
+        // The rule under the tab bar is the new theme's border.
+        let (_, paint) = render(&mut app, 100, 20);
         assert_eq!(
-            paint[marked[0]][column].fg,
-            theme.text.strong.fg.expect("the strong colour"),
-            "the mark is not painted strong"
+            paint[2][0].fg,
+            Theme::preset(Preset::Nord)
+                .chrome
+                .border
+                .fg
+                .expect("the border colour"),
+            "the window kept the old theme"
         );
-        // The kind is dim, and the box is the theme's, as on the other tabs.
-        let kind_row = rows
-            .iter()
-            .position(|row| row.contains("palette"))
-            .expect("a palette row");
-        let kind = rows[kind_row].find("palette").expect("the kind");
+        app.selection = Some("raul.tasks.sort".to_string());
+        app.on_key(key(KeyCode::Right), &work, now());
         assert_eq!(
-            paint[kind_row][kind].fg,
-            theme.text.dim.fg.expect("the dim colour")
+            app.order,
+            Order {
+                key: crate::tasks::Key::Created,
+                reverse: false
+            },
+            "the Tasks order did not follow the draft"
         );
-        let border = theme.chrome.border.fg.expect("the border colour");
+    }
+
+    /// The footer of a window at 120 columns, as text.
+    fn footer_of(app: &mut App) -> String {
+        render(app, 120, 20)
+            .0
+            .last()
+            .expect("a footer row")
+            .trim_end()
+            .to_string()
+    }
+
+    #[test]
+    fn quitting_with_unsaved_changes_asks_in_the_footer_and_stay_keeps_them() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("asks");
+        app.selection = Some("raul.theme".to_string());
+        app.on_key(key(KeyCode::Right), &work, now());
+        // q does not quit: the footer asks, and the question is the footer.
         assert_eq!(
-            paint[2][0].fg, border,
-            "the settings box is not the theme's"
+            app.on_key(key(KeyCode::Char('q')), &work, now()),
+            Action::Redraw
         );
+        let footer = footer_of(&mut app);
+        for word in ["save", "quit", "stay"] {
+            assert!(footer.contains(word), "{footer}: {word} is missing");
+        }
+        // esc stays, and the change is kept.
+        assert_eq!(app.on_key(key(KeyCode::Esc), &work, now()), Action::Redraw);
+        assert!(!app.settings.asking());
+        assert!(app.settings.unsaved(), "stay dropped the change");
+        // ctrl-c quits at once, whatever is unsaved.
+        let mut control = key(KeyCode::Char('c'));
+        control.modifiers = crossterm::event::KeyModifiers::CONTROL;
+        assert_eq!(app.on_key(control, &work, now()), Action::Quit);
+    }
+
+    #[test]
+    fn quit_then_q_quits_without_saving_and_quit_then_w_saves_first() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("leave");
+        app.selection = Some("raul.theme".to_string());
+        app.on_key(key(KeyCode::Right), &work, now());
+        app.on_key(key(KeyCode::Char('q')), &work, now());
+        assert_eq!(
+            app.on_key(key(KeyCode::Char('q')), &work, now()),
+            Action::Quit,
+            "q did not quit without saving"
+        );
+        let path = coding_crew_core::config::config_path(&settings_home("leave"));
+        assert!(
+            std::fs::read_to_string(&path)
+                .expect("the file")
+                .contains("theme = \"dark\""),
+            "q wrote the change"
+        );
+        // Quit again, and w saves the change and quits.
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("leave-save");
+        app.selection = Some("raul.theme".to_string());
+        app.on_key(key(KeyCode::Right), &work, now());
+        app.on_key(key(KeyCode::Char('q')), &work, now());
+        assert_eq!(
+            app.on_key(key(KeyCode::Char('w')), &work, now()),
+            Action::Quit
+        );
+        let path = coding_crew_core::config::config_path(&settings_home("leave-save"));
+        assert!(
+            std::fs::read_to_string(&path)
+                .expect("the file")
+                .contains("theme = \"nord\""),
+            "w did not save before quitting"
+        );
+    }
+
+    #[test]
+    fn a_refused_save_says_why_in_the_footer_and_offers_the_reload() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("refused");
+        app.selection = Some("raul.theme".to_string());
+        app.on_key(key(KeyCode::Right), &work, now());
+        let path = coding_crew_core::config::config_path(&settings_home("refused"));
+        std::fs::write(
+            &path,
+            coding_crew_core::config::Config::default()
+                .to_toml()
+                .replace("round_limit = 5", "round_limit = 6"),
+        )
+        .expect("someone else's edit");
+        app.on_key(key(KeyCode::Char('w')), &work, now());
+        let footer = footer_of(&mut app);
+        assert!(footer.contains("the file changed on disk"), "{footer}");
+        assert!(footer.contains("reload"), "{footer}");
+        // The reload takes the file, and the notice goes with the refusal.
+        app.on_key(key(KeyCode::Char('r')), &work, now());
+        assert!(!app.settings.unsaved());
+        assert!(!footer_of(&mut app).contains("the file changed on disk"));
+    }
+
+    #[test]
+    fn a_save_refused_from_the_quit_question_on_another_tab_says_why_on_settings() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("refused-elsewhere");
+        app.selection = Some("raul.theme".to_string());
+        app.on_key(key(KeyCode::Right), &work, now());
+        app.on_key(key(KeyCode::Char('4')), &work, now());
+        assert_eq!(app.tab, Tab::Tasks);
+        app.on_key(key(KeyCode::Char('q')), &work, now());
+        assert!(app.settings.asking(), "q did not ask");
+        let path = coding_crew_core::config::config_path(&settings_home("refused-elsewhere"));
+        std::fs::write(
+            &path,
+            coding_crew_core::config::Config::default()
+                .to_toml()
+                .replace("round_limit = 5", "round_limit = 6"),
+        )
+        .expect("someone else's edit");
+        assert_eq!(
+            app.on_key(key(KeyCode::Char('w')), &work, now()),
+            Action::Redraw
+        );
+        assert_eq!(app.tab, Tab::Settings, "the refusal stayed on Tasks");
+        assert!(!app.settings.asking());
+        let footer = footer_of(&mut app);
+        assert!(footer.contains("the file changed on disk"), "{footer}");
+        assert!(footer.contains("reload"), "{footer}");
+    }
+
+    #[test]
+    fn the_settings_help_names_the_keys_that_change_the_file() {
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, true);
+        app.settings = settings_panel("help");
+        let rows = render(&mut app, 100, 40).0;
+        let help = help_text(&rows, 100, 40);
+        for word in ["change", "edit", "save", "undo", "reload"] {
+            assert!(help.contains(word), "{help}: {word} is missing");
+        }
+        assert!(!help.contains("switch tab"), "{help}");
     }
 
     #[test]
@@ -1617,6 +1964,23 @@ mod tests {
         }
     }
 
+    /// The scratch home a Settings panel of the tests is under.
+    fn settings_home(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("raul-app-{name}-{}", std::process::id()))
+    }
+
+    /// A Settings panel over a fresh file of the defaults, in a scratch home.
+    fn settings_panel(name: &str) -> settings::Panel {
+        let home = settings_home(name);
+        let _ = std::fs::remove_dir_all(&home);
+        settings::Panel::open(Some(&home), settings::Overrides::default())
+    }
+
+    /// The name of a binding in a failure message: its act and its scopes.
+    fn named(binding: &keys::Binding) -> String {
+        format!("{:?} in {:?}", binding.act, binding.scopes)
+    }
+
     #[test]
     fn every_binding_in_the_table_does_its_act() {
         // The keys group lists the table; the handling reads the table. A
@@ -1624,17 +1988,18 @@ mod tests {
         // does not say, fails here.
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        for binding in keys::BINDINGS {
+        for binding in &keys::BINDINGS {
             for scope in binding.scopes {
                 // The sort and filter keys answer on the Tasks tab alone; the
-                // rest on Path.
-                let tab = if matches!(scope, Scope::Tasks | Scope::Filter) {
-                    Tab::Tasks
-                } else {
-                    Tab::Path
+                // Settings keys on the Settings tab; the rest on Path.
+                let tab = match scope {
+                    Scope::Tasks | Scope::Filter => Tab::Tasks,
+                    Scope::Settings | Scope::Value | Scope::Asking => Tab::Settings,
+                    _ => Tab::Path,
                 };
                 let mut app = window(&theme, tab, false);
-                let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
+                let ids = rows_of(&work, tab, now(), Order::default(), "")
+                    .unwrap_or_else(|| app.ids(&work, now()).expect("a row tab"));
                 if *scope == Scope::Detail {
                     let mut detail = Detail::opened("TSK13".to_string(), tab, None);
                     detail.scroll = 5;
@@ -1643,6 +2008,30 @@ mod tests {
                     // The filter's keys answer while the line is open.
                     app.filter = "ab".to_string();
                     app.on_key(key(KeyCode::Char('/')), &work, now());
+                } else if matches!(scope, Scope::Settings | Scope::Value | Scope::Asking) {
+                    app.settings = settings_panel(&format!("every-{scope:?}"));
+                    app.selection = Some(
+                        if binding.act == Act::Begin {
+                            "harness.driven"
+                        } else {
+                            "raul.theme"
+                        }
+                        .to_string(),
+                    );
+                    match scope {
+                        Scope::Value => app.settings.begin("harness.driven"),
+                        Scope::Asking => {
+                            app.settings.change("raul.theme", 1);
+                            app.settings.ask();
+                        }
+                        _ => {}
+                    }
+                    if binding.act == Act::Undo || binding.act == Act::Save {
+                        app.settings.change("raul.theme", 1);
+                    }
+                    if binding.act == Act::Reload {
+                        app.settings.change("raul.theme", 1);
+                    }
                 } else {
                     match binding.act {
                         Act::ClearFilter => app.filter = "x".to_string(),
@@ -1659,43 +2048,100 @@ mod tests {
                         _ => {}
                     }
                 }
-                let action = app.on_key(press_for(&binding), &work, now());
+                let action = app.on_key(press_for(binding), &work, now());
                 match binding.act {
-                    Act::Quit => assert_eq!(action, Action::Quit, "{}", binding.key),
-                    Act::Help => {
-                        assert!(app.help, "{} did not open the help", binding.key);
+                    Act::Quit | Act::Exit => {
+                        assert_eq!(action, Action::Quit, "{}", named(binding));
                     }
-                    Act::NextTab => assert_eq!(app.tab, Tab::Tasks, "{}", binding.key),
-                    Act::PreviousTab => assert_eq!(app.tab, Tab::NeedsYou, "{}", binding.key),
-                    Act::JumpTab => assert_eq!(app.tab, Tab::Settings, "{}", binding.key),
+                    Act::Help => {
+                        assert!(app.help, "{} did not open the help", named(binding));
+                    }
+                    Act::NextTab => assert_eq!(app.tab, Tab::Tasks, "{}", named(binding)),
+                    Act::PreviousTab => assert_eq!(app.tab, Tab::NeedsYou, "{}", named(binding)),
+                    Act::JumpTab => assert_eq!(app.tab, Tab::Settings, "{}", named(binding)),
                     Act::NextSort => {
-                        assert_eq!(app.order, Order::default().cycled(), "{}", binding.key);
+                        assert_eq!(app.order, Order::default().cycled(), "{}", named(binding));
                     }
                     Act::ReverseSort => {
-                        assert_eq!(app.order, Order::default().reversed(), "{}", binding.key);
+                        assert_eq!(app.order, Order::default().reversed(), "{}", named(binding));
                     }
                     Act::Open => {
-                        assert!(app.detail.is_some(), "{} did not open", binding.key);
+                        assert!(app.detail.is_some(), "{} did not open", named(binding));
                     }
                     Act::Back => {
-                        assert!(app.detail.is_none(), "{} did not close", binding.key);
+                        assert!(app.detail.is_none(), "{} did not close", named(binding));
                     }
                     Act::Filter => {
-                        assert!(app.typing, "{} did not open the filter", binding.key);
+                        assert!(app.typing, "{} did not open the filter", named(binding));
                     }
                     Act::KeepFilter => {
-                        assert!(!app.typing, "{} did not keep the filter", binding.key);
-                        assert_eq!(app.filter, "ab", "{}", binding.key);
+                        assert!(!app.typing, "{} did not keep the filter", named(binding));
+                        assert_eq!(app.filter, "ab", "{}", named(binding));
                     }
                     Act::ClearFilter => {
-                        assert!(!app.typing, "{} kept the line open", binding.key);
-                        assert!(app.filter.is_empty(), "{} kept the text", binding.key);
+                        assert!(!app.typing, "{} kept the line open", named(binding));
+                        assert!(app.filter.is_empty(), "{} kept the text", named(binding));
                     }
                     Act::EraseFilter => {
-                        assert_eq!(app.filter, "a", "{}", binding.key);
+                        assert_eq!(app.filter, "a", "{}", named(binding));
                     }
                     Act::TypeFilter => {
-                        assert_eq!(app.filter, "abx", "{}", binding.key);
+                        assert_eq!(app.filter, "abx", "{}", named(binding));
+                    }
+                    Act::Change(step) => {
+                        // From the Dark theme, a step back is the last theme
+                        // and a step forward is the next one.
+                        let expected = if step < 0 {
+                            Preset::Terminal
+                        } else {
+                            Preset::Nord
+                        };
+                        assert_eq!(app.theme.preset, expected, "{}", named(binding));
+                    }
+                    Act::Begin => {
+                        assert!(app.settings.editing(), "{} did not start", named(binding));
+                    }
+                    Act::Save => match scope {
+                        Scope::Asking => {
+                            assert_eq!(action, Action::Quit, "{} did not quit", named(binding));
+                        }
+                        _ => assert!(!app.settings.unsaved(), "{} did not save", named(binding)),
+                    },
+                    Act::Undo => {
+                        assert!(
+                            !app.settings.unsaved(),
+                            "{} kept the change",
+                            named(binding)
+                        );
+                        assert_eq!(app.theme.preset, Preset::Dark, "{}", named(binding));
+                    }
+                    Act::Reload => {
+                        assert!(!app.settings.unsaved(), "{} kept the draft", named(binding));
+                    }
+                    Act::Keep | Act::Drop => {
+                        assert!(
+                            !app.settings.editing(),
+                            "{} kept the value open",
+                            named(binding)
+                        );
+                    }
+                    Act::EraseValue => {
+                        assert!(
+                            app.settings.editing(),
+                            "{} closed the value",
+                            named(binding)
+                        );
+                    }
+                    Act::TypeValue => {
+                        let typed = app.settings.typing().expect("the value");
+                        assert!(typed.ends_with('x'), "{}: {typed}", named(binding));
+                    }
+                    Act::Stay => {
+                        assert!(
+                            !app.settings.asking(),
+                            "{} kept the question",
+                            named(binding)
+                        );
                     }
                     Act::Move(step) => {
                         if *scope == Scope::Detail {
@@ -1704,7 +2150,7 @@ mod tests {
                                 app.detail.as_ref().expect("the pane").scroll,
                                 scroll as u16,
                                 "{}",
-                                binding.key
+                                named(binding)
                             );
                         } else {
                             let expected = if step < 0 { &ids[0] } else { &ids[1] };
@@ -1712,7 +2158,7 @@ mod tests {
                                 app.selection.as_deref(),
                                 Some(expected.as_str()),
                                 "{}",
-                                binding.key
+                                named(binding)
                             );
                         }
                     }
@@ -1723,7 +2169,7 @@ mod tests {
                                 app.detail.as_ref().expect("the pane").scroll,
                                 scroll as u16,
                                 "{}",
-                                binding.key
+                                named(binding)
                             );
                         } else {
                             let page = app.view.page();
@@ -1732,7 +2178,7 @@ mod tests {
                                 app.selection.as_deref(),
                                 Some(ids[expected].as_str()),
                                 "{}",
-                                binding.key
+                                named(binding)
                             );
                         }
                     }
@@ -1831,13 +2277,13 @@ mod tests {
     #[test]
     fn the_settings_cursor_scrolls_and_stays_drawn() {
         // The Settings tab keeps the row tabs' rule: the cursor is never on
-        // a row the pane does not draw.
+        // a row the pane does not draw, and its line is painted.
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
-        let ids = rows_of(&work, Tab::Settings, now(), Order::default(), "").expect("a list tab");
-        let rows_of_settings = settings::groups(Order::default());
         let mut app = window(&theme, Tab::Settings, false);
+        app.settings = settings_panel("scrolls");
+        let ids = app.settings.ids();
         for height in [12u16, 8, 6] {
             render(&mut app, 100, height);
             for _ in 0..ids.len() + 2 {
@@ -1854,26 +2300,19 @@ mod tests {
                     app.view.first(),
                     app.view.first() + app.view.page()
                 );
-                let label = rows_of_settings
-                    .iter()
-                    .flat_map(|group| group.rows.iter())
-                    .find(|row| row.id == cursor)
-                    .map(|row| row.label.clone())
-                    .expect("the row's label");
-                // The cursor's line is on the screen, painted with the
-                // selection from the first content column to the pane's edge.
+                // The cursor's line is on the screen, its value named, and
+                // painted with the selection after the selection bar.
+                let key_name = cursor.rsplit('.').next().expect("a key");
                 let (_, row) = rows
                     .iter()
                     .enumerate()
                     .skip(2)
                     .take(rows.len().saturating_sub(3))
-                    .find(|(y, _)| paint[*y][1] == selection)
+                    .find(|(y, _)| paint[*y][2] == selection)
                     .unwrap_or_else(|| panic!("{cursor} is not painted: {rows:?}"));
-                let mark = Icon::InUse.glyph(IconSet::Nerd);
-                let text = row.trim_matches('│').trim();
                 assert!(
-                    text.starts_with(&label) || text.starts_with(&format!("{mark} {label}")),
-                    "{cursor}: the selected line is {text:?}"
+                    row.contains(&format!("{key_name} = ")),
+                    "{cursor}: the selected line is {row:?}"
                 );
             }
         }
@@ -2427,7 +2866,7 @@ mod tests {
             let mut app = window(&theme, tab, false);
             let rows = render(&mut app, width, height).0;
             let footer = rows.last().expect("a footer row").trim_end().to_string();
-            let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
+            let ids = app.ids(&work, now()).expect("a row tab");
             let hidden = ids.len() - app.view.page();
             assert!(hidden > 0, "{tab:?}: nothing is hidden");
             assert!(
@@ -2975,6 +3414,41 @@ mod tests {
         app.on_key(key(KeyCode::Enter), &work, now());
         assert_eq!(app.filter, "q2o", "the keys were not typed");
         assert!(app.detail.is_none(), "enter opened a row inside the filter");
+    }
+
+    #[test]
+    fn while_a_settings_value_is_typed_no_other_key_fires() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("typing-keys");
+        // An unsaved change for w and u to act on, and a reload for r.
+        app.settings.change("raul.theme", 1);
+        app.apply_look();
+        app.selection = Some("harness.driven".to_string());
+        app.on_key(key(KeyCode::Enter), &work, now());
+        assert!(app.settings.editing(), "enter did not start the edit");
+        for code in [
+            KeyCode::Char('q'),
+            KeyCode::Char('w'),
+            KeyCode::Char('u'),
+            KeyCode::Char('r'),
+            KeyCode::Char('2'),
+            KeyCode::Char('h'),
+            KeyCode::Left,
+        ] {
+            assert_eq!(
+                app.on_key(key(code), &work, now()),
+                Action::Redraw,
+                "{code:?} quit the window"
+            );
+        }
+        assert!(!app.settings.asking(), "q asked about quitting");
+        assert!(app.settings.editing(), "a key closed the value");
+        assert!(app.settings.unsaved(), "w saved or r reloaded the change");
+        assert_eq!(app.theme.preset, Preset::Nord, "u undid the change");
+        assert_eq!(app.tab, Tab::Settings, "a digit or h changed the tab");
+        let typed = app.settings.typing().expect("the value");
+        assert!(typed.ends_with("qwur2h"), "{typed}");
     }
 
     #[test]

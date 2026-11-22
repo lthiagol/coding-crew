@@ -237,6 +237,9 @@ names the path, and `● modified` while there are unsaved changes. Decided
 flow's sections (`round_limit`, each agent's `model` and `role`, the
 `[harness]`, the order's steps' values). Rows cannot be added or removed from
 raul; only values change. A comment line is not a row the cursor stops on.
+A value written inline (`harness = { … }`, `tasks = { … }`) or as a dotted key
+(`tasks.sort = …`) is shown as text, not a stop, until the follow-up in
+`TODO.md` makes each one editable.
 
 | value | how it changes |
 |---|---|

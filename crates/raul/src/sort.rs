@@ -1,14 +1,12 @@
 //! The order each tab keeps its rows in.
 //!
-//! The Settings tab's sort group and the tab's own ordering read the same
-//! value: a tab that is sorted another way says so.
+//! The order each tab keeps its rows in, as the comparators and the tree's
+//! branches read it.
 
 use std::cmp::Ordering;
 
 use crate::path::Branch;
-use crate::settings::GroupKind;
 use crate::tabs::Tab;
-use crate::tasks::Order;
 
 /// The order a tab puts its rows in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,30 +19,13 @@ pub enum Sort {
     Dependency,
     /// The id, ascending, inside the tab's groups: ideas first.
     Id,
-    /// The tab's groups, in the order the spec names them.
-    Groups,
-    /// The order the window has in force on the Tasks tab.
-    Tasks(Order),
+    /// The file's own order: its sections, top to bottom.
+    File,
+    /// The Tasks tab's order, which the window holds for the session.
+    Tasks,
 }
 
 impl Sort {
-    /// The words the Settings tab uses: what comes first, and what the
-    /// order is.
-    pub fn words(self) -> String {
-        match self {
-            Sort::None => "no sort: a summary".to_string(),
-            Sort::LongestWait => "longest wait first".to_string(),
-            Sort::Dependency => "claimable, then branches".to_string(),
-            Sort::Id => "ideas first, ids ascending".to_string(),
-            Sort::Groups => GroupKind::ALL
-                .iter()
-                .map(|group| group.label())
-                .collect::<Vec<&str>>()
-                .join(", "),
-            Sort::Tasks(order) => order.words(),
-        }
-    }
-
     /// The comparator of the longest-wait order: the longest wait first,
     /// and the id when two waits are equal.
     ///
@@ -84,28 +65,15 @@ impl Tab {
             Tab::Overview => Sort::None,
             Tab::NeedsYou => Sort::LongestWait,
             Tab::Path => Sort::Dependency,
-            Tab::Tasks => Sort::Tasks(Order::default()),
+            Tab::Tasks => Sort::Tasks,
             Tab::Backlog => Sort::Id,
-            Tab::Settings => Sort::Groups,
+            Tab::Settings => Sort::File,
         }
-    }
-}
-
-/// The order a tab keeps, with the Tasks tab's order as the window has it.
-///
-/// The Settings tab names this, so a Tasks row says the order in force, not
-/// the order a fresh window starts in.
-pub fn in_force(tab: Tab, tasks: Order) -> Sort {
-    match tab {
-        Tab::Tasks => Sort::Tasks(tasks),
-        other => other.sort(),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
 
     #[test]
@@ -113,66 +81,9 @@ mod tests {
         assert_eq!(Tab::Overview.sort(), Sort::None);
         assert_eq!(Tab::NeedsYou.sort(), Sort::LongestWait);
         assert_eq!(Tab::Path.sort(), Sort::Dependency);
-        assert_eq!(Tab::Tasks.sort(), Sort::Tasks(Order::default()));
+        assert_eq!(Tab::Tasks.sort(), Sort::Tasks);
         assert_eq!(Tab::Backlog.sort(), Sort::Id);
-        assert_eq!(Tab::Settings.sort(), Sort::Groups);
-    }
-
-    #[test]
-    fn the_tasks_order_in_force_is_the_one_the_window_has() {
-        let order = Order {
-            key: crate::tasks::Key::Created,
-            reverse: true,
-        };
-        assert_eq!(in_force(Tab::Tasks, order).words(), "created, newest first");
-        assert_eq!(
-            in_force(Tab::Tasks, Order::default()).words(),
-            "by id, ascending"
-        );
-        for tab in [
-            Tab::Overview,
-            Tab::NeedsYou,
-            Tab::Path,
-            Tab::Backlog,
-            Tab::Settings,
-        ] {
-            assert_eq!(in_force(tab, order), tab.sort(), "{tab:?}");
-        }
-    }
-
-    #[test]
-    fn every_tab_says_something_different() {
-        // A tab that is sorted another way says so: no two tabs share the
-        // words of their order.
-        let words: Vec<String> = Tab::ALL.iter().map(|tab| tab.sort().words()).collect();
-        let unique: HashSet<&String> = words.iter().collect();
-        assert_eq!(unique.len(), words.len(), "{words:?}");
-        for word in &words {
-            assert!(!word.is_empty(), "{words:?}");
-            assert!(
-                word.chars().count() <= 30,
-                "{word:?} is too long for 40 columns"
-            );
-        }
-    }
-
-    #[test]
-    fn the_overview_says_it_has_no_sort() {
-        let words = Tab::Overview.sort().words();
-        assert!(words.contains("no sort"), "{words}");
-        assert!(words.contains("summary"), "{words}");
-        assert!(Tab::Overview.sort().branches().is_empty());
-    }
-
-    #[test]
-    fn the_settings_order_names_its_groups_in_order() {
-        let words = Tab::Settings.sort().words();
-        let expected = GroupKind::ALL
-            .iter()
-            .map(|group| group.label())
-            .collect::<Vec<&str>>()
-            .join(", ");
-        assert_eq!(words, expected);
+        assert_eq!(Tab::Settings.sort(), Sort::File);
     }
 
     #[test]
@@ -191,7 +102,7 @@ mod tests {
     }
 
     #[test]
-    fn the_comparators_sort_the_way_their_words_say() {
+    fn the_comparators_sort_the_way_their_order_says() {
         // The longest wait first, then the id.
         let sort = Tab::NeedsYou.sort();
         let mut rows = [("TSK02", 10i64), ("TSK01", 10), ("TSK03", 20)];
@@ -202,15 +113,6 @@ mod tests {
         let mut ids = ["ITM02", "ITM01", "TSK27"];
         ids.sort_by(|one, other| sort.compare_ids(one, other));
         assert_eq!(ids, ["ITM01", "ITM02", "TSK27"]);
-    }
-
-    #[test]
-    fn the_id_row_says_what_comes_first_and_what_the_order_is() {
-        // The Backlog's groups decide which rows come first; the id decides
-        // the order inside a group. The row says both.
-        let words = Tab::Backlog.sort().words();
-        assert!(words.contains("ideas first"), "{words}");
-        assert!(words.contains("ids ascending"), "{words}");
     }
 
     #[test]

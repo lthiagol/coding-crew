@@ -176,18 +176,7 @@ impl Config {
             out.push_str("[[order]]\n");
             out.push_str(&format!("step = {}\n", quote(&step.step)));
             out.push_str(&format!("role = {}\n", quote(step.role.as_str())));
-            let gates: Vec<String> = step
-                .gates
-                .iter()
-                .map(|gate| {
-                    format!(
-                        "{{ from = {}, to = {} }}",
-                        quote(gate.from.as_str()),
-                        quote(gate.to.as_str())
-                    )
-                })
-                .collect();
-            out.push_str(&format!("gates = [{}]\n\n", gates.join(", ")));
+            out.push_str(&format!("gates = {}\n\n", gates_text(&step.gates)));
         }
         out.push_str(
             "# raul's own settings: theme is dark, nord, catppuccin, dracula or\n\
@@ -261,6 +250,21 @@ impl ConfigFile {
     /// The configuration as the file holds it.
     pub fn config(&self) -> &Config {
         &self.loaded
+    }
+
+    /// Whether the file assigns `key` in the table `table`, in any form TOML
+    /// writes it: a header, a dotted key or an inline table. The table is
+    /// dotted, as `raul.tasks`; the root is the empty name. An array of tables
+    /// is not a table here, so no key is found in one.
+    pub fn assigns(&self, table: &str, key: &str) -> bool {
+        let mut node: &dyn TableLike = self.document.as_table();
+        for name in table.split('.').filter(|name| !name.is_empty()) {
+            match node.get(name).and_then(Item::as_table_like) {
+                Some(next) => node = next,
+                None => return false,
+            }
+        }
+        node.contains_key(key)
     }
 
     /// Save `config` into the file. Only the values that differ from the
@@ -452,8 +456,36 @@ fn write_beside(tmp: &Path, path: &Path, text: &str) -> std::io::Result<()> {
     fs::rename(tmp, path)
 }
 
+/// The gates as the file writes them: a TOML list of inline tables.
+pub fn gates_text(gates: &[Gate]) -> String {
+    let gates: Vec<String> = gates
+        .iter()
+        .map(|gate| {
+            format!(
+                "{{ from = {}, to = {} }}",
+                quote(gate.from.as_str()),
+                quote(gate.to.as_str())
+            )
+        })
+        .collect();
+    format!("[{}]", gates.join(", "))
+}
+
+/// The gates a TOML list of inline tables holds, as the file writes them.
+///
+/// The error is the parser's message: the text is not a list of gates.
+pub fn gates_from_text(text: &str) -> Result<Vec<Gate>, String> {
+    #[derive(Deserialize)]
+    struct Holder {
+        gates: Vec<Gate>,
+    }
+    toml::from_str::<Holder>(&format!("gates = {text}"))
+        .map(|holder| holder.gates)
+        .map_err(|error| error.message().to_string())
+}
+
 /// A TOML string, escaped.
-fn quote(value: &str) -> String {
+pub fn quote(value: &str) -> String {
     let mut out = String::with_capacity(value.len() + 2);
     out.push('"');
     for character in value.chars() {
@@ -1079,6 +1111,34 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     }
 
     #[test]
+    fn a_key_is_found_under_a_header_a_dotted_key_or_an_inline_table() {
+        let text = Config::default().to_toml();
+        let scratch = scratch_file("assigns", &text);
+        let file = ConfigFile::read(&scratch.path()).expect("the configuration");
+        assert!(file.assigns("", "round_limit"));
+        assert!(file.assigns("raul", "theme"));
+        assert!(file.assigns("raul.tasks", "reverse"));
+        assert!(!file.assigns("raul", "reverse"));
+        assert!(!file.assigns("raul.tasks", "theme"));
+        assert!(!file.assigns("nowhere", "theme"));
+
+        // The tasks table written as an inline table, and as dotted keys.
+        let head = &text[..text
+            .find("# The order the Tasks tab")
+            .expect("the tasks table")];
+        for tasks in [
+            "tasks = { sort = \"id\", reverse = false }\n",
+            "tasks.sort = \"id\"\ntasks.reverse = false\n",
+        ] {
+            let scratch = scratch_file("assigns-tasks", &format!("{head}{tasks}"));
+            let file = ConfigFile::read(&scratch.path()).expect("the configuration");
+            assert!(file.assigns("raul.tasks", "sort"), "{tasks}");
+            assert!(file.assigns("raul.tasks", "reverse"), "{tasks}");
+            assert!(!file.assigns("raul.tasks", "theme"), "{tasks}");
+        }
+    }
+
+    #[test]
     fn a_missing_file_is_created_with_the_defaults() {
         let scratch = scratch_file("created", "");
         let path = scratch.path();
@@ -1360,5 +1420,22 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         ] {
             assert!(toml.contains(word), "{word}: {toml}");
         }
+    }
+
+    #[test]
+    fn gates_are_written_and_read_back() {
+        let gates = vec![
+            gate(Status::Groomed, Status::Approved),
+            gate(Status::CodeReview, Status::Done),
+        ];
+        let text = gates_text(&gates);
+        assert_eq!(
+            text,
+            "[{ from = \"groomed\", to = \"approved\" }, { from = \"code-review\", to = \"done\" }]"
+        );
+        assert_eq!(gates_from_text(&text), Ok(gates));
+        assert_eq!(gates_from_text("[]"), Ok(Vec::new()));
+        assert!(gates_from_text("[{ from = \"nowhere\", to = \"done\" }]").is_err());
+        assert!(gates_from_text("[").is_err());
     }
 }

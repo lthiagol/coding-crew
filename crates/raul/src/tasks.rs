@@ -137,19 +137,6 @@ impl Order {
         }
     }
 
-    /// The words the Settings tab names the order with: what comes first.
-    pub fn words(self) -> String {
-        let (forward, backward) = match self.key {
-            Key::Id => ("by id, ascending", "by id, descending"),
-            Key::Created => ("created, oldest first", "created, newest first"),
-            Key::Updated => ("updated, oldest first", "updated, newest first"),
-            Key::Status => ("status, draft first", "status, done first"),
-            Key::Priority => ("priority, urgent first", "priority, low first"),
-            Key::Effort => ("effort, smallest first", "effort, largest first"),
-        };
-        if self.reverse { backward } else { forward }.to_string()
-    }
-
     /// The order of two tasks: the key, in the direction in force, and the id
     /// when the key ties. The id breaks a tie either way, so the order is
     /// stable.
@@ -808,7 +795,6 @@ mod tests {
         let order = Order::default();
         assert_eq!(order.key, Key::Id);
         assert!(!order.reverse);
-        assert_eq!(order.words(), "by id, ascending");
     }
 
     #[test]
@@ -835,39 +821,6 @@ mod tests {
         assert_eq!(reversed.key, Key::Id);
         assert!(reversed.reverse);
         assert!(!reversed.reversed().reverse, "O is its own undo");
-    }
-
-    #[test]
-    fn the_words_name_the_order_in_force_and_fit_the_settings_row() {
-        let mut order = Order::default();
-        let mut words = Vec::new();
-        for _ in 0..Key::ALL.len() {
-            for reverse in [false, true] {
-                let at = Order { reverse, ..order };
-                let text = at.words();
-                assert!(!text.is_empty());
-                assert!(
-                    text.chars().count() <= 30,
-                    "{text:?} is too long for 40 columns"
-                );
-                words.push(text);
-            }
-            order = order.cycled();
-        }
-        let unique: std::collections::HashSet<&String> = words.iter().collect();
-        assert_eq!(
-            unique.len(),
-            words.len(),
-            "two orders say the same: {words:?}"
-        );
-        assert_eq!(
-            Order {
-                key: Key::Created,
-                reverse: true
-            }
-            .words(),
-            "created, newest first"
-        );
     }
 
     #[test]

@@ -38,6 +38,7 @@ use coding_crew_theme::{IconSet, Preset};
 use config::Look;
 use data::{Missing, Work};
 use detail::Detail;
+use settings::Overrides;
 use tabs::Tab;
 
 const USAGE: &str = "usage: raul [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N] [--tab NAME] [--detail TASK-ID]] [work-folder]";
@@ -60,13 +61,21 @@ fn main() -> Result<()> {
         env.as_deref(),
         &loaded,
     )?;
+    // The Settings tab shows the file, and says which values the flag and the
+    // environment override.
+    let overrides = Overrides {
+        theme: options.theme,
+        icons: options.icons.clone(),
+        env_icons: env.filter(|name| !name.is_empty()),
+    };
+    let panel = settings::Panel::open(user_home().as_deref(), overrides);
 
     if options.render {
-        return render_plain(options, look);
+        return render_plain(options, look, panel);
     }
 
     let mut terminal = setup()?;
-    let result = run(&mut terminal, options, look);
+    let result = run(&mut terminal, options, look, panel);
     restore(&mut terminal)?;
     result
 }
@@ -313,11 +322,13 @@ fn run(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     options: Options,
     look: Look,
+    panel: settings::Panel,
 ) -> Result<()> {
     let reason = options.reason;
     let mut app = App::new(options.root, look.theme, look.icons);
     app.order = look.order;
     app.notice = look.problem;
+    app.settings = panel;
     loop {
         let work = Work::load_missing(&app.root, reason);
         // One clock read per frame: the draw and the key that answers it
@@ -345,12 +356,13 @@ fn run(
 ///
 /// A configuration problem is named on stderr: the screen on stdout is the
 /// one raul draws with the defaults.
-fn render_plain(options: Options, look: Look) -> Result<()> {
+fn render_plain(options: Options, look: Look, panel: settings::Panel) -> Result<()> {
     if let Some(problem) = &look.problem {
         eprintln!("{problem}");
     }
     let mut app = App::new(options.root, look.theme, look.icons);
     app.order = look.order;
+    app.settings = panel;
     app.tab = options.tab;
     let work = Work::load_missing(&app.root, options.reason);
     if let Some(id) = &options.detail {

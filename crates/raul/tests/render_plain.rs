@@ -703,6 +703,37 @@ fn a_flag_names_the_icon_set_over_the_environment() {
     );
 }
 
+/// The Settings tab at a width, asserted against its snapshot. The home is the
+/// render's own, so the configuration is the defaults the tab writes.
+fn assert_settings_at(width: u16) {
+    let width_arg = width.to_string();
+    let output = run(&[
+        "--render", "--plain", "--tab", "settings", "--width", &width_arg, "--height", "40", WORK,
+    ]);
+    assert!(
+        output.status.success(),
+        "raul failed for settings at width {width}: {output:?}"
+    );
+    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    let name = format!("settings-{width}.txt");
+    let path = snapshot_path(&name);
+    let snapshot =
+        fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    assert_eq!(
+        text, snapshot,
+        "the Settings tab at width {width} differs from {name}"
+    );
+}
+
+#[test]
+fn the_settings_tab_matches_the_snapshot_at_40_and_100_columns() {
+    // The file as the tab draws it: the comments, the headers and the values
+    // of the defaults, the cursor on the first value, and the count of what
+    // the pane does not show.
+    assert_settings_at(40);
+    assert_settings_at(100);
+}
+
 #[test]
 fn the_overview_matches_the_snapshot_at_every_canonical_width() {
     // Widths the sweep and the reviewers read: the narrow design width, the
@@ -753,8 +784,8 @@ fn render_tab_at(preset: &str, tab: &str, width: u16, height: u16) -> String {
 
 #[test]
 fn the_settings_tab_is_reachable_in_render_mode_at_every_canonical_width() {
-    // The tab's groups take 49 rows, so the render is taller than the
-    // default: every group is on screen to be named.
+    // The tab draws the configuration file: its first value is on screen at
+    // the default height, and the title names the file.
     for width in [40, 60, 100] {
         let text = render_tab_at("dark", "settings", width, 60);
         assert_eq!(
@@ -764,28 +795,22 @@ fn the_settings_tab_is_reachable_in_render_mode_at_every_canonical_width() {
         );
         // The tab bar names it, so the screen is the Settings tab.
         assert!(text.contains("Settings"), "width {width}: {text}");
-        // It lists what is true: the themes, the keys and the sorts.
-        for group in ["theme · 5", "keys · 32", "sort · 6"] {
-            assert!(text.contains(group), "width {width}: {group} is missing");
-        }
-        for words in ["Catppuccin", "palette", "terminal colours", "quit", "open"] {
-            assert!(text.contains(words), "width {width}: {words} is missing");
-        }
+        // It draws the file: its first value, and its path in the title.
+        assert!(text.contains("round_limit = 5"), "width {width}: {text}");
+        assert!(text.contains("config.toml"), "width {width}: {text}");
         assert!(
             !text.contains("nothing to set yet"),
             "width {width}: {text}"
         );
-        assert!(!text.contains("not built yet"), "width {width}: {text}");
-        // The footer names the scroll keys where they fit, and no open key:
-        // the tab reads.
+        // The footer names what the tab does: it quits, and it has no open
+        // key, since enter edits here.
         let footer = text.lines().last().expect("a footer row").trim_end();
+        assert!(footer.contains("quit"), "width {width}: {footer}");
         if width == 100 {
-            for key in ["↑↓", "j/k", "pgup/pgdn", "g/G"] {
-                assert!(footer.contains(key), "width {width}: {footer}");
+            for words in ["edit", "change", "save", "top/bottom", "move"] {
+                assert!(footer.contains(words), "width {width}: {footer}");
             }
         }
-        assert!(!footer.contains("enter"), "width {width}: {footer}");
-        assert!(!footer.contains("open"), "width {width}: {footer}");
         for (number, line) in text.lines().enumerate() {
             let measured = display_width(line);
             assert!(

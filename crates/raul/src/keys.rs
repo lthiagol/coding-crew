@@ -1,8 +1,8 @@
 //! The keys raul answers, in one table.
 //!
-//! The window's input handling and the Settings tab's keys group both read
-//! this table: a key that is handled but not listed, or listed but not
-//! handled, is one the gate can see.
+//! The window's input handling reads this table, and the gate checks it: a
+//! key is answered only by a row that names it, and every row does its act.
+//! The footer and the help name the keys in their own words.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -22,19 +22,13 @@ pub enum Scope {
     /// The filter line, while it is typed into: its keys type, and no other
     /// key of the window answers.
     Filter,
-}
-
-impl Scope {
-    /// The name of the scope, as the keys group writes it.
-    pub fn label(&self) -> &'static str {
-        match self {
-            Scope::Window => "window",
-            Scope::Rows => "rows",
-            Scope::Tasks => "tasks",
-            Scope::Detail => "detail",
-            Scope::Filter => "filter",
-        }
-    }
+    /// The Settings tab: its keys change the file's values.
+    Settings,
+    /// A value of the Settings tab, while it is typed in: its keys type, and no
+    /// other key answers.
+    Value,
+    /// The question quit asks with unsaved changes: save, quit or stay.
+    Asking,
 }
 
 /// What a key asks the window to do.
@@ -76,6 +70,28 @@ pub enum Act {
     EraseFilter,
     /// Type the key into the filter text.
     TypeFilter,
+    /// Quit at once, without asking about unsaved changes.
+    Exit,
+    /// Cycle the choice under the cursor: the step, forward on a positive one.
+    Change(isize),
+    /// Start typing the value under the cursor.
+    Begin,
+    /// Write the changes to the configuration file.
+    Save,
+    /// Drop the unsaved changes.
+    Undo,
+    /// Read the configuration file again.
+    Reload,
+    /// Keep the value being typed in.
+    Keep,
+    /// Drop the value being typed in.
+    Drop,
+    /// Delete the last letter of the value being typed in.
+    EraseValue,
+    /// Type the key into the value being typed in.
+    TypeValue,
+    /// Do not quit: the question about unsaved changes is answered with stay.
+    Stay,
 }
 
 /// A key, or the keys that share one binding: `Control` says the key is
@@ -112,17 +128,14 @@ impl Chord {
     }
 }
 
-/// One row of the table, and one row of the Settings tab.
+/// One row of the table: the keys that do an act, and where they do it. The
+/// footer and the help name the keys in their own words.
 #[derive(Debug, Clone, Copy)]
 pub struct Binding {
     /// The scopes the binding works in.
     pub scopes: &'static [Scope],
     /// The keys that do this.
     pub chords: &'static [Chord],
-    /// The keys, as a screen writes them.
-    pub key: &'static str,
-    /// What the key does.
-    pub says: &'static str,
     /// What the key asks for.
     pub act: Act,
 }
@@ -137,55 +150,36 @@ impl Binding {
     pub fn matches(&self, key: &KeyEvent) -> bool {
         self.chords.iter().any(|chord| chord.matches(key))
     }
-
-    /// The scopes, as a screen writes them.
-    pub fn scope_names(&self) -> String {
-        self.scopes
-            .iter()
-            .map(Scope::label)
-            .collect::<Vec<&str>>()
-            .join(", ")
-    }
 }
 
 /// The keys of the window, in the order the groups read them: the window
 /// first, then the rows, then the filter line, then the detail pane.
-pub const BINDINGS: [Binding; 32] = [
+pub const BINDINGS: [Binding; 47] = [
     Binding {
         scopes: &[Scope::Window, Scope::Detail],
         chords: &[Chord::Key(KeyCode::Char('q'), false)],
-        key: "q",
-        says: "quit",
         act: Act::Quit,
     },
     Binding {
         scopes: &[Scope::Window, Scope::Detail],
         chords: &[Chord::Key(KeyCode::Char('c'), true)],
-        key: "ctrl-c",
-        says: "quit",
-        act: Act::Quit,
+        act: Act::Exit,
     },
     Binding {
         // The window's quit key, as the screens doc names it: in the detail
         // pane the same key returns to the tab instead.
         scopes: &[Scope::Window],
         chords: &[Chord::Key(KeyCode::Esc, false)],
-        key: "esc",
-        says: "quit",
         act: Act::Quit,
     },
     Binding {
         scopes: &[Scope::Window],
         chords: &[Chord::Key(KeyCode::Char('?'), false)],
-        key: "?",
-        says: "help",
         act: Act::Help,
     },
     Binding {
         scopes: &[Scope::Window],
         chords: &[Chord::Digits],
-        key: "1-5",
-        says: "tab",
         act: Act::JumpTab,
     },
     Binding {
@@ -194,8 +188,6 @@ pub const BINDINGS: [Binding; 32] = [
             Chord::Key(KeyCode::Right, false),
             Chord::Key(KeyCode::Char('l'), false),
         ],
-        key: "→ l",
-        says: "next tab",
         act: Act::NextTab,
     },
     Binding {
@@ -204,22 +196,16 @@ pub const BINDINGS: [Binding; 32] = [
             Chord::Key(KeyCode::Left, false),
             Chord::Key(KeyCode::Char('h'), false),
         ],
-        key: "← h",
-        says: "previous tab",
         act: Act::PreviousTab,
     },
     Binding {
         scopes: &[Scope::Window],
         chords: &[Chord::Key(KeyCode::Tab, false)],
-        key: "tab",
-        says: "next tab",
         act: Act::NextTab,
     },
     Binding {
         scopes: &[Scope::Window],
         chords: &[Chord::Key(KeyCode::BackTab, false)],
-        key: "shift-tab",
-        says: "previous tab",
         act: Act::PreviousTab,
     },
     Binding {
@@ -228,8 +214,6 @@ pub const BINDINGS: [Binding; 32] = [
             Chord::Key(KeyCode::Up, false),
             Chord::Key(KeyCode::Char('k'), false),
         ],
-        key: "↑ k",
-        says: "move up",
         act: Act::Move(-1),
     },
     Binding {
@@ -238,114 +222,118 @@ pub const BINDINGS: [Binding; 32] = [
             Chord::Key(KeyCode::Down, false),
             Chord::Key(KeyCode::Char('j'), false),
         ],
-        key: "↓ j",
-        says: "move down",
         act: Act::Move(1),
     },
     Binding {
         scopes: &[Scope::Rows],
         chords: &[Chord::Key(KeyCode::PageUp, false)],
-        key: "pgup",
-        says: "move a page up",
         act: Act::Page(-1),
     },
     Binding {
         scopes: &[Scope::Rows],
         chords: &[Chord::Key(KeyCode::PageDown, false)],
-        key: "pgdn",
-        says: "move a page down",
         act: Act::Page(1),
     },
     Binding {
         scopes: &[Scope::Rows],
         chords: &[Chord::Key(KeyCode::Char('g'), false)],
-        key: "g",
-        says: "first row",
         act: Act::Top,
     },
     Binding {
         scopes: &[Scope::Rows],
         chords: &[Chord::Key(KeyCode::Char('G'), false)],
-        key: "G",
-        says: "last row",
         act: Act::Bottom,
     },
     Binding {
         scopes: &[Scope::Rows],
         chords: &[Chord::Key(KeyCode::Enter, false)],
-        key: "enter",
-        says: "open",
         act: Act::Open,
     },
     Binding {
         scopes: &[Scope::Tasks],
         chords: &[Chord::Key(KeyCode::Char('o'), false)],
-        key: "o",
-        says: "next sort key",
         act: Act::NextSort,
     },
     Binding {
         scopes: &[Scope::Tasks],
         chords: &[Chord::Key(KeyCode::Char('O'), false)],
-        key: "O",
-        says: "reverse sort",
         act: Act::ReverseSort,
     },
     Binding {
         scopes: &[Scope::Tasks],
         chords: &[Chord::Key(KeyCode::Char('/'), false)],
-        key: "/",
-        says: "filter",
         act: Act::Filter,
     },
     Binding {
         // With a filter in force, esc clears it before it quits the window.
         scopes: &[Scope::Tasks],
         chords: &[Chord::Key(KeyCode::Esc, false)],
-        key: "esc",
-        says: "clear the filter",
         act: Act::ClearFilter,
     },
     Binding {
         scopes: &[Scope::Filter],
         chords: &[Chord::Key(KeyCode::Enter, false)],
-        key: "enter",
-        says: "keep the filter",
         act: Act::KeepFilter,
     },
     Binding {
         scopes: &[Scope::Filter],
         chords: &[Chord::Key(KeyCode::Esc, false)],
-        key: "esc",
-        says: "clear the filter",
         act: Act::ClearFilter,
     },
     Binding {
         scopes: &[Scope::Filter],
         chords: &[Chord::Key(KeyCode::Backspace, false)],
-        key: "backspace",
-        says: "delete a letter",
         act: Act::EraseFilter,
     },
     Binding {
         scopes: &[Scope::Filter],
         chords: &[Chord::Typed],
-        key: "type",
-        says: "the filter text",
         act: Act::TypeFilter,
     },
     Binding {
         scopes: &[Scope::Filter],
         chords: &[Chord::Key(KeyCode::Char('c'), true)],
-        key: "ctrl-c",
-        says: "quit",
-        act: Act::Quit,
+        act: Act::Exit,
+    },
+    Binding {
+        scopes: &[Scope::Settings],
+        chords: &[
+            Chord::Key(KeyCode::Left, false),
+            Chord::Key(KeyCode::Char('h'), false),
+        ],
+        act: Act::Change(-1),
+    },
+    Binding {
+        scopes: &[Scope::Settings],
+        chords: &[
+            Chord::Key(KeyCode::Right, false),
+            Chord::Key(KeyCode::Char('l'), false),
+        ],
+        act: Act::Change(1),
+    },
+    Binding {
+        scopes: &[Scope::Settings],
+        chords: &[Chord::Key(KeyCode::Enter, false)],
+        act: Act::Begin,
+    },
+    Binding {
+        scopes: &[Scope::Settings],
+        chords: &[Chord::Key(KeyCode::Char('w'), false)],
+        act: Act::Save,
+    },
+    Binding {
+        scopes: &[Scope::Settings],
+        chords: &[Chord::Key(KeyCode::Char('u'), false)],
+        act: Act::Undo,
+    },
+    Binding {
+        scopes: &[Scope::Settings],
+        chords: &[Chord::Key(KeyCode::Char('r'), false)],
+        act: Act::Reload,
     },
     Binding {
         scopes: &[Scope::Detail],
         chords: &[Chord::Key(KeyCode::Esc, false)],
-        key: "esc",
-        says: "back",
         act: Act::Back,
     },
     Binding {
@@ -354,8 +342,6 @@ pub const BINDINGS: [Binding; 32] = [
             Chord::Key(KeyCode::Up, false),
             Chord::Key(KeyCode::Char('k'), false),
         ],
-        key: "↑ k",
-        says: "scroll up",
         act: Act::Move(-1),
     },
     Binding {
@@ -364,37 +350,72 @@ pub const BINDINGS: [Binding; 32] = [
             Chord::Key(KeyCode::Down, false),
             Chord::Key(KeyCode::Char('j'), false),
         ],
-        key: "↓ j",
-        says: "scroll down",
         act: Act::Move(1),
     },
     Binding {
         scopes: &[Scope::Detail],
         chords: &[Chord::Key(KeyCode::PageUp, false)],
-        key: "pgup",
-        says: "scroll a page up",
         act: Act::Page(-1),
     },
     Binding {
         scopes: &[Scope::Detail],
         chords: &[Chord::Key(KeyCode::PageDown, false)],
-        key: "pgdn",
-        says: "scroll a page down",
         act: Act::Page(1),
     },
     Binding {
         scopes: &[Scope::Detail],
         chords: &[Chord::Key(KeyCode::Char('g'), false)],
-        key: "g",
-        says: "top of the document",
         act: Act::Top,
     },
     Binding {
         scopes: &[Scope::Detail],
         chords: &[Chord::Key(KeyCode::Char('G'), false)],
-        key: "G",
-        says: "end of the document",
         act: Act::Bottom,
+    },
+    Binding {
+        scopes: &[Scope::Value],
+        chords: &[Chord::Key(KeyCode::Enter, false)],
+        act: Act::Keep,
+    },
+    Binding {
+        scopes: &[Scope::Value],
+        chords: &[Chord::Key(KeyCode::Esc, false)],
+        act: Act::Drop,
+    },
+    Binding {
+        scopes: &[Scope::Value],
+        chords: &[Chord::Key(KeyCode::Backspace, false)],
+        act: Act::EraseValue,
+    },
+    Binding {
+        scopes: &[Scope::Value],
+        chords: &[Chord::Typed],
+        act: Act::TypeValue,
+    },
+    Binding {
+        scopes: &[Scope::Value],
+        chords: &[Chord::Key(KeyCode::Char('c'), true)],
+        act: Act::Exit,
+    },
+    Binding {
+        scopes: &[Scope::Asking],
+        chords: &[Chord::Key(KeyCode::Char('w'), false)],
+        act: Act::Save,
+    },
+    Binding {
+        scopes: &[Scope::Asking],
+        chords: &[Chord::Key(KeyCode::Char('q'), false)],
+        act: Act::Quit,
+    },
+    Binding {
+        scopes: &[Scope::Asking],
+        chords: &[Chord::Key(KeyCode::Esc, false)],
+        act: Act::Stay,
+    },
+    Binding {
+        scopes: &[Scope::Asking],
+        chords: &[Chord::Key(KeyCode::Char('c'), true)],
+        act: Act::Exit,
     },
 ];
 
@@ -440,31 +461,40 @@ mod tests {
     }
 
     #[test]
-    fn every_binding_has_a_key_a_word_and_a_scope() {
+    fn every_binding_has_a_key_a_scope_and_an_act() {
+        // A row with no chord matches nothing, and one with no scope works
+        // nowhere: either would list a key that does nothing.
         let mut seen = HashSet::new();
         for binding in BINDINGS {
-            assert!(!binding.key.is_empty(), "{binding:?} has no key");
-            assert!(!binding.says.is_empty(), "{} says nothing", binding.key);
-            assert!(!binding.scopes.is_empty(), "{} has no scope", binding.key);
-            assert!(!binding.chords.is_empty(), "{} matches no key", binding.key);
-            // One row per key: a label and a place in the table name it.
+            assert!(!binding.scopes.is_empty(), "{:?} has no scope", binding.act);
             assert!(
-                seen.insert((binding.key, binding.scope_names())),
-                "{} ({}) is listed twice",
-                binding.key,
-                binding.scope_names()
+                !binding.chords.is_empty(),
+                "{:?} matches no key",
+                binding.act
             );
+            // One answer per key in a scope: a second row for the same key
+            // there would never be reached.
+            for scope in binding.scopes {
+                for chord in binding.chords {
+                    assert!(
+                        seen.insert((format!("{chord:?}"), format!("{scope:?}"))),
+                        "{chord:?} is bound twice in {scope:?}"
+                    );
+                }
+            }
         }
     }
 
     #[test]
     fn the_table_groups_the_scopes_in_the_order_of_the_groups() {
-        // The rows run window, then rows, then detail: a binding that works
-        // in two scopes sits with the first of them.
+        // The rows run window, then rows, then detail, then the value and the
+        // question: a binding that works in two scopes sits with the first of
+        // them.
         let rank = |scope: Scope| match scope {
             Scope::Window => 0,
-            Scope::Rows | Scope::Tasks | Scope::Filter => 1,
+            Scope::Rows | Scope::Tasks | Scope::Filter | Scope::Settings => 1,
             Scope::Detail => 2,
+            Scope::Value | Scope::Asking => 3,
         };
         let mut last = 0;
         for binding in BINDINGS {
@@ -476,9 +506,9 @@ mod tests {
                 .expect("a scope");
             assert!(
                 first >= last,
-                "{} ({}) is out of the scope order",
-                binding.key,
-                binding.scope_names()
+                "{:?} in {:?} is out of the scope order",
+                binding.act,
+                binding.scopes
             );
             last = first;
         }
@@ -497,6 +527,9 @@ mod tests {
             Scope::Tasks,
             Scope::Detail,
             Scope::Filter,
+            Scope::Settings,
+            Scope::Value,
+            Scope::Asking,
         ] {
             assert!(scopes.contains(&scope), "{scope:?} has no key");
         }
@@ -524,7 +557,7 @@ mod tests {
         control.modifiers = KeyModifiers::CONTROL;
         assert_eq!(
             binding(Scope::Window, &control).map(|binding| binding.act),
-            Some(Act::Quit)
+            Some(Act::Exit)
         );
     }
 

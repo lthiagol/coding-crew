@@ -1,0 +1,40 @@
+ 󰙅 raul · mock-data/coding-crew/work                                                     8 need you
+ 󰕮 Overview   󰂚 Needs you 8   󰘬 Path   󰫧 Tasks   󰚇 Backlog 11   󰒓 Settings
+───────────────────────────────────────────────────────────────▔▔▔▔▔▔▔▔▔▔▔▔─────────────────────────
+╭─ 󰒓 ~/.config/coding-crew/config.toml ────────────────────────────────────────────────────────────╮
+│ # coding-crew's flow configuration.                                                              │
+│ #                                                                                                │
+│ # This is the one file a human edits, so it is TOML and can carry                                │
+│ # comments. The format is provisional: it may change when the flow                               │
+│ # writes one itself. hugo reads this file at startup, writes the                                 │
+│ # defaults only when it is absent, saves the orchestrator's picked                               │
+│ # model in place, and never writes over a file it cannot read. The                               │
+│ # machine-written records - the journal and the runtime record -                                 │
+│ # stay JSON.                                                                                     │
+│                                                                                                  │
+│ # The build-and-fix cycles a task gets.                                                          │
+│▌round_limit = 5                                                                                  │
+│                                                                                                  │
+│ # One entry per agent of the automation: the name its role config                                │
+│ # gives it, the role it fills, and the model it runs.                                            │
+│ [[agents]]                                                                                       │
+│ name = "builder"                                                                                 │
+│ role = "runner"                                                                                  │
+│ model = "opencode-go/deepseek-v4.1-flash#high"                                                   │
+│                                                                                                  │
+│ [[agents]]                                                                                       │
+│ name = "reviewer"                                                                                │
+│ role = "reviewer"                                                                                │
+│ model = "opencode-go/glm-5.3#high"                                                               │
+│                                                                                                  │
+│ [[agents]]                                                                                       │
+│ name = "orchestrator"                                                                            │
+│ role = "orchestrator"                                                                            │
+│ model = "opencode-go/glm-5.3#high"                                                               │
+│                                                                                                  │
+│ # The tool the agents run in, and the way it is driven.                                          │
+│ [harness]                                                                                        │
+│ tool = "opencode"                                                                                │
+│ not shown: harness (1 hidden), order (18 hidden), raul (2 hidden), raul.tasks (2 hidden)         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ q  quit   1-6  tab   ←→  change   enter  edit   w  save   g/G  top/bottom   ↑↓ j/k  move   ?  help

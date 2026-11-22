@@ -113,6 +113,12 @@ None blocking. Carried from the closed units.
   project, because ADR 0010 says the nearest `coding-crew/` owns the result
   with or without `work/`. Left as a known limit; changing it means amending
   ADR 0010 to require a marker — the human's call.
+- **Settings: inline tables and dotted keys are text** (2026-11-22, review of
+  unit 63). `harness = { tool = …, driven = … }`, `[raul] tasks = { … }` and
+  `tasks.sort = …` are valid and saved into, but drawn as text with no stop.
+  Each value needs its own stop and its own cursor on a shared line, or the
+  line is split. Design call for the human; `docs/tui/screens.md` § Settings
+  says so.
 - **The fixture replay cannot check reviewer independence** (2026-11-22). An
   external round records its reviewer's actor id, not a session, so
   `fixtures_keep_their_gates` replays the review with an invented session.

@@ -1,0 +1,40 @@
+ 󰙅 raul · mock-data/coding-crew/work
+ ‹ 󰒓 Settings ›
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔────────────────────────
+╭─ 󰒓 ~/.config/coding-crew/config.toml ╮
+│ # coding-crew's flow configuration.  │
+│ #                                    │
+│ # This is the one file a human edits…│
+│ # comments. The format is provisiona…│
+│ # writes one itself. hugo reads this…│
+│ # defaults only when it is absent, s…│
+│ # model in place, and never writes o…│
+│ # machine-written records - the jour…│
+│ # stay JSON.                         │
+│                                      │
+│ # The build-and-fix cycles a task ge…│
+│▌round_limit = 5                      │
+│                                      │
+│ # One entry per agent of the automat…│
+│ # gives it, the role it fills, and t…│
+│ [[agents]]                           │
+│ name = "builder"                     │
+│ role = "runner"                      │
+│ model = "opencode-go/deepseek-v4.1-f…│
+│                                      │
+│ [[agents]]                           │
+│ name = "reviewer"                    │
+│ role = "reviewer"                    │
+│ model = "opencode-go/glm-5.3#high"   │
+│                                      │
+│ [[agents]]                           │
+│ name = "orchestrator"                │
+│ role = "orchestrator"                │
+│ model = "opencode-go/glm-5.3#high"   │
+│                                      │
+│ # The tool the agents run in, and th…│
+│ [harness]                            │
+│ tool = "opencode"                    │
+│ not shown: harness (1 hidden)…       │
+╰──────────────────────────────────────╯
+ q  quit   1-6  tab   ←→  change
