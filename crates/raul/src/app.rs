@@ -7,7 +7,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
+use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 
 use crate::backlog;
 use crate::data::Work;
@@ -19,8 +19,9 @@ use crate::path;
 use crate::settings;
 use crate::tabs::Tab;
 use crate::view::View;
+use coding_crew_theme::chrome;
 use coding_crew_theme::text::text_width;
-use coding_crew_theme::{IconSet, Theme, block_title_style};
+use coding_crew_theme::{Icon, IconSet, Theme, block_title_style};
 
 /// What a key asks the window to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,8 +46,7 @@ pub struct App {
     pub help: bool,
     /// The colours of the window.
     pub theme: Theme,
-    /// The icon set in force. No screen draws an icon yet.
-    #[allow(dead_code)]
+    /// The icon set in force.
     pub icons: IconSet,
 }
 
@@ -241,56 +241,73 @@ impl App {
         let rows = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(1),
+            Constraint::Length(1),
             Constraint::Min(3),
             Constraint::Length(1),
         ])
         .split(area);
+        let (tabs, rule) = self.tab_bar(rows[1].width, work, now);
 
         frame.render_widget(self.title_line(rows[0].width), rows[0]);
-        frame.render_widget(self.tab_bar(rows[1].width), rows[1]);
+        frame.render_widget(tabs, rows[1]);
+        frame.render_widget(rule, rows[2]);
+        let body = rows[3];
         // The row the cursor is on is the row enter opens: the highlight
         // and the key agree, including before the first move.
         let selected = self.cursor(work, now);
         let selected = selected.as_deref();
         let hidden = match self.tab {
             Tab::Overview => {
-                overview::render(frame, rows[2], work, &self.theme, now);
+                overview::render(frame, body, work, &self.theme, self.icons, now);
                 None
             }
             Tab::NeedsYou => needs::render_view(
                 frame,
-                rows[2],
+                body,
                 work,
                 &self.theme,
+                self.icons,
                 selected,
                 &mut self.view,
                 now,
             ),
             Tab::Path => path::render_view(
                 frame,
-                rows[2],
+                body,
                 work,
                 &self.theme,
+                self.icons,
                 selected,
                 &mut self.view,
                 now,
             ),
-            Tab::Backlog => {
-                backlog::render_view(frame, rows[2], work, &self.theme, selected, &mut self.view)
-            }
-            Tab::Settings => {
-                settings::render_view(frame, rows[2], &self.theme, selected, &mut self.view)
-            }
+            Tab::Backlog => backlog::render_view(
+                frame,
+                body,
+                work,
+                &self.theme,
+                self.icons,
+                selected,
+                &mut self.view,
+            ),
+            Tab::Settings => settings::render_view(
+                frame,
+                body,
+                &self.theme,
+                self.icons,
+                selected,
+                &mut self.view,
+            ),
         };
         if let Some(detail) = self.detail.as_mut() {
             // The pane covers the whole window: its own footer is the one
             // on display, and the help overlay waits behind it. The pane
             // takes the mutable detail: the draw clamps its scroll to the
             // document and measures the page the next keys move by.
-            detail::render(frame, area, work, detail, &self.theme);
+            detail::render(frame, area, work, detail, self.icons, &self.theme);
             return;
         }
-        frame.render_widget(self.footer(rows[3].width, work, now, hidden), rows[3]);
+        frame.render_widget(self.footer(rows[4].width, work, now, hidden), rows[4]);
 
         if self.help {
             let has_rows = rows_of(work, self.tab, now).is_some_and(|ids| !ids.is_empty());
@@ -298,25 +315,27 @@ impl App {
         }
     }
 
-    /// The title line: the name of the tool and the folder it reads.
+    /// The title line: the app's icon and name, a dim `·`, and the folder it
+    /// reads.
     ///
     /// A terminal too narrow for the name gives the whole line to the
     /// folder: a part of the line is never cut in half.
     fn title_line(&self, width: u16) -> Line<'static> {
-        const NAME: &str = " coding-crew ";
-        let name = Span::styled(NAME, self.theme.chrome.title);
+        let name = format!(" {} coding-crew", Icon::AppRaul.glyph(self.icons));
+        let separator = " · ";
+        let head = text_width(&name) + text_width(separator);
         let folder = self.theme.text.dim;
-        let name_width = text_width(NAME) as u16;
-        if width < name_width {
-            // The name does not fit: the folder it reads takes its place.
+        if usize::from(width) < head {
+            // The name does not fit: the folder it reads takes the line.
             let path = self.path_tail(usize::from(width));
-            let padding = " ".repeat(usize::from(width).saturating_sub(text_width(&path)));
-            return Line::from(vec![Span::raw(padding), Span::styled(path, folder)]);
+            return Line::from(Span::styled(path, folder));
         }
-        let columns = usize::from(width - name_width);
-        let path = self.path_tail(columns);
-        let padding = " ".repeat(columns.saturating_sub(text_width(&path)));
-        Line::from(vec![name, Span::raw(padding), Span::styled(path, folder)])
+        let path = self.path_tail(usize::from(width) - head);
+        Line::from(vec![
+            Span::styled(name, self.theme.chrome.title),
+            Span::styled(separator, self.theme.text.dim),
+            Span::styled(path, folder),
+        ])
     }
 
     /// The path, in the columns it has: the tail, which names the folder,
@@ -348,47 +367,111 @@ impl App {
         format!("…{}", kept.iter().rev().copied().collect::<String>())
     }
 
-    /// The tab bar, with the active tab marked.
+    /// The tab bar, and the rule under it.
+    ///
+    /// Each tab is its icon and its name; the two tabs whose count matters
+    /// carry it as a badge. The active tab's label is underlined: the rule
+    /// is `─`, broken by a `▔` under that label.
     ///
     /// A terminal too narrow for the five tabs gets the active tab alone.
-    /// The parts of the line are dropped whole: no label is ever cut in
-    /// half.
-    fn tab_bar(&self, width: u16) -> Line<'static> {
-        let full: usize = Tab::ALL
+    /// The parts are dropped whole: no label is ever cut in half.
+    fn tab_bar(&self, width: u16, work: &Work, now: &str) -> (Line<'static>, Line<'static>) {
+        let cells: Vec<Vec<Span<'static>>> = Tab::ALL
             .iter()
-            .map(|tab| tab.label().chars().count() + 2)
+            .map(|tab| self.tab_cell(*tab, work, now))
+            .collect();
+        let full: usize = cells
+            .iter()
+            .map(|cell| cell.iter().map(Span::width).sum::<usize>())
             .sum::<usize>()
             + Tab::ALL.len()
             - 1;
         if full <= width as usize {
             let mut spans = Vec::new();
-            for (index, tab) in Tab::ALL.iter().enumerate() {
+            let mut start = 0;
+            let mut underline = None;
+            for (index, (tab, cell)) in Tab::ALL.iter().zip(cells).enumerate() {
                 if index > 0 {
                     spans.push(Span::raw(" "));
+                    start += 1;
                 }
-                spans.push(Span::styled(
-                    format!(" {} ", tab.label()),
-                    self.tab_style(*tab),
-                ));
+                let columns: usize = cell.iter().map(Span::width).sum();
+                if *tab == self.tab {
+                    underline = Some((start, columns));
+                }
+                start += columns;
+                spans.extend(cell);
             }
-            return Line::from(spans);
+            return (Line::from(spans), self.rule(width, underline));
         }
         // Too narrow for the five tabs: the active tab, marked. The parts
         // are dropped whole, from the least to the most useful.
-        let marked = format!(" ‹ {} › ", self.tab.label());
-        let plain = format!(" {} ", self.tab.label());
-        let index = format!("{}/{}", self.tab.index() + 1, Tab::ALL.len());
+        let name = format!(
+            "{} {}",
+            tab_icon(self.tab).glyph(self.icons),
+            self.tab.label()
+        );
         let parts = [
-            (marked, self.tab_style(self.tab)),
-            (plain, self.tab_style(self.tab)),
-            (index, self.theme.chrome.tab_index),
+            (format!(" ‹ {name} › "), self.tab_style(self.tab), true),
+            (format!(" {name} "), self.tab_style(self.tab), true),
+            (
+                format!("{}/{}", self.tab.index() + 1, Tab::ALL.len()),
+                self.theme.chrome.tab_index,
+                false,
+            ),
         ];
-        for (part, style) in parts {
-            if part.chars().count() <= width as usize {
-                return Line::from(vec![Span::styled(part, style)]);
+        for (part, style, underlined) in parts {
+            let columns = text_width(&part);
+            if columns <= usize::from(width) {
+                let underline = underlined.then_some((0, columns));
+                return (
+                    Line::from(Span::styled(part, style)),
+                    self.rule(width, underline),
+                );
             }
         }
-        Line::from(Span::raw(""))
+        (Line::from(Span::raw("")), self.rule(width, None))
+    }
+
+    /// One tab in the bar: its icon and name, and its badge when it has one.
+    fn tab_cell(&self, tab: Tab, work: &Work, now: &str) -> Vec<Span<'static>> {
+        let style = self.tab_style(tab);
+        let name = format!("{} {}", tab_icon(tab).glyph(self.icons), tab.label());
+        let mut spans = vec![Span::styled(format!(" {name}"), style)];
+        if let Some(count) = self.badge(tab, work, now) {
+            spans.push(Span::styled(" ", style));
+            spans.push(chrome::badge(count, &self.theme));
+        }
+        spans.push(Span::styled(" ", style));
+        spans
+    }
+
+    /// The count a tab carries as its badge.
+    ///
+    /// The count is the one the tab's rows are drawn from, so the badge and
+    /// the rows cannot disagree.
+    fn badge(&self, tab: Tab, work: &Work, now: &str) -> Option<usize> {
+        match tab {
+            Tab::NeedsYou | Tab::Backlog => rows_of(work, tab, now).map(|ids| ids.len()),
+            Tab::Overview | Tab::Path | Tab::Settings => None,
+        }
+    }
+
+    /// The rule under the tab bar: `─` in the border slot, with the columns
+    /// of the active label drawn as `▔` in its slot.
+    fn rule(&self, width: u16, underline: Option<(usize, usize)>) -> Line<'static> {
+        let width = usize::from(width);
+        let (start, columns) = underline.unwrap_or((width, 0));
+        let start = start.min(width);
+        let columns = columns.min(width - start);
+        Line::from(vec![
+            Span::styled("─".repeat(start), self.theme.chrome.border),
+            Span::styled("▔".repeat(columns), self.theme.chrome.tab_active),
+            Span::styled(
+                "─".repeat(width - start - columns),
+                self.theme.chrome.border,
+            ),
+        ])
     }
 
     /// The style of a tab in the bar.
@@ -410,49 +493,35 @@ impl App {
     /// keys, and the content pane says nothing about it — the same fact is
     /// never painted twice.
     fn footer(&self, width: u16, work: &Work, now: &str, hidden: Option<usize>) -> Line<'static> {
-        let key = self.theme.chrome.key;
-        let label = self.theme.chrome.footer;
-        let space = || Span::raw("   ");
+        // A key chip, parted from the chip before it by two spaces.
+        let chip = |key: &str, action: &str| {
+            [
+                vec![Span::raw("  ")],
+                chrome::key_chip(key, action, &self.theme),
+            ]
+            .concat()
+        };
         // (where it sits in the line, its spans, whether it matters most)
-        let mut parts: Vec<(usize, Vec<Span<'static>>, bool)> = vec![(
-            0,
-            vec![Span::styled(" q ", key), Span::styled(" quit", label)],
-            true,
-        )];
+        let mut parts: Vec<(usize, Vec<Span<'static>>, bool)> =
+            vec![(0, chrome::key_chip("q", "quit", &self.theme), true)];
         if let Some(hidden) = hidden {
             parts.push((
                 1,
                 vec![
-                    space(),
+                    Span::raw("  "),
                     Span::styled(hidden.to_string(), self.theme.text.strong),
-                    Span::styled(" hidden", label),
+                    Span::styled(" hidden", self.theme.chrome.footer),
                 ],
                 true,
             ));
         }
-        parts.push((
-            1,
-            vec![
-                space(),
-                Span::styled(" 1-5 ", key),
-                Span::styled(" tab", label),
-            ],
-            true,
-        ));
+        parts.push((1, chip("1-5", "tab"), true));
         let mut next = 3;
         let has_rows = rows_of(work, self.tab, now).is_some_and(|ids| !ids.is_empty());
         // Enter is named only where it opens: the Settings tab is a list
         // whose rows are facts, and the tab reads.
         if has_rows && self.tab.opens() {
-            parts.push((
-                next,
-                vec![
-                    space(),
-                    Span::styled(" enter ", key),
-                    Span::styled(" open", label),
-                ],
-                true,
-            ));
+            parts.push((next, chip("enter", "open"), true));
             next += 1;
         }
         if has_rows {
@@ -462,69 +531,32 @@ impl App {
             // pgup/pgdn, then the tab pair — so a narrowing footer gives the
             // pair up first, the page keys next, the ends next, and the
             // single rows last.
-            parts.push((
-                next,
-                vec![
-                    space(),
-                    Span::styled(" g/G ", key),
-                    Span::styled(" top/bottom", label),
-                ],
-                false,
-            ));
+            parts.push((next, chip("g/G", "top/bottom"), false));
             next += 1;
-            parts.push((
-                next,
-                vec![
-                    space(),
-                    Span::styled(" ↑↓ j/k ", key),
-                    Span::styled(" move", label),
-                ],
-                false,
-            ));
+            parts.push((next, chip("↑↓ j/k", "move"), false));
             next += 1;
-            parts.push((
-                next,
-                vec![
-                    space(),
-                    Span::styled(" pgup/pgdn ", key),
-                    Span::styled(" page", label),
-                ],
-                false,
-            ));
+            parts.push((next, chip("pgup/pgdn", "page"), false));
             next += 1;
         }
-        parts.push((
-            next,
-            vec![
-                space(),
-                Span::styled(" ? ", key),
-                Span::styled(" help", label),
-            ],
-            true,
-        ));
+        parts.push((next, chip("?", "help"), true));
         if self.help {
-            parts.push((
-                next + 1,
-                vec![
-                    space(),
-                    Span::styled(" esc ", key),
-                    Span::styled(" close help", label),
-                ],
-                true,
-            ));
+            parts.push((next + 1, chip("esc", "close help"), true));
         }
         // The tab pair is the last optional part: a pane too narrow for
         // everything gives it up before a key that works on the tab.
-        parts.push((
-            2,
-            vec![
-                space(),
-                Span::styled(" ←→ ", key),
-                Span::styled(" switch tab", label),
-            ],
-            false,
-        ));
+        parts.push((2, chip("←→", "switch tab"), false));
         footer_line(parts, width)
+    }
+}
+
+/// The icon of a tab.
+fn tab_icon(tab: Tab) -> Icon {
+    match tab {
+        Tab::Overview => Icon::TabOverview,
+        Tab::NeedsYou => Icon::TabNeeds,
+        Tab::Path => Icon::TabPath,
+        Tab::Backlog => Icon::TabBacklog,
+        Tab::Settings => Icon::TabSettings,
     }
 }
 
@@ -678,8 +710,11 @@ fn render_help(frame: &mut Frame, area: Rect, theme: &Theme, has_rows: bool) {
     frame.render_widget(
         Paragraph::new(lines).wrap(Wrap { trim: true }).block(
             Block::bordered()
-                .title("keys")
-                .title_style(block_title_style(theme))
+                .border_type(BorderType::Rounded)
+                .title(Line::from(vec![
+                    Span::styled("─", theme.chrome.border_focus),
+                    Span::styled(" keys ", block_title_style(theme)),
+                ]))
                 .border_style(theme.chrome.border_focus),
         ),
         popup,
@@ -838,8 +873,8 @@ mod tests {
                 .collect::<String>();
             assert!(title.width() <= usize::from(width), "{width}: {text:?}");
             // Once the folder's name fits in the columns it has, the tail is
-            // kept whole.
-            if usize::from(width) >= 13 + 18 {
+            // kept whole: the name and its separator take 17 columns.
+            if usize::from(width) >= 17 + 17 {
                 assert!(text.contains("coding-crew/work"), "{width}: {text:?}");
             }
         }
@@ -849,7 +884,7 @@ mod tests {
     fn a_narrow_tab_bar_drops_whole_parts() {
         let app = app();
         for width in 0..=24 {
-            let bar = app.tab_bar(width);
+            let (bar, _) = app.tab_bar(width, &mock_work(), now());
             let text = bar
                 .spans
                 .iter()
@@ -858,8 +893,15 @@ mod tests {
             assert!(text.chars().count() <= width as usize, "{width}: {text}");
             // The active tab alone, the index alone, or nothing: no part
             // of the line is cut in half.
+            let glyph = Icon::TabOverview.glyph(IconSet::Nerd);
             assert!(
-                [" ‹ Overview › ", " Overview ", "1/5", ""].contains(&text.as_str()),
+                [
+                    format!(" ‹ {glyph} Overview › "),
+                    format!(" {glyph} Overview "),
+                    "1/5".to_string(),
+                    String::new(),
+                ]
+                .contains(&text),
                 "{width}: {text}"
             );
         }
@@ -877,12 +919,12 @@ mod tests {
 
     #[test]
     fn a_narrow_footer_does_not_cut_a_key() {
-        let rows = draw(30, 8);
+        let rows = draw(24, 8);
         let footer = rows.last().expect("a footer row").trim_end().to_string();
         // Every key shown is whole: nothing is cut in the middle of a word.
         assert!(footer.contains("quit"), "{footer}");
         assert!(!footer.contains("hel"), "{footer}");
-        let line = app().footer(30, &mock_work(), now(), None);
+        let line = app().footer(24, &mock_work(), now(), None);
         assert!(line.width() <= 30, "{line:?}");
     }
 
@@ -898,17 +940,25 @@ mod tests {
 
     #[test]
     fn the_tab_bar_shows_five_tabs_in_key_order() {
-        // The five labels, in the order the keys 1 to 5 reach them: the bar
-        // is the visible face of Tab::ALL.
+        // The five tabs, in the order the keys 1 to 5 reach them: the bar
+        // is the visible face of Tab::ALL. Each carries its icon, and the two
+        // whose counts matter carry the count of their rows.
+        let work = mock_work();
+        let needs = rows_of(&work, Tab::NeedsYou, now()).map_or(0, |ids| ids.len());
+        let backlog = rows_of(&work, Tab::Backlog, now()).map_or(0, |ids| ids.len());
+        let glyph = |icon: Icon| icon.glyph(IconSet::Nerd);
         let rows = draw(100, 20);
         let bar = rows.get(1).expect("the tab bar").trim_end();
-        // The labels, in key order: a bar that drops, adds or reorders a tab
-        // disagrees with a window that has five.
-        let expected = ["Overview", "Needs you", "Path", "Backlog", "Settings"]
-            .iter()
-            .map(|label| format!(" {label} "))
-            .collect::<Vec<String>>()
-            .join(" ");
+        let expected = [
+            format!(" {} Overview ", glyph(Icon::TabOverview)),
+            format!(" {} Needs you {needs} ", glyph(Icon::TabNeeds)),
+            format!(" {} Path ", glyph(Icon::TabPath)),
+            format!(" {} Backlog {backlog} ", glyph(Icon::TabBacklog)),
+            format!(" {} Settings ", glyph(Icon::TabSettings)),
+        ]
+        .join(" ");
+        // A bar that drops, adds or reorders a tab disagrees with a window
+        // that has five.
         assert_eq!(
             bar,
             expected.trim_end(),
@@ -917,13 +967,32 @@ mod tests {
         // The dropped tab is not back.
         assert!(!bar.contains("Autopilot"), "{bar}");
         // Too narrow for the bar, the index counts to five.
-        let narrow = app().tab_bar(8);
+        let (narrow, _) = app().tab_bar(8, &work, now());
         let text = narrow
             .spans
             .iter()
             .map(|span| span.content.to_string())
             .collect::<String>();
         assert_eq!(text, "1/5", "the narrow tab bar counts another window");
+    }
+
+    #[test]
+    fn the_rule_under_the_tabs_is_broken_under_the_active_tab() {
+        // The `▔` sits under the active label, and the rest of the rule is
+        // `─`: the rule is one row, the full width of the window.
+        let theme = Theme::preset(Preset::Dark);
+        let rows = render(&mut window(&theme, Tab::Path, false), 100, 20).0;
+        let label = format!(" {} Path ", Icon::TabPath.glyph(IconSet::Nerd));
+        let start = rows[1].find(&label).expect("the active label");
+        let start = rows[1][..start].chars().count();
+        let len = label.chars().count();
+        let expected = format!(
+            "{}{}{}",
+            "─".repeat(start),
+            "▔".repeat(len),
+            "─".repeat(100 - start - len)
+        );
+        assert_eq!(rows[2], expected);
     }
 
     #[test]
@@ -996,7 +1065,7 @@ mod tests {
         let rows = render(
             &mut window(&Theme::preset(Preset::Dark), Tab::Settings, false),
             100,
-            40,
+            44,
         )
         .0;
         let text = rows.join("\n");
@@ -1080,11 +1149,15 @@ mod tests {
         // the mark's own paint is on display. The pane is tall enough for
         // every row: the scroll would otherwise hide the theme at the top.
         app.selection = Some("sort:settings".to_string());
-        let (rows, paint) = render(&mut app, 100, 41);
+        let (rows, paint) = render(&mut app, 100, 45);
+        // The icon set in force is marked too, on its own group's rows: the
+        // theme's rows are the ones that say what kind of theme they are.
         let marked: Vec<usize> = rows
             .iter()
             .enumerate()
-            .filter(|(_, row)| row.contains('●'))
+            .filter(|(_, row)| {
+                row.contains('●') && (row.contains("palette") || row.contains("terminal colours"))
+            })
             .map(|(index, _)| index)
             .collect();
         assert_eq!(marked.len(), 1, "{}", rows.join("\n"));
@@ -1122,7 +1195,8 @@ mod tests {
         assert_eq!(app.tab, Tab::Settings, "5 did not reach Settings");
         let (rows, paint) = render(&mut app, 100, 20);
         let bar = rows.get(1).expect("the tab bar");
-        let column = bar.find(" Settings ").expect("the Settings label") + 1;
+        let column = bar.find(" Settings ").expect("the Settings label");
+        let column = bar[..column].chars().count() + 1;
         assert_eq!(
             paint[1][column].fg,
             theme.chrome.tab_active.fg.expect("the active tab colour"),
@@ -1656,6 +1730,20 @@ mod tests {
     }
 
     #[test]
+    fn the_help_title_leads_with_a_rule_after_the_corner_as_a_pane_does() {
+        // The check can fail: the old title reads `╭keys`, not `╭─ keys`.
+        let theme = Theme::preset(Preset::Dark);
+        let rows = render(&mut window(&theme, Tab::NeedsYou, true), 100, 20).0;
+        let popup = help_popup(Rect::new(0, 0, 100, 20));
+        let top: String = rows[usize::from(popup.y)]
+            .chars()
+            .skip(usize::from(popup.x))
+            .take(usize::from(popup.width))
+            .collect();
+        assert!(top.starts_with("╭─ keys "), "{top:?}");
+    }
+
+    #[test]
     fn the_help_popup_keeps_q_and_help_on_a_short_window() {
         let theme = Theme::preset(Preset::Dark);
         for height in [14u16, 10] {
@@ -1788,7 +1876,7 @@ mod tests {
         for tab in list_tabs() {
             let ids = rows_of(&work, tab, now()).expect("a list tab");
             let mut app = window(&theme, tab, false);
-            render(&mut app, 100, 14);
+            render(&mut app, 100, 15);
             let page = app.view.page();
             assert!(page > 1, "{tab:?}: the pane shows {page} rows");
             // One page down moves the cursor by exactly the rows on
@@ -1958,14 +2046,14 @@ mod tests {
         assert!(!at_68.contains("↑↓") && !at_68.contains("j/k"), "{at_68}");
         assert!(!at_68.contains("pgup/pgdn"), "{at_68}");
         assert!(!at_68.contains("switch tab"), "{at_68}");
-        // At 60 the ends are gone too; help still fits.
-        let at_60 = text(60);
-        assert!(at_60.contains("enter") && at_60.contains("open"), "{at_60}");
-        assert!(at_60.contains(" help"), "{at_60}");
-        assert!(!at_60.contains("g/G"), "{at_60}");
-        assert!(!at_60.contains("↑↓") && !at_60.contains("j/k"), "{at_60}");
-        assert!(!at_60.contains("pgup/pgdn"), "{at_60}");
-        assert!(!at_60.contains("switch tab"), "{at_60}");
+        // At 56 the ends are gone too; help still fits.
+        let at_56 = text(56);
+        assert!(at_56.contains("enter") && at_56.contains("open"), "{at_56}");
+        assert!(at_56.contains(" help"), "{at_56}");
+        assert!(!at_56.contains("g/G"), "{at_56}");
+        assert!(!at_56.contains("↑↓") && !at_56.contains("j/k"), "{at_56}");
+        assert!(!at_56.contains("pgup/pgdn"), "{at_56}");
+        assert!(!at_56.contains("switch tab"), "{at_56}");
         // At 40 help gives way too; the keys that matter most hold, and no
         // movement key is named.
         let at_40 = text(40);

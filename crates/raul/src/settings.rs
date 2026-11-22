@@ -1,19 +1,20 @@
 //! The Settings tab: what the tool is doing, in one list.
 //!
-//! Three groups, all derived, none stored: the themes that exist, the keys
-//! that work, and the order each tab keeps. It reads: nothing here is
-//! changed from the tab.
+//! Four groups, all derived, none stored: the themes that exist, the keys
+//! that work, the order each tab keeps, and the icon sets. It reads: nothing
+//! here is changed from the tab.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 
 use crate::keys;
 use crate::tabs::Tab;
 use crate::view::View;
+use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, pad, text_width};
-use coding_crew_theme::{Preset, Theme, block_title_style, selected_line};
+use coding_crew_theme::{Icon, IconSet, Preset, Theme, selected_line};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -33,11 +34,18 @@ pub enum GroupKind {
     Keys,
     /// The order each tab keeps.
     Sort,
+    /// The icon sets that exist.
+    Icons,
 }
 
 impl GroupKind {
     /// Every group, in the order of the tab.
-    pub const ALL: [GroupKind; 3] = [GroupKind::Theme, GroupKind::Keys, GroupKind::Sort];
+    pub const ALL: [GroupKind; 4] = [
+        GroupKind::Theme,
+        GroupKind::Keys,
+        GroupKind::Sort,
+        GroupKind::Icons,
+    ];
 
     /// The name of the group.
     pub fn label(&self) -> &'static str {
@@ -45,9 +53,13 @@ impl GroupKind {
             GroupKind::Theme => "theme",
             GroupKind::Keys => "keys",
             GroupKind::Sort => "sort",
+            GroupKind::Icons => "icons",
         }
     }
 }
+
+/// The number of groups: the size of every per-group count.
+const GROUPS: usize = GroupKind::ALL.len();
 
 /// A row of the tab: one fact, derived from the code that owns it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +70,8 @@ pub struct Row {
     pub group: GroupKind,
     /// The theme the row names, for the theme group.
     pub preset: Option<Preset>,
+    /// The icon set the row names, for the icons group.
+    pub set: Option<IconSet>,
     /// The fixed label: the theme's name, the key, the tab.
     pub label: String,
     /// What the row says: the theme's kind, what the key does, the order.
@@ -75,9 +89,9 @@ pub struct Group {
     pub rows: Vec<Row>,
 }
 
-/// The three groups, derived: the theme crate's presets, the key table and
-/// the tabs' own sorts, in the order `GroupKind::ALL` names.
-pub fn groups() -> [Group; 3] {
+/// The groups, derived: the theme crate's presets, the key table, the tabs'
+/// own sorts and the icon sets, in the order `GroupKind::ALL` names.
+pub fn groups() -> [Group; GROUPS] {
     GroupKind::ALL.map(|kind| Group {
         kind,
         rows: rows(kind),
@@ -93,6 +107,7 @@ fn rows(kind: GroupKind) -> Vec<Row> {
                 id: format!("theme:{}", preset.name()),
                 group: GroupKind::Theme,
                 preset: Some(*preset),
+                set: None,
                 label: preset.label().to_string(),
                 says: preset.kind().label().to_string(),
                 scopes: None,
@@ -105,6 +120,7 @@ fn rows(kind: GroupKind) -> Vec<Row> {
                 id: format!("key:{index:02}"),
                 group: GroupKind::Keys,
                 preset: None,
+                set: None,
                 label: binding.key.to_string(),
                 says: binding.says.to_string(),
                 scopes: Some(binding.scope_names()),
@@ -116,8 +132,25 @@ fn rows(kind: GroupKind) -> Vec<Row> {
                 id: format!("sort:{}", tab.name()),
                 group: GroupKind::Sort,
                 preset: None,
+                set: None,
                 label: tab.label().to_string(),
                 says: tab.sort().words(),
+                scopes: None,
+            })
+            .collect(),
+        GroupKind::Icons => IconSet::ALL
+            .iter()
+            .map(|set| Row {
+                id: format!("icons:{}", set.name()),
+                group: GroupKind::Icons,
+                preset: None,
+                set: Some(*set),
+                label: set.name().to_string(),
+                says: match set {
+                    IconSet::Nerd => "needs a Nerd Font",
+                    IconSet::Unicode => "any font, one column each",
+                }
+                .to_string(),
                 scopes: None,
             })
             .collect(),
@@ -143,20 +176,18 @@ pub fn render_view(
     frame: &mut Frame,
     area: Rect,
     theme: &Theme,
+    icons: IconSet,
     selected: Option<&str>,
     view: &mut View,
 ) -> Option<usize> {
-    let block = Block::bordered()
-        .title("settings")
-        .title_style(block_title_style(theme))
-        .border_style(theme.chrome.border);
+    let block = chrome::pane("settings", Icon::TabSettings, icons, false, theme);
     let groups = groups();
     let ids = row_ids();
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
     let (rows, announced) = view.draw(&ids, selected, |first| {
         let (lines, announced, shown, whole) =
-            window(&groups, width, height, theme, selected, first);
+            window(&groups, width, height, theme, icons, selected, first);
         ((lines, announced), shown, whole)
     });
     frame.render_widget(
@@ -167,16 +198,20 @@ pub fn render_view(
     (hidden > 0 && !announced).then_some(hidden)
 }
 
-/// The widths of the label column of each group.
+/// The widths of the label column of each group, and the icon set in force:
+/// the mark of the icons group is drawn from it, as the theme group's is
+/// drawn from the theme in force.
 #[derive(Debug, Clone, Copy)]
 struct Metrics {
     theme: usize,
     keys: usize,
     sort: usize,
+    icons: usize,
+    set: IconSet,
 }
 
 /// The widths of the label columns: the widest label of each group.
-fn metrics(groups: &[Group]) -> Metrics {
+fn metrics(groups: &[Group], set: IconSet) -> Metrics {
     let width = |kind: GroupKind| {
         groups
             .iter()
@@ -190,6 +225,8 @@ fn metrics(groups: &[Group]) -> Metrics {
         theme: width(GroupKind::Theme),
         keys: width(GroupKind::Keys),
         sort: width(GroupKind::Sort),
+        icons: width(GroupKind::Icons),
+        set,
     }
 }
 
@@ -209,13 +246,14 @@ fn window(
     width: usize,
     height: usize,
     theme: &Theme,
+    icons: IconSet,
     selected: Option<&str>,
     first: usize,
 ) -> (Vec<Line<'static>>, bool, Vec<usize>, bool) {
     if height == 0 {
         return (Vec::new(), false, Vec::new(), false);
     }
-    let metrics = metrics(groups);
+    let metrics = metrics(groups, icons);
     let total: usize = groups.iter().map(|group| group.rows.len()).sum();
     let wanted: usize = groups.iter().map(|group| 1 + group.rows.len()).sum();
     if first == 0 && wanted <= height {
@@ -333,8 +371,8 @@ fn cursor_row(
 }
 
 /// What each group hides when only the row at `cursor` is shown.
-fn omitted_with_only(groups: &[Group], cursor: usize) -> [usize; 3] {
-    let mut omitted = [0usize; 3];
+fn omitted_with_only(groups: &[Group], cursor: usize) -> [usize; GROUPS] {
+    let mut omitted = [0usize; GROUPS];
     let mut at = 0usize;
     for (index, group) in groups.iter().enumerate() {
         omitted[index] = group.rows.len();
@@ -362,10 +400,10 @@ fn layout(
     metrics: Metrics,
     theme: &Theme,
     selected: Option<&str>,
-) -> (Vec<Line<'static>>, Vec<usize>, [usize; 3]) {
+) -> (Vec<Line<'static>>, Vec<usize>, [usize; GROUPS]) {
     let mut lines = Vec::new();
     let mut shown = Vec::new();
-    let mut omitted = [0usize; 3];
+    let mut omitted = [0usize; GROUPS];
     let mut used = 0usize;
     let mut row_index = 0usize;
     for (index, group) in groups.iter().enumerate() {
@@ -458,7 +496,7 @@ impl Said {
 /// last one and the last row is marked with `…`. An entry is never cut in
 /// half: a group and its count stay together.
 fn announcement(
-    omitted: &[usize; 3],
+    omitted: &[usize; GROUPS],
     width: usize,
     room: usize,
     theme: &Theme,
@@ -577,7 +615,7 @@ fn entry(kind: GroupKind, count: usize, width: usize) -> Said {
 /// header's `group · total`, and it names the groups even when a row is too
 /// narrow for `group (count hidden)`. The lead-in and the word are dropped
 /// only when they do not fit; the flag says whether one of them is present.
-fn compact(omitted: &[usize; 3], width: usize, room: usize) -> Option<(Vec<Said>, bool)> {
+fn compact(omitted: &[usize; GROUPS], width: usize, room: usize) -> Option<(Vec<Said>, bool)> {
     let tokens: Vec<Said> = GroupKind::ALL
         .iter()
         .enumerate()
@@ -777,6 +815,7 @@ fn row_line(
         GroupKind::Theme => theme_line(row, width, metrics, theme),
         GroupKind::Keys => key_line(row, width, metrics, theme),
         GroupKind::Sort => sort_line(row, width, metrics, theme),
+        GroupKind::Icons => icons_line(row, width, metrics, theme),
     };
     if selected == Some(row.id.as_str()) {
         return selected_line(line, width, theme);
@@ -787,10 +826,28 @@ fn row_line(
 /// A theme row: the mark of the theme in use, the name, and its kind.
 fn theme_line(row: &Row, width: usize, metrics: Metrics, theme: &Theme) -> Line<'static> {
     let in_use = row.preset == Some(theme.preset);
+    marked_line(row, in_use, metrics.theme, width, theme)
+}
+
+/// An icons row: the mark of the set in force, the name, and what it needs.
+fn icons_line(row: &Row, width: usize, metrics: Metrics, theme: &Theme) -> Line<'static> {
+    let in_use = row.set == Some(metrics.set);
+    marked_line(row, in_use, metrics.icons, width, theme)
+}
+
+/// A row that names one of a group's values: the mark of the value in use,
+/// the name in a column `label_width` wide, and what the value says.
+fn marked_line(
+    row: &Row,
+    in_use: bool,
+    label_width: usize,
+    width: usize,
+    theme: &Theme,
+) -> Line<'static> {
     let mark = if in_use { "●" } else { " " };
     let indent = " ".repeat(ROW_INDENT);
-    let name = pad(&row.label, metrics.theme);
-    let head = ROW_INDENT + 1 + 1 + metrics.theme;
+    let name = pad(&row.label, label_width);
+    let head = ROW_INDENT + 1 + 1 + label_width;
     let full = head + GAP + text_width(&row.says);
     let name_style = if in_use {
         theme.text.strong
@@ -806,7 +863,7 @@ fn theme_line(row: &Row, width: usize, metrics: Metrics, theme: &Theme) -> Line<
             Span::styled(row.says.clone(), theme.text.dim),
         ]);
     }
-    // The kind gives way: the mark and the name say which theme it is.
+    // The kind gives way: the mark and the name say which value it is.
     if width >= head {
         return Line::from(vec![
             Span::raw(indent),
@@ -904,7 +961,7 @@ mod tests {
         let mut view = View::default();
         terminal
             .draw(|frame| {
-                render_view(frame, frame.area(), theme, None, &mut view);
+                render_view(frame, frame.area(), theme, IconSet::Nerd, None, &mut view);
             })
             .expect("drawing the settings tab");
         let buffer = terminal.backend().buffer();
@@ -928,15 +985,38 @@ mod tests {
     }
 
     #[test]
-    fn the_three_groups_are_derived_in_the_order_of_the_spec() {
+    fn the_four_groups_are_derived_in_the_order_of_the_spec() {
         let groups = groups();
         assert_eq!(
-            [groups[0].kind, groups[1].kind, groups[2].kind],
+            [
+                groups[0].kind,
+                groups[1].kind,
+                groups[2].kind,
+                groups[3].kind
+            ],
             GroupKind::ALL
         );
         assert_eq!(
             GroupKind::ALL.map(|kind| kind.label()),
-            ["theme", "keys", "sort"]
+            ["theme", "keys", "sort", "icons"]
+        );
+    }
+
+    #[test]
+    fn the_icon_rows_are_every_set_and_say_what_it_needs() {
+        let groups = groups();
+        let rows = &groups[3].rows;
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.label.as_str())
+                .collect::<Vec<&str>>(),
+            ["nerd", "unicode"]
+        );
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.set.expect("an icon row names its set"))
+                .collect::<Vec<IconSet>>(),
+            IconSet::ALL.to_vec()
         );
     }
 
@@ -1003,11 +1083,16 @@ mod tests {
                 .iter()
                 .map(|group| group.rows.len())
                 .collect::<Vec<_>>(),
-            [Preset::ALL.len(), keys::BINDINGS.len(), Tab::ALL.len()]
+            [
+                Preset::ALL.len(),
+                keys::BINDINGS.len(),
+                Tab::ALL.len(),
+                IconSet::ALL.len()
+            ]
         );
         assert_eq!(
             row_ids().len(),
-            Preset::ALL.len() + keys::BINDINGS.len() + Tab::ALL.len()
+            Preset::ALL.len() + keys::BINDINGS.len() + Tab::ALL.len() + IconSet::ALL.len()
         );
         // The empty state is gone: the tab has no state to be empty.
         let text = inner(&draw(&theme(), 100, 40)).join("\n");
@@ -1021,6 +1106,7 @@ mod tests {
             ("theme", Preset::ALL.len()),
             ("keys", keys::BINDINGS.len()),
             ("sort", Tab::ALL.len()),
+            ("icons", IconSet::ALL.len()),
         ] {
             assert!(
                 text.contains(&format!("{name} · {count}")),
@@ -1046,6 +1132,32 @@ mod tests {
             for other in Preset::ALL {
                 assert!(text.contains(other.label()), "{}", other.name());
             }
+        }
+    }
+
+    #[test]
+    fn every_icon_set_marks_its_own_row_exactly_once() {
+        let groups = groups();
+        for set in IconSet::ALL {
+            let says = groups[3]
+                .rows
+                .iter()
+                .find(|row| row.set == Some(set))
+                .map(|row| row.says.as_str())
+                .expect("a row for the set");
+            let (lines, _, _, _) = window(&groups, 98, 40, &theme(), set, None, 0);
+            let text = text_of(&lines);
+            let marked: Vec<&str> = text
+                .lines()
+                .filter(|line| line.contains('●') && line.contains(says))
+                .collect();
+            assert_eq!(marked.len(), 1, "{}: {text}", set.name());
+            assert!(
+                marked[0].contains(set.name()),
+                "{}: {}",
+                set.name(),
+                marked[0]
+            );
         }
     }
 
@@ -1078,7 +1190,8 @@ mod tests {
         for width in 10..=40usize {
             for height in [2usize, 5, 8, 12, 30] {
                 for first in [0usize, 3, 10, 26, 32] {
-                    let (lines, _, _, _) = window(&groups, width, height, &theme, None, first);
+                    let (lines, _, _, _) =
+                        window(&groups, width, height, &theme, IconSet::Nerd, None, first);
                     let texts: Vec<String> = lines
                         .iter()
                         .map(|line| {
@@ -1178,7 +1291,7 @@ mod tests {
     #[test]
     fn the_announcement_never_shows_a_count_without_its_group() {
         let theme = theme();
-        let (rows, cut) = announcement(&[5, 18, 5], 60, 2, &theme);
+        let (rows, cut) = announcement(&[5, 18, 5, 2], 60, 2, &theme);
         assert!(!cut, "the announcement does not fit two rows");
         let text = said_text(&rows);
         for kind in GroupKind::ALL {
@@ -1187,10 +1300,11 @@ mod tests {
         assert!(text.contains("theme (5 hidden)"), "{text}");
         assert!(text.contains("keys (18 hidden)"), "{text}");
         assert!(text.contains("sort (5 hidden)"), "{text}");
+        assert!(text.contains("icons (2 hidden)"), "{text}");
         assert!(!text.contains("not shown: 28"), "{text}");
         // A pane with a row to spare still names the groups: the compact
         // shape is not a bare total either.
-        let (rows, cut) = announcement(&[5, 18, 5], 60, 1, &theme);
+        let (rows, cut) = announcement(&[5, 18, 5, 2], 60, 1, &theme);
         assert!(!cut, "the compact announcement does not fit one row");
         let text = said_text(&rows);
         for kind in GroupKind::ALL {
@@ -1217,7 +1331,15 @@ mod tests {
         // The window starts in the middle of the keys group: the rows are
         // not shown without the name of the group above them.
         let groups = groups();
-        let (rows, shown, _) = layout(&groups, 10, 6, 98, metrics(&groups), &theme(), None);
+        let (rows, shown, _) = layout(
+            &groups,
+            10,
+            6,
+            98,
+            metrics(&groups, IconSet::Nerd),
+            &theme(),
+            None,
+        );
         let text = text_of(&rows);
         assert!(text.starts_with("  keys · 23"), "{text}");
         assert!(!text.contains("theme · 5"), "{text}");
@@ -1229,7 +1351,7 @@ mod tests {
         // The window starts at the end of the keys group. What is above it
         // is counted too, by the group it belongs to.
         let groups = groups();
-        let (rows, _, _, _) = window(&groups, 98, 10, &theme(), None, 26);
+        let (rows, _, _, _) = window(&groups, 98, 10, &theme(), IconSet::Nerd, None, 26);
         let text = text_of(&rows);
         assert!(text.contains("theme (5 hidden)"), "{text}");
         assert!(text.contains("keys (21 hidden)"), "{text}");
@@ -1287,7 +1409,14 @@ mod tests {
         let mut view = View::default();
         terminal
             .draw(|frame| {
-                render_view(frame, frame.area(), theme, selected, &mut view);
+                render_view(
+                    frame,
+                    frame.area(),
+                    theme,
+                    IconSet::Nerd,
+                    selected,
+                    &mut view,
+                );
             })
             .expect("drawing the settings tab");
         let buffer = terminal.backend().buffer();

@@ -8,15 +8,16 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 
 use coding_crew_core::{Item, ItemKind, ItemStatus, Status, Task};
 
 use crate::data::Work;
 use crate::tabs::Tab;
 use crate::view::View;
+use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, pad, text_width};
-use coding_crew_theme::{Theme, block_title_style, phase_style, selected_line};
+use coding_crew_theme::{Icon, IconSet, Theme, phase_style, selected_line};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -180,7 +181,7 @@ fn scope_text(scope: &[String]) -> Option<String> {
 #[cfg(test)]
 pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, selected: Option<&str>) {
     let mut view = View::default();
-    render_view(frame, area, work, theme, selected, &mut view);
+    render_view(frame, area, work, theme, IconSet::Nerd, selected, &mut view);
 }
 
 /// Draw the tab through the window the keys move.
@@ -193,13 +194,11 @@ pub fn render_view(
     area: Rect,
     work: &Work,
     theme: &Theme,
+    icons: IconSet,
     selected: Option<&str>,
     view: &mut View,
 ) -> Option<usize> {
-    let block = Block::bordered()
-        .title("backlog")
-        .title_style(block_title_style(theme))
-        .border_style(theme.chrome.border);
+    let block = chrome::pane("backlog", Icon::TabBacklog, icons, false, theme);
     if let Some(missing) = work.missing {
         frame.render_widget(
             Paragraph::new(vec![

@@ -18,6 +18,9 @@ mod support;
 /// The work folder, relative to the repository root.
 const WORK: &str = "mock-data/coding-crew/work";
 
+/// The variable that names the icon set when no flag does.
+const ICONS_ENV: &str = "CODING_CREW_ICONS";
+
 /// A fresh project folder holding a `work` folder with the duplicate-id
 /// files, written in `order`. The project folder is the working directory of
 /// a render, so every case names the same relative work folder.
@@ -69,6 +72,9 @@ fn run(args: &[&str]) -> Output {
 fn run_in(dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_raul"))
         .current_dir(dir)
+        // The variable names a set only when no flag does: a developer's own
+        // choice must not change a snapshot that is recorded in nerd.
+        .env_remove(ICONS_ENV)
         .args(args)
         .output()
         .expect("running raul")
@@ -590,6 +596,28 @@ fn assert_overview_at(width: u16, name: &str) {
             "row {number} is {measured} columns wide, not at most {width}: {line:?}"
         );
     }
+}
+
+#[test]
+fn a_flag_names_the_icon_set_over_the_environment() {
+    // A developer who exports the unicode set still gets the nerd snapshot
+    // when the command names nerd: the flag wins over the variable.
+    let output = Command::new(env!("CARGO_BIN_EXE_raul"))
+        .current_dir(repo_root())
+        .env(ICONS_ENV, "unicode")
+        .args([
+            "--render", "--plain", "--icons", "nerd", "--width", "100", "--height", "40", WORK,
+        ])
+        .output()
+        .expect("running raul");
+    assert!(output.status.success(), "raul failed: {output:?}");
+    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    let snapshot =
+        fs::read_to_string(snapshot_path("overview.txt")).expect("the overview snapshot");
+    assert_eq!(
+        text, snapshot,
+        "a render that names nerd differs from overview.txt under {ICONS_ENV}=unicode"
+    );
 }
 
 #[test]

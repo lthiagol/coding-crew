@@ -171,13 +171,15 @@ mod tests {
         let doc = include_str!("../../../docs/tui/screens.md");
         let labels: Vec<&str> = Tab::ALL.iter().map(|tab| tab.label()).collect();
 
-        // The sketch draws the same tabs in the same order, three spaces
-        // apart, as the bar does.
-        assert_eq!(
-            sketch_bar(doc),
-            labels.join("   "),
-            "the window sketch's tab bar disagrees with the code"
-        );
+        // The sketch draws the same tabs in the same order as the bar does,
+        // each with its icon, and the counts of the two that carry one.
+        let mut rest = sketch_bar(doc);
+        for label in &labels {
+            let (_, after) = rest
+                .split_once(label)
+                .unwrap_or_else(|| panic!("the window sketch has no {label}"));
+            rest = after.to_string();
+        }
 
         // The tab table has one row per tab, in the same order.
         assert_eq!(

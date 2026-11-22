@@ -30,6 +30,7 @@ state=${FAKE_STATE_DIR:?FAKE_STATE_DIR not set}
 width=""
 height=""
 work=""
+icons=""
 while (($#)); do
   case "$1" in
     --render | --plain)
@@ -43,6 +44,10 @@ while (($#)); do
       height=${2:-}
       shift 2
       ;;
+    --icons)
+      icons=${2:-}
+      shift 2
+      ;;
     --*)
       printf 'fake raul: unknown option %s\n' "$1" >&2
       exit 2
@@ -54,6 +59,7 @@ while (($#)); do
   esac
 done
 printf '%s|%s|%s\n' "$width" "$height" "$work" >>"$state/calls"
+printf '%s|%s\n' "$icons" "${CODING_CREW_ICONS-unset}" >>"$state/icon-calls"
 
 if [[ -n ${FAKE_HANG_WIDTH:-} && $width == "$FAKE_HANG_WIDTH" ]]; then
   exec sleep 60
@@ -116,6 +122,7 @@ new_case() {
   export FAKE_STATE_DIR
   unset FAKE_FAIL_WIDTH FAKE_SHORT_WIDTH FAKE_OVERFLOW_WIDTH FAKE_HANG_WIDTH
   unset FAKE_WIDE_WIDTH FAKE_COMBINING_WIDTH FAKE_CLUSTER_WIDTH
+  unset CODING_CREW_ICONS
   # The default output folder is a fresh one under TMPDIR; keep it inside the
   # case so the suite's own trap removes it.
   export TMPDIR="$FAKE_STATE_DIR/tmp"
@@ -222,8 +229,30 @@ expect_count 0 "$(awk 'length($0) != 40 { count++ } END { print count + 0 }' "$O
 expect_count 81 "$(wc -l <"$FAKE_STATE_DIR/calls")" "one call per width"
 expect_line "$FAKE_STATE_DIR/calls" 1 '40|40|mock-data/coding-crew/work' "first call"
 expect_line "$FAKE_STATE_DIR/calls" 81 '120|40|mock-data/coding-crew/work' "last call"
+expect_count 81 "$(grep -c '^nerd|unset$' "$FAKE_STATE_DIR/icon-calls")" "default renders name the nerd set"
 # The folder is reported, not cleaned: it still holds the files above.
 expect_exists "$OUT" "output folder is kept"
+
+# 1a. The icon set is passed to every render, and the sweep runs the render
+# without the environment's choice: a developer's export cannot change it.
+new_case
+export CODING_CREW_ICONS=unicode
+run_sweep --raul "$BIN/raul" --icons unicode --work work
+expect_rc 0 "unicode set"
+expect_count 81 "$(grep -c '^unicode|unset$' "$FAKE_STATE_DIR/icon-calls")" "every render names the unicode set and clears the environment"
+expect_count 0 "$(grep -vc '^unicode|unset$' "$FAKE_STATE_DIR/icon-calls")" "no render keeps the environment's set"
+
+new_case
+export CODING_CREW_ICONS=unicode
+run_sweep --raul "$BIN/raul" --work work
+expect_rc 0 "default set under an exported environment"
+expect_count 81 "$(grep -c '^nerd|unset$' "$FAKE_STATE_DIR/icon-calls")" "the default names nerd and clears the environment"
+
+new_case
+run_sweep --raul "$BIN/raul" --icons emoji --work work
+expect_rc 2 "unknown icon set"
+expect_contains "$STDERR" "invalid choice: 'emoji'" "unknown icon set is named"
+expect_missing "$FAKE_STATE_DIR/calls" "unknown icon set runs no render"
 
 # 2. An explicit --out is used, created with its parents, and a --height is
 # passed through.
@@ -349,6 +378,7 @@ new_case
 run_sweep --help
 expect_rc 0 "help"
 expect_contains "$STDOUT" '40 to 120' "help names the range"
+expect_contains "$STDOUT" '--icons' "help names the icons flag"
 expect_contains "$STDOUT" '--work' "help names the work flag"
 expect_contains "$STDOUT" '--out' "help names the output flag"
 expect_contains "$STDOUT" '--timeout' "help names the timeout flag"

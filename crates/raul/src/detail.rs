@@ -20,7 +20,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph};
+use ratatui::widgets::{Block, BorderType, Clear, Paragraph};
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 
@@ -33,7 +33,7 @@ use crate::app::footer_line;
 use crate::data::Work;
 use crate::tabs::Tab;
 use coding_crew_theme::text::{cut_to, text_width};
-use coding_crew_theme::{Theme, block_title_style};
+use coding_crew_theme::{Icon, IconSet, Theme, block_title_style, phase_style};
 
 /// The syntect assets, loaded once per process.
 ///
@@ -121,14 +121,24 @@ fn clamp_scroll(offset: isize) -> u16 {
 }
 
 /// Draw the pane over the whole window.
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, detail: &mut Detail, theme: &Theme) {
+pub fn render(
+    frame: &mut Frame,
+    area: Rect,
+    work: &Work,
+    detail: &mut Detail,
+    icons: IconSet,
+    theme: &Theme,
+) {
     let rows = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(area);
     let width = usize::from(rows[0].width).saturating_sub(2);
     // The pane covers the whole window: what is under it is not on
     // display, and nothing of it shows through.
     frame.render_widget(Clear, area);
+    // The pane is a rounded block like the others; its title is the
+    // record's status icon, then its id and title, cut as one line.
     let block = Block::bordered()
-        .title(header_labels(detail, work, width, theme))
+        .border_type(BorderType::Rounded)
+        .title(header_labels(detail, work, width, icons, theme))
         .border_style(theme.chrome.border_focus);
     let lines = document_lines(work, detail, width, theme);
     // The scroll is clamped to the document, and the page is what the pane
@@ -200,12 +210,27 @@ fn document_lines(work: &Work, detail: &Detail, width: usize, theme: &Theme) -> 
 /// by the projection's own rule. The title is `text.strong` — a title that
 /// matters. The labels are cut on grapheme boundaries: a long title is
 /// never cut through a grapheme, and a cut title is never shown as if it
-/// were the whole one.
-fn header_labels(detail: &Detail, work: &Work, width: usize, theme: &Theme) -> Line<'static> {
-    let mut labels = vec![
-        Span::raw(" "),
-        Span::styled(escape_literal(&detail.id), theme.text.normal),
-    ];
+/// were the whole one. The title leads with a rule after the corner, as every
+/// pane's does: `╭─ icon id · title`.
+fn header_labels(
+    detail: &Detail,
+    work: &Work,
+    width: usize,
+    icons: IconSet,
+    theme: &Theme,
+) -> Line<'static> {
+    let mut labels = vec![Span::styled("─", theme.chrome.border_focus), Span::raw(" ")];
+    if let Some(task) = work.task(&detail.id)
+        && let Some(icon) = Icon::for_status(task.status.as_str())
+    {
+        // The icon takes the phase's slot, as the status word does.
+        labels.push(Span::styled(
+            icon.glyph(icons).to_string(),
+            phase_style(theme, task.status),
+        ));
+        labels.push(Span::raw(" "));
+    }
+    labels.push(Span::styled(escape_literal(&detail.id), theme.text.normal));
     if let Some(title) = work.record_title(&detail.id) {
         labels.push(Span::styled(" · ".to_string(), theme.text.dim));
         labels.push(Span::styled(
@@ -653,12 +678,21 @@ mod tests {
         // and the cut says so. The check can fail: a pass-through cut
         // would show the whole title at a width that cannot hold it.
         let work = titled_work(&"x".repeat(300));
-        let line = header_labels(&pane("TSK01"), &work, 98, &theme());
-        assert!(line.width() <= 98, "{line:?}");
+        let line = header_labels(&pane("TSK01"), &work, 98, IconSet::Nerd, &theme());
+        assert_eq!(line.width(), 98, "{line:?}");
         let (rows, _) = draw(&work, &pane("TSK01"), 100, 40);
         let header = &rows[0];
         assert!(header.contains('…'), "{header:?}");
         assert!(!header.contains(&"x".repeat(300)), "{header:?}");
+    }
+
+    #[test]
+    fn the_title_leads_with_a_rule_after_the_corner_as_a_pane_does() {
+        // The overlay's title has the shape of every pane's: `╭─ icon id`.
+        // The check can fail: the old shape reads `╭ icon id`.
+        let work = titled_work("a title");
+        let (rows, _) = draw(&work, &pane("TSK01"), 100, 40);
+        assert!(rows[0].starts_with("╭─ "), "{:?}", rows[0]);
     }
 
     #[test]

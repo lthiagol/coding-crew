@@ -17,6 +17,7 @@ pub const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦"
 
 /// A pane: a rounded block with its title in the top border, beside its icon.
 ///
+/// The title follows a rule segment after the corner: `╭─ icon title ───╮`.
 /// The border is `chrome.border`, or `chrome.border_focus` when the pane has
 /// focus. The title is `text.strong`, as every block's title is.
 pub fn pane(title: &str, icon: Icon, set: IconSet, focused: bool, theme: &Theme) -> Block<'static> {
@@ -25,10 +26,13 @@ pub fn pane(title: &str, icon: Icon, set: IconSet, focused: bool, theme: &Theme)
     } else {
         theme.chrome.border
     };
-    let heading = Line::from(Span::styled(
-        format!(" {} {title} ", icon.glyph(set)),
-        block_title_style(theme),
-    ));
+    let heading = Line::from(vec![
+        Span::styled("─", border),
+        Span::styled(
+            format!(" {} {title} ", icon.glyph(set)),
+            block_title_style(theme),
+        ),
+    ]);
     Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(border)
@@ -121,6 +125,17 @@ mod tests {
         assert!(top.contains(" ◆ raul "), "{top:?}");
         assert_eq!(buffer[(0, 2)].symbol(), "╰");
         assert_eq!(Some(buffer[(0, 0)].fg), theme.chrome.border.fg);
+    }
+
+    #[test]
+    fn a_pane_title_follows_a_rule_after_the_corner() {
+        let theme = theme();
+        let area = Rect::new(0, 0, 20, 3);
+        let mut buffer = Buffer::empty(area);
+        pane("raul", Icon::AppRaul, IconSet::Unicode, false, &theme).render(area, &mut buffer);
+        let top = row(&buffer, 0);
+        assert!(top.starts_with("╭─ ◆ raul "), "{top:?}");
+        assert_eq!(Some(buffer[(1, 0)].fg), theme.chrome.border.fg);
     }
 
     #[test]

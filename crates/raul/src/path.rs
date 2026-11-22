@@ -10,7 +10,7 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 
 use coding_crew_core::{Status, Task};
 
@@ -18,8 +18,9 @@ use crate::data::{Work, has_overlay, live_claim};
 use crate::review_state::{self, Part};
 use crate::tabs::Tab;
 use crate::view::View;
+use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, first_grapheme, head_to, text_width};
-use coding_crew_theme::{Theme, block_title_style, phase_style, selected_line};
+use coding_crew_theme::{Icon, IconSet, Theme, phase_style, selected_line};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -352,19 +353,18 @@ pub fn row_ids(work: &Work, now: &str) -> Vec<String> {
 /// paint. Every other row keeps its own. The window is settled so the cursor
 /// is on a row the pane shows. `now` is the frame's instant: the cursor's
 /// rows and the drawn tree answer from the same one.
+#[allow(clippy::too_many_arguments)]
 pub fn render_view(
     frame: &mut Frame,
     area: Rect,
     work: &Work,
     theme: &Theme,
+    icons: IconSet,
     selected: Option<&str>,
     view: &mut View,
     now: &str,
 ) -> Option<usize> {
-    let block = Block::bordered()
-        .title("path tree")
-        .title_style(block_title_style(theme))
-        .border_style(theme.chrome.border);
+    let block = chrome::pane("path tree", Icon::TabPath, icons, false, theme);
     if let Some(missing) = work.missing {
         frame.render_widget(
             Paragraph::new(vec![
@@ -1318,7 +1318,16 @@ mod tests {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
             .draw(|frame| {
-                render_view(frame, frame.area(), work, &theme(), None, view, now);
+                render_view(
+                    frame,
+                    frame.area(),
+                    work,
+                    &theme(),
+                    IconSet::Nerd,
+                    None,
+                    view,
+                    now,
+                );
             })
             .expect("drawing the path");
         let buffer = terminal.backend().buffer();
@@ -2101,7 +2110,16 @@ mod tests {
         let mut view = View::default();
         terminal
             .draw(|frame| {
-                render_view(frame, frame.area(), work, &theme(), None, &mut view, now());
+                render_view(
+                    frame,
+                    frame.area(),
+                    work,
+                    &theme(),
+                    IconSet::Nerd,
+                    None,
+                    &mut view,
+                    now(),
+                );
             })
             .expect("drawing the path");
         let buffer = terminal.backend().buffer();

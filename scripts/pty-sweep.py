@@ -3,12 +3,14 @@
 
 For every width from 40 to 120 the sweep runs
 
-    raul --render --plain --width W --height H [work-folder]
+    raul --render --plain --icons SET --width W --height H [work-folder]
 
-and writes the output to `<out>/<W>.txt`. It measures every line in terminal
-columns — per grapheme cluster, so a joined emoji counts once — and a line
-wider than W fails the command, naming the width, the line number and the
-measured length. The rules live in `terminal-columns.txt` beside this file,
+and writes the output to `<out>/<W>.txt`. The icon set is named on every
+render, and the child's environment leaves out `CODING_CREW_ICONS`, so a
+developer's own choice cannot change what the sweep measures. It measures
+every line in terminal columns — per grapheme cluster, so a joined emoji
+counts once — and a line wider than W fails the command, naming the width,
+the line number and the measured length. The rules live in `terminal-columns.txt` beside this file,
 which the Rust width check reads too. A render that does not finish within
 `--timeout` seconds fails too, so a hung raul cannot stall the gate.
 
@@ -18,11 +20,12 @@ defaults to a fresh folder under the system temporary directory.
 Run from the repository root:
 
     python3 scripts/pty-sweep.py --raul target/debug/raul \
-        --work mock-data/coding-crew/work
+        --work mock-data/coding-crew/work --icons unicode
 """
 
 import argparse
 import bisect
+import os
 import subprocess
 import sys
 import tempfile
@@ -43,6 +46,13 @@ MAX_DIMENSION = 1000
 # A render is a bounded process: a hung one fails the sweep instead of
 # stalling the gate.
 DEFAULT_TIMEOUT = 30
+
+# The icon sets raul draws, and the set a render names when none is given
+# (crates/theme/src/icons.rs). The variable that would name a set instead of
+# the flag is left out of every render's environment.
+ICON_SETS = ("nerd", "unicode")
+DEFAULT_ICONS = "nerd"
+ICON_ENV = "CODING_CREW_ICONS"
 
 # The one table of terminal-column rules, read here and by
 # crates/raul/tests/render_plain.rs. Neither measure carries its own rules.
@@ -302,6 +312,12 @@ def parse_args(argv):
         help=f"the rows of each render (default: {DEFAULT_HEIGHT})",
     )
     parser.add_argument(
+        "--icons",
+        choices=ICON_SETS,
+        default=DEFAULT_ICONS,
+        help=f"the icon set each render draws with (default: {DEFAULT_ICONS})",
+    )
+    parser.add_argument(
         "--out",
         metavar="DIR",
         help="where to write one file per width (default: a fresh temp folder)",
@@ -337,11 +353,16 @@ def rows_of(text):
 def sweep(args, out, table):
     """Run every width; return one `(width, message)` pair per failure."""
     failures = []
+    environment = {
+        name: value for name, value in os.environ.items() if name != ICON_ENV
+    }
     for width in range(FIRST_WIDTH, LAST_WIDTH + 1):
         command = [
             args.raul,
             "--render",
             "--plain",
+            "--icons",
+            args.icons,
             "--width",
             str(width),
             "--height",
@@ -356,6 +377,7 @@ def sweep(args, out, table):
                 stderr=subprocess.PIPE,
                 check=False,
                 timeout=args.timeout,
+                env=environment,
             )
         except subprocess.TimeoutExpired:
             (out / f"{width}.txt").write_bytes(b"")

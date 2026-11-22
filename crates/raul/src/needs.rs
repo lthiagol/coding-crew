@@ -11,7 +11,7 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 
 use coding_crew_core::{Task, age_text, parse_rfc3339};
 
@@ -19,8 +19,9 @@ use crate::data::{Reason, Work};
 use crate::review_state::{self, Part};
 use crate::tabs::Tab;
 use crate::view::View;
+use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, pad};
-use coding_crew_theme::{Theme, block_title_style, reason_style, selected_line};
+use coding_crew_theme::{Icon, IconSet, Theme, reason_style, selected_line};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -70,19 +71,18 @@ pub struct Group {
 /// `selected` is the row the cursor is on: its cells take the selection's
 /// paint. Every other row keeps its own. The window is settled so the cursor
 /// is on a row the pane shows.
+#[allow(clippy::too_many_arguments)]
 pub fn render_view(
     frame: &mut Frame,
     area: Rect,
     work: &Work,
     theme: &Theme,
+    icons: IconSet,
     selected: Option<&str>,
     view: &mut View,
     now: &str,
 ) -> Option<usize> {
-    let block = Block::bordered()
-        .title("needs you")
-        .title_style(block_title_style(theme))
-        .border_style(theme.chrome.border);
+    let block = chrome::pane("needs you", Icon::TabNeeds, icons, false, theme);
     if let Some(missing) = work.missing {
         frame.render_widget(
             Paragraph::new(vec![
@@ -1113,7 +1113,16 @@ mod tests {
         let mut view = View::default();
         terminal
             .draw(|frame| {
-                render_view(frame, frame.area(), work, &theme(), None, &mut view, now());
+                render_view(
+                    frame,
+                    frame.area(),
+                    work,
+                    &theme(),
+                    IconSet::Nerd,
+                    None,
+                    &mut view,
+                    now(),
+                );
             })
             .expect("drawing the needs you tab");
         let buffer = terminal.backend().buffer();
@@ -1133,7 +1142,16 @@ mod tests {
         let mut view = View::default();
         terminal
             .draw(|frame| {
-                render_view(frame, frame.area(), work, &theme(), None, &mut view, now());
+                render_view(
+                    frame,
+                    frame.area(),
+                    work,
+                    &theme(),
+                    IconSet::Nerd,
+                    None,
+                    &mut view,
+                    now(),
+                );
             })
             .expect("drawing the needs you tab");
         let buffer = terminal.backend().buffer();
@@ -1969,6 +1987,7 @@ mod tests {
                             frame.area(),
                             &work,
                             &Theme::preset(preset),
+                            IconSet::Nerd,
                             None,
                             &mut view,
                             now(),

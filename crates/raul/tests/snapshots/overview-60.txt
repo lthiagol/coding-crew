@@ -1,30 +1,31 @@
- coding-crew                      mock-data/coding-crew/work
- Overview   Needs you   Path   Backlog   Settings
-┌counts──────────────────────┐┌needs you───────────────────┐
+ 󰙅 coding-crew · mock-data/coding-crew/work
+ ‹ 󰕮 Overview ›
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔────────────────────────────────────────────
+╭─ 󰕮 counts ─────────────────╮╭─ 󰂚 needs you ──────────────╮
 │30 tasks by status          ││8 tasks wait on a human     │
 │draft       6 groomed     3 ││approve     2               │
 │approved    4 executing   3 ││review      3               │
 │code-review 3 remediating 3 ││escalated   3               │
-│needs-human 3 done        5 │└────────────────────────────┘
-└────────────────────────────┘┌claimable───────────────────┐
-┌smaller tasks───────────────┐│1 task an agent could claim │
+│needs-human 3 done        5 │╰────────────────────────────╯
+╰────────────────────────────╯╭─ 󰄲 claimable ──────────────╮
+╭─ 󰚇 smaller tasks ──────────╮│1 task an agent could claim │
 │smaller tasks by kind       ││right now                   │
 │idea        1               ││approved, free, dependencies│
 │feature     2               ││done                        │
-│bug         2               │└────────────────────────────┘
-└────────────────────────────┘┌activity────────────────────┐
+│bug         2               │╰────────────────────────────╯
+╰────────────────────────────╯╭─ 󰥔 activity ───────────────╮
                               │+153 earlier events         │
                               │2026-11-16T09:30Z remediate…│
                               │2026-11-16T10:00Z finding_r…│
                               │2026-11-16T10:00Z escalated │
                               │2026-11-16T12:00Z approved …│
                               │2026-11-16T12:00Z commented │
-                              └────────────────────────────┘
-                              ┌next────────────────────────┐
+                              ╰────────────────────────────╯
+                              ╭─ 󰘬 next ───────────────────╮
                               │TSK29 The fixtures keep     │
                               │their gates                 │
                               │the first task of the path  │
-                              └────────────────────────────┘
+                              ╰────────────────────────────╯
 
 
 
@@ -36,5 +37,4 @@
 
 
 
-
- q  quit    1-5  tab    ←→  switch tab    ?  help
+ q  quit   1-5  tab   ←→  switch tab   ?  help

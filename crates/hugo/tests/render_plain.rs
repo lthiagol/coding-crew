@@ -44,6 +44,8 @@ fn run_in(dir: &Path, home: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_hugo"))
         .current_dir(dir)
         .env("HOME", home)
+        // A developer's icon set must not change these renders.
+        .env_remove("CODING_CREW_ICONS")
         .args(args)
         .output()
         .expect("running hugo")

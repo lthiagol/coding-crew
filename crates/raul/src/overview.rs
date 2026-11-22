@@ -6,13 +6,14 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 
 use coding_crew_core::{ActivityEvent, Status};
 
 use crate::data::{Missing, Reason, Work};
+use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, head_to, text_width};
-use coding_crew_theme::{Theme, block_title_style, phase_style, reason_style};
+use coding_crew_theme::{Icon, IconSet, Theme, phase_style, reason_style};
 
 /// Below this width the blocks are stacked in one column.
 const NARROW: u16 = 58;
@@ -30,24 +31,38 @@ const JOURNAL_UNREADABLE: &str = "the journal cannot be read";
 /// `now` is the frame's instant: the claimable count, the summary line and
 /// the next task all answer from it, so one screen cannot draw a count and
 /// a next task from two clocks.
-pub fn render(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, now: &str) {
+pub fn render(
+    frame: &mut Frame,
+    area: Rect,
+    work: &Work,
+    theme: &Theme,
+    icons: IconSet,
+    now: &str,
+) {
     if let Some(missing) = work.missing {
-        render_missing(frame, area, work, missing, theme);
+        render_missing(frame, area, work, missing, icons, theme);
         return;
     }
     if work.is_empty() {
-        render_empty(frame, area, work, theme);
+        render_empty(frame, area, work, icons, theme);
         return;
     }
     if area.width < NARROW {
-        render_stacked(frame, area, work, theme, now);
+        render_stacked(frame, area, work, icons, theme, now);
     } else {
-        render_wide(frame, area, work, theme, now);
+        render_wide(frame, area, work, icons, theme, now);
     }
 }
 
 /// There is no work folder.
-fn render_missing(frame: &mut Frame, area: Rect, work: &Work, missing: Missing, theme: &Theme) {
+fn render_missing(
+    frame: &mut Frame,
+    area: Rect,
+    work: &Work,
+    missing: Missing,
+    icons: IconSet,
+    theme: &Theme,
+) {
     frame.render_widget(
         Paragraph::new(vec![
             Line::from(Span::styled(missing.headline(), theme.semantic.error)),
@@ -57,23 +72,21 @@ fn render_missing(frame: &mut Frame, area: Rect, work: &Work, missing: Missing, 
             )),
         ])
         .wrap(Wrap { trim: true })
-        .block(
-            Block::bordered()
-                .title("overview")
-                .title_style(block_title_style(theme))
-                .border_style(theme.chrome.border),
-        ),
+        .block(chrome::pane(
+            "overview",
+            Icon::TabOverview,
+            icons,
+            false,
+            theme,
+        )),
         area,
     );
 }
 
 /// There is nothing to read — but a file that does not parse still shows.
-fn render_empty(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
+fn render_empty(frame: &mut Frame, area: Rect, work: &Work, icons: IconSet, theme: &Theme) {
     let empty = Paragraph::new(Line::from(Span::styled("no tasks yet", theme.text.dim))).block(
-        Block::bordered()
-            .title("overview")
-            .title_style(block_title_style(theme))
-            .border_style(theme.chrome.border),
+        chrome::pane("overview", Icon::TabOverview, icons, false, theme),
     );
     if work.errors.is_empty() {
         frame.render_widget(
@@ -102,7 +115,7 @@ fn render_empty(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
             },
         );
         frame.render_widget(
-            errors_block(&panel, theme),
+            errors_block(&panel, icons, theme),
             Rect {
                 x: area.x,
                 y: area.y + 3,
@@ -130,7 +143,7 @@ fn render_empty(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
     let height = area.height - empty_rows;
     if height >= needed {
         frame.render_widget(
-            errors_block(&panel, theme),
+            errors_block(&panel, icons, theme),
             Rect {
                 x: area.x,
                 y,
@@ -153,15 +166,10 @@ fn render_empty(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme) {
 }
 
 /// The files that could not be read, in a box.
-fn errors_block(panel: &Panel, theme: &Theme) -> Paragraph<'static> {
+fn errors_block(panel: &Panel, icons: IconSet, theme: &Theme) -> Paragraph<'static> {
     Paragraph::new(panel.lines.clone())
         .wrap(Wrap { trim: true })
-        .block(
-            Block::bordered()
-                .title(panel.title)
-                .title_style(block_title_style(theme))
-                .border_style(theme.chrome.border),
-        )
+        .block(chrome::pane(panel.title, panel.icon, icons, false, theme))
 }
 
 /// The line that names a file that could not be read, when the block does
@@ -180,7 +188,14 @@ fn error_marker(work: &Work, width: u16, theme: &Theme) -> Line<'static> {
 
 /// Two columns: the counts on the left, the numbers that ask for a decision
 /// on the right.
-fn render_wide(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, now: &str) {
+fn render_wide(
+    frame: &mut Frame,
+    area: Rect,
+    work: &Work,
+    icons: IconSet,
+    theme: &Theme,
+    now: &str,
+) {
     let columns =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
     // The unreadable block outranks the kinds: a file that could not be read
@@ -208,12 +223,19 @@ fn render_wide(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, now: &
     let area = summary_area(frame, area, work, fits, theme, now);
     let columns =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
-    draw_panels(frame, columns[0], &left, theme);
-    draw_panels(frame, columns[1], &right, theme);
+    draw_panels(frame, columns[0], &left, icons, theme);
+    draw_panels(frame, columns[1], &right, icons, theme);
 }
 
 /// One column, for a narrow terminal.
-fn render_stacked(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, now: &str) {
+fn render_stacked(
+    frame: &mut Frame,
+    area: Rect,
+    work: &Work,
+    icons: IconSet,
+    theme: &Theme,
+    now: &str,
+) {
     let mut panels = vec![
         needs_you_panel(work, area.width, theme),
         claimable_panel(work, theme, now),
@@ -233,7 +255,7 @@ fn render_stacked(frame: &mut Frame, area: Rect, work: &Work, theme: &Theme, now
     let width = area.width.saturating_sub(BORDER);
     let fits = column_fits(&panels, width, area.height);
     let area = summary_area(frame, area, work, fits, theme, now);
-    draw_panels(frame, area, &panels, theme);
+    draw_panels(frame, area, &panels, icons, theme);
 }
 
 /// The area the blocks get, and the summary line above them.
@@ -354,6 +376,8 @@ fn width_of(spans: &[Span<'_>]) -> usize {
 /// A block of the Overview: a titled box with lines in it.
 struct Panel {
     title: &'static str,
+    /// The icon the title carries.
+    icon: Icon,
     /// The lines it shows when there is room.
     lines: Vec<Line<'static>>,
     /// The lines it shows when there is less room: complete, but denser.
@@ -517,7 +541,7 @@ fn reduce(panel: &Panel, content: &mut u16, width: u16) -> bool {
 }
 
 /// Draw the blocks of a column, top to bottom.
-fn draw_panels(frame: &mut Frame, area: Rect, panels: &[Panel], theme: &Theme) {
+fn draw_panels(frame: &mut Frame, area: Rect, panels: &[Panel], icons: IconSet, theme: &Theme) {
     let width = area.width.saturating_sub(BORDER);
     let content = layout_of(panels, width, area.height);
     let mut y = area.y;
@@ -558,12 +582,9 @@ fn draw_panels(frame: &mut Frame, area: Rect, panels: &[Panel], theme: &Theme) {
         }
         let rows = rows_of(&lines, width);
         frame.render_widget(
-            Paragraph::new(lines).wrap(Wrap { trim: true }).block(
-                Block::bordered()
-                    .title(panel.title)
-                    .title_style(block_title_style(theme))
-                    .border_style(theme.chrome.border),
-            ),
+            Paragraph::new(lines)
+                .wrap(Wrap { trim: true })
+                .block(chrome::pane(panel.title, panel.icon, icons, false, theme)),
             Rect {
                 x: area.x,
                 y,
@@ -660,6 +681,7 @@ fn counts_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
     }
     Panel {
         title: "counts",
+        icon: Icon::TabOverview,
         lines,
         compact: dense,
         // The counts are read together: the dense form is used only when
@@ -781,6 +803,7 @@ fn kinds_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
     }
     Panel {
         title: "smaller tasks",
+        icon: Icon::TabBacklog,
         lines,
         compact: None,
         compact_whole: false,
@@ -854,6 +877,7 @@ fn needs_you_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
     }
     Panel {
         title: "needs you",
+        icon: Icon::TabNeeds,
         lines,
         compact: Some(vec![headline, Line::from(spans)]),
         // The three reasons are read together: the dense form is used only
@@ -906,6 +930,7 @@ fn claimable_panel(work: &Work, theme: &Theme, now: &str) -> Panel {
     ];
     Panel {
         title: "claimable",
+        icon: Icon::StatusApproved,
         lines,
         compact: None,
         compact_whole: false,
@@ -928,6 +953,7 @@ fn activity_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
     if work.activity_unreadable() {
         return Panel {
             title: "activity",
+            icon: Icon::Clock,
             lines: vec![Line::from(Span::styled(
                 JOURNAL_UNREADABLE,
                 theme.text.normal,
@@ -951,6 +977,7 @@ fn activity_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
     if events.is_empty() && unreadable == 0 {
         return Panel {
             title: "activity",
+            icon: Icon::Clock,
             lines: vec![Line::from(Span::styled("no activity yet", theme.text.dim))],
             compact: None,
             compact_whole: false,
@@ -986,6 +1013,7 @@ fn activity_panel(work: &Work, width: u16, theme: &Theme) -> Panel {
     let count = events.len();
     Panel {
         title: "activity",
+        icon: Icon::Clock,
         lines,
         compact: None,
         compact_whole: false,
@@ -1085,6 +1113,7 @@ fn next_panel(work: &Work, theme: &Theme, now: &str) -> Panel {
     };
     Panel {
         title: "next",
+        icon: Icon::TabPath,
         lines,
         compact: None,
         compact_whole: false,
@@ -1111,6 +1140,7 @@ fn errors_panel(work: &Work, theme: &Theme) -> Panel {
         .collect();
     Panel {
         title: "unreadable",
+        icon: Icon::StatusNeedsHuman,
         lines,
         compact: None,
         compact_whole: false,
@@ -1190,7 +1220,7 @@ mod tests {
     fn draw_at(work: &Work, width: u16, height: u16, now: &str) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme(), now))
+            .draw(|frame| render(frame, frame.area(), work, &theme(), IconSet::Nerd, now))
             .expect("drawing the overview");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();
@@ -1207,7 +1237,7 @@ mod tests {
     fn draw_cells(work: &Work, width: u16, height: u16) -> Vec<Vec<(char, Color)>> {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
-            .draw(|frame| render(frame, frame.area(), work, &theme(), now()))
+            .draw(|frame| render(frame, frame.area(), work, &theme(), IconSet::Nerd, now()))
             .expect("drawing the overview");
         let buffer = terminal.backend().buffer();
         let area = *buffer.area();

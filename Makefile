@@ -56,8 +56,9 @@ test-flow: ## Run the flow skill's suites when the skill is installed
 	fi
 
 .PHONY: sweep
-sweep: build-raul ## Sweep the plain render at every width from 40 to 120
-	python3 scripts/pty-sweep.py --raul $(CARGO_TARGET_DIR)/debug/raul --work mock-data/coding-crew/work
+sweep: build-raul ## Sweep the plain render at every width from 40 to 120, in both icon sets
+	python3 scripts/pty-sweep.py --raul $(CARGO_TARGET_DIR)/debug/raul --work mock-data/coding-crew/work --icons nerd
+	python3 scripts/pty-sweep.py --raul $(CARGO_TARGET_DIR)/debug/raul --work mock-data/coding-crew/work --icons unicode
 
 .PHONY: fmt fmt-check
 fmt: ## Format the code

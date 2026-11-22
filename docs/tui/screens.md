@@ -10,23 +10,25 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 ## The window
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│ Overview   Needs you   Path   Backlog   Settings               │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  content pane — rows of the active tab                         │
-│                                                                │
-├────────────────────────────────────────────────────────────────┤
-│ q quit   tab next   enter open   ? help                         │
-└────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│ ◆ coding-crew · ~/projects/app                                     │
+│  ▦ Overview   ◉ Needs you 8   ⑂ Path   ≡ Backlog 11   ⚙ Settings   │
+│─▔▔▔▔▔▔▔▔▔▔▔▔───────────────────────────────────────────────────────│
+│                                                                    │
+│  content pane — rows of the active tab                             │
+│                                                                    │
+├────────────────────────────────────────────────────────────────────┤
+│ q  quit   1-5  tab   enter  open   ?  help                         │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 | part | behaviour |
 |---|---|
-| tab bar | the five tabs; `1`–`5`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` |
+| header | the app's icon and name, a dim `·`, then the folder the tool reads |
+| tab bar | the five tabs, each its icon and name; `Needs you` and `Backlog` carry their counts as badges; the active tab is bold and underlined by a `▔` on the rule under the bar; `1`–`5`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` |
 | content pane | the active tab's rows; `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` |
 | detail pane | `enter` on a row opens the task as a full-screen overlay; `esc` returns to the tab and the selection it came from, and `enter` again reopens |
-| footer | contextual keys for the active tab — never a key that does nothing. When the content pane has no room for the hidden-rows announcement, the footer carries that count beside the keys, and the content pane says nothing about it — the same fact is never painted twice |
+| footer | contextual keys for the active tab, as key chips — never a key that does nothing. When the content pane has no room for the hidden-rows announcement, the footer carries that count beside the keys, and the content pane says nothing about it — the same fact is never painted twice |
 | quit | `q` quits, and `esc` quits too — in the window. `esc` in the detail pane returns to the tab instead |
 
 The detail pane is not a tab: it is the same task seen close up, and it opens
@@ -170,7 +172,7 @@ could be worked. The grouping is derived from the kind; it is never stored.
 
 ### Settings
 
-What the tool is doing, in one list — three groups, all derived, none stored,
+What the tool is doing, in one list — four groups, all derived, none stored,
 in this order.
 
 | group | rows |
@@ -178,6 +180,7 @@ in this order.
 | theme | one row per preset in the theme crate's `Preset::ALL`, so a new preset appears here without raul knowing it; the theme in use is marked, and exactly one row is; each row says what the theme is — a palette, or the terminal's own colours |
 | keys | one row per binding in raul's key table — the window's keys (quit, help, the tab keys), the row keys (the movement keys, opening a task) and the detail pane's keys (the scroll keys, and the key that returns) — so the list and the input handling are one table, and a key handled but not listed, or listed but not handled, fails the gate; the keys the tool no longer has are not listed |
 | sort | one row per tab, naming in words what comes first and the order the tab keeps; the order and the words come from the tab's own sort, so a tab sorted another way says so; the Overview has no sort and says so, and the detail pane is not a tab and has no row |
+| icons | one row per icon set, `nerd` and `unicode`; the set in force is marked, as the theme in force is, and exactly one row is; each row says what the set needs |
 
 The rows are a list with a cursor: the tab scrolls when its rows are taller
 than the pane, and the cursor is never on a row the pane does not draw — the
