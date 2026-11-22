@@ -257,7 +257,7 @@
     {
       "id": "NOTE-01",
       "author": "reviewer-05",
-      "body": "The budget is spent and the loop stops here: a human decides the next move.",
+      "body": "The budget is spent and the loop stops here: a human decides the next move.\n\nA finding keeps its id, such as `FIND-01`, across the rounds that name it. It travels the loop the Review section draws:\n\n```mermaid\nflowchart TD\n    A[Round raises a finding] --> B{Fixed in the next round?}\n    B -->|yes| C[Resolved, listed under its round]\n    B -->|no| D[Carried into the next round]\n    D --> A\n```\n",
       "at": "2026-11-15T12:00Z"
     }
   ],

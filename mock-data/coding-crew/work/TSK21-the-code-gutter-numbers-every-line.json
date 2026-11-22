@@ -253,7 +253,7 @@
     {
       "id": "NOTE-01",
       "author": "reviewer-05",
-      "body": "The budget is spent and the loop stops here: a human decides the next move.",
+      "body": "The budget is spent and the loop stops here: a human decides the next move.\n\n> [!WARNING]\n> The gutter counts a wrapped row as a line, so a block's numbers stop matching the source past the first wrap.\n\nThe width the gutter takes is the digits of the last line, plus two cells of padding:\n\n```python\ndef gutter_width(lines: int) -> int:\n    return len(str(lines)) + 2\n```\n\nThe engine's syntax set is a workspace dependency, so the gutter inherits it:\n\n```toml\n[dependencies]\nsyntect.workspace = true\n```\n",
       "at": "2026-11-16T12:00Z"
     }
   ],

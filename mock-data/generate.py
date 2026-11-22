@@ -2371,6 +2371,64 @@ def build():
             questions=questions,
             depends_on=[DONE_IDS[i], DONE_IDS[(i + 2) % len(DONE_IDS)]],
         )
+        # The notes that carry the document's constructs: alerts, a nested
+        # list three deep, a table, a mermaid block, a long link, inline code,
+        # and fenced code in python and toml. Each appends to the note the
+        # journal already reads, so its first line is unchanged.
+        if tid == "TSK19":
+            item["notes"][0]["body"] += (
+                "\n\nThe roles the level work adds, by the field that paints them:\n\n"
+                "| field | role | paints |\n"
+                "|---|---|---|\n"
+                "| `heading_1` | `HeadingSection` | the first-level heading |\n"
+                "| `heading_2` | `HeadingItem` | the second-level heading |\n"
+                "| `heading_3` | `HeadingFinding` | the third level and every level below |\n"
+                "| `alert_note` | `AlertNote` | a `[!NOTE]` alert |\n"
+                "| `alert_warning` | `AlertWarning` | a `[!WARNING]` alert |\n\n"
+                "The open choice is the depth. The options are:\n\n"
+                "- keep one role below level three\n"
+                "  - the palette stays at eighteen roles\n"
+                "  - a level-four heading reads like a level-three one\n"
+                "    - the nested list in a finding is the only place it shows\n"
+                "- give level four its own role\n"
+                "  - the palette grows to nineteen\n\n"
+                "> [!NOTE]\n"
+                "> The alert and link roles were already in the palette; this unit adds only the headings.\n\n"
+                "The upstream presets are in [leaf's `presets.rs`]"
+                "(https://github.com/rivolink/leaf/blob/29f6ad480d95a4240c63f63d390e9909afdad9e8/src/theme/presets.rs)"
+                " at the pinned commit.\n\n"
+                "> [!WARNING]\n"
+                "> The terminal preset stays colourless, so the roles above are invisible there:"
+                " check the level split in a coloured preset before the level-four decision.\n"
+            )
+        if tid == "TSK20":
+            item["notes"][0]["body"] += (
+                "\n\nA finding keeps its id, such as `FIND-01`, across the rounds that name it."
+                " It travels the loop the Review section draws:\n\n"
+                "```mermaid\n"
+                "flowchart TD\n"
+                "    A[Round raises a finding] --> B{Fixed in the next round?}\n"
+                "    B -->|yes| C[Resolved, listed under its round]\n"
+                "    B -->|no| D[Carried into the next round]\n"
+                "    D --> A\n"
+                "```\n"
+            )
+        if tid == "TSK21":
+            item["notes"][0]["body"] += (
+                "\n\n> [!WARNING]\n"
+                "> The gutter counts a wrapped row as a line, so a block's numbers stop matching"
+                " the source past the first wrap.\n\n"
+                "The width the gutter takes is the digits of the last line, plus two cells of padding:\n\n"
+                "```python\n"
+                "def gutter_width(lines: int) -> int:\n"
+                "    return len(str(lines)) + 2\n"
+                "```\n\n"
+                "The engine's syntax set is a workspace dependency, so the gutter inherits it:\n\n"
+                "```toml\n"
+                "[dependencies]\n"
+                "syntect.workspace = true\n"
+                "```\n"
+            )
         tasks.append(item)
 
     # done — clean verdict, no open findings. Five of them, chained only
@@ -2564,6 +2622,17 @@ def build():
                 plus_minutes(rounds[-1]["at"], 10),
             )
         )
+        # The fixture whose note carries a fenced bash block: the gate that
+        # keeps the column table honest is the command the note names.
+        if tid == "TSK22":
+            notes[0]["body"] += (
+                "\n\nThe gate regenerates the column table and fails on any drift:\n\n"
+                "```bash\n"
+                "make columns\n"
+                "```\n\n"
+                "The target runs the generator with `--check`, so a stale table fails"
+                " `make check` rather than drifting quietly.\n"
+            )
         item = task(
             tid,
             b["title"],

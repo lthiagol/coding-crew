@@ -1381,3 +1381,91 @@ fn every_field_the_model_defines_is_populated_by_a_fixture() {
         items.iter().any(|i| !i.dismissed_reason.is_empty())
     );
 }
+
+/// A line longer than an 80-column pane wraps in it, so a link that long
+/// exercises the wrap.
+const WRAPPING_LINK: usize = 80;
+
+/// The document constructs a note body carries, by the names the test pins.
+fn markdown_constructs(body: &str) -> HashSet<String> {
+    let mut found = HashSet::new();
+    if body.contains("> [!NOTE]") {
+        found.insert("> [!NOTE]".to_string());
+    }
+    if body.contains("> [!WARNING]") {
+        found.insert("> [!WARNING]".to_string());
+    }
+    let lines: Vec<&str> = body.lines().collect();
+    let mut in_fence = false;
+    // The indent of each open list item, outermost first.
+    let mut depths: Vec<usize> = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        if in_fence {
+            in_fence = !trimmed.starts_with("```");
+            continue;
+        }
+        if let Some(language) = trimmed.strip_prefix("```") {
+            in_fence = true;
+            if !language.trim().is_empty() {
+                found.insert(format!("```{}", language.trim()));
+            }
+            continue;
+        }
+        if trimmed.starts_with("- ") {
+            while depths.last().is_some_and(|&depth| depth >= indent) {
+                depths.pop();
+            }
+            depths.push(indent);
+            if depths.len() >= 3 {
+                found.insert("list nested three deep".to_string());
+            }
+        } else if indent == 0 && !trimmed.is_empty() {
+            depths.clear();
+        }
+        if trimmed.starts_with('|') {
+            let next = lines.get(index + 1).map_or("", |next| next.trim_start());
+            if next.starts_with('|') && next.contains("---") {
+                found.insert("table".to_string());
+            }
+        } else if trimmed.matches('`').count() >= 2 {
+            found.insert("inline code".to_string());
+        }
+        if let Some(start) = line.find("](http") {
+            let rest = &line[start + 2..];
+            if rest.find(')').is_some_and(|end| end > WRAPPING_LINK) {
+                found.insert("long link".to_string());
+            }
+        }
+    }
+    found
+}
+
+#[test]
+fn the_fixtures_keep_the_constructs_the_document_is_pinned_to_show() {
+    let mut found = HashSet::new();
+    for task in tasks() {
+        for note in &task.notes {
+            found.extend(markdown_constructs(&note.body));
+        }
+    }
+    let required = [
+        "> [!NOTE]",
+        "> [!WARNING]",
+        "list nested three deep",
+        "table",
+        "inline code",
+        "long link",
+        "```rust",
+        "```python",
+        "```toml",
+        "```bash",
+        "```mermaid",
+    ];
+    let missing: Vec<&str> = required
+        .into_iter()
+        .filter(|construct| !found.contains(*construct))
+        .collect();
+    assert!(missing.is_empty(), "no note carries {missing:?}");
+}

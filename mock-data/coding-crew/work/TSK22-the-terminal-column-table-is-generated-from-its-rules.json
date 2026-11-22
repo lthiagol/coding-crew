@@ -156,7 +156,7 @@
     {
       "id": "NOTE-01",
       "author": "runner-04",
-      "body": "The work is done and the evidence is attached; the review is closed.",
+      "body": "The work is done and the evidence is attached; the review is closed.\n\nThe gate regenerates the column table and fails on any drift:\n\n```bash\nmake columns\n```\n\nThe target runs the generator with `--check`, so a stale table fails `make check` rather than drifting quietly.\n",
       "at": "2026-11-05T16:05Z"
     },
     {

@@ -267,7 +267,7 @@
     {
       "id": "NOTE-01",
       "author": "reviewer-05",
-      "body": "The budget is spent and the loop stops here: a human decides the next move.",
+      "body": "The budget is spent and the loop stops here: a human decides the next move.\n\nThe roles the level work adds, by the field that paints them:\n\n| field | role | paints |\n|---|---|---|\n| `heading_1` | `HeadingSection` | the first-level heading |\n| `heading_2` | `HeadingItem` | the second-level heading |\n| `heading_3` | `HeadingFinding` | the third level and every level below |\n| `alert_note` | `AlertNote` | a `[!NOTE]` alert |\n| `alert_warning` | `AlertWarning` | a `[!WARNING]` alert |\n\nThe open choice is the depth. The options are:\n\n- keep one role below level three\n  - the palette stays at eighteen roles\n  - a level-four heading reads like a level-three one\n    - the nested list in a finding is the only place it shows\n- give level four its own role\n  - the palette grows to nineteen\n\n> [!NOTE]\n> The alert and link roles were already in the palette; this unit adds only the headings.\n\nThe upstream presets are in [leaf's `presets.rs`](https://github.com/rivolink/leaf/blob/29f6ad480d95a4240c63f63d390e9909afdad9e8/src/theme/presets.rs) at the pinned commit.\n\n> [!WARNING]\n> The terminal preset stays colourless, so the roles above are invisible there: check the level split in a coloured preset before the level-four decision.\n",
       "at": "2026-11-14T12:00Z"
     }
   ],

@@ -1420,6 +1420,24 @@ fn the_detail_renders_the_record_close_up() {
     assert!(!text.contains("Overview"), "{text}");
 }
 
+/// The detail pane of a fixture, tall enough for its whole note.
+fn detail_render(id: &str) -> String {
+    let output = run(&[
+        "--render", "--plain", "--detail", id, "--width", "100", "--height", "400", WORK,
+    ]);
+    assert!(output.status.success(), "raul failed: {output:?}");
+    String::from_utf8(output.stdout).expect("the plain render is UTF-8")
+}
+
+#[test]
+fn the_note_constructs_render_in_the_detail_of_their_fixtures() {
+    let diagram = detail_render("TSK20");
+    assert!(diagram.contains("┌─ mermaid"), "{diagram}");
+    let alerts = detail_render("TSK19");
+    assert!(alerts.contains("ℹ Note"), "{alerts}");
+    assert!(alerts.contains("⚠ Warning"), "{alerts}");
+}
+
 #[test]
 fn the_detail_is_bounded_by_the_dimensions() {
     let title = detail_title();
