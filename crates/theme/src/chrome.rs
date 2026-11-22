@@ -22,6 +22,19 @@ pub const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦"
 /// The border is `chrome.border`, or `chrome.border_focus` when the pane has
 /// focus. The title is `text.strong`, as every block's title is.
 pub fn pane(title: &str, icon: Icon, set: IconSet, focused: bool, theme: &Theme) -> Block<'static> {
+    pane_titled(title, icon, set, focused, block_title_style(theme), theme)
+}
+
+/// A pane whose title takes the given style: the accent, for the main pane
+/// of hugo, and `text.strong` everywhere else, as [`pane`] paints it.
+pub fn pane_titled(
+    title: &str,
+    icon: Icon,
+    set: IconSet,
+    focused: bool,
+    title_style: Style,
+    theme: &Theme,
+) -> Block<'static> {
     let border = if focused {
         theme.chrome.border_focus
     } else {
@@ -29,10 +42,7 @@ pub fn pane(title: &str, icon: Icon, set: IconSet, focused: bool, theme: &Theme)
     };
     let heading = Line::from(vec![
         Span::styled("─", border),
-        Span::styled(
-            format!(" {} {title} ", icon.glyph(set)),
-            block_title_style(theme),
-        ),
+        Span::styled(format!(" {} {title} ", icon.glyph(set)), title_style),
     ]);
     Block::bordered()
         .border_type(BorderType::Rounded)

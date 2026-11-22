@@ -2340,7 +2340,7 @@ mod tests {
         // a row the pane does not draw, and its line is painted.
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        let selection = paint_of(theme.text.selected);
+        let selection = paint_of(theme.text.selected_bg);
         let mut app = window(&theme, Tab::Settings, false);
         app.settings = settings_panel("scrolls");
         let ids = app.settings.ids();
@@ -2368,7 +2368,7 @@ mod tests {
                     .enumerate()
                     .skip(2)
                     .take(rows.len().saturating_sub(3))
-                    .find(|(y, _)| paint[*y][2] == selection)
+                    .find(|(y, _)| paint[*y][2].bg == selection.bg)
                     .unwrap_or_else(|| panic!("{cursor} is not painted: {rows:?}"));
                 assert!(
                     row.contains(&format!("{key_name} = ")),
@@ -2620,8 +2620,8 @@ mod tests {
         // keys.
         let (y, x) = cell_of(&rows, "TSK02").expect("the drawn first row");
         assert_eq!(
-            paint[y][x],
-            paint_of(theme.text.selected),
+            paint[y][x].bg,
+            paint_of(theme.text.selected_bg).bg,
             "the cursor was not painted on the row the frame drew first: {text}"
         );
         assert_eq!(app.cursor(&work, after).as_deref(), Some("TSK02"));
@@ -2761,7 +2761,7 @@ mod tests {
     fn the_cursor_is_never_on_a_row_the_pane_does_not_show() {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        let selection = paint_of(theme.text.selected);
+        let selection = paint_of(theme.text.selected_bg);
         for tab in row_tabs() {
             let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
             let mut app = window(&theme, tab, false);
@@ -2801,7 +2801,7 @@ mod tests {
                 paint
                     .get(y)
                     .and_then(|cells| cells.get(x))
-                    .is_some_and(|cell| *cell == selection)
+                    .is_some_and(|cell| cell.bg == selection.bg)
             })
         })
     }
@@ -3069,7 +3069,7 @@ mod tests {
         // cursor lands on is always on the screen, with the highlight on it.
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        let selection = paint_of(theme.text.selected);
+        let selection = paint_of(theme.text.selected_bg);
         for tab in row_tabs() {
             let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
             for height in [8u16, 9, 11] {
@@ -3118,7 +3118,7 @@ mod tests {
         // highlight is on it, so the cursor and the key agree.
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        let selection = paint_of(theme.text.selected);
+        let selection = paint_of(theme.text.selected_bg);
         for tab in row_tabs() {
             let mut app = window(&theme, tab, false);
             let (rows, paint) = render(&mut app, 100, 40);
@@ -3127,7 +3127,7 @@ mod tests {
             let (y, x) = cell_of(&rows, first)
                 .unwrap_or_else(|| panic!("{tab:?}: {first} is not on screen"));
             assert_eq!(
-                paint[y][x], selection,
+                paint[y][x].bg, selection.bg,
                 "{tab:?}: the first row is not painted with the selection"
             );
             // The bar runs to the edge of the content pane.
@@ -3148,7 +3148,7 @@ mod tests {
     fn the_cursor_follows_the_keys_and_lands_where_enter_will_open() {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        let selection = paint_of(theme.text.selected);
+        let selection = paint_of(theme.text.selected_bg);
         for tab in row_tabs() {
             let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
             assert!(ids.len() >= 3, "{tab:?}: not enough rows to move through");
@@ -3159,7 +3159,7 @@ mod tests {
             let (rows, paint) = render(&mut app, 100, 40);
             let (y, x) = cell_of(&rows, &ids[1]).expect("the second row");
             assert_eq!(
-                paint[y][x], selection,
+                paint[y][x].bg, selection.bg,
                 "{tab:?}: the paint did not follow the key"
             );
             // The row the paint is on is the row enter opens.
@@ -3175,7 +3175,7 @@ mod tests {
             assert_eq!(app.selection.as_deref(), Some(ids[0].as_str()), "{tab:?}");
             let (rows, paint) = render(&mut app, 100, 40);
             let (y, x) = cell_of(&rows, &ids[0]).expect("the first row");
-            assert_eq!(paint[y][x], selection, "{tab:?}: up did not repaint");
+            assert_eq!(paint[y][x].bg, selection.bg, "{tab:?}: up did not repaint");
             // `j` and `k` are the same movement as down and up.
             app.on_key(key(KeyCode::Char('j')), &work, now());
             assert_eq!(app.selection.as_deref(), Some(ids[1].as_str()), "{tab:?}");
@@ -3199,7 +3199,7 @@ mod tests {
     fn esc_returns_the_cursor_and_its_paint_to_the_row_it_came_from() {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        let selection = paint_of(theme.text.selected);
+        let selection = paint_of(theme.text.selected_bg);
         for tab in row_tabs() {
             let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
             let target = &ids[2];
@@ -3221,13 +3221,13 @@ mod tests {
             let (rows, paint) = render(&mut app, 100, 40);
             let (y, x) = cell_of(&rows, target).expect("the returned row");
             assert_eq!(
-                paint[y][x], selection,
+                paint[y][x].bg, selection.bg,
                 "{tab:?}: esc lost the paint it came from"
             );
             let other = &ids[1];
             let (y, x) = cell_of(&rows, other).expect("another row");
             assert_ne!(
-                paint[y][x], selection,
+                paint[y][x].bg, selection.bg,
                 "{tab:?}: the paint did not move back"
             );
         }

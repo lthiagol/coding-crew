@@ -106,6 +106,11 @@ take the slot of the word they sit beside.
   `text.dim`, followed by the numbers in words: `██████░░░░ 18 of 45`.
 - **A spinner** (hugo only, for `working` agents) cycles `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` on the
   tick; the plain render shows the first frame, so it stays deterministic.
+- **The sidebar recesses.** hugo's sidebar sits on `chrome.surface`, a step
+  darker than the base, so the main pane reads as the work and the sidebar as
+  the configuration beside it. A selected row's tint, `text.selected_bg`, is a
+  step from the surface toward the accent; the `▌` bar carries the selection
+  where the two are close.
 
 ## raul
 
@@ -128,8 +133,8 @@ as a dim divider), the event kind's icon, the task id strong, then the words.
 **Needs you, Path, Backlog rows** lead with the status (or kind) icon in its
 slot, then the id in `text.strong`, the title in `text.normal`, and the suffix
 (review state, waits on) in `text.dim` with its own icon: `󰅚 2 open (1 high)`,
-`󰌾 waits on TSK04`. The selected row is a full-width bar in `text.selected`
-with a `▌` in the focus slot at its left edge. The Path tree keeps its spine
+`󰌾 waits on TSK04`. The selected row is a full-width tint, `text.selected_bg`,
+under the row's own colours, with a `▌` in the focus slot at its left edge. The Path tree keeps its spine
 and branches; its branch headers become `├─ 󰐊 RUNNING  6` with the count as a
 badge.
 
@@ -137,10 +142,11 @@ badge.
 
 ## hugo
 
-**The sidebar** is the configuration card: a header `󰒓 configuration`, then
-each group under a dim small-caps label (`AGENTS`, `HARNESS`, `ROUNDS`,
-`ORDER`); an agent is `role icon  name` with the model under it. The cursor is
-the same `▌` bar as raul's rows.
+**The sidebar** is the configuration card, recessed on `chrome.surface` (see
+the chrome): a header `󰒓 configuration`, then each group under a dim
+small-caps label (`AGENTS`, `HARNESS`, `ROUNDS`, `ORDER`); an agent is
+`role icon  name` with the model under it. The cursor is the same `▌` bar as
+raul's rows, on the tint.
 
 **The main pane**:
 

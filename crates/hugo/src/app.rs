@@ -14,14 +14,16 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Clear, Paragraph};
+use ratatui::widgets::{Block, Clear, Paragraph};
 
 use coding_crew_core::config::{CONFIG_FILE, Config};
 use coding_crew_core::harness::{self, HARNESSES, Harness};
 use coding_crew_core::runtime::{CrewMember, Runtime};
 use coding_crew_core::{Role, age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, tail_to, text_width};
-use coding_crew_theme::{Icon, IconSet, Slot, Theme, chrome, phase_style, selected_line};
+use coding_crew_theme::{
+    Icon, IconSet, Slot, Theme, chrome, phase_style, role_style, selected_line,
+};
 
 use crate::catalog::Catalog;
 use crate::config::{self, ConfigRead, ConfigState};
@@ -476,7 +478,8 @@ impl App {
             return false;
         }
         let (inner, width, height) = if area.height >= 3 && area.width >= 4 {
-            let block = chrome::pane(SIDEBAR_TITLE, Icon::Config, self.icons, false, &self.theme);
+            let block = chrome::pane(SIDEBAR_TITLE, Icon::Config, self.icons, false, &self.theme)
+                .style(self.theme.chrome.surface);
             let inner = block.inner(area);
             frame.render_widget(block, area);
             (inner, inner.width, inner.height)
@@ -500,7 +503,10 @@ impl App {
             usize::from(height),
             cursor,
         );
-        frame.render_widget(Paragraph::new(drawn.lines), inner);
+        frame.render_widget(
+            Paragraph::new(drawn.lines).style(self.theme.chrome.surface),
+            inner,
+        );
         drawn.agents
     }
 
@@ -1049,6 +1055,18 @@ impl App {
         ))
     }
 
+    /// A block of the main pane: its title on the accent.
+    fn main_title(&self, title: &'static str, icon: Icon) -> Block<'static> {
+        chrome::pane_titled(
+            title,
+            icon,
+            self.icons,
+            false,
+            self.theme.chrome.tab_active,
+            &self.theme,
+        )
+    }
+
     /// The title line: the app's icon and name, a dim `·` and the project
     /// folder, and on the right edge the status pill: whether the automation
     /// runs.
@@ -1158,7 +1176,7 @@ impl App {
             return;
         }
         // No record means nothing runs, so the pane wears the stopped icon.
-        let block = chrome::pane(title, Icon::Stopped, self.icons, false, &self.theme);
+        let block = self.main_title(title, Icon::Stopped);
         // The inner width is the pane's own: a state that does not fit is
         // cut and marked, never drawn past the border.
         let inner = area.width.saturating_sub(2);
@@ -1180,7 +1198,7 @@ impl App {
         }
         let inner = if area.height >= 3 && area.width >= 4 {
             // Whether it runs is not known, so the pane keeps hugo's icon.
-            let block = chrome::pane(FLOW_TITLE, Icon::Config, self.icons, false, &self.theme);
+            let block = self.main_title(FLOW_TITLE, Icon::Config);
             let inner = block.inner(area);
             frame.render_widget(block, area);
             inner
@@ -1210,13 +1228,7 @@ impl App {
             self.flow_body(frame, area, runtime, now, tick);
             return;
         }
-        let block = chrome::pane(
-            FLOW_TITLE,
-            run_icon(runtime.stamp.runs),
-            self.icons,
-            false,
-            &self.theme,
-        );
+        let block = self.main_title(FLOW_TITLE, run_icon(runtime.stamp.runs));
         let inner = block.inner(area);
         frame.render_widget(block, area);
         self.flow_body(frame, inner, runtime, now, tick);
@@ -1266,7 +1278,7 @@ impl App {
         constraints.push(Constraint::Min(0));
         let areas = Layout::vertical(constraints).split(body);
         for (section, area) in sections.iter().zip(areas.iter()) {
-            let block = chrome::pane(section.title, section.icon, self.icons, false, &self.theme);
+            let block = self.main_title(section.title, section.icon);
             frame.render_widget(Paragraph::new(section.lines.clone()).block(block), *area);
         }
     }
@@ -1301,7 +1313,10 @@ impl App {
         let mut lines: Vec<Line<'static>> = Vec::new();
         for section in &sections[..shown] {
             let heading = format!("{} {}", section.icon.glyph(self.icons), section.title);
-            lines.push(Line::from(Span::styled(heading, self.theme.text.strong)));
+            lines.push(Line::from(Span::styled(
+                heading,
+                self.theme.chrome.tab_active,
+            )));
             lines.extend(section.lines.clone());
         }
         if !hidden.is_empty() {
@@ -1444,7 +1459,7 @@ impl App {
                     role_icon(member.role).glyph(self.icons),
                     member.role.as_str()
                 ),
-                normal,
+                role_style(&self.theme, member.role),
             ),
             model: (short_model(&member.model).to_string(), self.theme.text.dim),
             holds: (
@@ -1535,9 +1550,15 @@ impl App {
     fn budget_lines(&self, runtime: &Runtime, width: usize) -> Vec<Line<'static>> {
         let spent = runtime.budget.spent as usize;
         let total = runtime.budget.total as usize;
-        let bar = chrome::progress_bar(spent, total, BUDGET_CELLS, Slot::TextStrong, &self.theme)
-            .into_iter()
-            .map(|span| (span.content.into_owned(), span.style));
+        let bar = chrome::progress_bar(
+            spent,
+            total,
+            BUDGET_CELLS,
+            budget_slot(spent, total),
+            &self.theme,
+        )
+        .into_iter()
+        .map(|span| (span.content.into_owned(), span.style));
         let numbers = vec![
             (" ".to_string(), Style::default()),
             (spent.to_string(), self.theme.text.strong),
@@ -1922,6 +1943,18 @@ struct Section {
     title: &'static str,
     icon: Icon,
     lines: Vec<Line<'static>>,
+}
+
+/// The slot the budget bar is filled in: `semantic.ok` under half spent,
+/// `semantic.warn` up to four fifths, and `semantic.error` above that.
+fn budget_slot(spent: usize, total: usize) -> Slot {
+    if total == 0 || spent * 2 < total {
+        Slot::SemanticOk
+    } else if spent * 5 <= total * 4 {
+        Slot::SemanticWarn
+    } else {
+        Slot::SemanticError
+    }
 }
 
 /// The model's own name, without the provider the configuration names.
@@ -3143,6 +3176,69 @@ mod tests {
         assert_eq!(
             colour_of(&rows, &paint, "idle"),
             theme().text.dim.fg.expect("the dim colour")
+        );
+    }
+
+    #[test]
+    fn the_crew_names_each_role_on_its_own_slot() {
+        let runtime = runtime();
+        let (rows, paint) = render_runtime(100, 40, &runtime);
+        // Each role's crew row is found by a word of its own, and the name is
+        // the rightmost one on it: the sidebar draws the same name on the left.
+        let roles = [
+            ("idle", "orchestrator", theme().roles.orchestrator),
+            ("TSK10", "runner", theme().roles.runner),
+            ("TSK13 ", "reviewer", theme().roles.reviewer),
+        ];
+        for (row_word, name, style) in roles {
+            let y = rows
+                .iter()
+                .position(|row| row.contains(row_word))
+                .unwrap_or_else(|| panic!("{row_word} is not on screen"));
+            let at = rows[y].rfind(name).expect("the role's name is on its row");
+            let column = rows[y][..at].chars().count();
+            assert_eq!(
+                paint[y][column].fg,
+                style.fg.expect("a role has a colour"),
+                "{name} is not on its role's slot"
+            );
+        }
+    }
+
+    #[test]
+    fn the_budget_is_coloured_by_what_is_spent() {
+        // Under half spent is ok, up to four fifths is a warning, and past
+        // that is an error. Each boundary is the edge of its own colour.
+        assert_eq!(budget_slot(0, 45), Slot::SemanticOk);
+        assert_eq!(budget_slot(22, 45), Slot::SemanticOk);
+        assert_eq!(budget_slot(23, 45), Slot::SemanticWarn);
+        assert_eq!(budget_slot(36, 45), Slot::SemanticWarn);
+        assert_eq!(budget_slot(37, 45), Slot::SemanticError);
+        assert_eq!(budget_slot(0, 0), Slot::SemanticOk);
+    }
+
+    #[test]
+    fn the_sidebar_is_drawn_on_its_surface_and_the_main_pane_titles_on_the_accent() {
+        let runtime = runtime();
+        let (rows, paint) = render_runtime(100, 40, &runtime);
+        // A word of the sidebar's group rule is on the surface, and the main
+        // pane's crew title is on the accent.
+        let (y, x) = rows
+            .iter()
+            .enumerate()
+            .find_map(|(y, row)| row.find("AGENTS").map(|at| (y, row[..at].chars().count())))
+            .expect("the AGENTS title is on screen");
+        assert_eq!(
+            paint[y][x].bg,
+            theme().chrome.surface.bg.expect("the surface is a colour")
+        );
+        assert_eq!(
+            colour_of(&rows, &paint, "crew"),
+            theme()
+                .chrome
+                .tab_active
+                .fg
+                .expect("the accent is a colour")
         );
     }
 

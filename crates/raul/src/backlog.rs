@@ -2334,7 +2334,7 @@ mod tests {
         let groups = groups(&mock_work());
         let metrics = metrics(&groups);
         let row = &groups[0].rows[0];
-        let selection = theme.text.selected;
+        let selection = theme.text.selected_bg;
         let built = row_lines(row, 98, metrics, IconSet::Nerd, &theme, Some("ITM01"));
         assert_eq!(built.len(), 2);
         // The bar is on the first line only, in its own paint: the rest of
@@ -2348,7 +2348,7 @@ mod tests {
                 &line.spans[..]
             };
             for span in painted {
-                assert_eq!(span.style, selection, "{span:?} is not the selection");
+                assert_eq!(span.style.bg, selection.bg, "{span:?} is not the selection");
             }
         }
     }
@@ -2472,7 +2472,7 @@ mod tests {
     #[test]
     fn a_selected_row_takes_the_selection_slot_and_the_others_keep_their_own() {
         let theme = theme();
-        let selection = theme.text.selected;
+        let selection = theme.text.selected_bg;
         let groups = groups(&mock_work());
         let metrics = Metrics {
             id: id_width(&groups),
@@ -2502,7 +2502,7 @@ mod tests {
             assert_eq!(selected.spans[0].style, theme.chrome.border_focus);
             for span in &selected.spans[1..] {
                 assert_eq!(
-                    span.style, selection,
+                    span.style.bg, selection.bg,
                     "{width}: {span:?} is not the selection"
                 );
             }

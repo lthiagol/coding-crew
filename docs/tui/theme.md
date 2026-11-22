@@ -20,16 +20,23 @@ differently.
 | `chrome.border_focus` | the border of the focused block |
 | `chrome.footer` | the filter note's count, `2 of 5 · 3 filtered out`, above the footer |
 | `chrome.key` | a key label in the footer and in the help overlay |
+| `chrome.surface` | the background of hugo's sidebar: a step darker than the base, so the sidebar is recessed |
 | `text.normal` | ordinary text |
 | `text.dim` | secondary text: the empty state, a marker, a hint under a line, a separator, a path, a tab that is not built yet |
 | `text.strong` | a count, a title that matters |
-| `text.selected` | the selected row |
+| `text.selected` | the mark in a document: a search or a marked span, the accent at full opacity |
+| `text.selected_bg` | the selected row: a subtle tint under the row, which keeps its own colours |
 | `semantic.ok` | a clean result, a finished task |
 | `semantic.warn` | something wants attention and is not broken |
 | `semantic.error` | a failure: an unreadable file, a failed criterion, an escalation, no coding-crew folder found |
 | `semantic.info` | neutral information |
 | `semantic.human` | the human lane: approve, review, and the facts that wait on it — "wait on a human" |
 | `semantic.agent` | the agent lane: claimable, running |
+| `role.orchestrator` | the orchestrator's icon and name, in the crew and the sidebar |
+| `role.runner` | the runner's icon and name |
+| `role.reviewer` | the reviewer's icon and name |
+
+The creator takes `semantic.human`, the lane its icon is drawn from.
 
 The words that name a lane take the lane's slot: "wait on a human" is
 `semantic.human`, and the number beside it is `text.strong`. The same fact
@@ -73,6 +80,21 @@ border is taken away again: a title is never dimmed.
 
 The border of a block is `chrome.border`, and the border of the focused one is
 `chrome.border_focus`.
+
+hugo's main pane is the one exception: its block titles and section headings
+take the accent, `chrome.tab_active`, the bold the sidebar's group labels use,
+so the pane's sections read as the sections of one screen. raul's titles stay
+`text.strong`.
+
+## The selection
+
+A selected row is `▌` on `chrome.border_focus`, and the row on
+`text.selected_bg`. The row's text keeps its own colours, so a status stays
+readable on the selection; the tint carries the selection, the bar marks it.
+
+The mark in a document is the one place the accent is painted whole:
+`text.selected` is the accent with the base on it, as a search or a marked
+span is.
 
 ## The markdown engine
 
@@ -208,14 +230,13 @@ The preset is chosen with a flag for now:
 `raul --theme dark|nord|catppuccin|dracula|terminal`. A theme file on disk is
 later.
 
-The `dark` preset is ours, hand-tuned, and its eighteen values are written
-down in [palettes.md](palettes.md), with their roles and their contrast. The
-`nord` preset is the Nord family's, and its eighteen values are recorded in
-the same file. The `catppuccin` preset is the Catppuccin family's mocha
-flavour, and its eighteen values are recorded there too; the other three
-flavours wait with the light theme. The `dracula` preset is the Dracula
-family's Dracula Classic variant, and its eighteen values are recorded there
-too; alucard waits with the light theme.
+The `dark` preset is ours, hand-tuned, and its values are written down in
+[palettes.md](palettes.md), with their roles and their contrast. The `nord`
+preset is the Nord family's, and its values are recorded in the same file.
+The `catppuccin` preset is the Catppuccin family's mocha flavour, and its
+values are recorded there too; the other three flavours wait with the light
+theme. The `dracula` preset is the family's Dracula Classic variant, and its
+values are recorded there too; alucard waits with the light theme.
 
 The four colour presets paint the document's eighteen roles from the same
 family palettes; the roles, their values and their figures are recorded in
@@ -223,8 +244,10 @@ family palettes; the roles, their values and their figures are recorded in
 `Color::Reset`, the way it paints no slot's colour.
 
 **The dark, nord, catppuccin and dracula presets assume a terminal with a
-dark background, and do not paint one.** The background is the terminal's
-own; every colour of the palettes is picked to read on a dark one.
+dark background, and paint none of their own, except two.** The background is
+the terminal's own; every colour of the palettes is picked to read on a dark
+one. The two exceptions are `chrome.surface` and `text.selected_bg`, derived a
+step from the base; the terminal's own background is the base of every row.
 
 **The light themes are deferred.** No light preset is built until that changes:
 not ours, and not the light variants of the families — Catppuccin Latte,
@@ -232,10 +255,11 @@ Dracula Alucard and Nord Light wait with them, and so do the Catppuccin
 frappé and macchiato flavours. The slots are shaped so a light preset drops
 in without touching anything else.
 
-**Selection is the accent at full opacity.** A terminal has no alpha
-compositing, so a translucent selection is not available; every colour
-preset uses the accent colour whole. The terminal preset has no accent:
-its selection is reversed video, and its own section below says so.
+**Selection is a tint, and the mark is the accent whole.** A terminal has no
+alpha compositing, so a translucent selection is not available: the selected
+row is a tint derived from the surface, and a document's mark is the accent
+whole. The terminal preset has no tint and no accent: its selection is
+reversed video, and its own section below says so.
 
 ## The terminal preset
 
@@ -254,8 +278,13 @@ can and cannot do:
   different, and so do the human lane and the agent lane.
 - **the two lanes never share one.** They hold different attributes, so the
   rule that the lanes are two colours holds here too.
-- **the selection is not a colour.** `text.selected` is reversed video: the
-  shape of the selection carries the meaning, not a hue.
+- **the selection is not a colour.** `text.selected_bg` is reversed video, as
+  the selection always was: the shape of the selection carries the meaning,
+  not a hue. The surface is nothing the terminal paints: the sidebar keeps the
+  terminal's own background.
+- **the roles are attributes.** `role.orchestrator` is italic and underlined,
+  `role.runner` is dim and italic, and `role.reviewer` is dim and underlined:
+  three shapes no semantic slot holds, so a role does not read as a phase.
 - **the document loses its distinctions.** `MarkdownTheme` carries colours
   only, so every field becomes `Color::Reset`: a checked task, an unchecked
   task, a warning and a caution are painted alike. Only the engine's own
@@ -268,7 +297,7 @@ can and cannot do:
   reversed: loud, but not red.
 - **what it cannot do:** it cannot say *which* hue a thing is, and it cannot
   tell a colour from the terminal's own foreground. The five attributes are
-  enough for the eight phases and not enough for the eighteen slots: the
+  enough for the eight phases and not enough for the slots: the
   weak chrome slots — the muted foreground, the dimmed foreground, the
   border, the footer and the inactive tab — all hold DIM, and the title,
   the strong text and the focused border all hold BOLD. The showing tab

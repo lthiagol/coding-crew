@@ -5,7 +5,7 @@
 //! a phase names a slot, never a colour.
 
 use crate::text::text_width;
-use coding_crew_core::{Reason, Status};
+use coding_crew_core::{Reason, Role, Status};
 use coding_crew_engine::MarkdownTheme;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -32,6 +32,8 @@ pub enum Slot {
     ChromeFooter,
     /// A key label in the footer and in the help overlay.
     ChromeKey,
+    /// The background of a sidebar: a step darker than the base.
+    ChromeSurface,
     /// Ordinary text.
     TextNormal,
     /// Secondary text: the empty state, a marker, a hint under a line, a
@@ -39,8 +41,12 @@ pub enum Slot {
     TextDim,
     /// A count, a title that matters.
     TextStrong,
-    /// The selected row.
+    /// The mark in a document: the pair a search or a marked span is
+    /// painted with, at full opacity.
     TextSelected,
+    /// The background of the selected row: a subtle tint, so the row's text
+    /// keeps its own colours.
+    TextSelectedBg,
     /// A clean result, a finished task.
     SemanticOk,
     /// Something wants attention and is not broken.
@@ -57,6 +63,12 @@ pub enum Slot {
     SemanticHuman,
     /// The agent lane: claimable, running.
     SemanticAgent,
+    /// The orchestrator's role: its icon and name in the crew and the sidebar.
+    RoleOrchestrator,
+    /// The runner's role, the builder that writes the code.
+    RoleRunner,
+    /// The reviewer's role.
+    RoleReviewer,
 }
 
 impl Slot {
@@ -66,7 +78,7 @@ impl Slot {
     /// which comes later: they are pinned by the tests, and nothing draws
     /// a slot by name yet.
     #[allow(dead_code)]
-    pub const ALL: [Slot; 18] = [
+    pub const ALL: [Slot; 23] = [
         Slot::ChromeTitle,
         Slot::ChromeTabActive,
         Slot::ChromeTabInactive,
@@ -75,16 +87,21 @@ impl Slot {
         Slot::ChromeBorderFocus,
         Slot::ChromeFooter,
         Slot::ChromeKey,
+        Slot::ChromeSurface,
         Slot::TextNormal,
         Slot::TextDim,
         Slot::TextStrong,
         Slot::TextSelected,
+        Slot::TextSelectedBg,
         Slot::SemanticOk,
         Slot::SemanticWarn,
         Slot::SemanticError,
         Slot::SemanticInfo,
         Slot::SemanticHuman,
         Slot::SemanticAgent,
+        Slot::RoleOrchestrator,
+        Slot::RoleRunner,
+        Slot::RoleReviewer,
     ];
 
     /// The name of the slot, as the spec writes it.
@@ -99,16 +116,21 @@ impl Slot {
             Slot::ChromeBorderFocus => "chrome.border_focus",
             Slot::ChromeFooter => "chrome.footer",
             Slot::ChromeKey => "chrome.key",
+            Slot::ChromeSurface => "chrome.surface",
             Slot::TextNormal => "text.normal",
             Slot::TextDim => "text.dim",
             Slot::TextStrong => "text.strong",
             Slot::TextSelected => "text.selected",
+            Slot::TextSelectedBg => "text.selected_bg",
             Slot::SemanticOk => "semantic.ok",
             Slot::SemanticWarn => "semantic.warn",
             Slot::SemanticError => "semantic.error",
             Slot::SemanticInfo => "semantic.info",
             Slot::SemanticHuman => "semantic.human",
             Slot::SemanticAgent => "semantic.agent",
+            Slot::RoleOrchestrator => "role.orchestrator",
+            Slot::RoleRunner => "role.runner",
+            Slot::RoleReviewer => "role.reviewer",
         }
     }
 }
@@ -124,6 +146,7 @@ pub struct Chrome {
     pub border_focus: Style,
     pub footer: Style,
     pub key: Style,
+    pub surface: Style,
 }
 
 /// The colours of the text.
@@ -133,6 +156,7 @@ pub struct Text {
     pub dim: Style,
     pub strong: Style,
     pub selected: Style,
+    pub selected_bg: Style,
 }
 
 /// The colours that carry a meaning.
@@ -146,6 +170,14 @@ pub struct Semantic {
     pub agent: Style,
 }
 
+/// The colours of the roles: the icon and the name of each agent's role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Roles {
+    pub orchestrator: Style,
+    pub runner: Style,
+    pub reviewer: Style,
+}
+
 /// The colours raul and hugo paint with, one per slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
@@ -154,6 +186,7 @@ pub struct Theme {
     pub chrome: Chrome,
     pub text: Text,
     pub semantic: Semantic,
+    pub roles: Roles,
 }
 
 impl Theme {
@@ -171,12 +204,14 @@ impl Theme {
                 border_focus: style(Slot::ChromeBorderFocus),
                 footer: style(Slot::ChromeFooter),
                 key: style(Slot::ChromeKey),
+                surface: style(Slot::ChromeSurface),
             },
             text: Text {
                 normal: style(Slot::TextNormal),
                 dim: style(Slot::TextDim),
                 strong: style(Slot::TextStrong),
                 selected: style(Slot::TextSelected),
+                selected_bg: style(Slot::TextSelectedBg),
             },
             semantic: Semantic {
                 ok: style(Slot::SemanticOk),
@@ -185,6 +220,11 @@ impl Theme {
                 info: style(Slot::SemanticInfo),
                 human: style(Slot::SemanticHuman),
                 agent: style(Slot::SemanticAgent),
+            },
+            roles: Roles {
+                orchestrator: style(Slot::RoleOrchestrator),
+                runner: style(Slot::RoleRunner),
+                reviewer: style(Slot::RoleReviewer),
             },
         }
     }
@@ -200,16 +240,21 @@ impl Theme {
             Slot::ChromeBorderFocus => self.chrome.border_focus,
             Slot::ChromeFooter => self.chrome.footer,
             Slot::ChromeKey => self.chrome.key,
+            Slot::ChromeSurface => self.chrome.surface,
             Slot::TextNormal => self.text.normal,
             Slot::TextDim => self.text.dim,
             Slot::TextStrong => self.text.strong,
             Slot::TextSelected => self.text.selected,
+            Slot::TextSelectedBg => self.text.selected_bg,
             Slot::SemanticOk => self.semantic.ok,
             Slot::SemanticWarn => self.semantic.warn,
             Slot::SemanticError => self.semantic.error,
             Slot::SemanticInfo => self.semantic.info,
             Slot::SemanticHuman => self.semantic.human,
             Slot::SemanticAgent => self.semantic.agent,
+            Slot::RoleOrchestrator => self.roles.orchestrator,
+            Slot::RoleRunner => self.roles.runner,
+            Slot::RoleReviewer => self.roles.reviewer,
         }
     }
 
@@ -686,6 +731,54 @@ pub fn reason_style(theme: &Theme, reason: Reason) -> Style {
     theme.slot(reason_slot(reason))
 }
 
+/// The slot that paints a role.
+///
+/// The creator grooms with a human, so it takes the human lane's slot, the
+/// way its icon is the human's.
+pub fn role_slot(role: Role) -> Slot {
+    match role {
+        Role::Orchestrator => Slot::RoleOrchestrator,
+        Role::Runner => Slot::RoleRunner,
+        Role::Reviewer => Slot::RoleReviewer,
+        Role::Creator => Slot::SemanticHuman,
+    }
+}
+
+/// The style of a role in a theme.
+pub fn role_style(theme: &Theme, role: Role) -> Style {
+    theme.slot(role_slot(role))
+}
+
+/// The share of black a surface takes off its base: the sidebar recedes.
+const SURFACE_SHARE: f64 = 0.30;
+
+/// The share of the accent a selected row takes over its surface.
+const SELECTION_SHARE: f64 = 0.10;
+
+/// `from` mixed toward `to` by `share`, channel by channel.
+///
+/// The two backgrounds of a palette are derived this way, from the family's
+/// own base, text and accent, so the doc can state every figure.
+pub fn mix(from: Color, to: Color, share: f64) -> Color {
+    let (Color::Rgb(r, g, b), Color::Rgb(to_r, to_g, to_b)) = (from, to) else {
+        return from;
+    };
+    let channel = |one: u8, other: u8| {
+        (f64::from(one) + (f64::from(other) - f64::from(one)) * share).round() as u8
+    };
+    Color::Rgb(channel(r, to_r), channel(g, to_g), channel(b, to_b))
+}
+
+/// The surface of a palette: the base a step toward black.
+fn surface_of(base: Color) -> Color {
+    mix(base, Color::Rgb(0, 0, 0), SURFACE_SHARE)
+}
+
+/// The selected row's tint: the surface a step toward the accent.
+fn selection_of(surface: Color, accent: Color) -> Color {
+    mix(surface, accent, SELECTION_SHARE)
+}
+
 /// The style of the title of a block.
 ///
 /// The title of a block is `text.strong`: a title that matters. It sits on
@@ -695,8 +788,9 @@ pub fn block_title_style(theme: &Theme) -> Style {
     theme.text.strong.remove_modifier(Modifier::DIM)
 }
 
-/// The line the cursor is on: every cell takes the selection's paint, and
-/// the bar runs to the edge of the pane.
+/// The line the cursor is on: the tint runs under every cell, and the
+/// bar runs to the edge of the pane. Each cell keeps its own colours, so a
+/// status stays readable on the selected row.
 pub fn selected_line(line: Line<'static>, width: usize, theme: &Theme) -> Line<'static> {
     let used: usize = line
         .spans
@@ -706,10 +800,16 @@ pub fn selected_line(line: Line<'static>, width: usize, theme: &Theme) -> Line<'
     let mut spans: Vec<Span<'static>> = line
         .spans
         .into_iter()
-        .map(|span| Span::styled(span.content, theme.text.selected))
+        .map(|span| {
+            let style = span.style.patch(theme.text.selected_bg);
+            Span::styled(span.content, style)
+        })
         .collect();
     if used < width {
-        spans.push(Span::styled(" ".repeat(width - used), theme.text.selected));
+        spans.push(Span::styled(
+            " ".repeat(width - used),
+            theme.text.selected_bg,
+        ));
     }
     Line::from(spans)
 }
@@ -848,8 +948,13 @@ mod dark {
     pub const ERROR: Color = Color::Rgb(0xe0, 0x6c, 0x75);
     /// Neutral information: a foreground without a hue of its own.
     pub const INFO: Color = Color::Rgb(0xb0, 0xb0, 0xb0);
-    /// The attention colour: a key label.
+    /// The attention colour: a key label, and the orchestrator's role.
     pub const ATTENTION: Color = Color::Rgb(0xff, 0xd1, 0x66);
+    /// The runner's role: a teal of the palette's own, apart from the agent
+    /// lane's violet and the human lane's blue.
+    pub const TEAL: Color = Color::Rgb(0x56, 0xd4, 0xdd);
+    /// The reviewer's role: a pink, apart from the error's red.
+    pub const PINK: Color = Color::Rgb(0xff, 0x9b, 0xd2);
 }
 
 /// The style of a slot in the dark palette.
@@ -860,8 +965,9 @@ mod dark {
 fn dark_style(slot: Slot) -> Style {
     use dark::{
         ACCENT, ATTENTION, BACKGROUND, BORDER, BRIGHTEST, DIMMED, ERROR, FOREGROUND, INFO, MUTED,
-        OK, RAISED, SECOND, SECOND_ACCENT, WARN,
+        OK, PINK, RAISED, SECOND, SECOND_ACCENT, TEAL, WARN,
     };
+    let surface = surface_of(BACKGROUND);
     match slot {
         // The brightest foreground: the name of the tool.
         Slot::ChromeTitle => Style::new().fg(BRIGHTEST).add_modifier(Modifier::BOLD),
@@ -879,15 +985,19 @@ fn dark_style(slot: Slot) -> Style {
         Slot::ChromeFooter => Style::new().fg(DIMMED),
         // The attention colour: a key label.
         Slot::ChromeKey => Style::new().fg(ATTENTION).add_modifier(Modifier::BOLD),
+        // A step darker than the base, for the sidebar.
+        Slot::ChromeSurface => Style::new().bg(surface),
         // The main foreground: ordinary text.
         Slot::TextNormal => Style::new().fg(FOREGROUND),
         // The muted foreground: secondary text.
         Slot::TextDim => Style::new().fg(MUTED),
         // The raised foreground: a count, a title that matters.
         Slot::TextStrong => Style::new().fg(RAISED).add_modifier(Modifier::BOLD),
-        // The selection is the accent, whole: a terminal has no alpha
-        // compositing, so a translucent selection is not there to be had.
+        // The mark in a document: the accent whole, with the base on it. A
+        // terminal has no alpha compositing, so the mark is not translucent.
         Slot::TextSelected => Style::new().fg(BACKGROUND).bg(ACCENT),
+        // The selected row: a tint a step toward the accent from the surface.
+        Slot::TextSelectedBg => Style::new().bg(selection_of(surface, ACCENT)),
         // A clean result, a finished task.
         Slot::SemanticOk => Style::new().fg(OK),
         // Something wants attention and is not broken.
@@ -900,6 +1010,11 @@ fn dark_style(slot: Slot) -> Style {
         Slot::SemanticHuman => Style::new().fg(ACCENT),
         // The agent lane takes the second accent.
         Slot::SemanticAgent => Style::new().fg(SECOND_ACCENT),
+        // The roles take hues of their own: the attention yellow, a teal and
+        // a pink.
+        Slot::RoleOrchestrator => Style::new().fg(ATTENTION),
+        Slot::RoleRunner => Style::new().fg(TEAL),
+        Slot::RoleReviewer => Style::new().fg(PINK),
     }
 }
 
@@ -954,7 +1069,7 @@ fn dark_document() -> DocPalette {
     }
 }
 
-/// The twelve Nord colours that the slots spend.
+/// The fourteen Nord colours that the slots spend.
 ///
 /// The family's palette has sixteen values in four groups: polar night
 /// (nord0–3), snow storm (nord4–6), frost (nord7–10) and aurora (nord11–15).
@@ -983,6 +1098,10 @@ mod nord {
     pub const NORD9: Color = Color::Rgb(0x81, 0xa1, 0xc1);
     /// nord11: the error colour.
     pub const NORD11: Color = Color::Rgb(0xbf, 0x61, 0x6a);
+    /// nord12: the runner's role, the aurora's orange.
+    pub const NORD12: Color = Color::Rgb(0xd0, 0x87, 0x70);
+    /// nord15: the orchestrator's role, the aurora's purple.
+    pub const NORD15: Color = Color::Rgb(0xb4, 0x8e, 0xad);
     /// nord13: the warning colour, and the attention colour.
     pub const NORD13: Color = Color::Rgb(0xeb, 0xcb, 0x8b);
     /// nord14: the success colour.
@@ -996,8 +1115,10 @@ mod nord {
 /// it assumes a terminal with a dark background and paints none of its own.
 fn nord_style(slot: Slot) -> Style {
     use nord::{
-        NORD0, NORD2, NORD3, NORD4, NORD5, NORD6, NORD7, NORD8, NORD9, NORD11, NORD13, NORD14,
+        NORD0, NORD2, NORD3, NORD4, NORD5, NORD6, NORD7, NORD8, NORD9, NORD11, NORD12, NORD13,
+        NORD14, NORD15,
     };
+    let surface = surface_of(NORD0);
     match slot {
         // The brightest foreground: the name of the tool.
         Slot::ChromeTitle => Style::new().fg(NORD6).add_modifier(Modifier::BOLD),
@@ -1022,8 +1143,12 @@ fn nord_style(slot: Slot) -> Style {
         Slot::TextDim => Style::new().fg(NORD4),
         // The raised foreground: a count, a title that matters.
         Slot::TextStrong => Style::new().fg(NORD6).add_modifier(Modifier::BOLD),
-        // The selection is the accent, whole: the base colour on it.
+        // The mark in a document: the accent whole, with the base on it.
         Slot::TextSelected => Style::new().fg(NORD0).bg(NORD8),
+        // The selected row: a tint a step toward the accent from the surface.
+        Slot::TextSelectedBg => Style::new().bg(selection_of(surface, NORD8)),
+        // A step darker than the base, for the sidebar.
+        Slot::ChromeSurface => Style::new().bg(surface),
         // A clean result, a finished task.
         Slot::SemanticOk => Style::new().fg(NORD14),
         // Something wants attention and is not broken.
@@ -1037,6 +1162,10 @@ fn nord_style(slot: Slot) -> Style {
         Slot::SemanticHuman => Style::new().fg(NORD8),
         // The agent lane takes the second accent.
         Slot::SemanticAgent => Style::new().fg(NORD7),
+        // The roles take the aurora's purple and orange, and the frost.
+        Slot::RoleOrchestrator => Style::new().fg(NORD15),
+        Slot::RoleRunner => Style::new().fg(NORD12),
+        Slot::RoleReviewer => Style::new().fg(NORD9),
     }
 }
 
@@ -1090,10 +1219,10 @@ fn nord_document() -> DocPalette {
     }
 }
 
-/// The fourteen Catppuccin mocha values that the slots spend.
+/// The seventeen Catppuccin mocha values that the slots spend.
 ///
 /// The family's page lists twenty-six values; the mapping in
-/// docs/tui/palettes.md names which role each of these fourteen plays, and
+/// docs/tui/palettes.md names which role each of these seventeen plays, and
 /// why the rest are kept for the record. The flavour is mocha: the other
 /// three wait with the light theme.
 mod catppuccin {
@@ -1128,6 +1257,12 @@ mod catppuccin {
     pub const RED: Color = Color::Rgb(0xf3, 0x8b, 0xa8);
     /// teal: the second accent, the agent lane.
     pub const TEAL: Color = Color::Rgb(0x94, 0xe2, 0xd5);
+    /// pink: the orchestrator's role.
+    pub const PINK: Color = Color::Rgb(0xf5, 0xc2, 0xe7);
+    /// sapphire: the runner's role.
+    pub const SAPPHIRE: Color = Color::Rgb(0x74, 0xc7, 0xec);
+    /// lavender: the reviewer's role.
+    pub const LAVENDER: Color = Color::Rgb(0xb4, 0xbe, 0xfe);
 }
 
 /// The style of a slot in the Catppuccin palette.
@@ -1138,9 +1273,10 @@ mod catppuccin {
 /// paints none of its own.
 fn catppuccin_style(slot: Slot) -> Style {
     use catppuccin::{
-        BASE, GREEN, MAUVE, OVERLAY0, OVERLAY2, PEACH, RED, ROSEWATER, SUBTEXT0, SUBTEXT1,
-        SURFACE1, TEAL, TEXT, YELLOW,
+        BASE, GREEN, LAVENDER, MAUVE, OVERLAY0, OVERLAY2, PEACH, PINK, RED, ROSEWATER, SAPPHIRE,
+        SUBTEXT0, SUBTEXT1, SURFACE1, TEAL, TEXT, YELLOW,
     };
+    let surface = surface_of(BASE);
     match slot {
         // The brightest foreground: the name of the tool. The family names
         // no raised foreground, so the raised and the brightest borrow the
@@ -1168,8 +1304,12 @@ fn catppuccin_style(slot: Slot) -> Style {
         Slot::TextDim => Style::new().fg(SUBTEXT1),
         // The raised foreground: a count, a title that matters.
         Slot::TextStrong => Style::new().fg(ROSEWATER).add_modifier(Modifier::BOLD),
-        // The selection is the accent, whole: the base colour on it.
+        // The mark in a document: the accent whole, with the base on it.
         Slot::TextSelected => Style::new().fg(BASE).bg(MAUVE),
+        // The selected row: a tint a step toward the accent from the surface.
+        Slot::TextSelectedBg => Style::new().bg(selection_of(surface, MAUVE)),
+        // A step darker than the base, for the sidebar.
+        Slot::ChromeSurface => Style::new().bg(surface),
         // A clean result, a finished task.
         Slot::SemanticOk => Style::new().fg(GREEN),
         // Something wants attention and is not broken.
@@ -1182,6 +1322,10 @@ fn catppuccin_style(slot: Slot) -> Style {
         Slot::SemanticHuman => Style::new().fg(MAUVE),
         // The agent lane takes the second accent.
         Slot::SemanticAgent => Style::new().fg(TEAL),
+        // The roles take pink, sapphire and lavender.
+        Slot::RoleOrchestrator => Style::new().fg(PINK),
+        Slot::RoleRunner => Style::new().fg(SAPPHIRE),
+        Slot::RoleReviewer => Style::new().fg(LAVENDER),
     }
 }
 
@@ -1236,11 +1380,11 @@ fn catppuccin_document() -> DocPalette {
     }
 }
 
-/// The eleven Dracula values that the slots spend.
+/// The twelve Dracula values that the slots spend.
 ///
 /// The family's page lists twelve values in its color palette and sixteen in
 /// its ANSI one; the mapping in docs/tui/palettes.md names which role each of
-/// these eleven plays, and why the rest are kept for the record. The variant
+/// these twelve plays, and why the rest are kept for the record. The variant
 /// is Dracula Classic: alucard waits with the light theme.
 mod dracula {
     use ratatui::style::Color;
@@ -1269,6 +1413,8 @@ mod dracula {
     pub const PURPLE: Color = Color::Rgb(0xbd, 0x93, 0xf9);
     /// ANSI bright white: the raised and the brightest foreground.
     pub const BRIGHT_WHITE: Color = Color::Rgb(0xff, 0xff, 0xff);
+    /// pink: the orchestrator's role.
+    pub const PINK: Color = Color::Rgb(0xff, 0x79, 0xc6);
 }
 
 /// The style of a slot in the Dracula palette.
@@ -1278,9 +1424,10 @@ mod dracula {
 /// it assumes a terminal with a dark background and paints none of its own.
 fn dracula_style(slot: Slot) -> Style {
     use dracula::{
-        BACKGROUND, BRIGHT_WHITE, COMMENT, CURRENT_LINE, CYAN, FOREGROUND, GREEN, ORANGE, PURPLE,
-        RED, YELLOW,
+        BACKGROUND, BRIGHT_WHITE, COMMENT, CURRENT_LINE, CYAN, FOREGROUND, GREEN, ORANGE, PINK,
+        PURPLE, RED, YELLOW,
     };
+    let surface = surface_of(BACKGROUND);
     match slot {
         // The brightest foreground: the ANSI bright white, a step above the
         // plain foreground.
@@ -1307,8 +1454,12 @@ fn dracula_style(slot: Slot) -> Style {
         Slot::TextDim => Style::new().fg(COMMENT),
         // The raised foreground: the ANSI bright white.
         Slot::TextStrong => Style::new().fg(BRIGHT_WHITE).add_modifier(Modifier::BOLD),
-        // The selection is the accent, whole: the base colour on it.
+        // The mark in a document: the accent whole, with the base on it.
         Slot::TextSelected => Style::new().fg(BACKGROUND).bg(PURPLE),
+        // The selected row: a tint a step toward the accent from the surface.
+        Slot::TextSelectedBg => Style::new().bg(selection_of(surface, PURPLE)),
+        // A step darker than the base, for the sidebar.
+        Slot::ChromeSurface => Style::new().bg(surface),
         // A clean result, a finished task.
         Slot::SemanticOk => Style::new().fg(GREEN),
         // Something wants attention and is not broken.
@@ -1322,6 +1473,11 @@ fn dracula_style(slot: Slot) -> Style {
         Slot::SemanticHuman => Style::new().fg(PURPLE),
         // The agent lane takes the second accent.
         Slot::SemanticAgent => Style::new().fg(CYAN),
+        // The roles take pink, and the two hues the family already spends
+        // for the agent lane and the attention colour.
+        Slot::RoleOrchestrator => Style::new().fg(PINK),
+        Slot::RoleRunner => Style::new().fg(CYAN),
+        Slot::RoleReviewer => Style::new().fg(YELLOW),
     }
 }
 
@@ -1402,6 +1558,11 @@ fn terminal_style(slot: Slot) -> Style {
         Slot::TextDim => Style::new().add_modifier(Modifier::DIM),
         Slot::TextStrong => Style::new().add_modifier(Modifier::BOLD),
         Slot::TextSelected => Style::new().add_modifier(Modifier::REVERSED),
+        // The terminal has no tint: the selected row is reversed, as the
+        // selection always was.
+        Slot::TextSelectedBg => Style::new().add_modifier(Modifier::REVERSED),
+        // The terminal's own background is the surface: nothing is painted.
+        Slot::ChromeSurface => Style::new(),
         // The six semantic slots are pairwise distinct, and none of them
         // paints like ordinary text: the phases are told apart by the
         // attributes alone.
@@ -1420,6 +1581,16 @@ fn terminal_style(slot: Slot) -> Style {
         Slot::SemanticAgent => Style::new()
             .add_modifier(Modifier::BOLD)
             .add_modifier(Modifier::ITALIC),
+        // The roles are told apart by attributes no semantic slot holds.
+        Slot::RoleOrchestrator => Style::new()
+            .add_modifier(Modifier::ITALIC)
+            .add_modifier(Modifier::UNDERLINED),
+        Slot::RoleRunner => Style::new()
+            .add_modifier(Modifier::DIM)
+            .add_modifier(Modifier::ITALIC),
+        Slot::RoleReviewer => Style::new()
+            .add_modifier(Modifier::UNDERLINED)
+            .add_modifier(Modifier::DIM),
     }
 }
 
@@ -1700,16 +1871,21 @@ mod tests {
                 "chrome.border_focus",
                 "chrome.footer",
                 "chrome.key",
+                "chrome.surface",
                 "text.normal",
                 "text.dim",
                 "text.strong",
                 "text.selected",
+                "text.selected_bg",
                 "semantic.ok",
                 "semantic.warn",
                 "semantic.error",
                 "semantic.info",
                 "semantic.human",
                 "semantic.agent",
+                "role.orchestrator",
+                "role.runner",
+                "role.reviewer",
             ]
         );
         let mut sorted = names.clone();
@@ -1839,6 +2015,110 @@ mod tests {
             (other, one)
         };
         (light + 0.05) / (dark + 0.05)
+    }
+
+    #[test]
+    fn the_words_read_on_the_base_the_surface_and_the_selected_tint() {
+        // The sidebar draws its words on the surface, and a selected row
+        // draws them on the tint. Each word there is held to the floor the
+        // doc states, 3:1, on every background it sits on.
+        for preset in colour_presets() {
+            let theme = Theme::preset(preset);
+            let base = document_base(preset);
+            let surface = theme.chrome.surface.bg.expect("the surface is a colour");
+            let tint = theme.text.selected_bg.bg.expect("the tint is a colour");
+            for slot in [
+                Slot::ChromeTabActive,
+                Slot::TextNormal,
+                Slot::TextDim,
+                Slot::TextStrong,
+                Slot::SemanticOk,
+                Slot::SemanticWarn,
+                Slot::SemanticError,
+                Slot::SemanticInfo,
+                Slot::SemanticHuman,
+                Slot::SemanticAgent,
+                Slot::RoleOrchestrator,
+                Slot::RoleRunner,
+                Slot::RoleReviewer,
+            ] {
+                let foreground = theme.slot(slot).fg.expect("a word is a colour");
+                for behind in [base, surface, tint] {
+                    let ratio = contrast(foreground, behind);
+                    assert!(
+                        ratio >= 3.0,
+                        "{} reads at {ratio:.1}:1 in the {} preset, and a word needs 3:1",
+                        slot.name(),
+                        preset.name()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_selected_tint_is_a_step_from_the_surface() {
+        // The tint is subtle: it differs from the surface, and it is a step
+        // from it, not a fill. The step is at least 1.15:1, so the tint is
+        // visible where the base and the tint are close, and under 1.5:1.
+        for preset in colour_presets() {
+            let theme = Theme::preset(preset);
+            let surface = theme.chrome.surface.bg.expect("the surface is a colour");
+            let tint = theme.text.selected_bg.bg.expect("the tint is a colour");
+            let ratio = contrast(surface, tint);
+            assert!(
+                (1.15..1.5).contains(&ratio),
+                "the {} preset's tint is {ratio:.2}:1 from the surface, and a step is 1.15:1 to 1.5:1",
+                preset.name()
+            );
+        }
+    }
+
+    #[test]
+    fn the_surface_recedes_below_the_base() {
+        // The sidebar is recessed: each colour preset's surface is darker
+        // than its base.
+        for preset in colour_presets() {
+            let theme = Theme::preset(preset);
+            let surface = theme.chrome.surface.bg.expect("the surface is a colour");
+            assert!(
+                luminance(surface) < luminance(document_base(preset)),
+                "the {} preset's surface is not darker than its base",
+                preset.name()
+            );
+        }
+    }
+
+    #[test]
+    fn the_terminal_roles_are_told_apart() {
+        // The roles name no hue in the terminal, so they are told apart by
+        // attribute: each holds a set no other role or semantic slot holds.
+        let theme = Theme::preset(Preset::Terminal);
+        let roles = [Slot::RoleOrchestrator, Slot::RoleRunner, Slot::RoleReviewer];
+        let others = [
+            Slot::TextNormal,
+            Slot::SemanticOk,
+            Slot::SemanticWarn,
+            Slot::SemanticError,
+            Slot::SemanticInfo,
+            Slot::SemanticHuman,
+            Slot::SemanticAgent,
+        ];
+        for slot in roles {
+            let style = theme.slot(slot);
+            for other in roles.iter().chain(others.iter()) {
+                if *other == slot {
+                    continue;
+                }
+                assert_ne!(
+                    style,
+                    theme.slot(*other),
+                    "{} paints like {}",
+                    slot.name(),
+                    other.name()
+                );
+            }
+        }
     }
 
     #[test]
@@ -1991,7 +2271,7 @@ mod tests {
         assert_eq!(
             rows.len(),
             Slot::ALL.len(),
-            "the doc's dark table does not hold the eighteen slots"
+            "the doc's dark table does not hold every slot"
         );
         for (slot, foreground, background, bold) in rows {
             let style = theme.slot(
@@ -2104,7 +2384,24 @@ mod tests {
 
     /// The slots that hold a word. The chrome that draws lines is not one.
     fn is_a_word(slot: &str) -> bool {
-        !matches!(slot, "chrome.border" | "chrome.tab_index")
+        !matches!(
+            slot,
+            "chrome.border" | "chrome.tab_index" | "chrome.surface" | "text.selected_bg"
+        )
+    }
+
+    /// The slots that paint a background and no word: the surface and the
+    /// selected row's tint.
+    fn is_a_background(slot: Slot) -> bool {
+        matches!(slot, Slot::ChromeSurface | Slot::TextSelectedBg)
+    }
+
+    /// The slots that hold a word: every slot but the backgrounds.
+    fn words() -> usize {
+        Slot::ALL
+            .iter()
+            .filter(|slot| !is_a_background(**slot))
+            .count()
     }
 
     #[test]
@@ -2279,6 +2576,8 @@ mod tests {
             "nord8" => nord::NORD8,
             "nord9" => nord::NORD9,
             "nord11" => nord::NORD11,
+            "nord12" => nord::NORD12,
+            "nord15" => nord::NORD15,
             "nord13" => nord::NORD13,
             "nord14" => nord::NORD14,
             other => panic!("{other} is not a Nord colour the slots spend"),
@@ -2303,12 +2602,22 @@ mod tests {
         assert_eq!(
             rows.len(),
             Slot::ALL.len(),
-            "the doc's Nord table does not hold the eighteen slots"
+            "the doc's Nord table does not hold every slot"
         );
         for (name, _, colour) in rows {
             let slot = slot_named(&name);
             let style = theme.slot(slot);
-            if slot == Slot::TextSelected {
+            if is_a_background(slot) {
+                assert_eq!(
+                    style.fg, None,
+                    "{name} paints a foreground the doc does not record"
+                );
+                assert_eq!(
+                    style.bg,
+                    Some(colour),
+                    "{name} paints a background the doc does not record"
+                );
+            } else if slot == Slot::TextSelected {
                 // The doc records the accent; the selection puts the base
                 // on it, the pair the palette records.
                 assert_eq!(
@@ -2340,6 +2649,9 @@ mod tests {
         // The value beside a role is the value the page gives that role:
         // the table's role cell and its value cell agree with each other.
         for (name, role, colour) in nord_rows() {
+            if is_a_background(slot_named(&name)) {
+                continue;
+            }
             let role = role.split_whitespace().next().expect("a role");
             assert_eq!(
                 nord_colour(role),
@@ -2357,7 +2669,7 @@ mod tests {
         let rows = family_ratios(&section(PALETTES, "Nord"));
         assert_eq!(
             rows.len(),
-            Slot::ALL.len(),
+            words(),
             "the doc's Nord table states {} figures",
             rows.len()
         );
@@ -2375,7 +2687,7 @@ mod tests {
             );
             checked += 1;
         }
-        assert_eq!(checked, Slot::ALL.len(), "Nord states {checked} figures");
+        assert_eq!(checked, words(), "Nord states {checked} figures");
     }
 
     #[test]
@@ -2389,7 +2701,9 @@ mod tests {
                 continue;
             }
             let style = theme.slot(slot);
-            let foreground = style.fg.expect("a Nord slot has a foreground");
+            let Some(foreground) = style.fg else {
+                continue;
+            };
             let behind = style.bg.unwrap_or(nord::NORD0);
             let ratio = contrast(foreground, behind);
             assert!(
@@ -2437,9 +2751,9 @@ mod tests {
         // values, so the gate reads them: each is the page's, and none is
         // painted.
         let section = section(PALETTES, "Nord");
-        let kept = ["nord1", "nord10", "nord12", "nord15"];
+        let kept = ["nord1", "nord10"];
         let recorded = section
-            .split_once("**nord1, nord10, nord12 and nord15 are kept for the record.**")
+            .split_once("**nord1 and nord10 are kept for the record.**")
             .expect("the Nord section no longer records the kept values")
             .1;
         for role in kept {
@@ -2577,7 +2891,7 @@ mod tests {
         );
     }
     /// Mocha, as the family's page lists it: every value, in the page's
-    /// order. The slots spend fourteen of the twenty-six; the rest are kept
+    /// order. The slots spend seventeen of the twenty-six; the rest are kept
     /// for the record, and the doc's page table is the page's list.
     const MOCHA_PAGE: [(&str, Color); 26] = [
         ("rosewater", Color::Rgb(0xf5, 0xe0, 0xdc)),
@@ -2637,6 +2951,9 @@ mod tests {
             "overlay2" => catppuccin::OVERLAY2,
             "overlay0" => catppuccin::OVERLAY0,
             "surface1" => catppuccin::SURFACE1,
+            "pink" => catppuccin::PINK,
+            "sapphire" => catppuccin::SAPPHIRE,
+            "lavender" => catppuccin::LAVENDER,
             "mauve" => catppuccin::MAUVE,
             "yellow" => catppuccin::YELLOW,
             "green" => catppuccin::GREEN,
@@ -2719,12 +3036,22 @@ mod tests {
         assert_eq!(
             rows.len(),
             Slot::ALL.len(),
-            "the doc's Catppuccin table does not hold the eighteen slots"
+            "the doc's Catppuccin table does not hold every slot"
         );
         for (name, _, colour) in rows {
             let slot = slot_named(&name);
             let style = theme.slot(slot);
-            if slot == Slot::TextSelected {
+            if is_a_background(slot) {
+                assert_eq!(
+                    style.fg, None,
+                    "{name} paints a foreground the doc does not record"
+                );
+                assert_eq!(
+                    style.bg,
+                    Some(colour),
+                    "{name} paints a background the doc does not record"
+                );
+            } else if slot == Slot::TextSelected {
                 // The doc records the accent; the selection puts the base
                 // on it, the pair the palette records.
                 assert_eq!(
@@ -2756,6 +3083,9 @@ mod tests {
         // The value beside a role is the value the page gives that role:
         // the table's role cell and its mocha cell agree with each other.
         for (name, role, colour) in catppuccin_rows() {
+            if is_a_background(slot_named(&name)) {
+                continue;
+            }
             let role = role.split_whitespace().next().expect("a role");
             assert_eq!(
                 catppuccin_colour(role),
@@ -2774,7 +3104,7 @@ mod tests {
         let rows = family_ratios(&section(PALETTES, "Catppuccin"));
         assert_eq!(
             rows.len(),
-            Slot::ALL.len(),
+            words(),
             "the doc's Catppuccin table states {} figures",
             rows.len()
         );
@@ -2792,11 +3122,7 @@ mod tests {
             );
             checked += 1;
         }
-        assert_eq!(
-            checked,
-            Slot::ALL.len(),
-            "Catppuccin states {checked} figures"
-        );
+        assert_eq!(checked, words(), "Catppuccin states {checked} figures");
     }
 
     #[test]
@@ -2809,7 +3135,9 @@ mod tests {
                 continue;
             }
             let style = theme.slot(slot);
-            let foreground = style.fg.expect("a Catppuccin slot has a foreground");
+            let Some(foreground) = style.fg else {
+                continue;
+            };
             let behind = style.bg.unwrap_or(catppuccin::BASE);
             let ratio = contrast(foreground, behind);
             assert!(
@@ -2911,6 +3239,7 @@ mod tests {
             "cyan" => dracula::CYAN,
             "purple" => dracula::PURPLE,
             "ANSI bright white" => dracula::BRIGHT_WHITE,
+            "pink" => dracula::PINK,
             other => panic!("{other} is not a Dracula colour the slots spend"),
         }
     }
@@ -3175,7 +3504,7 @@ mod tests {
             ),
             (
                 "Dracula",
-                "With the color palette's ten",
+                "With the color palette's eleven",
                 vec![colour_spent, page_spent],
             ),
             (
@@ -3343,12 +3672,22 @@ mod tests {
         assert_eq!(
             rows.len(),
             Slot::ALL.len(),
-            "the doc's Dracula table does not hold the eighteen slots"
+            "the doc's Dracula table does not hold every slot"
         );
         for (name, _, colour) in rows {
             let slot = slot_named(&name);
             let style = theme.slot(slot);
-            if slot == Slot::TextSelected {
+            if is_a_background(slot) {
+                assert_eq!(
+                    style.fg, None,
+                    "{name} paints a foreground the doc does not record"
+                );
+                assert_eq!(
+                    style.bg,
+                    Some(colour),
+                    "{name} paints a background the doc does not record"
+                );
+            } else if slot == Slot::TextSelected {
                 // The doc records the accent; the selection puts the base
                 // on it, the pair the palette records.
                 assert_eq!(
@@ -3381,6 +3720,9 @@ mod tests {
         // the table's role cell and its value cell agree with each other.
         let rows = dracula_rows();
         for (name, role, colour) in &rows {
+            if is_a_background(slot_named(name)) {
+                continue;
+            }
             assert_eq!(
                 dracula_colour(role),
                 *colour,
@@ -3412,7 +3754,7 @@ mod tests {
         let rows = family_ratios(&section(PALETTES, "Dracula"));
         assert_eq!(
             rows.len(),
-            Slot::ALL.len(),
+            words(),
             "the doc's Dracula table states {} figures",
             rows.len()
         );
@@ -3430,21 +3772,23 @@ mod tests {
             );
             checked += 1;
         }
-        assert_eq!(checked, Slot::ALL.len(), "Dracula states {checked} figures");
+        assert_eq!(checked, words(), "Dracula states {checked} figures");
     }
 
     #[test]
     fn the_dracula_preset_reads_on_its_background() {
         // Every word clears the floor the doc states; only the border and
         // the index are lines. The comment is the family's one dimmed grey,
-        // and it reads at 3.0:1 — the floor, not below it.
+        // and it reads at 3.0:1 on the base — the floor, not below it.
         let theme = Theme::preset(Preset::Dracula);
         for slot in Slot::ALL {
             if matches!(slot, Slot::ChromeBorder | Slot::ChromeTabIndex) {
                 continue;
             }
             let style = theme.slot(slot);
-            let foreground = style.fg.expect("a Dracula slot has a foreground");
+            let Some(foreground) = style.fg else {
+                continue;
+            };
             let behind = style.bg.unwrap_or(dracula::BACKGROUND);
             let ratio = contrast(foreground, behind);
             assert!(
@@ -3458,8 +3802,9 @@ mod tests {
     #[test]
     fn the_dracula_preset_invents_no_colour() {
         // Rule 9: a theme is a palette, not a mood. Every colour the preset
-        // paints is a value the page lists, in one of its two palettes, so a
-        // slot cannot be filled from memory.
+        // paints is a value the page lists, in one of its two palettes, or
+        // one of the two backgrounds the mapping derives from the page's own
+        // values, so a slot cannot be filled from memory.
         let section = section(PALETTES, "Dracula");
         let colours = page_rows(&subsection(
             &section,
@@ -3479,9 +3824,32 @@ mod tests {
             DRACULA_COLOURS.len() + DRACULA_ANSI.len(),
             "the doc does not record both of the page's palettes"
         );
+        let value = |role: &str| {
+            colours
+                .iter()
+                .find(|(name, _)| name == role)
+                .unwrap_or_else(|| panic!("the page has no {role}"))
+                .1
+        };
+        let surface = surface_of(value("background"));
+        let tint = selection_of(surface, value("purple"));
         let theme = Theme::preset(Preset::Dracula);
         for slot in Slot::ALL {
             let style = theme.slot(slot);
+            let derived = match slot {
+                Slot::ChromeSurface => Some(surface),
+                Slot::TextSelectedBg => Some(tint),
+                _ => None,
+            };
+            if let Some(derived) = derived {
+                assert_eq!(
+                    style.bg,
+                    Some(derived),
+                    "{} is not the background the mapping derives",
+                    slot.name()
+                );
+                continue;
+            }
             for colour in [style.fg, style.bg].into_iter().flatten() {
                 assert!(
                     page.contains(&colour),
@@ -3746,10 +4114,12 @@ mod tests {
             (Slot::ChromeBorderFocus, Modifier::BOLD),
             (Slot::ChromeFooter, Modifier::DIM),
             (Slot::ChromeKey, Modifier::BOLD | Modifier::REVERSED),
+            (Slot::ChromeSurface, Modifier::empty()),
             (Slot::TextNormal, Modifier::empty()),
             (Slot::TextDim, Modifier::DIM),
             (Slot::TextStrong, Modifier::BOLD),
             (Slot::TextSelected, Modifier::REVERSED),
+            (Slot::TextSelectedBg, Modifier::REVERSED),
             (Slot::SemanticOk, Modifier::ITALIC),
             (Slot::SemanticWarn, Modifier::UNDERLINED),
             (
@@ -3759,6 +4129,12 @@ mod tests {
             (Slot::SemanticInfo, Modifier::BOLD | Modifier::DIM),
             (Slot::SemanticHuman, Modifier::BOLD | Modifier::UNDERLINED),
             (Slot::SemanticAgent, Modifier::BOLD | Modifier::ITALIC),
+            (
+                Slot::RoleOrchestrator,
+                Modifier::ITALIC | Modifier::UNDERLINED,
+            ),
+            (Slot::RoleRunner, Modifier::DIM | Modifier::ITALIC),
+            (Slot::RoleReviewer, Modifier::UNDERLINED | Modifier::DIM),
         ];
         for (slot, attributes) in expected {
             let style = theme.slot(slot);

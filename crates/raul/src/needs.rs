@@ -1653,7 +1653,7 @@ mod tests {
     #[test]
     fn a_selected_row_takes_the_selection_slot_and_the_others_keep_their_reason() {
         let theme = theme();
-        let selection = theme.text.selected;
+        let selection = theme.text.selected_bg;
         let groups = groups(&human_lane(), "2026-11-07T16:00:00Z");
         let approve = &groups[0].rows[0];
         let escalated = &groups[2].rows[0];
@@ -1674,7 +1674,11 @@ mod tests {
             "the bar"
         );
         for span in &selected.spans[1..] {
-            assert_eq!(span.style, selection, "{:?} is not the selection", span);
+            assert_eq!(
+                span.style.bg, selection.bg,
+                "{:?} is not the selection",
+                span
+            );
         }
         // A later row is not painted as the selection.
         let other = row_line(escalated, 60, 2, IconSet::Nerd, &theme, Some("TSK01"));
@@ -1753,7 +1757,7 @@ mod tests {
             Some("TSK01"),
         );
         assert_eq!(line_text(&line), "TSK01");
-        assert_eq!(line.spans[0].style, theme.text.selected);
+        assert_eq!(line.spans[0].style.bg, theme.text.selected_bg.bg);
     }
 
     #[test]
@@ -2134,7 +2138,7 @@ mod tests {
     #[test]
     fn a_selected_row_takes_the_selection_paint_over_its_state() {
         let theme = theme();
-        let selection = theme.text.selected;
+        let selection = theme.text.selected_bg;
         let task = reviewed_task(
             5,
             &[
@@ -2153,7 +2157,11 @@ mod tests {
         assert_eq!(line.width(), 60, "the selection bar stops short");
         assert_eq!(line.spans[0].style, theme.chrome.border_focus, "the bar");
         for span in &line.spans[1..] {
-            assert_eq!(span.style, selection, "{:?} is not the selection", span);
+            assert_eq!(
+                span.style.bg, selection.bg,
+                "{:?} is not the selection",
+                span
+            );
         }
     }
 

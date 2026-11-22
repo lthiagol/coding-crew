@@ -40,21 +40,49 @@ key; the right is where a family's role comes from.
 | `chrome.border_focus` | `toc_accent` | the family's accent |
 | `chrome.footer` | `status_shortcut_fg` | the family's dimmed foreground — its muted one where the dimmed is a border grade |
 | `chrome.key` | `status_search_fg` | the family's attention colour |
+| `chrome.surface` | — ours | the base mixed 30% toward black — derived |
 | `text.normal` | `toc_hover_fg` | the family's main foreground |
 | `text.dim` | `toc_header_fg` | the family's muted foreground |
 | `text.strong` | `toc_secondary_text_active` | a raised foreground |
-| `text.selected` | `toc_active_bg` | the accent, at full opacity |
+| `text.selected` | `toc_active_bg` | the accent, at full opacity — the mark in a document |
+| `text.selected_bg` | — ours | the surface mixed 10% toward the accent — derived |
 | `semantic.ok` | `status_success_fg` | the family's success colour |
 | `semantic.warn` | `status_warning_fg` | the family's warning colour |
 | `semantic.error` | `status_error_fg` | the family's error colour |
 | `semantic.info` | `status_filename_fg` | the family's nearest-neutral foreground |
 | `semantic.human` | `toc_accent` | the family's accent |
 | `semantic.agent` | `status_watch_fg` | the family's second accent |
+| `role.orchestrator` | — ours | a hue of the family's own, named per family |
+| `role.runner` | — ours | a hue of the family's own, named per family |
+| `role.reviewer` | — ours | a hue of the family's own, named per family |
 
 The last two are ours: the human lane and the agent lane need two colours that
 are not "success" and "error". The accent and the second accent are the
 natural pair — the accent is already the focus colour, so the agent lane takes
 the other one.
+
+**The two backgrounds are derived.** The sidebar is recessed: its surface is
+the base mixed 30% toward black, a step darker than the base, so the sidebar
+sits below the main pane rather than on top of it. The selected row's tint is
+the surface mixed 10% toward the accent. The step is the floor the tint must
+clear: at 1.15:1 or more against the surface, the tint shows where the base
+and the tint are close. The code computes both from the palette's own values,
+and the tables below record the figures the test recomputes. The tint is a
+background under the row's text, not a mark: the row keeps its own colours,
+and the bar is what marks it.
+
+The shares are set together. At a quarter toward black, the dark palette's
+step reaches 1.15:1 only at a tint share near 10%, and there Dracula's comment
+falls to 2.9:1 on the tint; no pair holds both. At 30% and 10%, every word
+clears 3:1 on the base, the surface and the tint, and every colour preset's
+step is 1.16:1 or more.
+
+**The roles are three hues.** `role.orchestrator`, `role.runner` and
+`role.reviewer` are the icon and the name of each agent's role, in the crew
+and in the sidebar. Each takes a different hue of the family's own. Where a
+family has no hue left unspent, a role takes a hue a slot already spends, and
+the family's note says which. The creator takes `semantic.human`, the lane its
+icon is drawn from.
 
 A family that has no role of its own for one of these takes the colour it
 derives for it, and says so in its note below. A family whose dimmed
@@ -96,13 +124,15 @@ own presets are ours. It is the default, and it is the baseline a later
 family theme is compared against.
 
 Its values follow the mapping above: the accent is the focus border, the
-selection and the human lane; the second accent is the agent lane; the
-information colour is a neutral foreground. The selected row is the accent
-whole, with the background colour as its foreground: 9.7:1.
+mark and the human lane; the second accent is the agent lane; the information
+colour is a neutral foreground. The selected row is the tint `#141e28` under
+the row's own colours, and the mark in a document is the accent whole, with
+the background colour as its foreground: 9.7:1.
 
 **The palette assumes a terminal with a dark background, and raul paints no
-background of its own.** Every figure below is measured against `#0d1117`,
-the background the palette is measured against.
+background of its own beyond the derived ones.** Every figure below is
+measured against `#0d1117`, the background the palette is measured against.
+The surface and the tint are the only backgrounds the palette paints.
 
 The eighteen slots, with the role each value plays and the attributes it
 carries. The doc is the source of truth: the code is checked against this
@@ -118,16 +148,21 @@ table by a test.
 | `chrome.border_focus` | the accent | `#79c0ff` | — | — |
 | `chrome.footer` | the dimmed foreground | `#7d8590` | — | — |
 | `chrome.key` | the attention colour | `#ffd166` | — | bold |
+| `chrome.surface` | the base mixed 30% toward black | — | `#090c10` | — |
 | `text.normal` | the main foreground | `#c9d1d9` | — | — |
 | `text.dim` | the muted foreground | `#8b949e` | — | — |
 | `text.strong` | the raised foreground | `#e6edf3` | — | bold |
-| `text.selected` | the accent, at full opacity | `#0d1117` | `#79c0ff` | — |
+| `text.selected` | the mark: the accent, at full opacity | `#0d1117` | `#79c0ff` | — |
+| `text.selected_bg` | the surface mixed 10% toward the accent | — | `#141e28` | — |
 | `semantic.ok` | the success colour | `#7ec699` | — | — |
 | `semantic.warn` | the warning colour | `#ff9e64` | — | — |
 | `semantic.error` | the error colour | `#e06c75` | — | — |
 | `semantic.info` | a neutral foreground | `#b0b0b0` | — | — |
 | `semantic.human` | the accent | `#79c0ff` | — | — |
 | `semantic.agent` | the second accent | `#d2a8ff` | — | — |
+| `role.orchestrator` | the attention yellow | `#ffd166` | — | — |
+| `role.runner` | a teal, apart from the agent's violet | `#56d4dd` | — | — |
+| `role.reviewer` | a pink, apart from the error's red | `#ff9bd2` | — | — |
 
 **The agent lane does not use blue.** ANSI blue is `#0000ee`: about 2.0:1 on
 the background, the lowest-contrast colour of the fifteen other than black,
@@ -146,6 +181,9 @@ Contrast against `#0d1117`, for the record:
 | `#9aa5b1` | 7.6:1 | | `#8b949e` dim | 6.2:1 |
 | | | | `#7d8590` dimmed | 5.1:1 |
 | | | | `#3d444d` border | 1.9:1 |
+| | | | `#ffd166` orchestrator | 13.1:1 |
+| | | | `#56d4dd` runner | 10.7:1 |
+| | | | `#ff9bd2` reviewer | 9.8:1 |
 
 Every foreground that carries text is at 5.1:1 or better. The border is the
 one value below that: it is a line, not a word.
@@ -156,8 +194,8 @@ Four flavours: **latte** (light), **frappé**, **macchiato**, **mocha** (dark).
 Source: [catppuccin.com/palette](https://catppuccin.com/palette/).
 
 The base is `#303446` in frappé, `#24273a` in macchiato and `#1e1e2e` in mocha
-— the family's own. The theme paints no background of its own, and every
-figure below is measured against the base of the flavour.
+— the family's own. The theme paints no background of its own beyond the derived
+ones, and every figure below is measured against the base of the flavour.
 
 | slot | the family's role | frappé | macchiato | mocha |
 |---|---|---|---|---|
@@ -169,16 +207,21 @@ figure below is measured against the base of the flavour.
 | `chrome.border_focus` | mauve — the accent | `#ca9ee6` | `#c6a0f6` | `#cba6f7` |
 | `chrome.footer` | subtext1 — borrowed: the muted foreground | `#b5bfe2` | `#b8c0e0` | `#bac2de` |
 | `chrome.key` | yellow — the attention colour | `#e5c890` | `#eed49f` | `#f9e2af` |
+| `chrome.surface` | the base mixed 30% toward black — derived | `#222431` | `#191b29` | `#151520` |
 | `text.normal` | text — the main foreground | `#c6d0f5` | `#cad3f5` | `#cdd6f4` |
 | `text.dim` | subtext1 — the muted foreground | `#b5bfe2` | `#b8c0e0` | `#bac2de` |
 | `text.strong` | rosewater — the raised foreground | `#f2d5cf` | `#f4dbd6` | `#f5e0dc` |
-| `text.selected` | mauve — the accent, at full opacity | `#ca9ee6` | `#c6a0f6` | `#cba6f7` |
+| `text.selected` | mauve — the mark: the accent, at full opacity | `#ca9ee6` | `#c6a0f6` | `#cba6f7` |
+| `text.selected_bg` | the surface mixed 10% toward mauve — derived | `#333043` | `#2a283e` | `#272436` |
 | `semantic.ok` | green — the success colour | `#a6d189` | `#a6da95` | `#a6e3a1` |
 | `semantic.warn` | peach — the warning colour | `#ef9f76` | `#f5a97f` | `#fab387` |
 | `semantic.error` | red — the error colour | `#e78284` | `#ed8796` | `#f38ba8` |
 | `semantic.info` | subtext0 — **the neutral** | `#a5adce` | `#a5adcb` | `#a6adc8` |
 | `semantic.human` | mauve — the accent | `#ca9ee6` | `#c6a0f6` | `#cba6f7` |
 | `semantic.agent` | teal — the second accent | `#81c8be` | `#8bd5ca` | `#94e2d5` |
+| `role.orchestrator` | pink | `#f4b8e4` | `#f5bde6` | `#f5c2e7` |
+| `role.runner` | sapphire | `#85c1dc` | `#7dc4e4` | `#74c7ec` |
+| `role.reviewer` | lavender | `#babbf1` | `#b7bdf8` | `#b4befe` |
 
 Contrast against the base, for the record:
 
@@ -202,6 +245,9 @@ Contrast against the base, for the record:
 | `semantic.info` | 5.6:1 | 6.6:1 | 7.4:1 |
 | `semantic.human` | 5.6:1 | 6.8:1 | 8.1:1 |
 | `semantic.agent` | 6.4:1 | 8.7:1 | 11.0:1 |
+| `role.orchestrator` | 7.5:1 | 9.3:1 | 10.7:1 |
+| `role.runner` | 6.3:1 | 7.6:1 | 8.7:1 |
+| `role.reviewer` | 6.7:1 | 8.2:1 | 9.2:1 |
 
 **The title and the raised text borrow `rosewater`.** Catppuccin names no
 raised foreground: in the dark flavours every grey it has is dimmer than its
@@ -235,6 +281,11 @@ frappé and 8.1:1 in mocha.
 
 **The blue is kept for the record.** It is not used by any slot.
 
+**The roles are pink, sapphire and lavender.** Pink is the orchestrator's,
+sapphire the runner's and lavender the reviewer's. Lavender sits close to
+mauve, the accent, and it is the role nearest the human lane's colour; the
+roles still read apart in every flavour.
+
 **Only mocha is a preset.** The table above records the three dark flavours
 because they share a mapping, but the preset built from this family is
 mocha; latte, frappé and macchiato wait with the light theme.
@@ -242,7 +293,7 @@ mocha; latte, frappé and macchiato wait with the light theme.
 ### Mocha, as the page lists it
 
 Every value [catppuccin.com/palette](https://catppuccin.com/palette/) lists
-for mocha, in the page's order. The slots spend fourteen of the twenty-six
+for mocha, in the page's order. The slots spend seventeen of the twenty-six
 values the page lists; the rest are kept for the record.
 
 | role | mocha |
@@ -280,7 +331,8 @@ Two variants: **Dracula Classic** (dark) and **Alucard Classic** (light).
 Source: [draculatheme.com/spec](https://draculatheme.com/spec).
 
 The base is `#282A36` — the family's own background. The theme paints no
-background of its own, and every figure below is measured against it.
+background of its own beyond the derived ones, and every figure below is
+measured against the base.
 
 | slot | the family's role | dracula |
 |---|---|---|
@@ -292,16 +344,21 @@ background of its own, and every figure below is measured against it.
 | `chrome.border_focus` | purple — the accent | `#BD93F9` |
 | `chrome.footer` | comment — the dimmed foreground | `#6272A4` |
 | `chrome.key` | yellow — the attention colour | `#F1FA8C` |
+| `chrome.surface` | the base mixed 30% toward black — derived | `#1C1D26` |
 | `text.normal` | foreground — the main foreground | `#F8F8F2` |
 | `text.dim` | comment — the muted foreground | `#6272A4` |
 | `text.strong` | ANSI bright white — the raised foreground | `#FFFFFF` |
-| `text.selected` | purple — the accent, at full opacity | `#BD93F9` |
+| `text.selected` | purple — the mark: the accent, at full opacity | `#BD93F9` |
+| `text.selected_bg` | the surface mixed 10% toward purple — derived | `#2C293B` |
 | `semantic.ok` | green — the success colour | `#50FA7B` |
 | `semantic.warn` | orange — the warning colour | `#FFB86C` |
 | `semantic.error` | red — the error colour | `#FF5555` |
 | `semantic.info` | foreground — **the neutral** | `#F8F8F2` |
 | `semantic.human` | purple — the accent | `#BD93F9` |
 | `semantic.agent` | cyan — the second accent | `#8BE9FD` |
+| `role.orchestrator` | pink — the family's one unspent hue | `#FF79C6` |
+| `role.runner` | cyan — the agent lane's hue, reused | `#8BE9FD` |
+| `role.reviewer` | yellow — the attention hue, reused | `#F1FA8C` |
 
 Contrast against the base, for the record:
 
@@ -325,6 +382,9 @@ Contrast against the base, for the record:
 | `semantic.info` | 13.4:1 |
 | `semantic.human` | 5.9:1 |
 | `semantic.agent` | 10.3:1 |
+| `role.orchestrator` | 6.0:1 |
+| `role.runner` | 10.3:1 |
+| `role.reviewer` | 12.7:1 |
 
 Dracula's status colours are **syntax** colours — the spec assigns
 Green/Orange/Red/Yellow to code tokens, and a terminal theme reuses them.
@@ -357,11 +417,22 @@ the comment the same value on purpose, so the border is that grey too.
 foreground the family has, and at 3.0:1 it is at the floor a word needs
 rather than below it, so rule 4 lets it carry the labels.
 
-**The selection is the accent, whole.** Dracula selects with its own
-selection colour `#44475A`; a terminal has no alpha, so the accent is used
-whole: the base colour on the accent, 5.9:1.
+**The muted text clears the floor on every background.** The comment reads at
+3.0:1 on the base, 3.6:1 on the recessed surface and 3.0:1 in the selected
+tint. The tint is the tightest figure, and it is at the floor, not below it:
+the sidebar's keys, which are the muted text, read in this preset as they do
+in the others.
 
-**The pink is kept for the record.** It is not used by any slot.
+**The selected row is a tint, and the mark is the accent.** Dracula selects
+with its own selection colour `#44475A`, which the theme does not spend: the
+selected row is the surface a step toward the purple, the same derivation as
+every family's, and the mark in a document is the accent whole, with the base
+colour on it, 5.9:1.
+
+**The pink is the orchestrator's role.** It is the family's only hue no other
+slot spends, so it takes the orchestrator; the runner and the reviewer take
+the cyan and the yellow that are already spent, so a hue carries a second
+role.
 
 ### The functional colours, as the page lists them
 
@@ -378,8 +449,9 @@ the record, and no slot spends one.
 
 ### The UI backgrounds, as the page lists them
 
-The page names these UI backgrounds, a duplicate included; none is spent,
-because the theme paints no background of its own.
+The page names these UI backgrounds, a duplicate included; none is spent. The
+surface and the tint are derived from the base and the accent, not taken from
+the page's backgrounds.
 
 | context | dracula |
 |---|---|
@@ -399,8 +471,8 @@ guidance, not a palette colour: it adds no token, and no slot spends it.
 
 Every value [draculatheme.com/spec](https://draculatheme.com/spec) lists in
 its color palette for Dracula Classic, in the page's order. The slots spend
-ten of the twelve values in this table; the selection and the pink are kept
-for the record.
+eleven of the twelve values in this table; the selection is kept for the
+record.
 
 | role | dracula |
 |---|---|
@@ -423,7 +495,7 @@ The page publishes a second palette for terminal applications: sixteen
 values, eight of them restating a colour above and eight of them its own. The
 theme takes one of the sixteen by name — the bright white, for the raised and
 the brightest foreground; the other fifteen are kept for the record. With the
-color palette's ten, the theme spends eleven values of the page, and the
+color palette's eleven, the theme spends twelve values of the page, and the
 restatements are not counted twice.
 
 | ANSI token | dracula |
@@ -456,7 +528,8 @@ The palette has sixteen colours in four named groups: **polar night**
 Source: [nordtheme.com/docs/colors-and-palettes](https://www.nordtheme.com/docs/colors-and-palettes).
 
 The base is `#2e3440` — nord0, the family's own. The theme paints no
-background of its own, and every figure below is measured against it.
+background of its own beyond the derived ones, and every figure below is
+measured against the base.
 
 | slot | the family's role | nord |
 |---|---|---|
@@ -468,16 +541,21 @@ background of its own, and every figure below is measured against it.
 | `chrome.border_focus` | nord8 — the accent | `#88c0d0` |
 | `chrome.footer` | nord4 — borrowed: the muted foreground | `#d8dee9` |
 | `chrome.key` | nord13 — the attention colour | `#ebcb8b` |
+| `chrome.surface` | the base mixed 30% toward black — derived | — | `#20242d` |
 | `text.normal` | nord5 — the main foreground | `#e5e9f0` |
 | `text.dim` | nord4 — the muted foreground | `#d8dee9` |
 | `text.strong` | nord6 — the raised foreground | `#eceff4` |
-| `text.selected` | nord8 — the accent, at full opacity | `#88c0d0` |
+| `text.selected` | nord8 — the mark: the accent, at full opacity | `#88c0d0` |
+| `text.selected_bg` | the surface mixed 10% toward nord8 — derived | — | `#2a343d` |
 | `semantic.ok` | nord14 — the success colour | `#a3be8c` |
 | `semantic.warn` | nord13 — the warning colour | `#ebcb8b` |
 | `semantic.error` | nord11 — the error colour | `#bf616a` |
 | `semantic.info` | nord5 — **the neutral** | `#e5e9f0` |
 | `semantic.human` | nord8 — the accent | `#88c0d0` |
 | `semantic.agent` | nord7 — the second accent | `#8fbcbb` |
+| `role.orchestrator` | nord15 — the aurora's purple | `#b48ead` |
+| `role.runner` | nord12 — the aurora's orange | `#d08770` |
+| `role.reviewer` | nord9 — the frost | `#81a1c1` |
 
 Contrast against the base, for the record:
 
@@ -501,6 +579,9 @@ Contrast against the base, for the record:
 | `semantic.info` | 10.3:1 |
 | `semantic.human` | 6.2:1 |
 | `semantic.agent` | 6.0:1 |
+| `role.orchestrator` | 4.4:1 |
+| `role.runner` | 4.4:1 |
+| `role.reviewer` | 4.6:1 |
 
 Nord's light variant follows Nord's own **bright ambiance** style: snow storm
 as the base, polar night as the text. Nord's aurora colours work the same in
@@ -527,11 +608,12 @@ apart — nearer to a plain grey than the muted text's nord4, which is 17. The
 frost and the aurora are hues and not word greys: nord7 is 45 channels apart
 and near enough to the tolerance, but it is the agent lane.
 
-**nord1, nord10, nord12 and nord15 are kept for the record.** nord1
-`#3b4252` is the elevated polar night; the chrome needs only nord2 and nord3.
-nord10 `#5e81ac` is a frost blue, 78 channels apart: a hue of its own, so the
-information takes a neutral instead. nord12 `#d08770` is the aurora's orange
-and nord15 `#b48ead` its purple; neither is a role the slots need.
+**nord1 and nord10 are kept for the record.** nord1 `#3b4252` is the elevated
+polar night; the chrome needs only nord2 and nord3. nord10 `#5e81ac` is a frost
+blue, 78 channels apart: a hue of its own, so the information takes a neutral
+instead. The aurora's orange nord12 and purple nord15 are the runner's and the
+orchestrator's roles, and the reviewer takes the frost, nord9: the family has
+no third aurora hue that reads on the base.
 
 **The second foreground is the frost, nord9.** Nord's palette names no second
 foreground; the theme takes nord9 for the tabs that are not showing, and it
@@ -819,10 +901,12 @@ chrome.border_focus = "#88c0d0"
 # the footer's labels borrow the muted text: the dimmed chrome is a border grade
 chrome.footer = "#d8dee9"
 chrome.key = "#ebcb8b"
+chrome.surface = "#20242d"
 text.normal = "#e5e9f0"
 text.dim = "#d8dee9"
 text.strong = "#eceff4"
 text.selected = "#88c0d0"
+text.selected_bg = "#2a343d"
 semantic.ok = "#a3be8c"
 semantic.warn = "#ebcb8b"
 semantic.error = "#bf616a"
@@ -830,6 +914,9 @@ semantic.error = "#bf616a"
 semantic.info = "#e5e9f0"
 semantic.human = "#88c0d0"
 semantic.agent = "#8fbcbb"
+role.orchestrator = "#b48ead"
+role.runner = "#d08770"
+role.reviewer = "#81a1c1"
 ```
 
 The file format is later; the presets ship as code first.
@@ -839,9 +926,11 @@ The file format is later; the presets ship as code first.
 1. **Every slot gets a value.** A theme that leaves a slot unset falls back
    to the default, and the screen changes between presets — which breaks the
    rule that a theme changes the paint and never the words.
-2. **Selection is the accent at full opacity.** A terminal has no alpha
-   compositing, so a translucent selection does not exist. Every colour theme
-   uses the accent colour whole. This is leaf's rule and Frond kept it.
+2. **Selection is a tint; the mark is the accent at full opacity.** A
+   terminal has no alpha compositing, so a translucent selection does not
+   exist. A selected row takes `text.selected_bg`, a tint a step from the
+   surface toward the accent, and a mark in a document takes the accent whole.
+   This is leaf's rule for the mark, and Frond kept it.
 3. **Dimmed is still readable.** `text.dim` is for secondary text, not for
    text that may be missed: it reads at 3:1 or better on the background it
    sits on. If a family has no dimmed role, derive one from its muted
@@ -865,7 +954,9 @@ The file format is later; the presets ship as code first.
    such role — or that spends every one of them on another role — says in
    its note where its neutral comes from.
 9. **A theme is a palette, not a mood.** No new colours beyond the family's
-   roles, except where rule 6 applies.
+   roles, except where rule 6 applies, or the two backgrounds the mapping
+   derives: `chrome.surface` and `text.selected_bg`, each computed from the
+   family's own values and recorded in its table.
 10. **The preset changes nothing but colour.** The same words, the same layout,
     the same counts. This is checked by the render tests, which run against
     every preset, on every tab.

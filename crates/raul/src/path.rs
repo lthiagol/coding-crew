@@ -2400,7 +2400,7 @@ mod tests {
     #[test]
     fn a_selected_row_takes_the_selection_slot_and_the_others_keep_their_phase() {
         let theme = theme();
-        let selection = theme.text.selected;
+        let selection = theme.text.selected_bg;
         let style = phase_style(&theme, Status::Approved);
         let entry = Entry {
             id: "TSK01".to_string(),
@@ -2424,7 +2424,11 @@ mod tests {
             "the bar"
         );
         for span in &selected[0].spans[1..] {
-            assert_eq!(span.style, selection, "{:?} is not the selection", span);
+            assert_eq!(
+                span.style.bg, selection.bg,
+                "{:?} is not the selection",
+                span
+            );
         }
         // A wrapped row is painted whole: every line of it, note included.
         let mut wrapped = entry.clone();
@@ -2436,7 +2440,11 @@ mod tests {
             assert_eq!(line.width(), 30, "a line of the bar stops short");
             assert_eq!(line.spans[0].style, theme.chrome.border_focus, "the bar");
             for span in &line.spans[1..] {
-                assert_eq!(span.style, selection, "{:?} is not the selection", span);
+                assert_eq!(
+                    span.style.bg, selection.bg,
+                    "{:?} is not the selection",
+                    span
+                );
             }
         }
     }
@@ -2802,7 +2810,7 @@ mod tests {
             assert_eq!(line.width(), 100, "the selection bar stops short");
             assert_eq!(line.spans[0].style, theme.chrome.border_focus, "the bar");
             for span in &line.spans[1..] {
-                assert_eq!(span.style, theme.text.selected, "{:?}", span);
+                assert_eq!(span.style.bg, theme.text.selected_bg.bg, "{:?}", span);
             }
         }
     }

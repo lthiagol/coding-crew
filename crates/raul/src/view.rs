@@ -35,8 +35,9 @@ pub fn bar(selected: bool, icons: IconSet, theme: &Theme) -> Span<'static> {
 
 /// A row whose first span is its bar, painted to `width` columns.
 ///
-/// The selected row is painted whole in `text.selected` after its bar; the
-/// bar keeps its own paint. Any other row is returned as it is.
+/// The selected row's cells keep their own colours on the tint of
+/// `text.selected_bg`; the bar keeps its own paint. Any other row is returned
+/// as it is.
 pub fn selected_row(
     line: Line<'static>,
     width: usize,
@@ -256,7 +257,7 @@ mod tests {
         assert_eq!(row.spans[0].style, theme.chrome.border_focus);
         assert_eq!(row.width(), 5);
         for span in &row.spans[1..] {
-            assert_eq!(span.style, theme.text.selected, "{span:?}");
+            assert_eq!(span.style.bg, theme.text.selected_bg.bg, "{span:?}");
         }
     }
 

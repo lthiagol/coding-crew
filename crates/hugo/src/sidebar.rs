@@ -12,13 +12,13 @@
 //! the theme's marker, and a group that does not fit the height is left out
 //! whole and named with what it held.
 
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
 use coding_crew_core::Role;
 use coding_crew_core::config::Config;
-use coding_crew_theme::text::cut_to;
-use coding_crew_theme::{Icon, IconSet, Theme, selected_line};
+use coding_crew_theme::text::{cut_to, text_width};
+use coding_crew_theme::{Icon, IconSet, Theme, role_style, selected_line};
 
 use crate::config::{ConfigRead, ConfigState};
 
@@ -72,6 +72,9 @@ pub const ORDER_TITLE: &str = "ORDER";
 /// The columns the cursor's bar takes: the first column of every row.
 const BAR: usize = 1;
 
+/// The columns a field's key takes: the longest key, `harness`, and a space.
+const KEY_COLUMN: usize = 8;
+
 /// The sidebar's named empty state: there is no home, so nothing is configured.
 pub const EMPTY: &str = "no configuration yet";
 /// The sidebar's state when the file is there but cannot be read.
@@ -83,18 +86,27 @@ pub const USING_DEFAULTS: &str = "using the defaults:";
 /// is the one still in force.
 pub const NOT_SAVED: &str = "the pick was not saved";
 
-/// One row of a group, before it is cut to the pane.
+/// One row of a group, before it is cut to the pane: its spans, each with
+/// the style it is painted in.
 struct Row {
-    text: String,
-    style: Style,
+    spans: Vec<(String, Style)>,
     /// The cursor is on this row.
     selected: bool,
+}
+
+impl Row {
+    /// A row of one span, painted in one style.
+    fn plain(text: String, style: Style, selected: bool) -> Self {
+        Row {
+            spans: vec![(text, style)],
+            selected,
+        }
+    }
 }
 
 /// One group of the sidebar: its title and its rows.
 struct Group {
     title: &'static str,
-    style: Style,
     rows: Vec<Row>,
 }
 
@@ -221,64 +233,66 @@ fn legacy_notice(file: &str) -> String {
 
 /// The configuration's groups, in the order they are read.
 fn groups(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<Group> {
-    let title = theme.text.dim;
     vec![
         Group {
             title: AGENTS_TITLE,
-            style: title,
             rows: agent_rows(config, theme, icons, cursor),
         },
         Group {
             title: LIMIT_TITLE,
-            style: title,
-            rows: vec![Row {
-                text: format!("{} build-and-fix rounds", config.round_limit),
-                style: theme.text.normal,
-                selected: false,
-            }],
+            rows: vec![Row::plain(
+                format!("{} build-and-fix rounds", config.round_limit),
+                theme.text.normal,
+                false,
+            )],
         },
         Group {
             title: ORDER_TITLE,
-            style: title,
             rows: order_rows(config, theme),
         },
     ]
 }
 
-/// One entry per agent: its role icon and its name and role, then the harness
-/// it runs in, its model and its effort on the rows under it. The head row is
-/// not picked; the cursor is on one of the three rows under it. A model that
-/// is empty, or an effort that is absent, says so on the warning slot.
+/// One entry per agent: its role icon and its name, the name on the role's
+/// slot and the role's word dim, then the harness it runs in, its model and
+/// its effort on the rows under it. The keys are dim and aligned in a column;
+/// the model is the strong value. The head row is not picked; the cursor is on
+/// one of the three rows under it. A model that is empty, or an effort that is
+/// absent, says so on the warning slot.
 fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<Row> {
     let mut rows = Vec::new();
     for (index, agent) in config.agents.iter().enumerate() {
         // A name that is its role is not said twice. The role's word stays
         // beside its icon: an icon decorates a word, it never replaces one.
-        let name = if agent.name == agent.role.as_str() {
-            agent.name.clone()
-        } else {
-            format!("{} · {}", agent.name, agent.role.as_str())
-        };
+        let head = format!("{} {}", role_icon(agent.role).glyph(icons), agent.name);
+        let mut spans = vec![(head, role_style(theme, agent.role))];
+        if agent.name != agent.role.as_str() {
+            spans.push((format!(" · {}", agent.role.as_str()), theme.text.dim));
+        }
         rows.push(Row {
-            text: format!("{} {name}", role_icon(agent.role).glyph(icons)),
-            style: theme.text.normal,
+            spans,
             selected: false,
         });
         for field in FIELDS {
             let (value, style) = match field {
-                Field::Harness => (agent.harness.clone(), theme.text.dim),
+                Field::Harness => (agent.harness.clone(), theme.text.normal),
                 Field::Model if agent.model.is_empty() => {
                     ("pick a model".to_string(), theme.semantic.warn)
                 }
-                Field::Model => (agent.model.clone(), theme.text.dim),
+                Field::Model => (agent.model.clone(), theme.text.strong),
                 Field::Effort => match &agent.effort {
-                    Some(effort) => (effort.clone(), theme.text.dim),
+                    Some(effort) => (effort.clone(), theme.text.normal),
                     None => ("pick an effort".to_string(), theme.semantic.warn),
                 },
             };
             rows.push(Row {
-                text: format!("  {} {value}", field.label()),
-                style,
+                spans: vec![
+                    (
+                        format!("  {:<width$}", field.label(), width = KEY_COLUMN),
+                        theme.text.dim,
+                    ),
+                    (value, style),
+                ],
                 selected: cursor_of(index, field) == cursor,
             });
         }
@@ -301,17 +315,17 @@ pub fn role_icon(role: Role) -> Icon {
 fn order_rows(config: &Config, theme: &Theme) -> Vec<Row> {
     let mut rows = Vec::new();
     for (index, step) in config.order.iter().enumerate() {
-        rows.push(Row {
-            text: format!("{} {} · {}", index + 1, step.step, step.role.as_str()),
-            style: theme.text.normal,
-            selected: false,
-        });
+        rows.push(Row::plain(
+            format!("{} {} · {}", index + 1, step.step, step.role.as_str()),
+            theme.text.normal,
+            false,
+        ));
         for gate in &step.gates {
-            rows.push(Row {
-                text: format!("  {}", gate.says()),
-                style: theme.text.dim,
-                selected: false,
-            });
+            rows.push(Row::plain(
+                format!("  {}", gate.says()),
+                theme.text.dim,
+                false,
+            ));
         }
     }
     rows
@@ -397,45 +411,82 @@ fn fits(
 }
 
 /// The groups drawn: each title, then its rows. The cursor's row takes the
-/// selection's bar and paint, bar to the pane's edge.
+/// selection's bar and tint, bar to the pane's edge.
 fn drawn(groups: &[Group], width: usize, icons: IconSet, theme: &Theme) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for group in groups {
-        lines.push(line(group.title, group.style, width));
+        lines.push(group_line(group.title, width, theme));
         for row in &group.rows {
-            lines.push(row_line(
-                &row.text,
-                row.style,
-                row.selected,
-                width,
-                icons,
-                theme,
-            ));
+            lines.push(row_line(&row.spans, row.selected, width, icons, theme));
         }
     }
     lines
 }
 
+/// A group's title: the label bold on the accent, then a dim rule to the
+/// pane's edge.
+fn group_line(title: &str, width: usize, theme: &Theme) -> Line<'static> {
+    let label = cut_to(title, width.saturating_sub(BAR));
+    let used = text_width(&label);
+    let mut spans = vec![
+        Span::raw(" "),
+        Span::styled(label, theme.chrome.tab_active.add_modifier(Modifier::BOLD)),
+    ];
+    let rest = width.saturating_sub(BAR + used);
+    if rest > 1 {
+        spans.push(Span::styled(
+            format!(" {}", "─".repeat(rest - 1)),
+            theme.text.dim,
+        ));
+    }
+    Line::from(spans)
+}
+
 /// A row with the bar column first: the cursor bar in the focus slot when the
-/// cursor is on it, a space otherwise, so every row shares one left edge.
+/// cursor is on it, a space otherwise, so every row shares one left edge. The
+/// row's spans keep their own colours; a selected row takes the tint under
+/// them.
 fn row_line(
-    text: &str,
-    style: Style,
+    spans: &[(String, Style)],
     selected: bool,
     width: usize,
     icons: IconSet,
     theme: &Theme,
 ) -> Line<'static> {
-    let body = Line::from(Span::styled(cut_to(text, width.saturating_sub(BAR)), style));
+    let body = cut_spans(spans, width.saturating_sub(BAR));
     let (bar, body) = if selected {
         let bar = Span::styled(Icon::CursorBar.glyph(icons), theme.chrome.border_focus);
-        (bar, selected_line(body, width.saturating_sub(BAR), theme))
+        (
+            bar,
+            selected_line(Line::from(body), width.saturating_sub(BAR), theme).spans,
+        )
     } else {
         (Span::raw(" "), body)
     };
-    let mut spans = vec![bar];
-    spans.extend(body.spans);
-    Line::from(spans)
+    let mut line = vec![bar];
+    line.extend(body);
+    Line::from(line)
+}
+
+/// The spans cut to `width` columns: whole spans while they fit, and the one
+/// that runs out cut with the theme's marker.
+fn cut_spans(spans: &[(String, Style)], width: usize) -> Vec<Span<'static>> {
+    let mut left = width;
+    let mut cut = Vec::new();
+    for (text, style) in spans {
+        if left == 0 {
+            break;
+        }
+        let used = text_width(text);
+        if used <= left {
+            cut.push(Span::styled(text.clone(), *style));
+            left -= used;
+        } else {
+            cut.push(Span::styled(cut_to(text, left), *style));
+            break;
+        }
+    }
+    cut
 }
 
 /// A line that is not a row: a title, a state or an announcement. It takes
@@ -508,7 +559,7 @@ mod tests {
         let rows = rendered(&configured(), 30, 40);
         let at = |needle: &str| {
             rows.iter()
-                .position(|row| row == needle)
+                .position(|row| row.starts_with(needle))
                 .unwrap_or_else(|| panic!("{needle} is not a group: {rows:#?}"))
         };
         let agents = at(AGENTS_TITLE);
@@ -530,11 +581,11 @@ mod tests {
         };
         let head = at("builder · runner");
         assert_eq!(rows[head + 1], "  harness claude", "{rows:#?}");
-        assert_eq!(rows[head + 2], "  model claude-haiku-5-5", "{rows:#?}");
-        assert_eq!(rows[head + 3], "  effort high", "{rows:#?}");
+        assert_eq!(rows[head + 2], "  model   claude-haiku-5-5", "{rows:#?}");
+        assert_eq!(rows[head + 3], "  effort  high", "{rows:#?}");
         let reviewer = at("reviewer");
-        assert_eq!(rows[reviewer + 2], "  model claude-opus-5-5", "{rows:#?}");
-        assert_eq!(rows[reviewer + 3], "  effort medium", "{rows:#?}");
+        assert_eq!(rows[reviewer + 2], "  model   claude-opus-5-5", "{rows:#?}");
+        assert_eq!(rows[reviewer + 3], "  effort  medium", "{rows:#?}");
         // The name is said once when it is the role.
         let text = rows.join("\n");
         assert!(!text.contains("reviewer · reviewer"), "{text}");
@@ -915,7 +966,7 @@ mod tests {
             .filter(|line| {
                 line.spans
                     .iter()
-                    .any(|span| span.style == theme().text.selected)
+                    .any(|span| span.style.bg == theme().text.selected_bg.bg)
             })
             .collect();
         assert_eq!(selected.len(), 1, "the cursor covers more than one row");
@@ -925,7 +976,7 @@ mod tests {
             .map(|span| span.content.as_ref())
             .collect();
         assert!(says.starts_with('▌'), "{says:?}");
-        assert!(says.contains("model claude-opus-5-5"), "{says:?}");
+        assert!(says.contains("model   claude-opus-5-5"), "{says:?}");
         assert_eq!(
             selected[0].width(),
             30,
@@ -978,7 +1029,7 @@ mod tests {
             !drawn.lines.iter().any(|line| {
                 line.spans
                     .iter()
-                    .any(|span| span.style == theme().text.selected)
+                    .any(|span| span.style.bg == theme().text.selected_bg.bg)
             }),
             "a cursor is painted where there is none"
         );
@@ -1037,7 +1088,7 @@ mod tests {
         for fact in [
             "2 build-and-fix rounds",
             "harness cursor-agent",
-            "effort low",
+            "effort  low",
             "1 plan · creator",
             "draft → groomed",
         ] {
