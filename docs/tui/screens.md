@@ -204,7 +204,7 @@ The document carries the task's sections, in reading order:
 | header | id, title, kind, status, overlays, claim, priority, effort, tags |
 | intent | outcome and problem |
 | scope | in and out |
-| acceptance criteria | each: description, verification, status, evidence, deferral |
+| acceptance criteria | each: description, verification, status, evidence, deferral, failure reason |
 | steps | each: action, done_when, status, deviation |
 | review | the budget and verdict, the rounds — kind, focus, verdict, findings — and the findings' threads |
 | questions | open and resolved |
@@ -214,8 +214,9 @@ The document carries the task's sections, in reading order:
 
 The projection is the shape, not the wording: each of the ten sections is a
 level-one heading, an item under one a level-two, and a finding under its round
-a level-three; a table for the criteria; lists for the steps; each review round
-a heading with its own fields and the findings it raised under it; the
+a level-three; a table for the header; each criterion a heading with its id and
+status, its fields a list, as the steps are; each review round a heading with
+its own fields and the findings it raised under it; the
 verification commands as code, with a rule before a fenced one. The evidence is
 quoted in a blockquote, the children are a task list — `[x]` for a done subtask,
 `[ ]` for one that is not — and a dependency is a link to its record. The
@@ -269,7 +270,8 @@ sketch is the tool's own output, not a drawing of it.
 `scripts/pty-sweep.py` renders the screen at every width from 40 to 120, keeps
 one file per width, and fails when a line is wider than its width. The gate
 runs it. The Overview is pinned byte for byte at 40, 60 and 100 columns in
-`crates/raul/tests/snapshots/`.
+`crates/raul/tests/snapshots/`, and so is the detail pane of TSK13 at 100 columns
+(`detail.txt`). The detail document reads at 14 columns and up.
 
 ## Not defined yet
 

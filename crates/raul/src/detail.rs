@@ -781,24 +781,22 @@ mod tests {
         // The body is never a blank screen while the record is a task, at
         // any width the pane can hold.
         let work = mock_work();
-        for width in [100u16, 60, 30, 12] {
+        for width in [100u16, 60, 30, 14, 12] {
             let (rows, _) = draw(&work, &pane("TSK13"), width, 20);
             let body = &rows[1..rows.len() - 1];
             assert!(
                 body.iter().any(|row| !row.trim().is_empty()),
                 "{width}: the body is blank"
             );
-            // The criteria table's narrowest drawing is 35 columns: its column
-            // floors keep each cell whole. A narrower inner width clips it (a
-            // follow-up under unit 51 in TODO.md), so those widths are skipped.
-            // Every width from 35 up is checked for overflow.
-            const CRITERIA_MIN_WIDTH: usize = 35;
-            let inner = usize::from(width) - 2;
-            if inner < CRITERIA_MIN_WIDTH {
+            // Below 14 columns the header table is wider than its inner
+            // width, and a quoted code line is too (a follow-up in TODO.md),
+            // so only the body is checked there.
+            if width < 14 {
                 continue;
             }
             // Nothing is wider than the pane: the document is rendered at
             // the pane's own width, inside the border.
+            let inner = usize::from(width) - 2;
             for line in document_lines(&work, &pane("TSK13"), inner, IconSet::Nerd, &theme()) {
                 assert!(line.width() <= inner, "{width}: {line:?}");
             }
@@ -1081,35 +1079,21 @@ mod tests {
     }
 
     #[test]
-    fn the_table_parser_consumes_the_projection_s_pipe_escape() {
-        // The engine question the projection review left: how the table
-        // parser renders a backslash inside a code span. The answer, with
-        // the real fixture TSK13, whose verification command carries a
-        // shell pipe: the parser that splits the cells resolves `\|`
-        // before inline parsing, so the code span sees the pipe alone and
-        // the cell is not split. The projection's own escape is consumed
-        // by the same parser that reads it — no backslash reaches the
-        // render, and the pipe is the pipe character, not a cell border.
-        // The seven-column table wraps the command across rows of its
-        // cell, so the pin is on the document's text, not on one row.
-        //
-        // A literal backslash in a value — not the projection's escape —
-        // would be eaten the same way when it sits directly before a pipe
-        // inside a code span. No fixture carries one: the tree has no
-        // backslash anywhere, and the fields the projection renders as
-        // code (commands, paths, ids, timestamps) do not end in `\|`. The
-        // record stays the pin below; a fixture with such a value would be
-        // its own unit in core.
+    fn a_verification_pipe_is_the_pipe_character() {
+        // The real fixture TSK13 carries a shell pipe in its verification
+        // command. A verification is a list field, not a table cell, so the
+        // projection does not escape the pipe: the code span holds the pipe
+        // alone, and no backslash reaches the render.
+        // The command's tail is rendered and the pipe is the pipe character.
         let work = mock_work();
         let detail = pane("TSK13");
         let rendered = document(&work, &detail, 100, &theme());
-        // The command's tail is rendered: nothing was lost at the split.
         assert!(
             rendered.contains("grep detai"),
-            "the command did not survive the cell: {rendered}"
+            "the command did not survive the render: {rendered}"
         );
-        // The pipe is the pipe character in the render. A cell split at
-        // the pipe would show a border instead.
+        // The pipe is the pipe character in the render. A split at the pipe
+        // would show a border instead.
         assert!(
             rendered.contains('|'),
             "the pipe did not survive: {rendered}"
@@ -1155,7 +1139,7 @@ mod tests {
         assert_eq!(injected.len(), 3, "{rendered}");
         for line in &injected {
             assert!(
-                line.starts_with('▎'),
+                line.trim_start().starts_with('▎'),
                 "a quoted line left the quotation: {line:?}\n{rendered}"
             );
         }

@@ -135,11 +135,10 @@ injection property holds.
 
 None blocking. Carried from the closed units.
 
-- **The criteria table clips below 37 columns** (2026-11-22). Its narrowest
-  drawing is 35 columns, because the column floors keep TSK13's cells whole,
-  so a raul pane narrower than 37 clips it. Unit 51 replaces the seven-column
-  table with blocks, which makes the limit moot. The floors stay: lowering them
-  brings back F15. The detail test skips those widths.
+- **The document overflows below 14 columns** (2026-11-22). The header table
+  is 11 columns wide, so an inner width of 10 (a 12-column pane) overflows; a
+  quoted code line overflows at 11 inner (13 columns). The detail test checks
+  the body at 12 and the overflow only from 14 up.
 - **The document's roles are slots in the rule's sense** (2026-11-21). Rule 1
   means every colour is named by something the theme crate owns and a preset
   decides — so the document's eighteen roles are slots, and the rules bind

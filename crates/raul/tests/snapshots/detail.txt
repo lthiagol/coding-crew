@@ -35,31 +35,21 @@
 │• the Review section                                                                              │
 │                                                                                                  │
 │▍ Acceptance criteria ────────────────────────────────────────────────────────────────────────────│
-│╭─────────────┬──────────────┬──────────────┬──────────┬──────────────┬──────────┬──────────────╮ │
-││ id          │ description  │ verification │ status   │ evidence     │ deferral │ failure      │ │
-││             │              │              │          │              │          │ reason       │ │
-│├─────────────┼──────────────┼──────────────┼──────────┼──────────────┼──────────┼──────────────┤ │
-││  ACCEPT-01  │ A marked     │  cargo test  │  passed  │ quoted below │ none     │ none         │ │
-││             │ span is      │   -p coding  │          │              │          │              │ │
-││             │ painted on   │  -crew-core  │          │              │          │              │ │
-││             │ text.selecte │   | grep de  │          │              │          │              │ │
-││             │ d.           │  tail        │          │              │          │              │ │
-││  ACCEPT-02  │ A fenced     │  cargo test  │  passed  │ quoted below │ none     │ none         │ │
-││             │ rust block   │   -p coding  │          │              │          │              │ │
-││             │ keeps        │  -crew-raul  │          │              │          │              │ │
-││             │ syntect’s    │   detail     │          │              │          │              │ │
-││             │ code tokens. │              │          │              │          │              │ │
-│╰─────────────┴──────────────┴──────────────┴──────────┴──────────────┴──────────┴──────────────╯ │
+│▸  ACCEPT-01  —  passed                                                                           │
+│• description: A marked span is painted on text.selected.                                         │
+│• verification:  cargo test -p coding-crew-core | grep detail                                     │
+│• evidence:                                                                                       │
+│  ▎  cargo test -p coding-crew-core | grep detail  — exit  0  — 12 passed; 0 failed — by          │
+│  ▎ runner-01  in  session-runner-01  at  2026-11-10T14:00Z                                       │
 │                                                                                                  │
-│Evidence for  ACCEPT-01                                                                           │
 │                                                                                                  │
-│▎  cargo test -p coding-crew-core | grep detail  — exit  0  — 12 passed; 0 failed — by  runner-01 │
-│▎ in  session-runner-01  at  2026-11-10T14:00Z                                                    │
+│▸  ACCEPT-02  —  passed                                                                           │
+│• description: A fenced rust block keeps syntect’s code tokens.                                   │
+│• verification:  cargo test -p coding-crew-raul detail                                            │
+│• evidence:                                                                                       │
+│  ▎  cargo test -p coding-crew-raul detail  — exit  0  — 12 passed; 0 failed — by  runner-01  in  │
+│  ▎ session-runner-01  at  2026-11-10T14:05Z                                                      │
 │                                                                                                  │
-│Evidence for  ACCEPT-02                                                                           │
-│                                                                                                  │
-│▎  cargo test -p coding-crew-raul detail  — exit  0  — 12 passed; 0 failed — by  runner-01  in    │
-│▎ session-runner-01  at  2026-11-10T14:05Z                                                        │
 │                                                                                                  │
 │▍ Steps ──────────────────────────────────────────────────────────────────────────────────────────│
 │▸  STP-01                                                                                         │
@@ -152,6 +142,16 @@
 │                                                                                                  │
 │▍ Children ───────────────────────────────────────────────────────────────────────────────────────│
 │none                                                                                              │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

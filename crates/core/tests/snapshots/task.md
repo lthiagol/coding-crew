@@ -37,19 +37,26 @@ lane the human is working in.
 
 # Acceptance criteria
 
-| id | description | verification | status | evidence | deferral | failure reason |
-|---|---|---|---|---|---|---|
-| `ACCEPT-01` | The selector hides a task that matches no selected lane. | `cargo test -p coding-crew-raul lane_filter` | `passed` | _quoted below_ | _none_ | _none_ |
-| `ACCEPT-02` | The saved default lane is not in this task. | `cargo test -p coding-crew-raul saved_lane` | `deferred` | _none_ | The settings store does not exist yet. — follow up: `TSK09` | _none_ |
-| `ACCEPT-03` | The empty lane announces that it is empty. | `cargo test -p coding-crew-raul empty_lane` | `failed` | _quoted below_ | _none_ | The lane count is drawn before the filter runs. |
+## `ACCEPT-01` — `passed`
 
-**Evidence for `ACCEPT-01`**
+- **description:** The selector hides a task that matches no selected lane.
+- **verification:** `cargo test -p coding-crew-raul lane_filter`
+- **evidence:**
+  > `cargo test -p coding-crew-raul lane_filter` — exit `0` — 12 passed; 0 failed — by `runner-1` in `s-runner` at `2026-11-16T16:10:00Z`
 
-> `cargo test -p coding-crew-raul lane_filter` — exit `0` — 12 passed; 0 failed — by `runner-1` in `s-runner` at `2026-11-16T16:10:00Z`
+## `ACCEPT-02` — `deferred`
 
-**Evidence for `ACCEPT-03`**
+- **description:** The saved default lane is not in this task.
+- **verification:** `cargo test -p coding-crew-raul saved_lane`
+- **deferral:** The settings store does not exist yet. — follow up: `TSK09`
 
-> `cargo test -p coding-crew-raul empty_lane` — exit `1` — 1 failed — by `runner-1` in `s-runner` at `2026-11-16T16:20:00Z`
+## `ACCEPT-03` — `failed`
+
+- **description:** The empty lane announces that it is empty.
+- **verification:** `cargo test -p coding-crew-raul empty_lane`
+- **evidence:**
+  > `cargo test -p coding-crew-raul empty_lane` — exit `1` — 1 failed — by `runner-1` in `s-runner` at `2026-11-16T16:20:00Z`
+- **failure reason:** The lane count is drawn before the filter runs.
 
 # Steps
 

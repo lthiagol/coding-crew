@@ -19,8 +19,8 @@ use std::collections::hash_map::Entry;
 
 use crate::lifecycle::{Overlay, Overlays};
 use crate::task::{
-    Claim, Finding, FindingStatus, Focus, Priority, Question, QuestionStatus, Round, RoundKind,
-    Severity, StepStatus, Task, Verdict,
+    AcceptanceCriterion, Claim, Finding, FindingStatus, Focus, Priority, Question, QuestionStatus,
+    Round, RoundKind, Severity, StepStatus, Task, Verdict,
 };
 
 /// What an empty section or field says.
@@ -102,59 +102,61 @@ fn criteria(out: &mut String, task: &Task) {
         return;
     }
 
-    out.push_str(
-        "| id | description | verification | status | evidence | deferral | failure reason |\n",
-    );
-    out.push_str("|---|---|---|---|---|---|---|\n");
-    for criterion in &task.acceptance_criteria {
-        // The evidence is quoted below the table: what a command printed is
-        // a quotation, and a table cell cannot hold a block.
-        let evidence = if criterion.evidence.is_empty() {
-            EMPTY.to_string()
-        } else {
-            "_quoted below_".to_string()
-        };
-        let deferral = criterion
-            .deferral
-            .as_ref()
-            .map(deferral_text)
-            .unwrap_or_else(|| EMPTY.to_string());
-        let verification = if is_multiline(&criterion.verification) {
-            "_see below_".to_string()
-        } else {
-            cell(&code(&criterion.verification))
-        };
+    for (index, criterion) in task.acceptance_criteria.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        criterion_block(out, criterion);
+    }
+}
 
+/// One criterion: its id and status as a heading, then its fields. A field
+/// that is empty is omitted, except the two a criterion must have.
+fn criterion_block(out: &mut String, criterion: &AcceptanceCriterion) {
+    out.push_str(&format!(
+        "## {} — {}\n\n",
+        code(&criterion.id),
+        code(criterion.effective_status().as_str()),
+    ));
+    prose_bullet(out, "description", &criterion.description);
+
+    // A multiline verification is a procedure: it is fenced below the
+    // fields, and the field says where it is.
+    let multiline = is_multiline(&criterion.verification);
+    if multiline {
+        out.push_str("- **verification:** _see below_\n");
+    } else {
         out.push_str(&format!(
-            "| {} | {} | {} | {} | {} | {} | {} |\n",
-            cell(&code(&criterion.id)),
-            cell(&criterion.description),
-            verification,
-            cell(&code(criterion.effective_status().as_str())),
-            cell(&evidence),
-            cell(&deferral),
-            cell(&criterion.failure_reason),
+            "- **verification:** {}\n",
+            code(&criterion.verification)
         ));
     }
 
-    for criterion in &task.acceptance_criteria {
-        if is_multiline(&criterion.verification) {
-            out.push('\n');
-            out.push_str(&format!("**Verification for {}**\n\n", code(&criterion.id)));
-            out.push_str("---\n\n");
-            fenced_block(out, &criterion.verification);
-        }
-
-        if !criterion.evidence.is_empty() {
-            out.push('\n');
-            out.push_str(&format!("**Evidence for {}**\n\n", code(&criterion.id)));
-            for (index, evidence) in criterion.evidence.iter().enumerate() {
-                if index > 0 {
-                    out.push('\n');
-                }
-                blockquote(out, &evidence_text(evidence));
+    // The evidence is quoted, not a code span: what a command printed is a
+    // quotation, and it may run over several lines.
+    if !criterion.evidence.is_empty() {
+        out.push_str("- **evidence:**\n");
+        for (index, evidence) in criterion.evidence.iter().enumerate() {
+            if index > 0 {
+                out.push('\n');
             }
+            blockquote(out, &evidence_text(evidence));
         }
+    }
+    if let Some(deferral) = &criterion.deferral {
+        prose_bullet(out, "deferral", &deferral_text(deferral));
+    }
+    if !criterion.failure_reason.trim().is_empty() {
+        prose_bullet(out, "failure reason", &criterion.failure_reason);
+    }
+
+    if multiline {
+        out.push_str(&format!(
+            "\n**Verification for {}**\n\n",
+            code(&criterion.id)
+        ));
+        out.push_str("---\n\n");
+        fenced_block(out, &criterion.verification);
     }
 }
 
@@ -437,11 +439,11 @@ fn prose_block(out: &mut String, value: &str) {
     out.push('\n');
 }
 
-/// Quote a value: every line carries the marker, so a value that holds a
-/// newline cannot leave the quotation.
+/// Quote a value under a list item: every line carries the marker at the
+/// item's indent, so a value that holds a newline cannot leave the quotation.
 fn blockquote(out: &mut String, value: &str) {
     for line in value.lines() {
-        out.push_str("> ");
+        out.push_str("  > ");
         out.push_str(line);
         out.push('\n');
     }

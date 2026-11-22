@@ -675,14 +675,15 @@ fn evidence_is_quoted_in_a_blockquote() {
     let document = task_to_markdown(&task, &[]);
     let body = section(&document, "# Acceptance criteria");
 
+    assert!(body.contains("## `ACCEPT-01` — `passed`"), "{body}");
+    assert!(body.contains("- **verification:** `cargo test`"), "{body}");
     assert!(
-        body.contains("| `ACCEPT-01` | _none_ | `cargo test` | `passed` | _quoted below_ |"),
+        body.contains("- **evidence:**\n  > `cargo test` — exit `0`"),
         "{body}"
     );
-    assert!(body.contains("**Evidence for `ACCEPT-01`**"), "{body}");
     assert!(
         body.contains(
-            "> `cargo test` — exit `0` — 12 passed; 0 failed — by `runner-1` in `s-runner` at `2026-11-14T09:00:00Z`"
+            "  > `cargo test` — exit `0` — 12 passed; 0 failed — by `runner-1` in `s-runner` at `2026-11-14T09:00:00Z`"
         ),
         "{body}"
     );
@@ -706,7 +707,7 @@ fn evidence_output_cannot_open_a_heading_an_entity_or_a_block() {
     let document = task_to_markdown(&task, &[]);
     let quoted: Vec<&str> = document
         .lines()
-        .filter(|line| line.starts_with("> "))
+        .filter(|line| line.starts_with("  > "))
         .collect();
 
     // The underline is escaped, so the title above it stays a paragraph.
@@ -757,7 +758,10 @@ fn a_newline_in_evidence_output_cannot_leave_the_quotation() {
     let body = section(&document, "# Acceptance criteria");
 
     for line in body.lines().filter(|line| line.contains("injected")) {
-        assert!(line.starts_with("> "), "the output left the quote:\n{body}");
+        assert!(
+            line.starts_with("  > "),
+            "the output left the quote:\n{body}"
+        );
     }
     assert!(
         !document
@@ -766,7 +770,7 @@ fn a_newline_in_evidence_output_cannot_leave_the_quotation() {
         "{document}"
     );
     assert!(
-        body.contains("> \\# injected\\-heading") && body.contains("> \\- injected item"),
+        body.contains("  > \\# injected\\-heading") && body.contains("  > \\- injected item"),
         "the summary is not escaped inside the quotation:\n{body}"
     );
 }
@@ -818,14 +822,35 @@ fn a_criterion_shows_its_effective_status_not_its_stored_one() {
     let document = task_to_markdown(&task, &[]);
     let body = section(&document, "# Acceptance criteria");
 
-    assert!(
-        body.contains("| `ACCEPT-01` | free text | `cargo test` | `passed` |"),
+    assert!(body.contains("## `ACCEPT-01` — `passed`"), "{body}");
+    assert!(body.contains("- **description:** free text"), "{body}");
+    assert!(body.contains("- **verification:** `cargo test`"), "{body}");
+    assert!(body.contains("## `ACCEPT-02` — `pending`"), "{body}");
+    assert!(body.contains("- **description:** _none_"), "{body}");
+    assert!(body.contains("- **verification:** _none_"), "{body}");
+}
+
+#[test]
+fn an_empty_optional_field_of_a_criterion_is_omitted() {
+    let mut task = minimal("TSK01");
+    task.acceptance_criteria = vec![AcceptanceCriterion {
+        id: "ACCEPT-01".to_string(),
+        description: "free text".to_string(),
+        verification: "cargo test".to_string(),
+        ..AcceptanceCriterion::default()
+    }];
+
+    let document = task_to_markdown(&task, &[]);
+    let body = section(&document, "# Acceptance criteria");
+
+    assert_eq!(
+        body.lines().filter(|line| line.starts_with("- ")).count(),
+        2,
         "{body}"
     );
-    assert!(
-        body.contains("| `ACCEPT-02` | _none_ | _none_ | `pending` |"),
-        "{body}"
-    );
+    assert!(!body.contains("evidence"), "{body}");
+    assert!(!body.contains("deferral"), "{body}");
+    assert!(!body.contains("failure reason"), "{body}");
 }
 
 #[test]
@@ -895,7 +920,7 @@ fn free_text_keeps_its_markdown_meaning() {
     assert!(scope.contains("A *list*:"), "{scope}");
     assert!(scope.contains("1. first"), "{scope}");
     assert!(scope.contains("2. second"), "{scope}");
-    assert!(section(&document, "# Acceptance criteria").contains("not **flat**<br>still markdown"));
+    assert!(section(&document, "# Acceptance criteria").contains("not **flat**\n  still markdown"));
     assert!(section(&document, "# Steps").contains("```sh"));
     assert!(section(&document, "# Steps").contains("  cargo test"));
     assert!(section(&document, "# Notes").contains("# What we learned"));
@@ -914,7 +939,10 @@ fn verification_commands_are_code_never_prose() {
     let document = task_to_markdown(&task, &[]);
     let body = section(&document, "# Acceptance criteria");
 
-    assert!(body.contains("`cargo test --workspace`"), "{body}");
+    assert!(
+        body.contains("- **verification:** `cargo test --workspace`"),
+        "{body}"
+    );
     assert!(!body.contains("| cargo test --workspace |"), "{body}");
 }
 
@@ -1338,7 +1366,7 @@ fn a_newline_in_a_fixed_field_cannot_break_the_line_structure() {
         .lines()
         .filter(|line| line.starts_with("## "))
         .collect();
-    assert_eq!(subheadings, ["## `NOTE-01`"]);
+    assert_eq!(subheadings, ["## `ACCEPT-01` — `passed`", "## `NOTE-01`"]);
     assert!(
         document.contains(
             "- **at:** `2026-11-14T08:00:00Z ## injected-time-heading - injected-time-item`"
@@ -1346,9 +1374,7 @@ fn a_newline_in_a_fixed_field_cannot_break_the_line_structure() {
         "{document}"
     );
     assert!(!document.lines().any(|line| line.starts_with("- injected")));
-    for line in table_rows(&document, "# Acceptance criteria") {
-        assert_eq!(columns(line), 7, "{line}");
-    }
+    assert!(table_rows(&document, "# Acceptance criteria").is_empty());
 }
 
 #[test]
@@ -1377,17 +1403,11 @@ fn a_verification_keeps_the_backslash_of_a_pipe() {
 
     let document = task_to_markdown(&task, &[]);
     let body = section(&document, "# Acceptance criteria");
-    let row = table_rows(&document, "# Acceptance criteria")
-        .into_iter()
-        .find(|line| line.contains("ACCEPT-01"))
-        .expect("the criterion row");
-
-    // GFM reads `\|` as an escaped pipe and drops the backslash it added.
-    assert!(row.contains("`grep -q 'foo\\\\|bar' f`"), "{body}");
-    assert_eq!(
-        row.replace("\\|", "|").matches("foo\\|bar").count(),
-        1,
-        "{row}"
+    // A field is a list item, not a table row: no pipe is escaped, so the
+    // command keeps its own backslash and reads as written.
+    assert!(
+        body.contains("- **verification:** `grep -q 'foo\\|bar' f`"),
+        "{body}"
     );
 }
 
@@ -1448,9 +1468,11 @@ fn backslashes_before_pipes_never_split_a_table_row() {
             table_rows(&document, "# Review").is_empty(),
             "the review is still a table:\n{document}"
         );
-        for (heading, expected_columns, expected_rows) in
-            [("# Header", 2, 10), ("# Acceptance criteria", 7, 3)]
-        {
+        assert!(
+            table_rows(&document, "# Acceptance criteria").is_empty(),
+            "the criteria are still a table:\n{document}"
+        );
+        for (heading, expected_columns, expected_rows) in [("# Header", 2, 10)] {
             let rows = table_rows(&document, heading);
             assert_eq!(
                 rows.len(),
@@ -1650,13 +1672,12 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
     }
 
     // The fixed-value attacks cannot open a cell or a row.
-    for (heading, expected) in [("# Header", 2), ("# Acceptance criteria", 7)] {
-        let rows = table_rows(&document, heading);
-        assert!(!rows.is_empty(), "{heading} has no table");
-        for line in rows {
-            assert_eq!(columns(line), expected, "{heading}: {line}");
-        }
+    let rows = table_rows(&document, "# Header");
+    assert!(!rows.is_empty(), "the header has no table");
+    for line in rows {
+        assert_eq!(columns(line), 2, "{line}");
     }
+    assert!(table_rows(&document, "# Acceptance criteria").is_empty());
 
     // The review is a history, not a table. Its shape is a round heading,
     // the round's fields, and the finding under it one level deeper. The
@@ -1740,17 +1761,12 @@ fn a_multiline_verification_is_a_fenced_block_beside_the_table() {
     let document = task_to_markdown(&task, &[]);
     let body = section(&document, "# Acceptance criteria");
 
-    for line in table_rows(&document, "# Acceptance criteria") {
-        assert_eq!(columns(line), 7, "{line}");
-    }
+    assert!(table_rows(&document, "# Acceptance criteria").is_empty());
     assert!(
-        body.contains("| `ACCEPT-01` | _none_ | `cargo test --workspace` |"),
+        body.contains("- **verification:** `cargo test --workspace`"),
         "{body}"
     );
-    assert!(
-        body.contains("| `ACCEPT-02` | _none_ | _see below_ |"),
-        "{body}"
-    );
+    assert!(body.contains("- **verification:** _see below_"), "{body}");
     assert!(body.contains("**Verification for `ACCEPT-02`**"), "{body}");
     assert!(
         body.contains("```\ncargo test\ncargo clippy --all-targets\n```"),
@@ -1761,7 +1777,7 @@ fn a_multiline_verification_is_a_fenced_block_beside_the_table() {
         body.contains("````\necho `x`\n```\nnot a fence\n````"),
         "{body}"
     );
-    assert!(!body.contains("| `ACCEPT-03` | _none_ | `echo"), "{body}");
+    assert!(!body.contains("- **verification:** `echo"), "{body}");
 }
 
 #[test]
