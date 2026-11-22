@@ -163,11 +163,11 @@ impl Store {
             if path.extension().and_then(|e| e.to_str()) != Some("json") {
                 continue;
             }
-            if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && name.starts_with(id)
-                && file_starts_with(&path, "TSK")
-            {
-                return load_task_path(&path);
+            if file_id(&path) == Some(id) && file_starts_with(&path, "TSK") {
+                let task = load_task_path(&path)?;
+                if task.id == id {
+                    return Ok(task);
+                }
             }
         }
         Err(StoreError::NotFound(id.to_string()))
@@ -201,7 +201,7 @@ impl Store {
             let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
                 continue;
             };
-            if name.starts_with(&task.id) && name.ends_with(".json") {
+            if file_id(&path) == Some(task.id.as_str()) && name.ends_with(".json") {
                 fs::remove_file(&path)?;
             }
         }
@@ -250,11 +250,11 @@ impl Store {
             if path.extension().and_then(|e| e.to_str()) != Some("json") {
                 continue;
             }
-            if file_starts_with(&path, "ITM")
-                && let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && name.starts_with(id)
-            {
-                return load_item_path(&path);
+            if file_id(&path) == Some(id) && file_starts_with(&path, "ITM") {
+                let item = load_item_path(&path)?;
+                if item.id == id {
+                    return Ok(item);
+                }
             }
         }
         Err(StoreError::NotFound(id.to_string()))
@@ -285,15 +285,7 @@ impl Store {
 
     /// Next free smaller-task id, scanning what exists.
     pub fn next_item_id(&self) -> Result<String, StoreError> {
-        let mut highest: u32 = 0;
-        for item in self.list_items()? {
-            if let Some(number) = item.id.strip_prefix("ITM")
-                && let Ok(number) = number.parse::<u32>()
-            {
-                highest = highest.max(number);
-            }
-        }
-        Ok(format!("ITM{:02}", highest + 1))
+        Ok(format!("ITM{:02}", self.highest_number("ITM")? + 1))
     }
 
     /// Promote a smaller task into a task.
@@ -313,15 +305,32 @@ impl Store {
 
     /// Next free task id, scanning what exists.
     pub fn next_id(&self) -> Result<String, StoreError> {
+        Ok(format!("TSK{:02}", self.highest_number("TSK")? + 1))
+    }
+
+    /// Highest plain number among the work files named `<prefix><digits>`.
+    ///
+    /// Reads file names, not parsed records: a file that does not parse still
+    /// holds its id, so a new task must not take it. Child ids (`TSK03.1`) are
+    /// not plain numbers and are skipped.
+    fn highest_number(&self, prefix: &str) -> Result<u32, StoreError> {
         let mut highest: u32 = 0;
-        for task in self.list()? {
-            if let Some(number) = task.id.strip_prefix("TSK")
+        if !self.root.is_dir() {
+            return Ok(highest);
+        }
+        for entry in fs::read_dir(&self.root)? {
+            let path = entry?.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            if let Some(id) = file_id(&path)
+                && let Some(number) = id.strip_prefix(prefix)
                 && let Ok(number) = number.parse::<u32>()
             {
                 highest = highest.max(number);
             }
         }
-        Ok(format!("TSK{:02}", highest + 1))
+        Ok(highest)
     }
 }
 
@@ -415,6 +424,16 @@ fn file_starts_with(path: &Path, prefix: &str) -> bool {
     path.file_name()
         .and_then(|n| n.to_str())
         .is_some_and(|name| name.starts_with(prefix))
+}
+
+/// The id a work file is named for: its name up to the first `-`.
+///
+/// Ids have no `-` and the slug follows it, so `TSK03.1-x.json` names `TSK03.1`.
+fn file_id(path: &Path) -> Option<&str> {
+    path.file_name()?
+        .to_str()?
+        .split_once('-')
+        .map(|(id, _)| id)
 }
 
 /// The file name a task would get.

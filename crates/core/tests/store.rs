@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 use coding_crew_core::store::{DATA_DIR, WORK_DIR};
-use coding_crew_core::{Store, StoreError};
+use coding_crew_core::{Store, StoreError, Task};
 
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("coding-crew-store-{name}-{}", std::process::id()));
@@ -206,4 +206,89 @@ fn dots_and_a_missing_tail_still_find_the_project() {
     );
 
     let _ = fs::remove_dir_all(&project);
+}
+
+#[test]
+fn saving_a_task_keeps_tasks_whose_ids_only_start_with_its_id() {
+    // TSK03.1 and TSK030 start with TSK03 but are other tasks.
+    let store = Store::new(scratch("prefix-save"));
+    store
+        .save(&Task::new("TSK03.1", "child"))
+        .expect("the child");
+    store
+        .save(&Task::new("TSK030", "other"))
+        .expect("the other task");
+    store
+        .save(&Task::new("TSK03", "parent"))
+        .expect("the parent");
+
+    let ids: Vec<String> = store
+        .list()
+        .expect("the tasks")
+        .into_iter()
+        .map(|task| task.id)
+        .collect();
+    assert_eq!(ids, ["TSK03", "TSK03.1", "TSK030"]);
+}
+
+#[test]
+fn load_returns_only_the_task_it_names() {
+    let store = Store::new(scratch("prefix-load"));
+    store
+        .save(&Task::new("TSK03.1", "child"))
+        .expect("the child");
+
+    assert!(matches!(store.load("TSK03"), Err(StoreError::NotFound(_))));
+    assert_eq!(store.load("TSK03.1").expect("the child").id, "TSK03.1");
+}
+
+#[test]
+fn load_checks_the_id_inside_the_file() {
+    // A file named for TSK03 whose record says TSK03.1 is not TSK03.
+    let store = Store::new(scratch("load-content"));
+    let child = Task::new("TSK03.1", "child");
+    store.save(&child).expect("the child");
+    fs::rename(
+        store.task_path(&child),
+        store.root().join("TSK03-child.json"),
+    )
+    .expect("a renamed file");
+
+    assert!(matches!(store.load("TSK03"), Err(StoreError::NotFound(_))));
+}
+
+#[test]
+fn load_item_returns_only_the_item_it_names() {
+    let store = Store::new(scratch("item-prefix"));
+    let item = store.create_item("first").expect("an item");
+
+    assert!(matches!(
+        store.load_item("ITM0"),
+        Err(StoreError::NotFound(_))
+    ));
+    assert_eq!(store.load_item(&item.id).expect("the item").id, item.id);
+}
+
+#[test]
+fn a_file_that_does_not_parse_still_holds_its_id() {
+    // A corrupt record keeps its id: the next id must not reuse it, and the
+    // save must not delete it.
+    let root = scratch("corrupt-id");
+    fs::write(root.join("TSK05-broken.json"), "{ not json").expect("a corrupt task");
+    fs::write(root.join("ITM05-broken.json"), "{ not json").expect("a corrupt item");
+    let store = Store::new(&root);
+
+    let task = store.create("next").expect("a task");
+    assert_eq!(task.id, "TSK06");
+    assert!(
+        root.join("TSK05-broken.json").is_file(),
+        "the corrupt task survives"
+    );
+
+    let item = store.create_item("next").expect("an item");
+    assert_eq!(item.id, "ITM06");
+    assert!(
+        root.join("ITM05-broken.json").is_file(),
+        "the corrupt item survives"
+    );
 }
