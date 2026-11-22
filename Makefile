@@ -7,6 +7,7 @@
 CARGO ?= $(shell command -v cargo 2>/dev/null || echo $(HOME)/.cargo/bin/cargo)
 CARGO_TARGET_DIR ?= target
 RAUL_PKG := coding-crew-raul
+HUGO_PKG := coding-crew-hugo
 TALITA_PKG := coding-crew-talita
 SKILL_SCRIPTS ?= $(HOME)/.config/opencode/skills/orchestration-flow/scripts
 
@@ -18,7 +19,7 @@ help: ## Show this help
 	@echo ""
 	@grep -E '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-.PHONY: build build-release build-raul build-talita
+.PHONY: build build-release build-raul build-hugo build-talita
 build: ## Build the workspace
 	$(CARGO) build
 
@@ -28,12 +29,19 @@ build-release: ## Build release binaries
 build-raul: ## Build raul only
 	$(CARGO) build -p $(RAUL_PKG)
 
+build-hugo: ## Build hugo only
+	$(CARGO) build -p $(HUGO_PKG)
+
 build-talita: ## Build talita only
 	$(CARGO) build -p $(TALITA_PKG)
 
 .PHONY: run raul
 run raul: ## Run raul (TUI) on the mock data
 	$(CARGO) run -p $(RAUL_PKG) -- mock-data/coding-crew/work
+
+.PHONY: hugo
+hugo: ## Run hugo (TUI) on its mock runtime
+	$(CARGO) run -p $(HUGO_PKG)
 
 .PHONY: test test-scripts columns
 test: ## Run the test suite
