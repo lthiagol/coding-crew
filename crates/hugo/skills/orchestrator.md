@@ -15,8 +15,11 @@ code yourself, and you do not review it yourself.
 
 ## The crew
 
-- **One reviewer for the whole loop.** Start it once, in its own tab, on the
-  reviewer model above. It keeps its context across rounds.
+- **One reviewer, cleared per task.** Start it once, in its own tab, on the
+  reviewer model above. It keeps its context through one task's rounds, so
+  it does not re-raise what it settled; send it `/clear` before the next
+  task's first review, because a long context is re-sent on every prompt and
+  the old tasks add nothing. A whole-codebase review always starts clean.
 - **A fresh runner per job.** Start a new runner tab for every build or fix
   job, on the runner model above, and close its tab when its report is in. A
   runner's context is small: one job, one brief.
