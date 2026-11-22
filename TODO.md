@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-21 by the orchestrator.
+Updated 2026-11-22 by the orchestrator.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,43 +56,16 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Three units, in the order they run. The order is in `docs/plan.md` — rows 49 to
-51 — and this is the list of them.
+None groomed. Units 49–59 closed on 2026-11-22 — the full code review's 35
+findings, the redesign (`docs/tui/redesign.md`), `hugo --skill` and hugo
+starting the orchestrator; their record is in `DONE.md`. Next candidates, for
+the human to pick or groom:
 
-### 49 · The projection earns the colours
-
-The projection emits `##` and `###` headings, bold, GFM tables, `- ` lists and
-`<br>` — and, since the review nests, `###`/`####` headings with bullets for
-the rounds and the findings. Nothing in the engine's vocabulary is reached:
-no blockquote, no task list, no rule, no link, no alert. A new palette would
-stay dead colour.
-
-**Done when:** the projection emits the constructs the palette paints — a
-level-one heading, sub-headings, blockquotes, task lists, rules and links — so
-no role in the document palette is dead; and the detail pane's snapshot is
-updated to the new document.
-
-### 50 · Per-preset syntax, the code gutter, the inline chip
-
-`crates/raul/src/detail.rs:59-63` pairs `base16-ocean.dark` with every
-preset, so Nord, Catppuccin and Dracula all wear ocean's code tokens. Inline
-code has no background at all, because `ChromeBorder` carries no `bg`.
-
-**Done when:** each preset pairs a syntax theme of its own; the fenced code
-carries a numbered gutter; and inline code has a background of its own.
-
-### 51 · The criteria table reads
-
-The Acceptance criteria section is a **seven-column** table — id, description,
-verification, status, evidence, deferral, failure reason — squeezed into the
-pane's width. At 40 columns every column is one character wide and the header
-wraps vertically, one letter per line. It is the same defect the review table
-had, in a different section.
-
-**Done when:** each criterion reads as a block with its own fields, the way
-Steps and the review read; the section is readable at 40 columns as well as at
-100; the verification and the evidence stay inside their code spans, and the
-injection property holds.
+- **hugo drives more of the loop** — the orchestrator is started from hugo;
+  the runtime record's writer (G2) is what would let hugo show the live crew
+  instead of the mock's.
+- **Light themes** — still deferred.
+- **Done tasks have no home** — see the open question under decisions.
 
 ---
 
@@ -134,6 +107,20 @@ injection property holds.
 ## THE FOLLOW-UPS
 
 None blocking. Carried from the closed units.
+
+- **Store discovery accepts any folder named `coding-crew`** (2026-11-22,
+  review F4). A checkout of this repository is itself discovered as a
+  project, because ADR 0010 says the nearest `coding-crew/` owns the result
+  with or without `work/`. Left as a known limit; changing it means amending
+  ADR 0010 to require a marker — the human's call.
+- **The fixture replay cannot check reviewer independence** (2026-11-22). An
+  external round records its reviewer's actor id, not a session, so
+  `fixtures_keep_their_gates` replays the review with an invented session.
+  The fix adds a `session` to `Round` — a model change, for the human.
+- **The `opencode` harness's model flag is assumed** (2026-11-22): `hugo
+  --skill` and hugo's launcher pass `--model <id>` for opencode; opencode is
+  not installed here, so it was not checked. `claude` was checked live: `s`
+  started a Claude orchestrator in a new herdr tab and prompted it.
 
 - **The document overflows below 14 columns** (2026-11-22). The header table
   is 11 columns wide, so an inner width of 10 (a 12-column pane) overflows; a

@@ -1119,6 +1119,32 @@ lows stand recorded: Dracula's six roles share one colour, which is the
 family's own narrowness, and the touch to a raul test was forced by the code
 label's remap.
 
+### 2026-11-22 · The full review, the redesign, and hugo's first step
+
+The flow ran on Claude in herdr: one Opus reviewer for the whole night, a
+fresh Haiku builder per job, at most five build/review rounds a job.
+
+**The full code review** raised 35 findings (2 high, 13 medium, 20 low) in
+eight batches. All closed except two recorded follow-ups (F4, and the
+reviewer-session gap). The highs: saving a task deleted other tasks whose
+ids it prefixed, and `load` could return the wrong record. Commits
+`e2c663c`…`e803908`.
+
+**The redesign** (`docs/tui/redesign.md`, units 52–57): an icon table with
+Nerd Font and unicode glyphs (`--icons`, `CODING_CREW_ICONS`); rounded panes
+with icons in their borders, tab badges and key chips; rows that lead with
+their status or kind; the Overview as cards with bars; hugo's crew table,
+budget bar, findings by severity; the document with bar-led headings,
+rounded tables, alert and quote bars, per-preset syntax, a code gutter, an
+inline chip, criteria as blocks and the header as a card. The fixtures grew
+the constructs to show it.
+
+**hugo** (units 58–59): `hugo --skill <role>` prints the orchestrator, runner
+or reviewer skill embedded in the binary, under the crew the configuration
+names; `s` starts the orchestrator in a new herdr tab over the queue —
+checked live with a Claude harness.
+
+
 ---
 
 ## Lessons
