@@ -13,13 +13,13 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph};
+use ratatui::widgets::{Clear, Paragraph};
 
 use coding_crew_core::config::{CONFIG_FILE, Config};
 use coding_crew_core::runtime::{AgentState, CrewMember, Runtime};
 use coding_crew_core::{Role, age_text, parse_rfc3339};
-use coding_crew_theme::text::{cut_to, text_width};
-use coding_crew_theme::{IconSet, Theme, block_title_style, phase_style, selected_line};
+use coding_crew_theme::text::{cut_to, tail_to, text_width};
+use coding_crew_theme::{Icon, IconSet, Theme, chrome, phase_style, selected_line};
 
 use crate::catalog::{Catalog, base_of};
 use crate::config::{self, ConfigRead, ConfigState};
@@ -37,8 +37,8 @@ pub const SIDEBAR_MIN_WIDTH: u16 = SIDEBAR_WIDTH + MAIN_MIN_WIDTH;
 /// the wall clock. Named in `docs/hugo/screens.md`.
 pub const RENDER_NOW: &str = "2026-11-19T09:00:00Z";
 
-/// The title line's text: the name of the tool.
-const NAME: &str = " hugo ";
+/// The title line's text: the name of the tool, which takes its icon.
+const NAME: &str = "hugo";
 
 /// The key that reads the configuration again.
 pub const RELOAD_KEY: &str = "r";
@@ -61,6 +61,8 @@ pub const NO_MODELS: &str = "no models in the catalog";
 pub const SIDEBAR_TITLE: &str = "configuration";
 /// The main pane's block title.
 pub const FLOW_TITLE: &str = "flow";
+/// The main pane's icon: what is running.
+const FLOW_ICON: Icon = Icon::Running;
 /// The main pane's named empty state.
 pub const FLOW_EMPTY: &str = "nothing is running";
 /// The main pane's state when the record is there but cannot be read.
@@ -131,8 +133,7 @@ enum ChoiceState {
 pub struct App {
     /// The colours of the window.
     pub theme: Theme,
-    /// The icon set in force. No screen draws an icon yet.
-    #[allow(dead_code)]
+    /// The icon set in force: every pane's title and every role draws with it.
     pub icons: IconSet,
     /// The configuration as read, and what a pick is saved into.
     pub config: ConfigRead,
@@ -151,6 +152,8 @@ pub struct App {
     help: bool,
     /// A pick that could not be saved, named so nothing fails silently.
     notice: Option<ReadError>,
+    /// The project's folder as the title line names it, when one is found.
+    pub project: Option<String>,
 }
 
 impl App {
@@ -167,6 +170,7 @@ impl App {
             reading: None,
             help: false,
             notice: None,
+            project: None,
         }
     }
 
@@ -272,10 +276,7 @@ impl App {
             return false;
         }
         let (inner, width, height) = if area.height >= 3 && area.width >= 4 {
-            let block = Block::bordered()
-                .title(SIDEBAR_TITLE)
-                .title_style(block_title_style(&self.theme))
-                .border_style(self.theme.chrome.border);
+            let block = chrome::pane(SIDEBAR_TITLE, Icon::Config, self.icons, false, &self.theme);
             let inner = block.inner(area);
             frame.render_widget(block, area);
             (inner, inner.width, inner.height)
@@ -294,6 +295,7 @@ impl App {
             &self.config,
             self.notice.as_ref(),
             &self.theme,
+            self.icons,
             usize::from(width),
             usize::from(height),
             cursor,
@@ -502,15 +504,34 @@ impl App {
         self.cursor = self.cursor.min(config.agents.len().saturating_sub(1));
     }
 
-    /// The title line: the name of the tool.
+    /// The title line: the app's icon and name, then a dim `·` and the
+    /// project's folder when one is found.
     ///
     /// A terminal too narrow for the name shows nothing rather than a cut of
-    /// it: the parts of the line are dropped whole.
+    /// it: the parts of the line are dropped whole. The folder is cut from
+    /// the front, so the folder that names the project is kept.
     fn title_line(&self, width: u16) -> Line<'static> {
-        if usize::from(width) < text_width(NAME) {
+        let name = format!(" {} {NAME}", Icon::AppHugo.glyph(self.icons));
+        let width = usize::from(width);
+        if width < text_width(&name) {
             return Line::from("");
         }
-        Line::from(Span::styled(NAME, self.theme.chrome.title))
+        let name = Span::styled(name, self.theme.chrome.title);
+        let Some(project) = &self.project else {
+            return Line::from(name);
+        };
+        let separator = " · ";
+        let head = text_width(&name.content) + text_width(separator);
+        let room = width.saturating_sub(head);
+        if room == 0 {
+            return Line::from(name);
+        }
+        let path = tail_to(project, room);
+        Line::from(vec![
+            name,
+            Span::styled(separator, self.theme.text.dim),
+            Span::styled(path, self.theme.text.dim),
+        ])
     }
 
     /// The line that says the sidebar is not shown, and what it holds.
@@ -550,10 +571,7 @@ impl App {
             frame.render_widget(Paragraph::new(line), area);
             return;
         }
-        let block = Block::bordered()
-            .title(title)
-            .title_style(block_title_style(&self.theme))
-            .border_style(self.theme.chrome.border);
+        let block = chrome::pane(title, FLOW_ICON, self.icons, false, &self.theme);
         // The inner width is the pane's own: a state that does not fit is
         // cut and marked, never drawn past the border.
         let inner = area.width.saturating_sub(2);
@@ -574,10 +592,7 @@ impl App {
             return;
         }
         let inner = if area.height >= 3 && area.width >= 4 {
-            let block = Block::bordered()
-                .title(FLOW_TITLE)
-                .title_style(block_title_style(&self.theme))
-                .border_style(self.theme.chrome.border);
+            let block = chrome::pane(FLOW_TITLE, FLOW_ICON, self.icons, false, &self.theme);
             let inner = block.inner(area);
             frame.render_widget(block, area);
             inner
@@ -607,10 +622,7 @@ impl App {
             self.flow_body(frame, area, runtime, now);
             return;
         }
-        let block = Block::bordered()
-            .title(FLOW_TITLE)
-            .title_style(block_title_style(&self.theme))
-            .border_style(self.theme.chrome.border);
+        let block = chrome::pane(FLOW_TITLE, FLOW_ICON, self.icons, false, &self.theme);
         let inner = block.inner(area);
         frame.render_widget(block, area);
         self.flow_body(frame, inner, runtime, now);
@@ -660,10 +672,7 @@ impl App {
         constraints.push(Constraint::Min(0));
         let areas = Layout::vertical(constraints).split(body);
         for (section, area) in sections.iter().zip(areas.iter()) {
-            let block = Block::bordered()
-                .title(section.title)
-                .title_style(block_title_style(&self.theme))
-                .border_style(self.theme.chrome.border);
+            let block = chrome::pane(section.title, section.icon, self.icons, false, &self.theme);
             frame.render_widget(Paragraph::new(section.lines.clone()).block(block), *area);
         }
     }
@@ -697,10 +706,8 @@ impl App {
         };
         let mut lines: Vec<Line<'static>> = Vec::new();
         for section in &sections[..shown] {
-            lines.push(Line::from(Span::styled(
-                section.title,
-                self.theme.text.strong,
-            )));
+            let heading = format!("{} {}", section.icon.glyph(self.icons), section.title);
+            lines.push(Line::from(Span::styled(heading, self.theme.text.strong)));
             lines.extend(section.lines.clone());
         }
         if !hidden.is_empty() {
@@ -725,22 +732,27 @@ impl App {
         vec![
             Section {
                 title: CREW_TITLE,
+                icon: Icon::RoleOrchestrator,
                 lines: self.crew_lines(runtime, width, now),
             },
             Section {
                 title: QUEUE_TITLE,
+                icon: Icon::TabBacklog,
                 lines: self.queue_lines(runtime, width),
             },
             Section {
                 title: ROUND_TITLE,
+                icon: Icon::RoleReviewer,
                 lines: vec![self.round_line(runtime, width)],
             },
             Section {
                 title: BUDGET_TITLE,
+                icon: Icon::Clock,
                 lines: vec![self.budget_line(runtime, width)],
             },
             Section {
                 title: FINDINGS_TITLE,
+                icon: Icon::Finding,
                 lines: vec![self.findings_line(runtime, width)],
             },
         ]
@@ -959,10 +971,13 @@ impl App {
             return;
         }
         frame.render_widget(Clear, popup);
-        let block = Block::bordered()
-            .title(CHOICE_TITLE)
-            .title_style(block_title_style(&self.theme))
-            .border_style(self.theme.chrome.border_focus);
+        let block = chrome::pane(
+            CHOICE_TITLE,
+            Icon::RoleOrchestrator,
+            self.icons,
+            true,
+            &self.theme,
+        );
         let inner = block.inner(popup);
         frame.render_widget(block, popup);
         let width = usize::from(inner.width);
@@ -1020,10 +1035,7 @@ impl App {
             return;
         }
         frame.render_widget(Clear, popup);
-        let block = Block::bordered()
-            .title(HELP_TITLE)
-            .title_style(block_title_style(&self.theme))
-            .border_style(self.theme.chrome.border_focus);
+        let block = chrome::pane(HELP_TITLE, Icon::Config, self.icons, true, &self.theme);
         let inner = block.inner(popup);
         frame.render_widget(block, popup);
         let width = usize::from(inner.width);
@@ -1112,12 +1124,7 @@ impl App {
     /// quits as in raul; the footer names what a line can carry, and the
     /// choice's keys while the choice is open.
     fn footer_line(&self, width: u16) -> Line<'static> {
-        let part = |key: &str, says: &str| {
-            vec![
-                Span::styled(format!(" {key} "), self.theme.chrome.key),
-                Span::styled(format!(" {says}"), self.theme.chrome.footer),
-            ]
-        };
+        let part = |key: &str, says: &str| chrome::key_chip(key, says, &self.theme);
         if self.help {
             return footer(
                 vec![
@@ -1162,9 +1169,14 @@ impl App {
 }
 
 /// The footer line: the parts that fit, the ones that matter most first.
+///
+/// Chips are parted from the chip before them by two spaces; the columns a
+/// chip takes after the first include those two.
 fn footer(parts: Vec<(u8, Vec<Span<'static>>, bool)>, width: u16) -> Line<'static> {
+    const PART: usize = 2;
     let mut chosen = vec![false; parts.len()];
     let mut used = 0usize;
+    let mut count = 0usize;
     for matters in [true, false] {
         for (index, (_, spans, needed)) in parts.iter().enumerate() {
             if *needed != matters {
@@ -1173,10 +1185,12 @@ fn footer(parts: Vec<(u8, Vec<Span<'static>>, bool)>, width: u16) -> Line<'stati
             let columns = spans
                 .iter()
                 .map(|span| text_width(span.content.as_ref()))
-                .sum::<usize>();
+                .sum::<usize>()
+                + if count > 0 { PART } else { 0 };
             if used + columns <= usize::from(width) {
                 chosen[index] = true;
                 used += columns;
+                count += 1;
             }
         }
     }
@@ -1185,6 +1199,9 @@ fn footer(parts: Vec<(u8, Vec<Span<'static>>, bool)>, width: u16) -> Line<'stati
     let mut spans = Vec::new();
     for index in order {
         if chosen[index] {
+            if !spans.is_empty() {
+                spans.push(Span::raw(" ".repeat(PART)));
+            }
             spans.extend(parts[index].1.clone());
         }
     }
@@ -1229,6 +1246,7 @@ fn help_popup(area: Rect) -> Rect {
 /// One block of the main pane, before it is drawn.
 struct Section {
     title: &'static str,
+    icon: Icon,
     lines: Vec<Line<'static>>,
 }
 
@@ -1727,7 +1745,8 @@ mod tests {
     #[test]
     fn the_title_names_the_tool_and_a_narrow_one_is_dropped_whole() {
         let app = app();
-        for width in 0..=8u16 {
+        let name = format!(" {} hugo", Icon::AppHugo.glyph(IconSet::Nerd));
+        for width in 0..=20u16 {
             let line = app.title_line(width);
             let text: String = line
                 .spans
@@ -1739,11 +1758,39 @@ mod tests {
                 "{width}: {text}"
             );
             assert!(
-                ["", " hugo "].contains(&text.as_str()),
+                ["", name.as_str()].contains(&text.as_str()),
                 "{width}: a cut of the name: {text}"
             );
         }
-        assert_eq!(app.title_line(100).spans[0].content.as_ref(), " hugo ");
+        assert_eq!(app.title_line(100).spans[0].content.as_ref(), name);
+    }
+
+    #[test]
+    fn the_title_names_the_project_folder_and_cuts_its_head_to_fit() {
+        let mut app = app();
+        app.project = Some("/home/agent/coding/coding-crew".to_string());
+        let text = |line: Line<'static>| -> String {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect()
+        };
+        let whole = text(app.title_line(100));
+        assert!(
+            whole.ends_with(" · /home/agent/coding/coding-crew"),
+            "{whole}"
+        );
+        // The folder that names the project is kept: the head is what goes.
+        let narrow = text(app.title_line(30));
+        assert!(narrow.ends_with("…/coding/coding-crew"), "{narrow}");
+        assert!(narrow.chars().count() <= 30, "{narrow}");
+        // With no columns left for the folder, the name keeps the line and
+        // the dot goes.
+        let name_only = text(app.title_line(9));
+        assert_eq!(
+            name_only,
+            format!(" {} hugo", Icon::AppHugo.glyph(IconSet::Nerd))
+        );
     }
 
     #[test]
@@ -2077,16 +2124,16 @@ mod tests {
         let (rows, _) = render(100, 40);
         let text = rows.join("\n");
         for fact in [
-            "agents",
+            "AGENTS",
             "builder · runner",
             "opencode-go",
             "deepseek-v4.1-flash#high",
-            "harness",
+            "HARNESS",
             "opencode",
             "--standalone · role config",
-            "review-round limit",
+            "ROUNDS",
             "5 build-and-fix rounds",
-            "order",
+            "ORDER",
             "1 groom · creator",
             "groomed → approved",
             "6 re-review · reviewer",
@@ -2095,9 +2142,9 @@ mod tests {
         }
         // The groups are read in the documented order.
         let at = |needle: &str| row_of(&rows, needle);
-        assert!(at("agents") < at("harness"), "{text}");
-        assert!(at("harness") < at("review-round limit"), "{text}");
-        assert!(at("review-round limit") < at("order"), "{text}");
+        assert!(at("AGENTS") < at("HARNESS"), "{text}");
+        assert!(at("HARNESS") < at("ROUNDS"), "{text}");
+        assert!(at("ROUNDS") < at("ORDER"), "{text}");
 
         // A redraw draws the same configuration: the keys only change what
         // the cursor points at, and a cursor paints no word.
@@ -2194,9 +2241,10 @@ mod tests {
         }
         let mut app = App::new(theme(), IconSet::Nerd, read, Some(home.clone()));
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
-        // The sidebar's inner width is 30 columns: the row is the error cut
-        // to the pane, exactly, not a shorter wording a test invented.
-        let visible = cut_to(&format!("{CONFIG_FILE}: {expected}"), 30);
+        // The sidebar's text is 29 columns: its inner width, less the bar's
+        // column. The row is the error cut to that, exactly, not a shorter
+        // wording a test invented.
+        let visible = cut_to(&format!("{CONFIG_FILE}: {expected}"), 29);
         assert!(
             rows.iter().any(|row| row.contains(&visible)),
             "the screen does not carry {visible:?}: {}",
@@ -2998,7 +3046,7 @@ mod tests {
         assert!(text.contains(sidebar::NOT_SAVED), "{text}");
         // The home is what could not be made, and it is what is named.
         let home_name = config::home_at(&home).display().to_string();
-        let shown = cut_to(&home_name, 30);
+        let shown = cut_to(&home_name, 29);
         assert!(text.contains(&shown), "{text}");
         assert!(!text.contains(CONFIG_FILE), "{text}");
         // The failure is painted on the failure slot.

@@ -14,51 +14,51 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 `crates/hugo/tests/snapshots/screen-100.txt`.
 
 ```text
- hugo
-┌configuration─────────────────┐┌flow──────────────────────────────────────────────────────────────┐
-│agents                        ││┌crew────────────────────────────────────────────────────────────┐│
-│builder · runner              │││orchestrator  glm-5.3#high  —  held —  idle                     ││
-│  opencode-go                 │││runner  deepseek-v4.1-flash#high  TSK10  held 10d  executing    ││
-│  deepseek-v4.1-flash#high    │││reviewer  glm-5.3#high  TSK13  held 8d  reviewing               ││
-│reviewer                      │││one per role · the reviewer reviews                             ││
-│  opencode-go                 ││└────────────────────────────────────────────────────────────────┘│
-│  glm-5.3#high                ││┌queue───────────────────────────────────────────────────────────┐│
-│orchestrator                  │││the automation's queue · 1 task                                 ││
-│  opencode-go                 │││TSK29  approved                                                 ││
-│  glm-5.3#high                ││└────────────────────────────────────────────────────────────────┘│
-│harness                       ││┌round───────────────────────────────────────────────────────────┐│
-│opencode                      │││TSK13 · external · round 2                                      ││
-│  --standalone · role config  ││└────────────────────────────────────────────────────────────────┘│
-│review-round limit            ││┌budget──────────────────────────────────────────────────────────┐│
-│5 build-and-fix rounds        │││external rounds 18 of 45                                        ││
-│order                         ││└────────────────────────────────────────────────────────────────┘│
-│1 groom · creator             ││┌findings────────────────────────────────────────────────────────┐│
-│  groomed → approved          │││21 open findings                                                ││
-│2 build · runner              ││└────────────────────────────────────────────────────────────────┘│
-│  approved → executing        ││                                                                  │
-│3 self-review · runner        ││                                                                  │
-│  executing → code-review     ││                                                                  │
-│4 review · reviewer           ││                                                                  │
-│  code-review → done          ││                                                                  │
-│  code-review → remediating   ││                                                                  │
-│  code-review → needs-human   ││                                                                  │
-│5 remediate · runner          ││                                                                  │
-│  remediating → code-review   ││                                                                  │
-│6 re-review · reviewer        ││                                                                  │
-│  code-review → done          ││                                                                  │
+ 󰚩 hugo · mock-data
+╭─ 󰒓 configuration ────────────╮╭─ 󰑮 flow ─────────────────────────────────────────────────────────╮
+│ AGENTS                       ││╭─ 󰚩 crew ───────────────────────────────────────────────────────╮│
+│▌󰖷 builder · runner           │││orchestrator  glm-5.3#high  —  held —  idle                     ││
+│   opencode-go                │││runner  deepseek-v4.1-flash#high  TSK10  held 10d  executing    ││
+│   deepseek-v4.1-flash#high   │││reviewer  glm-5.3#high  TSK13  held 8d  reviewing               ││
+│ 󰈈 reviewer                   │││one per role · the reviewer reviews                             ││
+│   opencode-go                ││╰────────────────────────────────────────────────────────────────╯│
+│   glm-5.3#high               ││╭─ 󰚇 queue ──────────────────────────────────────────────────────╮│
+│ 󰚩 orchestrator               │││the automation's queue · 1 task                                 ││
+│   opencode-go                │││TSK29  approved                                                 ││
+│   glm-5.3#high               ││╰────────────────────────────────────────────────────────────────╯│
+│ HARNESS                      ││╭─ 󰈈 round ──────────────────────────────────────────────────────╮│
+│ opencode                     │││TSK13 · external · round 1                                      ││
+│   --standalone · role config ││╰────────────────────────────────────────────────────────────────╯│
+│ ROUNDS                       ││╭─ 󰥔 budget ─────────────────────────────────────────────────────╮│
+│ 5 build-and-fix rounds       │││external rounds 18 of 45                                        ││
+│ ORDER                        ││╰────────────────────────────────────────────────────────────────╯│
+│ 1 groom · creator            ││╭─ 󰅚 findings ───────────────────────────────────────────────────╮│
+│   groomed → approved         │││17 open findings                                                ││
+│ 2 build · runner             ││╰────────────────────────────────────────────────────────────────╯│
+│   approved → executing       ││                                                                  │
+│ 3 self-review · runner       ││                                                                  │
+│   executing → code-review    ││                                                                  │
+│ 4 review · reviewer          ││                                                                  │
+│   code-review → done         ││                                                                  │
+│   code-review → remediating  ││                                                                  │
+│   code-review → needs-human  ││                                                                  │
+│ 5 remediate · runner         ││                                                                  │
+│   remediating → code-review  ││                                                                  │
+│ 6 re-review · reviewer       ││                                                                  │
+│   code-review → done         ││                                                                  │
 │                              ││                                                                  │
 │                              ││                                                                  │
 │                              ││                                                                  │
 │                              ││                                                                  │
 │                              ││                                                                  │
 │                              ││● running since 2026-11-09T08:30Z                                 │
-└──────────────────────────────┘└──────────────────────────────────────────────────────────────────┘
- q  quit r  reload ?  help
+╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+ q  quit   r  reload   ↑↓ j/k  move   ?  help
 ```
 
 | part | behaviour |
 |---|---|
-| title line | the name of the tool, `hugo`; a window too narrow for it shows no title rather than a cut of the name |
+| title line | the tool's icon and name, `hugo`, then a dim `·` and the project's folder when one is found; a window too narrow for the name shows no title rather than a cut of the name |
 | sidebar | the configuration, on the left: the agents and the model each runs, the harness, the review-round limit and the order, in that order. The agents group has a cursor: `↑ k` and `↓ j` move it, and `enter` on the orchestrator's row chooses its model. The builder's and the reviewer's rows are read-only. `r` reloads the configuration from the file |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
 | footer | the keys that work — never a key that does nothing. The window's keys are `q quit`, `ctrl-c quit`, `r reload`, `↑ k` `↓ j` move, `enter choose` (on the orchestrator's row) and `? help`; while the choice is open its keys are `esc close`, `enter pick`, `↑ k` `↓ j` move, and `q quit` and `? help` still work |
@@ -132,10 +132,10 @@ groups, in this order:
 
 | order | group | shows |
 |---|---|---|
-| 1 | `agents` | one entry per agent: its name and role, then the model it runs — the provider and the model's own name on the rows under it |
-| 2 | `harness` | the tool the agents run in, and the way it is driven |
-| 3 | `review-round limit` | the build-and-fix cycles a task gets, and the set the count counts |
-| 4 | `order` | the numbered steps, each with the gates it passes |
+| 1 | `AGENTS` | one entry per agent: its role's icon, its name and role, then the model it runs — the provider and the model's own name on the rows under it |
+| 2 | `HARNESS` | the tool the agents run in, and the way it is driven |
+| 3 | `ROUNDS` | the build-and-fix cycles a task gets, and the set the count counts |
+| 4 | `ORDER` | the numbered steps, each with the gates it passes |
 
 The configuration is **provisional**: the flow has not written one yet, and the
 format may change when it does. Its shape is
@@ -189,7 +189,7 @@ setting is written.
 the theme's marker — the provider and the model's own name are on rows of their
 own, so the model is whole at the sidebar's 32 columns. A group that does not
 fit the height is left out whole, and one line under the groups says
-`not shown:` with each group's name and how much it held: `order (14 hidden)`.
+`not shown:` with each group's name and how much it held: `ORDER (14 hidden)`.
 
 A configuration file that is there but cannot be read is not the empty state:
 the sidebar says `configuration is unreadable`, names the file and the error,

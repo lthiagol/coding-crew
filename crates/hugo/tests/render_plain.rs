@@ -158,7 +158,7 @@ fn the_sidebar_is_shown_wide_and_announced_where_it_is_dropped() {
     let wide = screen(100, 40);
     assert!(wide.contains("configuration"), "{wide}");
     assert!(wide.contains("flow"), "{wide}");
-    for group in ["agents", "harness", "review-round limit", "order"] {
+    for group in ["AGENTS", "HARNESS", "ROUNDS", "ORDER"] {
         assert!(
             wide.contains(group),
             "{group} is not on the sidebar: {wide}"
@@ -290,7 +290,12 @@ fn a_record_that_cannot_be_read_is_named_not_swallowed_as_no_run() {
 fn the_window_has_a_title_line_a_footer_and_no_tabs() {
     let text = screen(100, 40);
     let rows: Vec<&str> = text.lines().collect();
-    assert_eq!(rows[0], " hugo", "the title line names the tool");
+    // The icon, then the name; the project is the mock folder, which the
+    // render names from the working directory it runs in.
+    assert_eq!(
+        rows[0], " 󰚩 hugo · mock-data",
+        "the title line names the tool"
+    );
     assert!(rows.last().expect("a footer").contains("quit"), "{text}");
     // The shell is one sidebar and one main pane: no tab bar, no tab key.
     assert!(!text.contains("Overview"), "{text}");
@@ -307,7 +312,10 @@ fn the_footer_names_the_keys_that_work_and_no_key_that_does_nothing() {
     // nothing: the footer names quit, reload and help.
     let text = screen(100, 40);
     let footer = text.lines().last().expect("a footer").trim();
-    assert_eq!(footer, "q  quit r  reload ↑↓ j/k  move ?  help", "{footer}");
+    assert_eq!(
+        footer, "q  quit   r  reload   ↑↓ j/k  move   ?  help",
+        "{footer}"
+    );
     for dead in ["open", "tab", "esc", "choose", "pick"] {
         assert!(!footer.contains(dead), "{footer}: {dead}");
     }

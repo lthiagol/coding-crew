@@ -29,6 +29,34 @@ pub fn cut_to(text: &str, width: usize) -> String {
     format!("{head}…")
 }
 
+/// The text, cut to `width` columns from the front: the tail is kept, and a
+/// cut head is marked with `…`. A path keeps the folder that names it.
+pub fn tail_to(text: &str, width: usize) -> String {
+    if text_width(text) <= width {
+        return text.to_string();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    let span = Span::raw(text.to_string());
+    let graphemes: Vec<&str> = span
+        .styled_graphemes(Style::default())
+        .map(|grapheme| grapheme.symbol)
+        .collect();
+    let budget = width - 1;
+    let mut used = 0;
+    let mut kept: Vec<&str> = Vec::new();
+    for grapheme in graphemes.iter().rev() {
+        let columns = text_width(grapheme);
+        if used + columns > budget {
+            break;
+        }
+        used += columns;
+        kept.push(grapheme);
+    }
+    format!("…{}", kept.iter().rev().copied().collect::<String>())
+}
+
 /// The longest head of `text` that fits in `budget` columns.
 ///
 /// A grapheme is the smallest piece a terminal draws: cutting on scalars
@@ -72,6 +100,23 @@ mod tests {
     use super::*;
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
+
+    #[test]
+    fn a_tail_keeps_the_end_and_marks_the_cut() {
+        assert_eq!(tail_to("/home/agent/coding", 40), "/home/agent/coding");
+        assert_eq!(tail_to("/home/agent/coding", 8), "…/coding");
+        assert_eq!(tail_to("/home/agent/coding", 1), "…");
+        assert_eq!(tail_to("/home/agent/coding", 0), "");
+    }
+
+    #[test]
+    fn a_tail_is_never_wider_than_its_columns() {
+        let path = "/a/界界/coding-crew";
+        for width in 0..=20 {
+            let cut = tail_to(path, width);
+            assert!(text_width(&cut) <= width, "{width}: {cut:?}");
+        }
+    }
 
     #[test]
     fn the_first_grapheme_is_what_the_terminal_draws_once() {

@@ -9,7 +9,7 @@ mod config;
 mod sidebar;
 
 use std::io::{Stdout, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Result, bail};
@@ -179,6 +179,7 @@ fn preset_of(name: &str) -> Result<Preset> {
 /// redraw happens at least once a tick, so the screen keeps up without a key.
 fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Result<()> {
     let located = locate_runtime();
+    app.project = located.label(std::env::current_dir().ok().as_deref());
     loop {
         let runtime = read_runtime(&located);
         // One clock read per frame, as in raul: the crews' holds and every
@@ -216,6 +217,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Resul
 /// must be the same bytes on every run.
 fn render_plain(options: Options, mut app: App) -> Result<()> {
     let located = locate_runtime();
+    app.project = located.label(std::env::current_dir().ok().as_deref());
     let runtime = read_runtime(&located);
     let mut terminal = Terminal::new(TestBackend::new(options.width, options.height))?;
     terminal.draw(|frame| app.draw(frame, &runtime, RENDER_NOW))?;
@@ -234,6 +236,29 @@ enum Located {
     Absent,
     /// The project could not be determined: that is not the empty state.
     Unreadable(ReadError),
+}
+
+impl Located {
+    /// The project's folder as the title line names it, when one is found.
+    ///
+    /// The folder is named as raul names its folder: relative to the working
+    /// directory, so a screen does not carry the machine's own paths. The
+    /// working directory itself is named by its folder's name, a folder
+    /// below it as `./folder`, and anything else by its whole path.
+    fn label(&self, cwd: Option<&Path>) -> Option<String> {
+        let Located::Found(runtime) = self else {
+            return None;
+        };
+        let project = runtime.parent()?.parent()?;
+        let relative = cwd.and_then(|cwd| project.strip_prefix(cwd).ok());
+        Some(match relative {
+            Some(rest) if rest.as_os_str().is_empty() => {
+                project.file_name()?.to_string_lossy().into_owned()
+            }
+            Some(rest) => format!("./{}", rest.display()),
+            None => project.display().to_string(),
+        })
+    }
 }
 
 /// The nearest project's runtime record, discovered from the current

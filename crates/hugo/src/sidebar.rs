@@ -16,17 +16,22 @@
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
+use coding_crew_core::Role;
 use coding_crew_core::config::Config;
 use coding_crew_theme::text::cut_to;
-use coding_crew_theme::{Theme, selected_line};
+use coding_crew_theme::{Icon, IconSet, Theme, selected_line};
 
 use crate::config::{ConfigRead, ConfigState};
 
-/// The sidebar's groups, in the order they are read.
-pub const AGENTS_TITLE: &str = "agents";
-pub const HARNESS_TITLE: &str = "harness";
-pub const LIMIT_TITLE: &str = "review-round limit";
-pub const ORDER_TITLE: &str = "order";
+/// The sidebar's groups, in the order they are read. Each label is the dim
+/// upper-case word the screen draws.
+pub const AGENTS_TITLE: &str = "AGENTS";
+pub const HARNESS_TITLE: &str = "HARNESS";
+pub const LIMIT_TITLE: &str = "ROUNDS";
+pub const ORDER_TITLE: &str = "ORDER";
+
+/// The columns the cursor's bar takes: the first column of every row.
+const BAR: usize = 1;
 
 /// The sidebar's named empty state: there is no home, so nothing is configured.
 pub const EMPTY: &str = "no configuration yet";
@@ -76,6 +81,7 @@ pub fn lines(
     state: &ConfigRead,
     notice: Option<&crate::app::ReadError>,
     theme: &Theme,
+    icons: IconSet,
     width: usize,
     height: usize,
     cursor: usize,
@@ -114,7 +120,13 @@ pub fn lines(
                     line(&legacy_notice(file), theme.text.dim, width),
                 ));
             }
-            return fits(prefix, groups(config, theme, cursor), theme, width, height);
+            return fits(
+                prefix,
+                groups(config, theme, icons, cursor),
+                theme,
+                width,
+                height,
+            );
         }
         ConfigState::Unreadable(error) => {
             prefix.push((
@@ -144,7 +156,7 @@ pub fn lines(
     match &state.state {
         ConfigState::Unreadable(_) => fits(
             prefix,
-            groups(&Config::default(), theme, usize::MAX),
+            groups(&Config::default(), theme, icons, usize::MAX),
             theme,
             width,
             height,
@@ -166,13 +178,13 @@ fn legacy_notice(file: &str) -> String {
 }
 
 /// The configuration's groups, in the order they are read.
-fn groups(config: &Config, theme: &Theme, cursor: usize) -> Vec<Group> {
-    let title = theme.text.strong;
+fn groups(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<Group> {
+    let title = theme.text.dim;
     vec![
         Group {
             title: AGENTS_TITLE,
             style: title,
-            rows: agent_rows(config, theme, cursor),
+            rows: agent_rows(config, theme, icons, cursor),
         },
         Group {
             title: HARNESS_TITLE,
@@ -207,21 +219,22 @@ fn groups(config: &Config, theme: &Theme, cursor: usize) -> Vec<Group> {
     ]
 }
 
-/// One entry per agent: its name and role, then its model — the provider and
-/// the model's own name — on the rows under it. The cursor is on an entry's
-/// head row.
-fn agent_rows(config: &Config, theme: &Theme, cursor: usize) -> Vec<Row> {
+/// One entry per agent: its role icon, its name and role, then its model — the
+/// provider and the model's own name — on the rows under it. The cursor is on
+/// an entry's head row.
+fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<Row> {
     let mut rows = Vec::new();
     for (index, agent) in config.agents.iter().enumerate() {
-        // A name that is its role is not said twice.
-        let head = if agent.name == agent.role.as_str() {
+        // A name that is its role is not said twice. The role's word stays
+        // beside its icon: an icon decorates a word, it never replaces one.
+        let name = if agent.name == agent.role.as_str() {
             agent.name.clone()
         } else {
             format!("{} · {}", agent.name, agent.role.as_str())
         };
         let selected = index == cursor;
         rows.push(Row {
-            text: head,
+            text: format!("{} {name}", role_icon(agent.role).glyph(icons)),
             style: theme.text.normal,
             selected,
         });
@@ -246,6 +259,17 @@ fn agent_rows(config: &Config, theme: &Theme, cursor: usize) -> Vec<Row> {
         }
     }
     rows
+}
+
+/// The icon of a role. A creator grooms with a human, so it takes the
+/// human's icon: the table has no creator of its own.
+fn role_icon(role: Role) -> Icon {
+    match role {
+        Role::Creator => Icon::RoleHuman,
+        Role::Runner => Icon::RoleRunner,
+        Role::Reviewer => Icon::RoleReviewer,
+        Role::Orchestrator => Icon::RoleOrchestrator,
+    }
 }
 
 /// The order's steps, numbered, each with the gates it passes.
@@ -347,25 +371,46 @@ fn fits(
 }
 
 /// The groups drawn: each title, then its rows. The cursor's row takes the
-/// selection's paint, bar to the pane's edge.
+/// selection's bar and paint, bar to the pane's edge.
 fn drawn(groups: &[Group], width: usize, theme: &Theme) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for group in groups {
         lines.push(line(group.title, group.style, width));
         for row in &group.rows {
-            let text = line(&row.text, row.style, width);
-            lines.push(if row.selected {
-                selected_line(text, width, theme)
-            } else {
-                text
-            });
+            lines.push(row_line(&row.text, row.style, row.selected, width, theme));
         }
     }
     lines
 }
 
+/// A row with the bar column first: `▌` in the focus slot when the cursor is
+/// on it, a space otherwise, so every row shares one left edge.
+fn row_line(
+    text: &str,
+    style: Style,
+    selected: bool,
+    width: usize,
+    theme: &Theme,
+) -> Line<'static> {
+    let body = Line::from(Span::styled(cut_to(text, width.saturating_sub(BAR)), style));
+    let (bar, body) = if selected {
+        let bar = Span::styled("▌", theme.chrome.border_focus);
+        (bar, selected_line(body, width.saturating_sub(BAR), theme))
+    } else {
+        (Span::raw(" "), body)
+    };
+    let mut spans = vec![bar];
+    spans.extend(body.spans);
+    Line::from(spans)
+}
+
+/// A line that is not a row: a title, a state or an announcement. It takes
+/// the bar column too, so the sidebar has one left edge.
 fn line(text: &str, style: Style, width: usize) -> Line<'static> {
-    Line::from(Span::styled(cut_to(text, width), style))
+    Line::from(vec![
+        Span::raw(" "),
+        Span::styled(cut_to(text, width.saturating_sub(BAR)), style),
+    ])
 }
 
 #[cfg(test)]
@@ -394,7 +439,7 @@ mod tests {
         }))
     }
 
-    /// The lines' text, one string per line.
+    /// The lines' text, one string per line, without the bar column.
     fn text(lines: &[Line<'static>]) -> Vec<String> {
         lines
             .iter()
@@ -403,6 +448,9 @@ mod tests {
                     .iter()
                     .map(|span| span.content.as_ref())
                     .collect::<String>()
+                    .chars()
+                    .skip(1)
+                    .collect()
             })
             .collect()
     }
@@ -418,7 +466,7 @@ mod tests {
         height: usize,
         cursor: usize,
     ) -> Vec<String> {
-        text(&lines(state, None, &theme(), width, height, cursor).lines)
+        text(&lines(state, None, &theme(), IconSet::Nerd, width, height, cursor).lines)
     }
 
     #[test]
@@ -526,11 +574,17 @@ mod tests {
     #[test]
     fn every_row_fits_the_pane_and_a_row_too_wide_is_cut_with_the_marker() {
         for width in 1..=40usize {
-            for row in rendered(&configured(), width, 100) {
-                assert!(
-                    coding_crew_theme::text::text_width(&row) <= width,
-                    "{width}: {row:?}"
-                );
+            let drawn = lines(
+                &configured(),
+                None,
+                &theme(),
+                IconSet::Nerd,
+                width,
+                100,
+                usize::MAX,
+            );
+            for line in &drawn.lines {
+                assert!(line.width() <= width, "{width}: {line:?}");
             }
         }
         // A row that does not fit is cut with the theme's marker, never
@@ -555,7 +609,7 @@ mod tests {
         let rows = rendered(&configured(), 30, 17);
         assert!(rows.len() <= 17, "{rows:#?}");
         let last = rows.last().expect("the announcement");
-        assert_eq!(last, "not shown: order (14 hidden)", "{rows:#?}");
+        assert_eq!(last, "not shown: ORDER (14 hidden)", "{rows:#?}");
         // No part of the order is drawn, and its title is not a group on its
         // own.
         assert!(!rows.iter().any(|row| row == ORDER_TITLE), "{rows:#?}");
@@ -584,19 +638,20 @@ mod tests {
             &ConfigRead::of(ConfigState::Absent),
             None,
             &theme(),
+            IconSet::Nerd,
             30,
             40,
             usize::MAX,
         );
         assert_eq!(text(&drawn.lines), [EMPTY]);
         assert!(!drawn.agents, "the cursor has no rows in the empty state");
-        assert_eq!(drawn.lines[0].spans[0].style, theme().text.dim);
+        assert_eq!(drawn.lines[0].spans[1].style, theme().text.dim);
     }
 
     #[test]
     fn a_configuration_that_cannot_be_read_is_named_not_called_empty() {
         let state = unreadable();
-        let drawn = lines(&state, None, &theme(), 40, 40, usize::MAX);
+        let drawn = lines(&state, None, &theme(), IconSet::Nerd, 40, 40, usize::MAX);
         let rows = text(&drawn.lines);
         assert_eq!(rows[0], UNREADABLE);
         assert!(rows[1].contains("config.toml"), "{rows:#?}");
@@ -606,7 +661,7 @@ mod tests {
         // The defaults are drawn, but they are not the human's to change.
         assert!(drawn.agents, "the defaults' agents are not drawn");
         // The error is painted on the failure slot, as raul paints one.
-        assert_eq!(drawn.lines[1].spans[0].style, theme().semantic.error);
+        assert_eq!(drawn.lines[1].spans[1].style, theme().semantic.error);
     }
 
     #[test]
@@ -684,8 +739,8 @@ mod tests {
             "{rows:#?}"
         );
         // The notice is secondary text, not the failure slot.
-        let drawn = lines(&state, None, &theme(), 30, 40, usize::MAX);
-        assert_eq!(drawn.lines[0].spans[0].style, theme().text.dim);
+        let drawn = lines(&state, None, &theme(), IconSet::Nerd, 30, 40, usize::MAX);
+        assert_eq!(drawn.lines[0].spans[1].style, theme().text.dim);
     }
 
     #[test]
@@ -776,6 +831,7 @@ mod tests {
                 &configured(),
                 Some(&notice),
                 &theme(),
+                IconSet::Nerd,
                 30,
                 height,
                 usize::MAX,
@@ -793,7 +849,7 @@ mod tests {
 
     #[test]
     fn the_cursor_is_on_an_agents_head_row_and_the_bar_reaches_the_edge() {
-        let drawn = lines(&configured(), None, &theme(), 30, 40, 2);
+        let drawn = lines(&configured(), None, &theme(), IconSet::Nerd, 30, 40, 2);
         let selected: Vec<&Line<'static>> = drawn
             .lines
             .iter()
@@ -809,7 +865,8 @@ mod tests {
             .iter()
             .map(|span| span.content.as_ref())
             .collect();
-        assert!(says.starts_with("orchestrator"), "{says:?}");
+        assert!(says.starts_with('▌'), "{says:?}");
+        assert!(says.contains("orchestrator"), "{says:?}");
         assert_eq!(
             selected[0].width(),
             30,
@@ -820,7 +877,15 @@ mod tests {
 
     #[test]
     fn no_cursor_paints_no_row() {
-        let drawn = lines(&configured(), None, &theme(), 30, 40, usize::MAX);
+        let drawn = lines(
+            &configured(),
+            None,
+            &theme(),
+            IconSet::Nerd,
+            30,
+            40,
+            usize::MAX,
+        );
         assert!(
             !drawn.lines.iter().any(|line| {
                 line.spans
@@ -835,13 +900,13 @@ mod tests {
     fn a_short_pane_that_leaves_the_agents_out_says_the_cursor_has_nowhere_to_be() {
         // The agents group is left out whole, and the announcement says so:
         // the cursor must not act on a row the pane does not draw.
-        let drawn = lines(&configured(), None, &theme(), 30, 5, 0);
+        let drawn = lines(&configured(), None, &theme(), IconSet::Nerd, 30, 5, 0);
         assert!(!drawn.agents, "{:#?}", text(&drawn.lines));
         assert!(
             drawn
                 .lines
                 .iter()
-                .any(|line| line.spans[0].content.starts_with("not shown:")),
+                .any(|line| line.spans[1].content.starts_with("not shown:")),
             "{:#?}",
             text(&drawn.lines)
         );
