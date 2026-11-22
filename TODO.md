@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 70b.
+Updated 2026-11-22 by the orchestrator, after unit 71.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–70, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–71, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- 71 · Effort comes from the model, and raul picks from lists (M)
 - 72 · hugo shows where the flow is, and picks the tasks (L)
 - 73 · Mouse in both TUIs (M)
 - 74 · The review reads in layers (M)
@@ -159,9 +158,6 @@ None blocking. Carried from the closed units.
   external round records its reviewer's actor id, not a session, so
   `fixtures_keep_their_gates` replays the review with an invented session.
   The fix adds a `session` to `Round` — a model change, for the human.
-- **opencode's effort levels are assumed** (2026-11-22, unit 64): `low medium
-  high`, as `#variant` suffixes. Only the free `opencode/*` models are listed
-  here, so no provider's variants could be read. The human confirms the list.
 - **The flow files name claude ids** (2026-11-22, unit 64). `flow/builder.json`
   and `flow/reviewer.json` are in opencode's format, and they now carry
   `claude-haiku-5-5` and `claude-opus-5-5` so the pin test matches the new
@@ -180,15 +176,43 @@ None blocking. Carried from the closed units.
 - **The screen mock still shows old model names** (2026-11-22, unit 64).
   `docs/hugo/screens.md`, the ASCII pictures near lines 22–31, is illustrative
   and was left as it was.
-- **The reset level is `medium`** (2026-11-22, unit 65). A harness switch that
-  the new harness does not take resets the effort to `medium`, the level the
-  table now names as its default. The human confirms it or picks another.
+- **Effort is cleared, not reset** (2026-11-22, unit 71). A model or harness
+  change that the new model does not take clears the effort. It no longer
+  resets to `medium` or fills the switch's default. This replaces the unit 65
+  entries on the reset level and the switch fill. The human confirms it.
+- **A typed model's `none` is stored as `effort = ""`** (2026-11-22, unit 71).
+  Not `"none"`, because real `none` variants (opencode `hy4-flash-free`,
+  cursor's `…-none`) would collide with it. An empty effort starts with no
+  effort flag. The builder's choice; the orchestrator confirms it.
+- **A bare base with levels has no entry that starts it bare** (2026-11-22,
+  unit 71). `gpt-5.3-codex` is listed bare and at levels, and a listed model
+  shows only its levels. It starts bare only by typing its id and picking
+  `none`. The human decides whether a listed base should offer `none`.
 - **Should the effort list offer `default`?** (2026-11-22, unit 65). The list
   has no entry that clears an effort, so an agent cannot be set back to none.
   The human decides whether it should.
-- **A harness switch fills an absent effort** (2026-11-22, unit 65).
-  `switch_harness` sets the harness default when the agent has no effort. That
-  is the switch rule, not the gap rule. The human confirms it reads right.
+- **The model and effort reads run on the screen** (2026-11-22, unit 71). raul
+  reads synchronously, bounded at 5 s and cached per session, so a slow
+  `cursor-agent --list-models` can hold Settings on the first `enter`. hugo
+  reads in the background. Moving raul's read to the background is the
+  follow-up.
+- **A failed read leaves a typed model with no effort choice** (2026-11-22,
+  unit 71). When the effort catalogue read fails, the list is empty, so a typed
+  model cannot pick an effort until the read works.
+- **cursor-agent and opencode efforts are checked late** (2026-11-22, unit 71).
+  The config read checks claude's levels only. A cursor or opencode effort is
+  checked when its list is read (raul's save), and nowhere at start, so a wrong
+  level fails at the harness. The human confirms the rule.
+- **Haiku's levels** (2026-11-22, unit 71). The curated table gives Haiku `low`,
+  `medium`, `high`. `cursor-agent --list-models` also lists `xhigh` and `max`
+  for `claude-haiku-5-5`. The human confirms which is right.
+- **opencode's levels come from an undocumented operation** (2026-11-22, unit
+  71). `opencode api --standalone model.list` gives the variants, and
+  `opencode models` has no variant flag. The human confirms relying on it.
+- **The live runs are not done** (2026-11-22, unit 71). The parsers are pinned
+  by captured `cursor-agent` and `opencode` output. The bounded reads and a
+  live start through hugo or raul were not run. The cursor start form
+  `--model <id>-<effort>` comes from the reviewer's live runs.
 - **`skill.rs` still writes `effort default`** (2026-11-22, unit 65).
   `crates/hugo/src/skill.rs:128` and its test pin it. The line is unreachable,
   since the crew text is built only after the `s` gap check. Left alone to keep
@@ -196,8 +220,6 @@ None blocking. Carried from the closed units.
 - **Esc from the id input drops the catalogue's error** (2026-11-22, unit 65).
   After a model catalogue fails, `esc` in `type an id…` returns to the list
   without the error line. Left as it was.
-- **cursor-agent's list and the opencode list are untested live** (2026-11-22,
-  unit 65). Both were exercised with a fake tool only.
 - **The effort ruling is not in the design record** (2026-11-22, unit 65).
   `docs/hugo/design-record.md` has the harness and model rule but not the
   effort gap. Add it there at the next edit to the design record.

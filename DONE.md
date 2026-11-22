@@ -1309,6 +1309,23 @@ sizes 2 and 3 were never checked for the roles shown and started, and the
 no-write test made no pick at all. Both were fixed with tests. Ruling
 (2026-11-22): hugo's picks are session-only. Commit `aa30ab4`.
 
+Unit closed: effort comes from the model, and raul picks from lists (plan 71).
+Four build rounds and four reviews; the second build round changed nothing,
+waiting on a ruling. Each model's levels come from its harness's listing:
+claude from a curated table (Opus, Sonnet and Fable low to max, Haiku low,
+medium and high), cursor-agent from the id suffixes of `--list-models`,
+opencode from the variants in `opencode api --standalone model.list`. The
+catalogue moved to core. raul's Settings picks from hugo's lists, with
+`type an id…` for a model. Round one found three: cursor-agent was started
+with a bracketed id it rejects, so the start now joins the listed id; a base
+listed bare and at levels could not be started bare; raul showed a blank for
+a no-level model. Round three found a typed model whose effort was cleared and
+could never start. The orchestrator ruled: its levels are the harness's known
+levels, then `none`, then `type a level…`. The builder stores `none` as
+`effort = ""`, not `"none"`, to keep clear of real `none` variants; the
+orchestrator confirms it. The last review's one finding, a stale agent-table
+row in task-model, is in the commit. Commit `80787ec`.
+
 ---
 
 ## Lessons
