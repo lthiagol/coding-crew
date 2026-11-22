@@ -22,9 +22,9 @@ use coding_crew_core::runtime::{Runtime, RuntimeError};
 use coding_crew_core::screen::{plain_text, restore, setup};
 use coding_crew_core::store::RUNTIME_FILE;
 use coding_crew_core::{Store, StoreError};
-use coding_crew_theme::{Preset, Theme};
+use coding_crew_theme::{IconSet, Preset, Theme};
 
-const USAGE: &str = "usage: hugo [--theme dark|nord|catppuccin|dracula|terminal] [--render --plain [--width N] [--height N]]";
+const USAGE: &str = "usage: hugo [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N]]";
 /// The columns of a plain render when --width is not given.
 const DEFAULT_WIDTH: u16 = 100;
 /// The rows of a plain render when --height is not given.
@@ -58,7 +58,7 @@ fn main() -> Result<()> {
     // a reason to fail. The home is kept: a pick is saved under it.
     let home = config::user_home();
     let config = config::load(home.as_deref());
-    let app = App::new(options.theme, config, home);
+    let app = App::new(options.theme, options.icons, config, home);
 
     if options.render {
         return render_plain(options, app);
@@ -75,6 +75,8 @@ fn main() -> Result<()> {
 struct Options {
     /// The colours of the window.
     theme: Theme,
+    /// The icon set the window draws with.
+    icons: IconSet,
     /// Print the screen as text and exit.
     render: bool,
     /// The columns of a plain render.
@@ -86,6 +88,7 @@ struct Options {
 /// The flags of the command line.
 fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     let mut preset = Preset::Dark;
+    let mut icons: Option<String> = None;
     let mut render = false;
     let mut plain = false;
     let mut width = DEFAULT_WIDTH;
@@ -104,6 +107,15 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
             }
             other if other.starts_with("--theme=") => {
                 preset = preset_of(&other["--theme=".len()..])?;
+            }
+            "--icons" => {
+                let Some(name) = args.next() else {
+                    bail!("--icons needs a name\n{USAGE}");
+                };
+                icons = Some(name);
+            }
+            other if other.starts_with("--icons=") => {
+                icons = Some(other["--icons=".len()..].to_string());
             }
             "--render" => render = true,
             "--plain" => plain = true,
@@ -136,8 +148,11 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     if render != plain {
         bail!("--render and --plain go together\n{USAGE}");
     }
+    let icons =
+        IconSet::resolve(icons.as_deref()).map_err(|error| anyhow::anyhow!("{error}\n{USAGE}"))?;
     Ok(Options {
         theme: Theme::preset(preset),
+        icons,
         render,
         width,
         height,
@@ -321,6 +336,30 @@ mod tests {
         let error =
             parse_args(["--theme".to_string()].into_iter()).expect_err("a theme needs a name");
         assert!(error.to_string().contains("--theme"), "{error}");
+    }
+
+    #[test]
+    fn the_icon_set_is_chosen_with_a_flag() {
+        for (name, set) in [("nerd", IconSet::Nerd), ("unicode", IconSet::Unicode)] {
+            for args in [
+                vec!["--icons".to_string(), name.to_string()],
+                vec![format!("--icons={name}")],
+            ] {
+                let options = parse_args(args.into_iter()).expect("the options");
+                assert_eq!(options.icons, set, "{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_unknown_icon_set_is_refused() {
+        let error = parse_args(["--icons".to_string(), "emoji".to_string()].into_iter())
+            .expect_err("emoji is not an icon set");
+        assert!(error.to_string().contains("emoji"), "{error}");
+        assert!(error.to_string().contains("--icons"), "{error}");
+        let error =
+            parse_args(["--icons".to_string()].into_iter()).expect_err("an icon set needs a name");
+        assert!(error.to_string().contains("--icons"), "{error}");
     }
 
     #[test]

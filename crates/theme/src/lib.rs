@@ -4,8 +4,11 @@
 //! domain knows nothing about this: `crates/core` never names a colour, and
 //! a phase names a slot, never a colour.
 
+pub mod chrome;
+pub mod icons;
 pub mod text;
 
 mod theme;
 
+pub use icons::{Icon, IconSet};
 pub use theme::*;

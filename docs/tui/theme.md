@@ -283,6 +283,21 @@ The preset exists for terminals whose palette the reader has chosen. Where
 the paint matters, the `dark`, `nord`, `catppuccin` or `dracula` preset is the
 one.
 
+## The icons
+
+The icons are one table, `crates/theme/src/icons.rs`, with each icon's glyph
+in both sets, `nerd` and `unicode`. The names and glyphs are the spec's:
+[redesign.md](redesign.md) § The icons. The chrome's pieces, the pane and the
+chips, are in `crates/theme/src/chrome.rs`.
+
+An icon decorates a word; it never replaces one. Every fact keeps its word,
+and the screen says the same thing with the icons stripped.
+
+The set is chosen with `--icons nerd|unicode` on both TUIs, then the
+`CODING_CREW_ICONS` variable, then the default `nerd`. A name that is neither
+set is refused. Every glyph in both sets measures one column, and the column
+table pins the glyphs.
+
 ## Rules
 
 1. No colour is written inline. Every colour comes from a slot.

@@ -576,3 +576,9 @@ case tab-after-letter 0061,0009 8
 case east-asian-wide 754C 2
 case fullwidth FF21 2
 case emoji 1F600 2
+
+# The icon glyphs of crates/theme/src/icons.rs in each set, and the spinner
+# frames of crates/theme/src/chrome.rs: one column each.
+case nerd-icons F0645,F06A9,F056E,F009A,F062C,F0687,F0493,F0766,F0AA5,F0132,F040A,F0208,F05B7,F0026,F012C,F0335,F0415,F00E4,F06A9,F05B7,F0208,F0004,F033E,F015A,F0337,F0954,F046E,F03E4,F0493 29
+case unicode-icons 25C6,25C7,25A6,25C9,2442,2261,2699,25CB,25D4,25D1,25B6,25CE,21BB,0021,2713,2726,002B,2717,25C7,25B8,25CE,263A,2298,2717,2192,25F7,25CF,25A0,2699 29
+case spinner-frames 280B,2819,2839,2838,283C,2834,2826,2827,2807,280F 10

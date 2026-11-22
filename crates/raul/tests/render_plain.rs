@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::OnceLock;
 
+use coding_crew_theme::chrome::SPINNER;
+use coding_crew_theme::{Icon, IconSet};
+
 mod support;
 
 /// The work folder, relative to the repository root.
@@ -1045,6 +1048,45 @@ fn the_terminal_column_table_pins_the_cases_the_measures_used_to_disagree_about(
     assert_eq!(table.width_of("e\u{0301}"), 1, "a letter and its mark");
     assert_eq!(table.width_of("\t"), 8, "a tab from the first column");
     assert_eq!(table.width_of("a\tb"), 9, "a tab advances in place");
+}
+
+#[test]
+fn the_icon_and_spinner_cases_are_the_theme_glyphs_one_column_each() {
+    // The sweep's icon and spinner cases are a hand copy of the theme's
+    // glyphs. Each case must spell them in the theme's order, and each glyph
+    // must take one column on its own: a total alone would pass one glyph at
+    // two beside one at zero.
+    let table = column_table();
+    let sets: [(&str, Vec<&str>); 3] = [
+        (
+            "nerd-icons",
+            Icon::ALL
+                .iter()
+                .map(|icon| icon.glyph(IconSet::Nerd))
+                .collect(),
+        ),
+        (
+            "unicode-icons",
+            Icon::ALL
+                .iter()
+                .map(|icon| icon.glyph(IconSet::Unicode))
+                .collect(),
+        ),
+        ("spinner-frames", SPINNER.to_vec()),
+    ];
+    for (name, glyphs) in sets {
+        let case = table
+            .case(name)
+            .unwrap_or_else(|| panic!("the table has no case {name}"));
+        assert_eq!(
+            case.text,
+            glyphs.concat(),
+            "the table's {name} case spells the theme's glyphs"
+        );
+        for glyph in glyphs {
+            assert_eq!(table.width_of(glyph), 1, "{glyph:?} in the {name} case");
+        }
+    }
 }
 
 #[test]

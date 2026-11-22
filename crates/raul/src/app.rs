@@ -20,7 +20,7 @@ use crate::settings;
 use crate::tabs::Tab;
 use crate::view::View;
 use coding_crew_theme::text::text_width;
-use coding_crew_theme::{Theme, block_title_style};
+use coding_crew_theme::{IconSet, Theme, block_title_style};
 
 /// What a key asks the window to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,11 +45,14 @@ pub struct App {
     pub help: bool,
     /// The colours of the window.
     pub theme: Theme,
+    /// The icon set in force. No screen draws an icon yet.
+    #[allow(dead_code)]
+    pub icons: IconSet,
 }
 
 impl App {
     /// A window with a theme of its own.
-    pub fn new(root: PathBuf, theme: Theme) -> Self {
+    pub fn new(root: PathBuf, theme: Theme, icons: IconSet) -> Self {
         Self {
             root,
             tab: Tab::Overview,
@@ -58,6 +61,7 @@ impl App {
             detail: None,
             help: false,
             theme,
+            icons,
         }
     }
 
@@ -714,12 +718,17 @@ mod tests {
         App::new(
             PathBuf::from("/tmp/coding-crew/work"),
             Theme::preset(Preset::Dark),
+            IconSet::Nerd,
         )
     }
 
     /// The window as it is drawn: a theme, a tab, and the help overlay.
     fn window(theme: &Theme, tab: Tab, help: bool) -> App {
-        let mut app = App::new(PathBuf::from("/tmp/coding-crew/work"), *theme);
+        let mut app = App::new(
+            PathBuf::from("/tmp/coding-crew/work"),
+            *theme,
+            IconSet::Nerd,
+        );
         app.tab = tab;
         app.help = help;
         app
@@ -818,6 +827,7 @@ mod tests {
         let app = App::new(
             PathBuf::from("/home/用户/项目/coding-crew/work"),
             Theme::preset(Preset::Dark),
+            IconSet::Nerd,
         );
         for width in 0..=60u16 {
             let title = app.title_line(width);

@@ -28,12 +28,12 @@ use app::{Action, App};
 use coding_crew_core::screen::{plain_text, restore, setup};
 use coding_crew_core::store::{DATA_DIR, WORK_DIR};
 use coding_crew_core::{Store, StoreError};
-use coding_crew_theme::{Preset, Theme};
+use coding_crew_theme::{IconSet, Preset, Theme};
 use data::{Missing, Work};
 use detail::Detail;
 use tabs::Tab;
 
-const USAGE: &str = "usage: raul [--theme dark|nord|catppuccin|dracula|terminal] [--render --plain [--width N] [--height N] [--tab NAME] [--detail TASK-ID]] [work-folder]";
+const USAGE: &str = "usage: raul [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N] [--tab NAME] [--detail TASK-ID]] [work-folder]";
 /// The columns of a plain render when --width is not given.
 const DEFAULT_WIDTH: u16 = 100;
 /// The rows of a plain render when --height is not given.
@@ -65,6 +65,8 @@ struct Options {
     reason: Missing,
     /// The colours of the window.
     theme: Theme,
+    /// The icon set the window draws with.
+    icons: IconSet,
     /// Print the screen as text and exit.
     render: bool,
     /// The columns of a plain render.
@@ -85,6 +87,7 @@ struct Options {
 fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     let mut root: Option<PathBuf> = None;
     let mut preset = Preset::Dark;
+    let mut icons: Option<String> = None;
     let mut render = false;
     let mut plain = false;
     let mut width = DEFAULT_WIDTH;
@@ -107,6 +110,15 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
             }
             other if other.starts_with("--theme=") => {
                 preset = preset_of(&other["--theme=".len()..])?;
+            }
+            "--icons" => {
+                let Some(name) = args.next() else {
+                    bail!("--icons needs a name\n{USAGE}");
+                };
+                icons = Some(name);
+            }
+            other if other.starts_with("--icons=") => {
+                icons = Some(other["--icons=".len()..].to_string());
             }
             "--render" => render = true,
             "--plain" => plain = true,
@@ -185,6 +197,8 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     if tab.is_some() && detail.is_some() {
         bail!("--tab and --detail cannot be combined: the detail pane covers the tab\n{USAGE}");
     }
+    let icons =
+        IconSet::resolve(icons.as_deref()).map_err(|error| anyhow::anyhow!("{error}\n{USAGE}"))?;
     let (root, reason) = match root {
         Some(root) => {
             let reason = reason_at(&root);
@@ -196,6 +210,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
         root,
         reason,
         theme: Theme::preset(preset),
+        icons,
         render,
         width,
         height,
@@ -276,7 +291,7 @@ fn reason_at(root: &Path) -> Missing {
 /// The window loop. The folder is read again on every redraw.
 fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> Result<()> {
     let reason = options.reason;
-    let mut app = App::new(options.root, options.theme);
+    let mut app = App::new(options.root, options.theme, options.icons);
     loop {
         let work = Work::load_missing(&app.root, reason);
         // One clock read per frame: the draw and the key that answers it
@@ -302,7 +317,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
 /// With `--detail`, the screen is the detail pane over the whole window,
 /// bounded by the same dimensions.
 fn render_plain(options: Options) -> Result<()> {
-    let mut app = App::new(options.root, options.theme);
+    let mut app = App::new(options.root, options.theme, options.icons);
     app.tab = options.tab;
     let work = Work::load_missing(&app.root, options.reason);
     if let Some(id) = &options.detail {
@@ -445,6 +460,30 @@ mod tests {
         let error =
             parse_args(["--theme".to_string()].into_iter()).expect_err("a theme needs a name");
         assert!(error.to_string().contains("--theme"), "{error}");
+    }
+
+    #[test]
+    fn the_icon_set_is_chosen_with_a_flag() {
+        for (name, set) in [("nerd", IconSet::Nerd), ("unicode", IconSet::Unicode)] {
+            for args in [
+                vec!["--icons".to_string(), name.to_string()],
+                vec![format!("--icons={name}")],
+            ] {
+                let options = parse_args(args.into_iter()).expect("the options");
+                assert_eq!(options.icons, set, "{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_unknown_icon_set_is_refused() {
+        let error = parse_args(["--icons".to_string(), "emoji".to_string()].into_iter())
+            .expect_err("emoji is not an icon set");
+        assert!(error.to_string().contains("emoji"), "{error}");
+        assert!(error.to_string().contains("--icons"), "{error}");
+        let error =
+            parse_args(["--icons".to_string()].into_iter()).expect_err("an icon set needs a name");
+        assert!(error.to_string().contains("--icons"), "{error}");
     }
 
     #[test]

@@ -19,7 +19,7 @@ use coding_crew_core::config::{CONFIG_FILE, Config};
 use coding_crew_core::runtime::{AgentState, CrewMember, Runtime};
 use coding_crew_core::{Role, age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, text_width};
-use coding_crew_theme::{Theme, block_title_style, phase_style, selected_line};
+use coding_crew_theme::{IconSet, Theme, block_title_style, phase_style, selected_line};
 
 use crate::catalog::{Catalog, base_of};
 use crate::config::{self, ConfigRead, ConfigState};
@@ -131,6 +131,9 @@ enum ChoiceState {
 pub struct App {
     /// The colours of the window.
     pub theme: Theme,
+    /// The icon set in force. No screen draws an icon yet.
+    #[allow(dead_code)]
+    pub icons: IconSet,
     /// The configuration as read, and what a pick is saved into.
     pub config: ConfigRead,
     /// The user's home, when there is one: the configuration lives under it.
@@ -152,9 +155,10 @@ pub struct App {
 
 impl App {
     /// A window with a theme and a configuration of its own.
-    pub fn new(theme: Theme, config: ConfigRead, home: Option<PathBuf>) -> Self {
+    pub fn new(theme: Theme, icons: IconSet, config: ConfigRead, home: Option<PathBuf>) -> Self {
         Self {
             theme,
+            icons,
             config,
             home,
             cursor: 0,
@@ -1451,7 +1455,7 @@ mod tests {
 
     /// A window on the project's own configuration.
     fn app() -> App {
-        App::new(theme(), sidebar_config(), None)
+        App::new(theme(), IconSet::Nerd, sidebar_config(), None)
     }
 
     /// Draw the window with a configuration of its own.
@@ -1461,7 +1465,7 @@ mod tests {
         runtime: &RuntimeRead,
         config: &ConfigRead,
     ) -> (Vec<String>, Vec<Vec<Paint>>) {
-        let mut app = App::new(theme(), config.clone(), None);
+        let mut app = App::new(theme(), IconSet::Nerd, config.clone(), None);
         render_app(&mut app, width, height, runtime)
     }
 
@@ -1652,7 +1656,7 @@ mod tests {
             assert!(!footer.contains(dead), "{footer}: {dead}");
         }
         // On the orchestrator's row, enter has a choice to open.
-        let mut app = App::new(theme(), sidebar_config(), None);
+        let mut app = App::new(theme(), IconSet::Nerd, sidebar_config(), None);
         app.cursor = 2;
         app.agents_drawn = true;
         let line: String = app
@@ -2188,7 +2192,7 @@ mod tests {
             ConfigState::Unreadable(error) => assert_eq!(error.error, expected),
             other => panic!("{other:?}"),
         }
-        let mut app = App::new(theme(), read, Some(home.clone()));
+        let mut app = App::new(theme(), IconSet::Nerd, read, Some(home.clone()));
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         // The sidebar's inner width is 30 columns: the row is the error cut
         // to the pane, exactly, not a shorter wording a test invented.
@@ -2416,6 +2420,7 @@ mod tests {
     fn on_orchestrator(home: Option<PathBuf>) -> App {
         let mut app = App::new(
             theme(),
+            IconSet::Nerd,
             ConfigRead::of(ConfigState::Config(Config::default())),
             home,
         );
@@ -2451,7 +2456,7 @@ mod tests {
 
     /// A window on the orchestrator's row, with a harness tool of its own.
     fn on_orchestrator_with(tool: &std::path::Path) -> App {
-        let mut window = App::new(theme(), config_with_tool(tool), None);
+        let mut window = App::new(theme(), IconSet::Nerd, config_with_tool(tool), None);
         window.agents_drawn = true;
         window.cursor = 2;
         window
@@ -2543,7 +2548,12 @@ mod tests {
     fn r_reads_the_configuration_again_and_the_sidebar_shows_it_at_once() {
         let home = scratch("reload");
         let path = config::config_path(&home);
-        let mut app = App::new(theme(), config::load_at(&home), Some(home.clone()));
+        let mut app = App::new(
+            theme(),
+            IconSet::Nerd,
+            config::load_at(&home),
+            Some(home.clone()),
+        );
         assert_eq!(app.loaded().expect("the configuration").round_limit, 5);
         // A human edits the file while hugo runs.
         let mine = Config {
@@ -2576,7 +2586,7 @@ mod tests {
         let path = config::config_path(&home);
         let broken = "round_limit = \n";
         fs::write(&path, broken).expect("a broken file");
-        let mut app = App::new(theme(), sidebar_config(), Some(home.clone()));
+        let mut app = App::new(theme(), IconSet::Nerd, sidebar_config(), Some(home.clone()));
 
         app.on_key(press(KeyCode::Char('r')));
         assert!(
@@ -2603,6 +2613,7 @@ mod tests {
         let home = scratch("reload-absent");
         let mut app = App::new(
             theme(),
+            IconSet::Nerd,
             ConfigRead::of(ConfigState::Absent),
             Some(home.clone()),
         );
@@ -2745,7 +2756,12 @@ mod tests {
         let home = scratch("choice-enter-reading");
         let tool =
             crate::catalog::scratch_tool("app-enter-reading", "#!/bin/sh\nsleep 0.5\necho p/m0\n");
-        let mut window = App::new(theme(), config_with_tool(&tool), Some(home.clone()));
+        let mut window = App::new(
+            theme(),
+            IconSet::Nerd,
+            config_with_tool(&tool),
+            Some(home.clone()),
+        );
         window.agents_drawn = true;
         window.cursor = 2;
         window.on_key(press(KeyCode::Enter));

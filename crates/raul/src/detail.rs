@@ -332,7 +332,7 @@ mod tests {
     use super::*;
     use crate::app::App;
     use crate::data::Work;
-    use coding_crew_theme::Preset;
+    use coding_crew_theme::{IconSet, Preset};
 
     /// The title fixture: one wide, one combining and one joined grapheme.
     const GRAPHEME_TITLE: &str = "界e\u{0301}👨‍👩‍👧x";
@@ -409,7 +409,11 @@ mod tests {
         width: u16,
         height: u16,
     ) -> (Vec<String>, Vec<Vec<Paint>>) {
-        let mut app = App::new(PathBuf::from("/tmp/coding-crew/work"), *theme);
+        let mut app = App::new(
+            PathBuf::from("/tmp/coding-crew/work"),
+            *theme,
+            IconSet::Nerd,
+        );
         app.detail = Some(detail.clone());
         let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("a test terminal");
         terminal
@@ -696,7 +700,11 @@ mod tests {
         height: u16,
         keys: &[crossterm::event::KeyCode],
     ) -> (Vec<String>, Vec<String>, App) {
-        let mut app = App::new(PathBuf::from("/tmp/coding-crew/work"), theme());
+        let mut app = App::new(
+            PathBuf::from("/tmp/coding-crew/work"),
+            theme(),
+            IconSet::Nerd,
+        );
         app.detail = Some(Detail::opened(id.to_string(), Tab::Path, None));
         // The first draw, as the loop does: it measures the page.
         let first = draw_frame(&mut app, work, width, height);
@@ -803,7 +811,11 @@ mod tests {
             "pgdn did not move a page"
         );
         // The same view, reached by the scroll itself.
-        let mut jumped = App::new(PathBuf::from("/tmp/coding-crew/work"), theme());
+        let mut jumped = App::new(
+            PathBuf::from("/tmp/coding-crew/work"),
+            theme(),
+            IconSet::Nerd,
+        );
         let mut detail = pane("TSK13");
         detail.scroll = page;
         jumped.detail = Some(detail);
