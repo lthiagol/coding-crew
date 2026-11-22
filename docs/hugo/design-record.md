@@ -81,6 +81,16 @@ The pick does not change the shape: one sidebar for the configuration, one
 main pane for what is running, no tabs. It fixes what the main pane reads
 **first** — the crew, then the work it holds.
 
+## Ruling, 2026-11-22: hugo starts the orchestrator
+
+hugo starts the orchestrator; the loop itself stays the orchestrator's. The
+`s` key opens a herdr tab, starts the orchestrator on its configured harness and
+model, and prompts it to run `hugo --skill orchestrator` over the queue. hugo
+does not claim a task, run a round or write the journal: a start is the first
+step towards hugo driving the loop, not the loop. Outside herdr the key says why.
+This settles whether hugo drives the loop or only shows it, which the pick above
+left open. The states are in [screens.md](screens.md#starting-the-orchestrator).
+
 ## The rulings the review made
 
 A review round read the thirty sketches against the rules above and settled

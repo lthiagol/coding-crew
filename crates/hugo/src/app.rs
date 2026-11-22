@@ -6,6 +6,7 @@
 //! and the findings, with the stamp at its foot.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -21,8 +22,9 @@ use coding_crew_core::{Role, age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, tail_to, text_width};
 use coding_crew_theme::{Icon, IconSet, Slot, Theme, chrome, phase_style, selected_line};
 
-use crate::catalog::{Catalog, base_of};
+use crate::catalog::{Catalog, base_of, model_args};
 use crate::config::{self, ConfigRead, ConfigState};
+use crate::launch::{self, LaunchRequest, Launcher, Start};
 use crate::sidebar::{self, role_icon};
 
 /// The columns the sidebar takes when it is shown, its border included.
@@ -46,6 +48,18 @@ pub const RELOAD_KEY: &str = "r";
 pub const CHOOSE_KEY: &str = "enter";
 /// The key that leaves the choice without saving.
 pub const CLOSE_KEY: &str = "esc";
+/// The key that starts the orchestrator over the queue.
+pub const START_KEY: &str = "s";
+/// The notice when `s` is pressed outside herdr.
+pub const START_NEEDS_HERDR: &str = "start needs herdr";
+/// The notice when `s` is pressed with no task in the queue.
+pub const QUEUE_EMPTY: &str = "the queue is empty";
+/// The note while the orchestrator's start runs.
+pub const STARTING: &str = "starting the orchestrator…";
+/// The notice when herdr already names an orchestrator.
+pub const ALREADY_RUNNING: &str = "an orchestrator is already running in herdr";
+/// The note's prefix when the start fails: the error follows it.
+pub const START_FAILED: &str = "the orchestrator did not start";
 /// The choice's block title.
 pub const CHOICE_TITLE: &str = "orchestrator model";
 /// The help's block title.
@@ -135,6 +149,17 @@ enum ChoiceState {
     Failed(String),
 }
 
+/// What the note row says about a start: a notice, a success, or a failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Note {
+    /// Nothing started, or a start is running: dim.
+    Notice(String),
+    /// The orchestrator started: the tab it runs in.
+    Done(String),
+    /// The start failed: the error, named.
+    Failed(String),
+}
+
 /// The state of the window.
 pub struct App {
     /// The colours of the window.
@@ -158,8 +183,21 @@ pub struct App {
     help: bool,
     /// A pick that could not be saved, named so nothing fails silently.
     notice: Option<ReadError>,
+    /// The launcher `s` starts the orchestrator through. `None` outside herdr:
+    /// the key says why, and starts nothing.
+    launch: Option<Arc<dyn Launcher>>,
+    /// The orchestrator's start in flight. It runs off the window's thread,
+    /// as the catalogue read does, so no key handling waits on herdr.
+    starting: Option<JoinHandle<Result<Start, String>>>,
+    /// The unheld queue's task ids, as the last frame drew them: the work
+    /// `s` hands the orchestrator, in order.
+    queued: Vec<String>,
+    /// The line the start last said, on the note row.
+    note: Option<Note>,
     /// The project's folder as the title line names it, when one is found.
     pub project: Option<String>,
+    /// The project's root: the folder the orchestrator's tab opens in.
+    pub root: Option<PathBuf>,
 }
 
 impl App {
@@ -176,11 +214,24 @@ impl App {
             reading: None,
             help: false,
             notice: None,
+            launch: None,
+            starting: None,
+            queued: Vec::new(),
+            note: None,
             project: None,
+            root: None,
         }
     }
 
-    /// Handle a key. The window shows; it acts on its configuration only.
+    /// The window with the launcher `s` starts the orchestrator through, or
+    /// `None` outside herdr.
+    pub fn with_launcher(mut self, launch: Option<Arc<dyn Launcher>>) -> Self {
+        self.launch = launch;
+        self
+    }
+
+    /// Handle a key. The window shows; it acts on its configuration, and `s`
+    /// starts the orchestrator over the queue.
     ///
     /// `q` and `ctrl-c` quit from anywhere, as in raul. The sidebar's keys
     /// move the cursor between the agents, open the orchestrator's model
@@ -213,6 +264,7 @@ impl App {
             KeyCode::Up | KeyCode::Char('k') => self.move_cursor(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_cursor(1),
             KeyCode::Enter => self.open_choice(),
+            KeyCode::Char('s') => self.start_orchestrator(),
             _ => {}
         }
         Action::Redraw
@@ -252,7 +304,15 @@ impl App {
     /// Draw the window. `now` is the instant holds are measured at, and `tick`
     /// is the frame the spinner shows.
     pub fn draw(&mut self, frame: &mut Frame, runtime: &RuntimeRead, now: &str, tick: usize) {
-        let screen = screen(frame.area());
+        // The queue `s` starts the orchestrator over is the one drawn: the
+        // unclaimed work, in order. Held tasks are the crew's, not the queue's.
+        self.queued = match runtime {
+            RuntimeRead::Record(runtime) => {
+                runtime.unheld_queue().map(|item| item.id.clone()).collect()
+            }
+            _ => Vec::new(),
+        };
+        let screen = screen(frame.area(), self.note.is_some());
         frame.render_widget(self.title_line(screen.title.width), screen.title);
         if let Some(area) = screen.announcement {
             frame.render_widget(self.hidden_line(area.width), area);
@@ -264,6 +324,9 @@ impl App {
             RuntimeRead::Record(runtime) => self.flow(frame, screen.flow, runtime, now, tick),
             RuntimeRead::Absent => self.empty_pane(frame, screen.flow, FLOW_TITLE, FLOW_EMPTY),
             RuntimeRead::Unreadable(error) => self.unreadable_pane(frame, screen.flow, error),
+        }
+        if let Some(area) = screen.note {
+            frame.render_widget(self.note_line(area.width), area);
         }
         frame.render_widget(self.footer_line(screen.footer.width), screen.footer);
         if self.help {
@@ -509,6 +572,111 @@ impl App {
         }
         self.close_choice();
         self.cursor = self.cursor.min(config.agents.len().saturating_sub(1));
+    }
+
+    /// Whether `s` can act: herdr hosts hugo, the queue has work, and no start
+    /// is in flight.
+    fn can_start(&self) -> bool {
+        self.launch.is_some() && !self.queued.is_empty() && self.starting.is_none()
+    }
+
+    /// Start the orchestrator over the queue, from `s`.
+    ///
+    /// Outside herdr, or with nothing queued, the key says why and starts
+    /// nothing. The start runs beside the window, and [`App::poll_start`]
+    /// takes its answer.
+    fn start_orchestrator(&mut self) {
+        if self.starting.is_some() {
+            return;
+        }
+        let Some(launcher) = self.launch.clone() else {
+            self.note = Some(Note::Notice(START_NEEDS_HERDR.to_string()));
+            return;
+        };
+        if self.queued.is_empty() {
+            self.note = Some(Note::Notice(QUEUE_EMPTY.to_string()));
+            return;
+        }
+        let request = match self.launch_request() {
+            Ok(request) => request,
+            Err(why) => {
+                self.note = Some(Note::Failed(format!("{START_FAILED}: {why}")));
+                return;
+            }
+        };
+        self.note = Some(Note::Notice(STARTING.to_string()));
+        self.starting = Some(std::thread::spawn(move || {
+            launch::start(launcher.as_ref(), &request).map_err(|error| format!("{error:#}"))
+        }));
+    }
+
+    /// The request a start is made with: the harness and the orchestrator's
+    /// model as the configuration holds them, the project's root, and the
+    /// queue in order.
+    fn launch_request(&self) -> Result<LaunchRequest, String> {
+        let config = self
+            .loaded()
+            .ok_or_else(|| "the configuration cannot be read".to_string())?;
+        let agent = config
+            .agents
+            .iter()
+            .find(|agent| agent.role == Role::Orchestrator)
+            .ok_or_else(|| "the configuration names no orchestrator".to_string())?;
+        let project = self
+            .root
+            .clone()
+            .ok_or_else(|| "the project's folder is not known".to_string())?;
+        Ok(LaunchRequest {
+            harness: config.harness.tool.clone(),
+            model_args: model_args(&config.harness.tool, &agent.model),
+            project,
+            tasks: self.queued.clone(),
+        })
+    }
+
+    /// Whether the orchestrator's start is in flight.
+    pub fn start_pending(&self) -> bool {
+        self.starting.is_some()
+    }
+
+    /// Take the start's answer when it has finished, without waiting on it.
+    ///
+    /// Returns whether the start finished, so the caller can draw at once.
+    pub fn poll_start(&mut self) -> bool {
+        let Some(starting) = self.starting.as_ref() else {
+            return false;
+        };
+        if !starting.is_finished() {
+            return false;
+        }
+        let starting = self.starting.take().expect("the start in flight");
+        let outcome = starting
+            .join()
+            .unwrap_or_else(|_| Err("the orchestrator's start stopped".to_string()));
+        self.note = Some(match outcome {
+            Ok(Start::Started(launched)) => {
+                Note::Done(format!("orchestrator started in tab {}", launched.tab))
+            }
+            Ok(Start::AlreadyRunning) => Note::Notice(ALREADY_RUNNING.to_string()),
+            Err(error) => Note::Failed(format!("{START_FAILED}: {error}")),
+        });
+        true
+    }
+
+    /// The note row: what the last start said, in one line.
+    fn note_line(&self, width: u16) -> Line<'static> {
+        let Some(note) = &self.note else {
+            return Line::from("");
+        };
+        let (text, style) = match note {
+            Note::Notice(text) => (text, self.theme.text.dim),
+            Note::Done(text) => (text, self.theme.semantic.ok),
+            Note::Failed(text) => (text, self.theme.semantic.error),
+        };
+        Line::from(Span::styled(
+            cut_to(&format!(" {text}"), usize::from(width)),
+            style,
+        ))
     }
 
     /// The title line: the app's icon and name, then a dim `·` and the
@@ -1226,6 +1394,7 @@ impl App {
         if self.can_choose() {
             lines.push((3, line(CHOOSE_KEY, "choose")));
         }
+        lines.push((3, line(START_KEY, "start the orchestrator")));
         lines.push((u8::MAX, line("q", "quit")));
         lines.push((u8::MAX, line("?", "this help")));
         lines
@@ -1274,6 +1443,9 @@ impl App {
         }
         if self.can_choose() {
             parts.push((4, part(CHOOSE_KEY, "choose"), false));
+        }
+        if self.can_start() {
+            parts.push((5, part(START_KEY, "start"), false));
         }
         footer(parts, width)
     }
@@ -1463,6 +1635,8 @@ pub struct Screen {
     pub sidebar: Option<Rect>,
     /// What is running.
     pub flow: Rect,
+    /// The note row, above the footer, when there is a note to say.
+    pub note: Option<Rect>,
     /// The footer.
     pub footer: Rect,
 }
@@ -1478,14 +1652,18 @@ pub struct Screen {
 /// chrome: a screen too short for everything loses its title and its footer
 /// first, and the fact that the configuration is not shown is the last line
 /// to give way.
-pub fn screen(area: Rect) -> Screen {
+pub fn screen(area: Rect, noted: bool) -> Screen {
     let sidebar_shown = area.width >= SIDEBAR_MIN_WIDTH;
-    let rows = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Min(3),
-        Constraint::Length(1),
-    ])
-    .split(area);
+    // The note row is there only while a start has something to say: a window
+    // without one keeps the rows it always had.
+    let mut constraints = vec![Constraint::Length(1), Constraint::Min(3)];
+    if noted {
+        constraints.push(Constraint::Length(1));
+    }
+    constraints.push(Constraint::Length(1));
+    let rows = Layout::vertical(constraints).split(area);
+    let footer = rows[rows.len() - 1];
+    let note = noted.then(|| rows[2]);
     let (announcement, body) = if sidebar_shown {
         (None, rows[1])
     } else {
@@ -1517,7 +1695,8 @@ pub fn screen(area: Rect) -> Screen {
         announcement,
         sidebar,
         flow,
-        footer: rows[2],
+        note,
+        footer,
     }
 }
 
@@ -1538,6 +1717,8 @@ mod tests {
     };
     use coding_crew_core::{Role, Status};
     use coding_crew_theme::Preset;
+
+    use crate::launch::FakeLauncher;
 
     fn theme() -> Theme {
         Theme::preset(Preset::Dark)
@@ -1763,7 +1944,7 @@ mod tests {
 
     #[test]
     fn the_sidebar_is_on_the_left_and_the_main_pane_takes_the_rest() {
-        let screen = screen(Rect::new(0, 0, 100, 40));
+        let screen = screen(Rect::new(0, 0, 100, 40), false);
         let sidebar = screen.sidebar.expect("the sidebar");
         assert_eq!(sidebar.x, 0);
         assert_eq!(sidebar.width, SIDEBAR_WIDTH);
@@ -1779,12 +1960,12 @@ mod tests {
         // The sidebar is shown while the main pane keeps its own least
         // width: at the boundary both are there, one column narrower the
         // sidebar is gone and the main pane takes the window.
-        let both = screen(Rect::new(0, 0, SIDEBAR_MIN_WIDTH, 40));
+        let both = screen(Rect::new(0, 0, SIDEBAR_MIN_WIDTH, 40), false);
         let sidebar = both.sidebar.expect("the sidebar at the boundary");
         assert_eq!(sidebar.width, SIDEBAR_WIDTH);
         assert_eq!(both.flow.width, MAIN_MIN_WIDTH);
 
-        let narrow = screen(Rect::new(0, 0, SIDEBAR_MIN_WIDTH - 1, 40));
+        let narrow = screen(Rect::new(0, 0, SIDEBAR_MIN_WIDTH - 1, 40), false);
         assert_eq!(narrow.sidebar, None, "the sidebar is still drawn");
         assert_eq!(narrow.flow.width, SIDEBAR_MIN_WIDTH - 1);
         assert!(narrow.flow.width > both.flow.width, "the main pane shrank");
@@ -1797,7 +1978,7 @@ mod tests {
         // Narrowing past the boundary never squeezes the main pane: it grows
         // by the sidebar's width.
         for width in 1..SIDEBAR_MIN_WIDTH {
-            let screen = screen(Rect::new(0, 0, width, 40));
+            let screen = screen(Rect::new(0, 0, width, 40), false);
             assert_eq!(screen.sidebar, None, "{width}");
             assert_eq!(screen.flow.width, width, "{width}");
             assert!(screen.announcement.is_some(), "{width}: silent drop");
@@ -2752,6 +2933,13 @@ mod tests {
             RELOAD_KEY.to_string(),
             CHOOSE_KEY.to_string(),
             CLOSE_KEY.to_string(),
+            format!("{START_KEY} start"),
+            START_NEEDS_HERDR.to_string(),
+            QUEUE_EMPTY.to_string(),
+            STARTING.to_string(),
+            ALREADY_RUNNING.to_string(),
+            "orchestrator started in tab".to_string(),
+            START_FAILED.to_string(),
             CHOICE_TITLE.to_string(),
             CATALOG_READING.to_string(),
             CATALOG_UNREADABLE.to_string(),
@@ -3449,5 +3637,155 @@ mod tests {
             app.on_key(press(KeyCode::Enter));
             assert!(app.choice.is_none(), "agent {cursor} opened a choice");
         }
+    }
+
+    /// Wait for a start to answer the way the loop does: by polling it, never
+    /// by waiting on it.
+    fn wait_for_start(window: &mut App) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while window.start_pending() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the start never answered"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            window.poll_start();
+        }
+    }
+
+    /// A window inside herdr: the launcher is the fake, and the project is
+    /// at a root of its own.
+    fn in_herdr(fake: &Arc<FakeLauncher>) -> App {
+        let mut window = app().with_launcher(Some(fake.clone()));
+        window.root = Some(PathBuf::from("/work/project"));
+        window
+    }
+
+    #[test]
+    fn s_outside_herdr_says_why_and_starts_nothing() {
+        // Outside herdr there is no launcher: the key is a notice, and the
+        // footer does not name a key that cannot act.
+        let mut window = app();
+        window.root = Some(PathBuf::from("/work/project"));
+        let runtime = RuntimeRead::Record(runtime());
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(!rows.last().expect("a footer row").contains("start"));
+        window.on_key(press(KeyCode::Char('s')));
+        assert!(!window.start_pending());
+        assert_eq!(
+            window.note,
+            Some(Note::Notice(START_NEEDS_HERDR.to_string()))
+        );
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(
+            text_of(&rows).contains(START_NEEDS_HERDR),
+            "{}",
+            text_of(&rows)
+        );
+        // The help lists the key all the same: it is the window's key.
+        let help: String = window
+            .help_lines(60)
+            .into_iter()
+            .map(|(_, line)| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.to_string())
+                    .collect::<String>()
+            })
+            .collect();
+        assert!(help.contains("start the orchestrator"), "{help}");
+    }
+
+    #[test]
+    fn s_with_an_empty_queue_starts_nothing() {
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = in_herdr(&fake);
+        let mut record = runtime();
+        record.queue.clear();
+        let runtime = RuntimeRead::Record(record);
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(!rows.last().expect("a footer row").contains("start"));
+        window.on_key(press(KeyCode::Char('s')));
+        assert!(!window.start_pending());
+        assert_eq!(window.note, Some(Note::Notice(QUEUE_EMPTY.to_string())));
+        assert!(fake.requests.lock().expect("the requests").is_empty());
+    }
+
+    #[test]
+    fn s_starts_the_orchestrator_over_the_queue_and_names_the_tab() {
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = in_herdr(&fake);
+        let runtime = RuntimeRead::Record(runtime());
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(rows.last().expect("a footer row").contains("start"));
+        window.on_key(press(KeyCode::Char('s')));
+        assert!(window.start_pending());
+        assert_eq!(window.note, Some(Note::Notice(STARTING.to_string())));
+        // While the start runs the key starts nothing more, and the footer
+        // stops naming it.
+        window.on_key(press(KeyCode::Char('s')));
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(!rows.last().expect("a footer row").contains("start"));
+        wait_for_start(&mut window);
+        assert_eq!(
+            window.note,
+            Some(Note::Done("orchestrator started in tab w1:t3".to_string()))
+        );
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(
+            text_of(&rows).contains("orchestrator started in tab w1:t3"),
+            "{}",
+            text_of(&rows)
+        );
+        let requests = fake.requests.lock().expect("the requests");
+        assert_eq!(
+            requests.len(),
+            1,
+            "a second key started a second orchestrator"
+        );
+        assert_eq!(requests[0].harness, "opencode");
+        assert_eq!(
+            requests[0].model_args,
+            ["--model", "opencode-go/glm-5.3#high"]
+        );
+        assert_eq!(requests[0].project, PathBuf::from("/work/project"));
+        assert_eq!(requests[0].tasks, ["TSK29"]);
+    }
+
+    #[test]
+    fn a_start_that_fails_is_named_on_the_failure_slot() {
+        let fake = Arc::new(FakeLauncher {
+            error: Some("herdr agent start: no pane".to_string()),
+            ..Default::default()
+        });
+        let mut window = in_herdr(&fake);
+        let runtime = RuntimeRead::Record(runtime());
+        render_app(&mut window, 100, 40, &runtime);
+        window.on_key(press(KeyCode::Char('s')));
+        wait_for_start(&mut window);
+        let (rows, paint) = render_app(&mut window, 100, 40, &runtime);
+        let text = text_of(&rows);
+        assert!(
+            text.contains("the orchestrator did not start: herdr agent start: no pane"),
+            "{text}"
+        );
+        assert_eq!(
+            colour_of(&rows, &paint, "did not start"),
+            theme().semantic.error.fg.expect("the error colour")
+        );
+    }
+
+    #[test]
+    fn an_orchestrator_herdr_already_names_is_a_notice_and_no_second_start() {
+        let fake = Arc::new(FakeLauncher {
+            named: true,
+            ..Default::default()
+        });
+        let mut window = in_herdr(&fake);
+        render_app(&mut window, 100, 40, &RuntimeRead::Record(runtime()));
+        window.on_key(press(KeyCode::Char('s')));
+        wait_for_start(&mut window);
+        assert_eq!(window.note, Some(Note::Notice(ALREADY_RUNNING.to_string())));
+        assert!(fake.requests.lock().expect("the requests").is_empty());
     }
 }

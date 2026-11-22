@@ -1,11 +1,13 @@
 //! hugo — the TUI for the flow.
 //!
-//! hugo reads the runtime and shows it. It does not drive the loop, and it
-//! writes nothing but its own configuration home.
+//! hugo reads the runtime and shows it. It starts the orchestrator, which runs
+//! the loop; it does not run the loop itself. It writes nothing but its own
+//! configuration home.
 
 mod app;
 mod catalog;
 mod config;
+mod launch;
 mod sidebar;
 mod skill;
 
@@ -83,6 +85,9 @@ fn main() -> Result<()> {
     if options.render {
         return render_plain(options, app);
     }
+    // The window starts the orchestrator through herdr when it runs inside
+    // herdr. A render never does: a pinned screen is the same in every pane.
+    let app = app.with_launcher(launch::from_env());
 
     let mut terminal = setup()?;
     let result = run(&mut terminal, app);
@@ -235,6 +240,7 @@ fn preset_of(name: &str) -> Result<Preset> {
 fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Result<()> {
     let located = locate_runtime();
     app.project = located.label(std::env::current_dir().ok().as_deref());
+    app.root = located.root();
     // The frame counter drives the spinner: every redraw is the next frame.
     let mut tick: usize = 0;
     loop {
@@ -247,12 +253,17 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> Resul
         tick = tick.wrapping_add(1);
         // The catalogue is a harness's, so it is read beside the window: while
         // a read is in flight the loop polls for the answer as well as for a
-        // key, so a slow tool never leaves raw mode without a reader.
+        // key, so a slow tool never leaves raw mode without a reader. The
+        // orchestrator's start is herdr's, and it is polled the same way.
         if app.catalog_pending() && app.poll_choice() {
             continue;
         }
+        if app.start_pending() && app.poll_start() {
+            continue;
+        }
         // A wait that ends with no event redraws: the record is read again.
-        if !event::poll(next_wait(app.catalog_pending(), someone_works(&runtime)))? {
+        let busy = app.catalog_pending() || app.start_pending();
+        if !event::poll(next_wait(busy, someone_works(&runtime)))? {
             continue;
         }
         if let Event::Key(key) = event::read()?
@@ -299,6 +310,15 @@ enum Located {
 }
 
 impl Located {
+    /// The project's root: the folder that holds the record's `coding-crew/`
+    /// folder, when a record is found.
+    fn root(&self) -> Option<PathBuf> {
+        let Located::Found(runtime) = self else {
+            return None;
+        };
+        Some(runtime.parent()?.parent()?.to_path_buf())
+    }
+
     /// The project's folder as the title line names it, when one is found.
     ///
     /// The folder is named as raul names its folder: relative to the working
@@ -306,10 +326,7 @@ impl Located {
     /// working directory itself is named by its folder's name, a folder
     /// below it as `./folder`, and anything else by its whole path.
     fn label(&self, cwd: Option<&Path>) -> Option<String> {
-        let Located::Found(runtime) = self else {
-            return None;
-        };
-        let project = runtime.parent()?.parent()?;
+        let project = self.root()?;
         let relative = cwd.and_then(|cwd| project.strip_prefix(cwd).ok());
         Some(match relative {
             Some(rest) if rest.as_os_str().is_empty() => {

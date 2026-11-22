@@ -286,6 +286,7 @@ dependencies = [
  "coding-crew-theme",
  "crossterm",
  "ratatui",
+ "serde_json",
 ]
 
 [[package]]

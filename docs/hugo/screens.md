@@ -1,8 +1,9 @@
 # hugo — screens
 
 hugo is the TUI for the flow (**H**uman-guided **U**nified **G**overnance &
-**O**rchestration). It reads the runtime and shows it. It does not drive the
-loop, and it writes nothing but its own configuration.
+**O**rchestration). It reads the runtime and shows it. It starts the
+orchestrator, which runs the loop, and it writes nothing but its own
+configuration.
 
 The interface was chosen in [design-record.md](design-record.md): one sidebar
 for the configuration and one main pane for what is running, with no tabs. The
@@ -61,7 +62,7 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 | title line | the tool's icon and name, `hugo`, then a dim `·` and the project's folder when one is found; a window too narrow for the name shows no title rather than a cut of the name |
 | sidebar | the configuration, on the left: the agents and the model each runs, the harness, the review-round limit and the order, in that order. The agents group has a cursor: `↑ k` and `↓ j` move it, and `enter` on the orchestrator's row chooses its model. The builder's and the reviewer's rows are read-only. `r` reloads the configuration from the file |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
-| footer | the keys that work — never a key that does nothing. The window's keys are `q quit`, `ctrl-c quit`, `r reload`, `↑ k` `↓ j` move, `enter choose` (on the orchestrator's row) and `? help`; while the choice is open its keys are `esc close`, `enter pick`, `↑ k` `↓ j` move, and `q quit` and `? help` still work |
+| footer | the keys that work — never a key that does nothing. The window's keys are `q quit`, `ctrl-c quit`, `r reload`, `↑ k` `↓ j` move, `enter choose` (on the orchestrator's row), `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)) and `? help`; while the choice is open its keys are `esc close`, `enter pick`, `↑ k` `↓ j` move, and `q quit` and `? help` still work |
 | choice | the `orchestrator model`, as a small list of the catalogue's models with a cursor of its own; `enter` picks one and saves it, `esc` closes it without saving |
 | help | `?` opens the keys, in the sidebar and over the choice; any key closes it and gives the choice back |
 | tab bar | none: the flow has one screen, not a set of tabs |
@@ -192,9 +193,8 @@ keeps drawing and taking its keys meanwhile. A tool that takes longer than
 choice — `the model catalog cannot be read` and the reason — so no key waits
 on a harness tool.
 
-Nothing else on the sidebar is changed from the screen: whether hugo drives the
-loop or only shows it is still open, so no key starts a run and no other
-setting is written.
+Nothing else on the sidebar is changed from the screen, and no other setting is
+written. `s` starts the orchestrator; the loop it runs is the orchestrator's.
 
 **Nothing is dropped without a word.** A row too wide for the pane is cut with
 the theme's marker — the provider and the model's own name are on rows of their
@@ -221,6 +221,30 @@ without a record shows the named empty state `nothing is running`. A record
 that cannot be read is not that state: the pane says
 `the runtime record cannot be read`, names the file and the error, and paints
 the error on the failure slot, as raul names a file it cannot read.
+
+## Starting the orchestrator
+
+`s` starts the orchestrator. hugo opens a herdr tab in the current workspace,
+starts the agent the orchestrator row names, on that row's harness and model,
+and prompts it to run `hugo --skill orchestrator` over the queue's tasks, in
+order. The loop is the orchestrator's: hugo starts it and does not run it.
+
+The queue is the unclaimed work the main pane draws. A task an agent holds is
+that agent's, so no second orchestrator is given it. The footer names `s start`
+only when it can act: herdr hosts hugo, the queue has work, and no start is in
+flight.
+
+| state | what `s` does |
+|---|---|
+| outside herdr (`HERDR_ENV` is not `1`) | starts nothing: `start needs herdr` |
+| the queue is empty | starts nothing: `the queue is empty` |
+| herdr already names an orchestrator | starts nothing: `an orchestrator is already running in herdr` |
+| starting | `starting the orchestrator…`, dim. The herdr calls run beside the window, which keeps drawing and taking keys |
+| started | `orchestrator started in tab <id>`, on `semantic.ok` |
+| failed | `the orchestrator did not start:` and the error, on the failure slot. When the tab was already open, the error names it |
+
+The note sits on its own row above the footer while a start has something to
+say. The last thing a start said stays until the next start.
 
 ## The layout
 
@@ -256,8 +280,8 @@ runs, and the sidebar says `no configuration yet`.
 
 The configuration is read at launch, and `r` reads it again without a
 restart. The only thing hugo writes there from the screen is the
-orchestrator's picked model; whether hugo drives the loop or only shows it is
-still open.
+orchestrator's picked model. `s` starts the orchestrator without writing
+anything.
 
 The records are not part of this file and do not follow it: the journal and
 the runtime record are machine-written, so they stay JSON.

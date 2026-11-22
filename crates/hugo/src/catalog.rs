@@ -159,7 +159,8 @@ pub fn base_of(model: &str) -> &str {
 /// takes them after `--`.
 ///
 /// `claude` takes the base model and its variant as `--effort`. Every other
-/// tool is given the model string as it is configured, variant included.
+/// tool is given the model string as it is configured, variant included: on
+/// opencode the variant is part of the model id, as flow/*.json carry it.
 pub fn model_args(tool: &str, model: &str) -> Vec<String> {
     if tool != "claude" {
         return vec!["--model".to_string(), model.to_string()];
