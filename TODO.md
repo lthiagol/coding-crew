@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 71.
+Updated 2026-11-22 by the orchestrator, after unit 72.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–71, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 49–72, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- 72 · hugo shows where the flow is, and picks the tasks (L)
 - 73 · Mouse in both TUIs (M)
 - 74 · The review reads in layers (M)
 - 75 · Backlog items have documents (S)
@@ -423,6 +422,29 @@ None blocking. Carried from the closed units.
 - **The flow suites did not run on unit 70b** (2026-11-22, unit 70b). The
   `orchestration-flow` skill is not installed here, so `make check` skipped
   them. The gate was green without them.
+- **Round 1's findings are in no fixture** (2026-11-22, unit 72). The mock's
+  TSK14 has one self round and one open high; the story's three external
+  findings from round 1 are not in `activity.json` or the work folder, so hugo's
+  findings and raul's TSK14 disagree. Adding them changes raul's snapshots and
+  the mock gates. The human decides.
+- **The queue holds unclaimable work** (2026-11-22, unit 72). TSK07 is
+  approved, but its dependencies TSK04 and TSK05 are only groomed, so `s` would
+  start a task it cannot claim. The human decides whether the queue offers only
+  claimable work, which means another waiting task in the mock.
+- **Captions cut at 40 columns** (2026-11-22, unit 72). The caption for the
+  findings block is cut with `…` at 40 columns. A shorter caption when narrow
+  would change the wording the brief names.
+- **The builder's unit 72 choices await confirmation** (2026-11-22, unit 72).
+  `tab` moves focus between the sidebar and the queue; `r` clears the marks; the
+  record's queue holds done and held tasks, and the pane offers only the waiting
+  ones; the budget and findings are the task in flight's; a cut line in hugo now
+  ends in `…` (this touches every fitted line, not only the new ones); the
+  findings noun is singular at one; the crew caption is the builder's wording.
+- **Stale round wording outside the unit** (2026-11-22, unit 72). `18 of 45` and
+  `17 open findings` remain in `docs/tui/redesign.md:107,157-158` and
+  `docs/hugo/tui-proposals/minimax/06-review-budget.html:73`. `design-record.md:100`
+  and `task-model.md:613` say "unclaimed work"; the builder left them, unsure
+  whether that is the model's term. Check and correct.
 
 ## WHAT WAITS ON THE FLOW
 

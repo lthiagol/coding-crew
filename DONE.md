@@ -1326,6 +1326,17 @@ levels, then `none`, then `type a level…`. The builder stores `none` as
 orchestrator confirms it. The last review's one finding, a stale agent-table
 row in task-model, is in the commit. Commit `80787ec`.
 
+Unit closed: hugo shows where the flow is, and picks the tasks (plan 72). One
+build round, one fix round; the second review clean. Every block has a dim
+caption, the round is a timeline of the task in flight, and the queue is
+pickable: `tab` moves focus, `space` marks, `a` marks all, and `s` starts the
+marked tasks in queue order, or the whole queue when none is marked. The mock
+runtime tells one story: five tasks, two done, one in flight in round two with
+the reviewer working, two waiting. Round one found one low: screens.md kept
+the old queue, budget and findings wording beside the new. Fixed to match the
+code and the pinned screens. Choices the builder made are open for the
+orchestrator to confirm (see THE FOLLOW-UPS). Commit `3ac76e5`.
+
 ---
 
 ## Lessons
