@@ -1,4 +1,4 @@
- 󰚩 hugo · mock-data
+ 󰚩 hugo · mock-data                                                                       󰑮 running
 ╭─ 󰒓 configuration ────────────╮╭─ 󰑮 flow ─────────────────────────────────────────────────────────╮
 │ AGENTS                       ││╭─ 󰚩 crew ───────────────────────────────────────────────────────╮│
 │▌󰖷 builder · runner           │││role           model                    task  held  state       ││

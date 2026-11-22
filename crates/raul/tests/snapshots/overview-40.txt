@@ -1,40 +1,40 @@
- 󰙅 coding-crew · …-data/coding-crew/work
+ 󰙅 raul · mock-data/coding-crew/work
  ‹ 󰕮 Overview ›
 ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔────────────────────────
 8 tasks wait on a human · 1 claimable
 ╭─ 󰂚 needs you ────────────────────────╮
-│8 tasks wait on a human               │
-│󰪥 approve     2                       │
-│󰈈 review      3                       │
-│󰀦 escalated   3                       │
+│ 8 tasks wait on a human              │
+│ 󰪥 approve     2                      │
+│ 󰈈 review      3                      │
+│ 󰀦 escalated   3                      │
 ╰──────────────────────────────────────╯
 ╭─ 󰄲 claimable ────────────────────────╮
-│󰖷 1 task an agent could claim right   │
-│now                                   │
-│approved, free, dependencies done     │
+│ 󰖷 1 task an agent could claim right  │
+│ now                                  │
+│ approved, free, dependencies done    │
 ╰──────────────────────────────────────╯
 ╭─ 󰘬 next ─────────────────────────────╮
-│󰌷 TSK29 The fixtures keep their gates │
-│the first task of the path            │
+│ 󰌷 TSK29 The fixtures keep their      │
+│ gates                                │
+│ the first task of the path           │
 ╰──────────────────────────────────────╯
 ╭─ 󰕮 counts ───────────────────────────╮
-│30 tasks by status                    │
-│󰝦 draft       6 ██████████████████████│
-│󰪥 groomed     3 ███████████░░░░░░░░░░░│
-│󰄲 approved    4 ██████████████░░░░░░░░│
-│󰐊 executing   3 ███████████░░░░░░░░░░░│
-│󰈈 code-review 3 ███████████░░░░░░░░░░░│
-│󰖷 remediating 3 ███████████░░░░░░░░░░░│
-│󰀦 needs-human 3 ███████████░░░░░░░░░░░│
-│󰄬 done        5 ██████████████████░░░░│
+│ 30 tasks by status                   │
+│ 󰝦 draft       6 ████████████████████ │
+│ 󰪥 groomed     3 ██████████░░░░░░░░░░ │
+│ 󰄲 approved    4 █████████████░░░░░░░ │
+│ 󰐊 executing   3 ██████████░░░░░░░░░░ │
+│ 󰈈 code-review 3 ██████████░░░░░░░░░░ │
+│ 󰖷 remediating 3 ██████████░░░░░░░░░░ │
+│ 󰀦 needs-human 3 ██████████░░░░░░░░░░ │
+│ 󰄬 done        5 ████████████████░░░░ │
 ╰──────────────────────────────────────╯
 ╭─ 󰚇 smaller tasks ────────────────────╮
-│smaller tasks by kind                 │
-│󰌵 idea        1                       │
-│󰐕 feature     2                       │
-│󰃤 bug         2                       │
+│ smaller tasks by kind                │
+│ 󰌵 idea        1                      │
+│ 󰐕 feature     2                      │
+│ 󰃤 bug         2                      │
 ╰──────────────────────────────────────╯
 activity not shown: 158 events
-
 
  q  quit   1-5  tab   ?  help

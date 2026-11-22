@@ -1,4 +1,4 @@
- 󰚩 hugo · mock-data
+ 󰚩 hugo · mock-data                               󰑮 running
  sidebar not shown: configuration (it needs 80 columns)
 ╭─ 󰑮 flow ─────────────────────────────────────────────────╮
 │╭─ 󰚩 crew ───────────────────────────────────────────────╮│

@@ -6,7 +6,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Wrap};
+use ratatui::widgets::{Block, Padding, Paragraph, Wrap};
 
 use coding_crew_core::{ActivityEvent, EventKind, Status};
 
@@ -20,6 +20,9 @@ use coding_crew_theme::{Icon, IconSet, Theme, phase_slot, phase_style, reason_st
 const TWO_COLUMNS: u16 = 80;
 /// The rows a block of the Overview takes for its border.
 const BORDER: u16 = 2;
+/// The columns a card takes beside its content: its two borders, and one
+/// column of padding inside each.
+const CARD_COLUMNS: u16 = 4;
 /// The columns the label of a count takes, so the counts line up.
 const LABEL_WIDTH: usize = 12;
 /// The events the activity block shows: the last few of the journal.
@@ -73,22 +76,15 @@ fn render_missing(
             )),
         ])
         .wrap(Wrap { trim: true })
-        .block(chrome::pane(
-            "overview",
-            Icon::TabOverview,
-            icons,
-            false,
-            theme,
-        )),
+        .block(card("overview", Icon::TabOverview, icons, theme)),
         area,
     );
 }
 
 /// There is nothing to read — but a file that does not parse still shows.
 fn render_empty(frame: &mut Frame, area: Rect, work: &Work, icons: IconSet, theme: &Theme) {
-    let empty = Paragraph::new(Line::from(Span::styled("no tasks yet", theme.text.dim))).block(
-        chrome::pane("overview", Icon::TabOverview, icons, false, theme),
-    );
+    let empty = Paragraph::new(Line::from(Span::styled("no tasks yet", theme.text.dim)))
+        .block(card("overview", Icon::TabOverview, icons, theme));
     if work.errors.is_empty() {
         frame.render_widget(
             empty,
@@ -102,7 +98,7 @@ fn render_empty(frame: &mut Frame, area: Rect, work: &Work, icons: IconSet, them
         return;
     }
     let panel = errors_panel(work, theme);
-    let width = area.width.saturating_sub(BORDER);
+    let width = area.width.saturating_sub(CARD_COLUMNS);
     let needed = panel.rows(width) + BORDER;
     // The empty state in its box, and the files that could not be read.
     if area.height >= 3 + needed {
@@ -166,11 +162,17 @@ fn render_empty(frame: &mut Frame, area: Rect, work: &Work, icons: IconSet, them
     }
 }
 
+/// A card of the Overview: a pane with one column of padding inside each
+/// border, so its text does not sit against the frame.
+fn card(title: &'static str, icon: Icon, icons: IconSet, theme: &Theme) -> Block<'static> {
+    chrome::pane(title, icon, icons, false, theme).padding(Padding::horizontal(1))
+}
+
 /// The files that could not be read, in a box.
 fn errors_block(panel: &Panel, icons: IconSet, theme: &Theme) -> Paragraph<'static> {
     Paragraph::new(panel.lines.clone())
         .wrap(Wrap { trim: true })
-        .block(chrome::pane(panel.title, panel.icon, icons, false, theme))
+        .block(card(panel.title, panel.icon, icons, theme))
 }
 
 /// The line that names a file that could not be read, when the block does
@@ -197,8 +199,9 @@ fn render_wide(
     theme: &Theme,
     now: &str,
 ) {
-    let columns =
-        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
+    let columns = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .spacing(1)
+        .split(area);
     // The unreadable block outranks the kinds: a file that could not be read
     // matters more than how many smaller tasks there are.
     let mut left = vec![counts_panel(work, columns[0].width, icons, theme)];
@@ -214,16 +217,17 @@ fn render_wide(
     ];
     let fits = column_fits(
         &left,
-        columns[0].width.saturating_sub(BORDER),
+        columns[0].width.saturating_sub(CARD_COLUMNS),
         columns[0].height,
     ) && column_fits(
         &right,
-        columns[1].width.saturating_sub(BORDER),
+        columns[1].width.saturating_sub(CARD_COLUMNS),
         columns[1].height,
     );
     let area = summary_area(frame, area, work, fits, theme, now);
-    let columns =
-        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
+    let columns = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .spacing(1)
+        .split(area);
     draw_panels(frame, columns[0], &left, icons, theme);
     draw_panels(frame, columns[1], &right, icons, theme);
 }
@@ -253,7 +257,7 @@ fn render_stacked(
     // the counts and the next task, and the block says how many events it
     // left out.
     panels.push(activity_panel(work, area.width, icons, theme));
-    let width = area.width.saturating_sub(BORDER);
+    let width = area.width.saturating_sub(CARD_COLUMNS);
     let fits = column_fits(&panels, width, area.height);
     let area = summary_area(frame, area, work, fits, theme, now);
     draw_panels(frame, area, &panels, icons, theme);
@@ -543,7 +547,7 @@ fn reduce(panel: &Panel, content: &mut u16, width: u16) -> bool {
 
 /// Draw the blocks of a column, top to bottom.
 fn draw_panels(frame: &mut Frame, area: Rect, panels: &[Panel], icons: IconSet, theme: &Theme) {
-    let width = area.width.saturating_sub(BORDER);
+    let width = area.width.saturating_sub(CARD_COLUMNS);
     let content = layout_of(panels, width, area.height);
     let mut y = area.y;
     for (index, panel) in panels.iter().enumerate() {
@@ -583,9 +587,12 @@ fn draw_panels(frame: &mut Frame, area: Rect, panels: &[Panel], icons: IconSet, 
         }
         let rows = rows_of(&lines, width);
         frame.render_widget(
-            Paragraph::new(lines)
-                .wrap(Wrap { trim: true })
-                .block(chrome::pane(panel.title, panel.icon, icons, false, theme)),
+            Paragraph::new(lines).wrap(Wrap { trim: true }).block(card(
+                panel.title,
+                panel.icon,
+                icons,
+                theme,
+            )),
             Rect {
                 x: area.x,
                 y,
@@ -637,7 +644,7 @@ fn counts_panel(work: &Work, width: u16, icons: IconSet, theme: &Theme) -> Panel
     let counts = work.status_counts();
     let total: usize = counts.iter().map(|(_, count)| count).sum();
     let heading = counts_heading(total, theme);
-    let inner = width.saturating_sub(BORDER);
+    let inner = width.saturating_sub(CARD_COLUMNS);
     let label_width = counts
         .iter()
         .map(|(status, _)| status.as_str().chars().count())
@@ -765,7 +772,7 @@ fn dense_counts(
 /// leaves the block out whole.
 fn kinds_panel(work: &Work, width: u16, icons: IconSet, theme: &Theme) -> Panel {
     let kinds = work.kind_counts();
-    let inner = usize::from(width.saturating_sub(BORDER));
+    let inner = usize::from(width.saturating_sub(CARD_COLUMNS));
     let digits = count_width(kinds.iter().map(|(_, count)| *count));
     let label_width = kinds
         .iter()
@@ -818,7 +825,7 @@ fn needs_you_panel(work: &Work, width: u16, icons: IconSet, theme: &Theme) -> Pa
             theme.semantic.human,
         ),
     ]);
-    let inner = width.saturating_sub(BORDER);
+    let inner = width.saturating_sub(CARD_COLUMNS);
     let counts = [approve, review, escalated];
     // The counts sit in a column when the column holds one. In a narrow
     // terminal they sit right after their reason.
@@ -1017,7 +1024,7 @@ fn activity_panel(work: &Work, width: u16, icons: IconSet, theme: &Theme) -> Pan
         lines.push(event_line(
             event,
             icons,
-            width.saturating_sub(BORDER),
+            width.saturating_sub(CARD_COLUMNS),
             theme,
         ));
     }
@@ -1853,7 +1860,7 @@ mod tests {
         }
         // In a terminal too narrow for a reason and its count, the reason
         // is left out rather than parted from its count.
-        let text = draw(&work, 9, 21).join("\n");
+        let text = draw(&work, 11, 21).join("\n");
         assert!(!text.contains("approve"), "{text}");
         assert!(text.contains("+3 more"), "{text}");
     }
@@ -1984,7 +1991,10 @@ mod tests {
                 // row: a count is never on a row of its own.
                 assert!(text.contains(&count.to_string()), "{width}: {text}");
                 assert_eq!(
-                    rows_of(std::slice::from_ref(row), width.saturating_sub(BORDER)),
+                    rows_of(
+                        std::slice::from_ref(row),
+                        width.saturating_sub(CARD_COLUMNS)
+                    ),
                     1,
                     "{width}: {text}"
                 );
@@ -2013,7 +2023,10 @@ mod tests {
                 // The count is never on the label's last column.
                 assert!(text.ends_with(&format!(" {count}")), "{width}: {text}");
                 assert_eq!(
-                    rows_of(std::slice::from_ref(row), width.saturating_sub(BORDER)),
+                    rows_of(
+                        std::slice::from_ref(row),
+                        width.saturating_sub(CARD_COLUMNS)
+                    ),
                     1,
                     "{width}: {text}"
                 );
@@ -2046,6 +2059,21 @@ mod tests {
         };
         assert!(shares_a_row(&draw(&work, TWO_COLUMNS, 40)));
         assert!(!shares_a_row(&draw(&work, TWO_COLUMNS - 1, 40)));
+    }
+
+    #[test]
+    fn the_cards_pad_one_column_inside_their_borders_and_part_their_columns() {
+        let rows = draw(&mock_work(), 100, 40);
+        assert!(
+            rows.iter().any(|row| row.contains("│ 30 tasks by status")),
+            "{}",
+            rows.join("\n")
+        );
+        assert!(
+            rows.iter().any(|row| row.contains("╮ ╭")),
+            "{}",
+            rows.join("\n")
+        );
     }
 
     #[test]
@@ -2196,13 +2224,14 @@ mod tests {
     #[test]
     fn a_block_that_cannot_hold_a_count_is_left_out_whole() {
         let work = mock_work();
-        // The counts do not fit a column of sixteen: the block is left out,
-        // not shown with a count on a row of its own.
-        let text = draw(&work, 16, 60).join("\n");
+        // The counts do not fit a card of eighteen columns, which holds
+        // sixteen inside its border and padding: the block is left out, not
+        // shown with a count on a row of its own.
+        let text = draw(&work, 18, 60).join("\n");
         assert!(text.contains("counts not sh"), "{text}");
         assert!(!text.contains("code-review"), "{text}");
-        // At seventeen columns they fit, and every count is with its status.
-        let text = draw(&work, 17, 60).join("\n");
+        // At nineteen columns they fit, and every count is with its status.
+        let text = draw(&work, 19, 60).join("\n");
         let code_review = work
             .status_counts()
             .into_iter()

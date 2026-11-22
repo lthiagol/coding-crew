@@ -311,7 +311,7 @@ impl App {
             _ => Vec::new(),
         };
         let screen = screen(frame.area(), self.note.is_some());
-        frame.render_widget(self.title_line(screen.title.width), screen.title);
+        frame.render_widget(self.title_line(screen.title.width, runtime), screen.title);
         if let Some(area) = screen.announcement {
             frame.render_widget(self.hidden_line(area.width), area);
         }
@@ -677,23 +677,45 @@ impl App {
         ))
     }
 
-    /// The title line: the app's icon and name, then a dim `·` and the
-    /// project's folder when one is found.
+    /// The title line: the app's icon and name, a dim `·` and the project
+    /// folder, and on the right edge the status pill: whether the automation
+    /// runs.
     ///
     /// A terminal too narrow for the name shows nothing rather than a cut of
-    /// it: the parts of the line are dropped whole. The folder is cut from
-    /// the front, so the folder that names the project is kept.
-    fn title_line(&self, width: u16) -> Line<'static> {
+    /// it: the parts of the line are dropped whole. The pill goes before the
+    /// folder is cut. The folder is cut from the front, so the folder that
+    /// names the project is kept.
+    fn title_line(&self, width: u16, runtime: &RuntimeRead) -> Line<'static> {
         let name = format!(" {} {NAME}", Icon::AppHugo.glyph(self.icons));
         let width = usize::from(width);
         if width < text_width(&name) {
             return Line::from("");
         }
         let name = Span::styled(name, self.theme.chrome.title);
+        let separator = " · ";
+        if let Some(pill) = self.pill(runtime) {
+            let whole = text_width(&name.content)
+                + self
+                    .project
+                    .as_deref()
+                    .map_or(0, |project| text_width(separator) + text_width(project));
+            if let Some(gap) = width
+                .checked_sub(whole + pill.width())
+                .filter(|gap| *gap >= 1)
+            {
+                let mut spans = vec![name.clone()];
+                if let Some(project) = &self.project {
+                    spans.push(Span::styled(separator, self.theme.text.dim));
+                    spans.push(Span::styled(project.clone(), self.theme.text.dim));
+                }
+                spans.push(Span::raw(" ".repeat(gap)));
+                spans.push(pill);
+                return Line::from(spans);
+            }
+        }
         let Some(project) = &self.project else {
             return Line::from(name);
         };
-        let separator = " · ";
         let head = text_width(&name.content) + text_width(separator);
         let room = width.saturating_sub(head);
         if room == 0 {
@@ -705,6 +727,25 @@ impl App {
             Span::styled(separator, self.theme.text.dim),
             Span::styled(path, self.theme.text.dim),
         ])
+    }
+
+    /// The header's status pill: whether the automation runs, in words with
+    /// its icon. None when the record cannot be read, since then the state
+    /// is not known. No record means nothing runs.
+    fn pill(&self, runtime: &RuntimeRead) -> Option<Span<'static>> {
+        let (icon, word, style) = match runtime {
+            RuntimeRead::Record(runtime) if runtime.stamp.runs => {
+                (Icon::Running, "running", self.theme.semantic.ok)
+            }
+            RuntimeRead::Record(_) | RuntimeRead::Absent => {
+                (Icon::Stopped, "not running", self.theme.semantic.warn)
+            }
+            RuntimeRead::Unreadable(_) => return None,
+        };
+        Some(chrome::pill(
+            &format!("{} {word}", icon.glyph(self.icons)),
+            style,
+        ))
     }
 
     /// The line that says the sidebar is not shown, and what it holds.
@@ -2173,7 +2214,7 @@ mod tests {
         let app = app();
         let name = format!(" {} hugo", Icon::AppHugo.glyph(IconSet::Nerd));
         for width in 0..=20u16 {
-            let line = app.title_line(width);
+            let line = app.title_line(width, &RuntimeRead::Absent);
             let text: String = line
                 .spans
                 .iter()
@@ -2188,7 +2229,12 @@ mod tests {
                 "{width}: a cut of the name: {text}"
             );
         }
-        assert_eq!(app.title_line(100).spans[0].content.as_ref(), name);
+        assert_eq!(
+            app.title_line(100, &RuntimeRead::Absent).spans[0]
+                .content
+                .as_ref(),
+            name
+        );
     }
 
     #[test]
@@ -2201,21 +2247,75 @@ mod tests {
                 .map(|span| span.content.as_ref())
                 .collect()
         };
-        let whole = text(app.title_line(100));
+        let whole = text(app.title_line(100, &RuntimeRead::Absent));
         assert!(
-            whole.ends_with(" · /home/agent/coding/coding-crew"),
+            whole.contains(" · /home/agent/coding/coding-crew"),
             "{whole}"
         );
         // The folder that names the project is kept: the head is what goes.
-        let narrow = text(app.title_line(30));
+        let narrow = text(app.title_line(30, &RuntimeRead::Absent));
         assert!(narrow.ends_with("…/coding/coding-crew"), "{narrow}");
         assert!(narrow.chars().count() <= 30, "{narrow}");
         // With no columns left for the folder, the name keeps the line and
         // the dot goes.
-        let name_only = text(app.title_line(9));
+        let name_only = text(app.title_line(9, &RuntimeRead::Absent));
         assert_eq!(
             name_only,
             format!(" {} hugo", Icon::AppHugo.glyph(IconSet::Nerd))
+        );
+    }
+
+    #[test]
+    fn the_title_pill_says_whether_the_automation_runs() {
+        let app = app();
+        let text = |line: Line<'static>| -> String {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect()
+        };
+        let mut runtime = runtime();
+        let running = text(app.title_line(100, &RuntimeRead::Record(runtime.clone())));
+        let running_pill = format!(" {} running ", Icon::Running.glyph(IconSet::Nerd));
+        assert!(running.ends_with(&running_pill), "{running}");
+
+        runtime.stamp = Stamp {
+            runs: false,
+            why: Some("the review budget is spent".to_string()),
+        };
+        let stopped = text(app.title_line(100, &RuntimeRead::Record(runtime)));
+        let stopped_pill = format!(" {} not running ", Icon::Stopped.glyph(IconSet::Nerd));
+        assert!(stopped.ends_with(&stopped_pill), "{stopped}");
+
+        // A record that cannot be read does not say whether anything runs.
+        let unreadable = RuntimeRead::Unreadable(ReadError {
+            file: "runtime.json".to_string(),
+            error: "unexpected end of file".to_string(),
+        });
+        let unknown = text(app.title_line(100, &unreadable));
+        assert!(!unknown.contains("running"), "{unknown}");
+    }
+
+    #[test]
+    fn the_title_pill_goes_before_the_folder_is_cut() {
+        let mut app = app();
+        app.project = Some("/home/agent/coding/coding-crew".to_string());
+        let text = |width: u16| -> String {
+            app.title_line(width, &RuntimeRead::Record(runtime()))
+                .spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect()
+        };
+        // The name, the separator and the folder take 40 columns; the pill
+        // takes 11, and a column between them: 52 in all.
+        let whole = text(52);
+        assert!(whole.ends_with(" 󰑮 running "), "{whole}");
+        let narrow = text(51);
+        assert!(!narrow.contains("running"), "{narrow}");
+        assert!(
+            narrow.ends_with(" · /home/agent/coding/coding-crew"),
+            "{narrow}"
         );
     }
 

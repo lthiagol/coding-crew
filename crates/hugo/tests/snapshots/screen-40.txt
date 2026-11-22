@@ -1,4 +1,4 @@
- 󰚩 hugo · mock-data
+ 󰚩 hugo · mock-data           󰑮 running
  sidebar not shown: configuration
 ╭─ 󰑮 flow ─────────────────────────────╮
 │╭─ 󰚩 crew ───────────────────────────╮│

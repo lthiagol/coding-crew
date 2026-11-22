@@ -78,6 +78,10 @@ take the slot of the word they sit beside.
 - **Panes have rounded borders** (`╭╮╰╯`) in `chrome.border`; the focused pane
   is `chrome.border_focus`. A pane's title sits in the top border with a space
   each side and its icon: `╭─ 󰘬 path ───…╮`.
+- **Cards are padded** one column inside their borders (the Overview's
+  cards). A list pane — Needs you, Path, Backlog, Settings, hugo's panes —
+  draws against its border, because its columns are spent on words at the
+  default width.
 - **The header line** is the app icon and name in `chrome.title`, a dim `·`,
   then the project path in `text.dim`; the right edge holds a status pill.
 - **The tab bar** (raul) is icon + name per tab; the active tab is

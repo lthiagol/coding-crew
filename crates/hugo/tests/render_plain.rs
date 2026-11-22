@@ -289,10 +289,12 @@ fn the_window_has_a_title_line_a_footer_and_no_tabs() {
     let text = screen(100, 40);
     let rows: Vec<&str> = text.lines().collect();
     // The icon, then the name; the project is the mock folder, which the
-    // render names from the working directory it runs in.
-    assert_eq!(
-        rows[0], " 󰚩 hugo · mock-data",
-        "the title line names the tool"
+    // render names from the working directory it runs in. The pill on the
+    // right says the automation runs.
+    assert!(
+        rows[0].starts_with(" 󰚩 hugo · mock-data") && rows[0].ends_with("󰑮 running"),
+        "the title line names the tool and says whether it runs: {:?}",
+        rows[0]
     );
     assert!(rows.last().expect("a footer").contains("quit"), "{text}");
     // The shell is one sidebar and one main pane: no tab bar, no tab key.

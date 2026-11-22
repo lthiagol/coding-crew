@@ -248,7 +248,7 @@ impl App {
         .split(area);
         let (tabs, rule) = self.tab_bar(rows[1].width, work, now);
 
-        frame.render_widget(self.title_line(rows[0].width), rows[0]);
+        frame.render_widget(self.title_line(rows[0].width, work, now), rows[0]);
         frame.render_widget(tabs, rows[1]);
         frame.render_widget(rule, rows[2]);
         let body = rows[3];
@@ -316,15 +316,30 @@ impl App {
     }
 
     /// The title line: the app's icon and name, a dim `·`, and the folder it
-    /// reads.
+    /// reads. The right edge holds the status pill: how many tasks need a
+    /// human, or that none do.
     ///
-    /// A terminal too narrow for the name gives the whole line to the
-    /// folder: a part of the line is never cut in half.
-    fn title_line(&self, width: u16) -> Line<'static> {
-        let name = format!(" {} coding-crew", Icon::AppRaul.glyph(self.icons));
+    /// A terminal too narrow for the whole folder drops the pill first; too
+    /// narrow for the name, the folder takes the line. A part of the line is
+    /// never cut in half.
+    fn title_line(&self, width: u16, work: &Work, now: &str) -> Line<'static> {
+        let name = format!(" {} raul", Icon::AppRaul.glyph(self.icons));
         let separator = " · ";
         let head = text_width(&name) + text_width(separator);
         let folder = self.theme.text.dim;
+        let whole = head + text_width(&self.root.display().to_string());
+        if let Some(pill) = self.pill(work, now) {
+            let room = usize::from(width).checked_sub(whole + pill.width());
+            if let Some(gap) = room.filter(|gap| *gap >= 1) {
+                return Line::from(vec![
+                    Span::styled(name, self.theme.chrome.title),
+                    Span::styled(separator, self.theme.text.dim),
+                    Span::styled(self.path_tail(usize::MAX), folder),
+                    Span::raw(" ".repeat(gap)),
+                    pill,
+                ]);
+            }
+        }
         if usize::from(width) < head {
             // The name does not fit: the folder it reads takes the line.
             let path = self.path_tail(usize::from(width));
@@ -336,6 +351,22 @@ impl App {
             Span::styled(separator, self.theme.text.dim),
             Span::styled(path, folder),
         ])
+    }
+
+    /// The header's status pill: the tasks that need a human, in the count
+    /// the Needs you tab carries, or that nothing does. None when the work
+    /// folder is missing: there is no count to show.
+    fn pill(&self, work: &Work, now: &str) -> Option<Span<'static>> {
+        if work.missing.is_some() {
+            return None;
+        }
+        let count = self.badge(Tab::NeedsYou, work, now)?;
+        let verb = if count == 1 { "needs" } else { "need" };
+        Some(if count == 0 {
+            chrome::pill("nothing needs you", self.theme.semantic.ok)
+        } else {
+            chrome::pill(&format!("{count} {verb} you"), self.theme.semantic.warn)
+        })
     }
 
     /// The path, in the columns it has: the tail, which names the folder,
@@ -847,7 +878,7 @@ mod tests {
     fn a_narrow_title_drops_whole_parts() {
         let app = app();
         for width in 0..=24 {
-            let title = app.title_line(width);
+            let title = app.title_line(width, &mock_work(), now());
             let text = title
                 .spans
                 .iter()
@@ -855,12 +886,87 @@ mod tests {
                 .collect::<String>();
             assert!(title.width() <= width as usize, "{width}: {text}");
             // The name is whole, or the folder is: a cut of the name never
-            // stands alone. Any line that holds the start of the name must
-            // hold all of it.
-            if text.contains("coding") {
-                assert!(text.contains("coding-crew"), "{width}: {text}");
+            // stands alone. Any line that holds the icon must hold all of it.
+            let icon = Icon::AppRaul.glyph(IconSet::Nerd);
+            if text.contains(icon) {
+                assert!(text.contains(&format!(" {icon} raul")), "{width}: {text}");
             }
         }
+    }
+
+    #[test]
+    fn the_title_names_raul_and_its_pill_sits_on_the_right_edge() {
+        let app = app();
+        let title = app.title_line(100, &mock_work(), now());
+        let text = title
+            .spans
+            .iter()
+            .map(|span| span.content.to_string())
+            .collect::<String>();
+        assert!(
+            text.starts_with(&format!(
+                " {} raul · /tmp/coding-crew/work",
+                Icon::AppRaul.glyph(IconSet::Nerd)
+            )),
+            "{text}"
+        );
+        assert!(text.ends_with(" 8 need you "), "{text}");
+        assert_eq!(title.width(), 100, "{text}");
+    }
+
+    #[test]
+    fn the_title_drops_the_pill_before_the_folder_is_cut() {
+        let app = app();
+        let work = mock_work();
+        let text = |width: u16| -> String {
+            app.title_line(width, &work, now())
+                .spans
+                .iter()
+                .map(|span| span.content.to_string())
+                .collect()
+        };
+        // The name, the separator and the folder take 31 columns, the pill
+        // 12, and a column between them: at 43 the pill goes, and the folder
+        // keeps its tail.
+        let whole = text(44);
+        assert!(whole.contains("8 need you"), "{whole}");
+        let narrow = text(43);
+        assert!(!narrow.contains("need you"), "{narrow}");
+        assert!(narrow.ends_with("/tmp/coding-crew/work"), "{narrow}");
+    }
+
+    #[test]
+    fn a_title_agrees_the_pill_with_one_task() {
+        let app = app();
+        let mut task = coding_crew_core::Task::new("TSK01", "the one task");
+        task.status = coding_crew_core::Status::Groomed;
+        let work = Work {
+            root: PathBuf::new(),
+            tasks: vec![task],
+            items: Vec::new(),
+            errors: Vec::new(),
+            activity: None,
+            missing: None,
+        };
+        let title = app.title_line(100, &work, now());
+        let text: String = title
+            .spans
+            .iter()
+            .map(|span| span.content.to_string())
+            .collect();
+        assert!(text.ends_with(" 1 needs you "), "{text}");
+    }
+
+    #[test]
+    fn a_title_with_nothing_to_need_a_human_says_so() {
+        let app = app();
+        let title = app.title_line(100, &Work::default(), now());
+        let text: String = title
+            .spans
+            .iter()
+            .map(|span| span.content.to_string())
+            .collect();
+        assert!(text.ends_with(" nothing needs you "), "{text}");
     }
 
     #[test]
@@ -874,7 +980,7 @@ mod tests {
             IconSet::Nerd,
         );
         for width in 0..=60u16 {
-            let title = app.title_line(width);
+            let title = app.title_line(width, &mock_work(), now());
             let text = title
                 .spans
                 .iter()
@@ -882,8 +988,9 @@ mod tests {
                 .collect::<String>();
             assert!(title.width() <= usize::from(width), "{width}: {text:?}");
             // Once the folder's name fits in the columns it has, the tail is
-            // kept whole: the name and its separator take 17 columns.
-            if usize::from(width) >= 17 + 17 {
+            // kept whole: the name and its separator take 10 columns, and the
+            // folder's name with its ellipsis 17.
+            if usize::from(width) >= 10 + 17 {
                 assert!(text.contains("coding-crew/work"), "{width}: {text:?}");
             }
         }

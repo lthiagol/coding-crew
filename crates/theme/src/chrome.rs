@@ -5,7 +5,7 @@
 //! ratatui value it paints with. The paint comes from slots, never from a
 //! colour written here.
 
-use ratatui::style::Modifier;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType};
 
@@ -49,6 +49,12 @@ pub fn key_chip(key: &str, action: &str, theme: &Theme) -> Vec<Span<'static>> {
         ),
         Span::styled(format!(" {action}"), theme.chrome.footer),
     ]
+}
+
+/// A status pill: the text with a space each side, reversed on the slot's
+/// style, so it reads as a filled chip on the header line.
+pub fn pill(text: &str, style: Style) -> Span<'static> {
+    Span::styled(format!(" {text} "), style.add_modifier(Modifier::REVERSED))
 }
 
 /// A count, in `text.strong`.
@@ -160,6 +166,17 @@ mod tests {
         );
         assert_eq!(spans[1].content, " quit");
         assert_eq!(spans[1].style, theme.chrome.footer);
+    }
+
+    #[test]
+    fn a_pill_is_the_text_padded_and_reversed_on_its_slot() {
+        let theme = theme();
+        let span = pill("8 need you", theme.semantic.warn);
+        assert_eq!(span.content, " 8 need you ");
+        assert_eq!(
+            span.style,
+            theme.semantic.warn.add_modifier(Modifier::REVERSED)
+        );
     }
 
     #[test]
