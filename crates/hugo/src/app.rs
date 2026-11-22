@@ -585,6 +585,7 @@ impl App {
     /// takes its answer.
     fn start_orchestrator(&mut self) {
         if self.starting.is_some() {
+            self.note = Some(Note::Notice(STARTING.to_string()));
             return;
         }
         let Some(launcher) = self.launch.clone() else {
@@ -3916,8 +3917,10 @@ mod tests {
         assert!(window.start_pending());
         assert_eq!(window.note, Some(Note::Notice(STARTING.to_string())));
         // While the start runs the key starts nothing more, and the footer
-        // stops naming it.
+        // stops naming it. The key still says the start is running.
+        window.note = None;
         window.on_key(press(KeyCode::Char('s')));
+        assert_eq!(window.note, Some(Note::Notice(STARTING.to_string())));
         let (rows, _) = render_app(&mut window, 100, 40, &runtime);
         assert!(!rows.last().expect("a footer row").contains("start"));
         wait_for_start(&mut window);

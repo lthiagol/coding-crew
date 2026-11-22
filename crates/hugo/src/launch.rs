@@ -7,14 +7,31 @@
 //! runs it.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use serde_json::Value;
+
+use crate::bounded::{self, Answer};
 
 /// The label of the orchestrator's tab, and the name of its agent in herdr.
 pub const ORCHESTRATOR: &str = "orchestrator";
+
+/// The code herdr answers with when no agent has the name asked for.
+const AGENT_NOT_FOUND: &str = "agent_not_found";
+
+/// How long a herdr call may take before hugo gives up on it. herdr answers
+/// from its own socket, so a call that runs past this is stuck, not slow. The
+/// one call that waits on its agent has its own bound.
+const HERDR_BOUND: Duration = Duration::from_secs(10);
+
+/// How long herdr waits for a started agent to be ready for input.
+const AGENT_START_TIMEOUT_MS: u64 = 30_000;
+
+/// How long `herdr agent start` may take: its readiness wait, plus room to
+/// report it.
+const AGENT_START_BOUND: Duration = Duration::from_secs(35);
 
 /// What a start needs: the harness, the arguments that start its model, the
 /// project's root, and the queue's task ids in order.
@@ -47,8 +64,9 @@ pub enum Start {
 /// Where the orchestrator is started. herdr is the one implementation; tests
 /// stand a fake in for it.
 pub trait Launcher: Send + Sync {
-    /// Whether herdr already names an orchestrator agent.
-    fn orchestrator_named(&self) -> bool;
+    /// Whether herdr already names an orchestrator agent. An error is herdr
+    /// failing to say, not an answer: it is not read as "not named".
+    fn orchestrator_named(&self) -> Result<bool>;
 
     /// Open a tab, start the orchestrator in it, and prompt it.
     fn start_orchestrator(&self, req: &LaunchRequest) -> Result<Launched>;
@@ -64,7 +82,7 @@ pub fn from_env() -> Option<Arc<dyn Launcher>> {
 /// window's thread runs: the check and the start are both herdr's, so both
 /// run off the window's thread.
 pub fn start(launcher: &dyn Launcher, req: &LaunchRequest) -> Result<Start> {
-    if launcher.orchestrator_named() {
+    if launcher.orchestrator_named()? {
         return Ok(Start::AlreadyRunning);
     }
     launcher.start_orchestrator(req).map(Start::Started)
@@ -87,8 +105,16 @@ impl Herdr {
 }
 
 impl Launcher for Herdr {
-    fn orchestrator_named(&self) -> bool {
-        herdr(&words(&["agent", "get", ORCHESTRATOR])).is_ok()
+    fn orchestrator_named(&self) -> Result<bool> {
+        let args = words(&["agent", "get", ORCHESTRATOR]);
+        let answer = herdr_answer(&args)?;
+        if answer.status.success() {
+            return Ok(true);
+        }
+        if not_found(&answer.stdout) {
+            return Ok(false);
+        }
+        Err(refused(&args, &answer))
     }
 
     fn start_orchestrator(&self, req: &LaunchRequest) -> Result<Launched> {
@@ -99,9 +125,14 @@ impl Launcher for Herdr {
         let tab_id = text_at(&tab, &["result", "tab", "tab_id"])?;
         let pane = text_at(&tab, &["result", "root_pane", "pane_id"])?;
         // The tab is open from here on: a failure after it names the tab, so
-        // the human can see what was left behind.
-        herdr(&agent_start_args(req, &pane)).with_context(|| format!("tab {tab_id} is open"))?;
-        herdr(&agent_prompt_args(req)).with_context(|| format!("tab {tab_id} is open"))?;
+        // the human can see what was left behind. An agent that started but
+        // was not prompted is named in herdr, so `s` will not prompt it: the
+        // error says how to send the prompt by hand.
+        herdr_within(&agent_start_args(req, &pane), AGENT_START_BOUND)
+            .with_context(|| format!("tab {tab_id} is open"))?;
+        herdr(&agent_prompt_args(req)).with_context(|| {
+            format!("tab {tab_id} is open; prompt it with `herdr agent prompt {ORCHESTRATOR}`")
+        })?;
         Ok(Launched { tab: tab_id })
     }
 }
@@ -124,7 +155,8 @@ fn tab_create_args(workspace: &str, project: &Path) -> Vec<String> {
     args
 }
 
-/// The command that starts the orchestrator's agent in the tab's pane.
+/// The command that starts the orchestrator's agent in the tab's pane. It
+/// names herdr's readiness timeout, so the call's bound is known to exceed it.
 fn agent_start_args(req: &LaunchRequest, pane: &str) -> Vec<String> {
     let mut args = words(&[
         "agent",
@@ -134,6 +166,8 @@ fn agent_start_args(req: &LaunchRequest, pane: &str) -> Vec<String> {
         &req.harness,
         "--pane",
         pane,
+        "--timeout",
+        &AGENT_START_TIMEOUT_MS.to_string(),
         "--",
     ]);
     args.extend(req.model_args.iter().cloned());
@@ -147,34 +181,61 @@ fn agent_prompt_args(req: &LaunchRequest) -> Vec<String> {
     args
 }
 
-/// Run herdr with `args`, and return its stdout. A failure names the command
+/// Run herdr with `args`, bounded, and return what it answered. A call that
+/// cannot run, or runs past the bound, is an error that names the command.
+fn herdr_answer(args: &[String]) -> Result<Answer> {
+    herdr_answer_within(args, HERDR_BOUND)
+}
+
+/// Run herdr with `args`, held to `bound`, and return what it answered.
+fn herdr_answer_within(args: &[String], bound: Duration) -> Result<Answer> {
+    bounded::run("herdr", args, bound).with_context(|| format!("herdr {}", command(args)))
+}
+
+/// Run herdr with `args`, and return its stdout. A refusal names the command
 /// and herdr's own words for why.
 fn herdr(args: &[String]) -> Result<Vec<u8>> {
-    let output = Command::new("herdr")
-        .args(args)
-        .stdin(Stdio::null())
-        .output()
-        .context("herdr could not be run")?;
-    if output.status.success() {
-        return Ok(output.stdout);
+    herdr_within(args, HERDR_BOUND)
+}
+
+/// Run herdr with `args`, held to `bound`, and return its stdout.
+fn herdr_within(args: &[String], bound: Duration) -> Result<Vec<u8>> {
+    let answer = herdr_answer_within(args, bound)?;
+    if answer.status.success() {
+        return Ok(answer.stdout);
     }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let why = [stderr.trim(), stdout.trim()]
-        .into_iter()
-        .find(|why| !why.is_empty())
-        .unwrap_or("failed");
-    let command = args.iter().take(2).cloned().collect::<Vec<_>>().join(" ");
-    bail!("herdr {command}: {why}")
+    Err(refused(args, &answer))
 }
 
 /// Run herdr and read its answer as JSON.
 fn herdr_json(args: &[String]) -> Result<Value> {
     let stdout = herdr(args)?;
-    serde_json::from_slice(&stdout).with_context(|| {
-        let command = args.iter().take(2).cloned().collect::<Vec<_>>().join(" ");
-        format!("herdr {command}: the answer is not JSON")
-    })
+    serde_json::from_slice(&stdout)
+        .with_context(|| format!("herdr {}: the answer is not JSON", command(args)))
+}
+
+/// The error for a herdr call that ran and failed: its command, and herdr's
+/// own words for why.
+fn refused(args: &[String], answer: &Answer) -> anyhow::Error {
+    let stderr = String::from_utf8_lossy(&answer.stderr);
+    let stdout = String::from_utf8_lossy(&answer.stdout);
+    let why = [stderr.trim(), stdout.trim()]
+        .into_iter()
+        .find(|why| !why.is_empty())
+        .unwrap_or("failed");
+    anyhow!("herdr {}: {why}", command(args))
+}
+
+/// Whether herdr's answer is its "no such agent" error. herdr writes its
+/// errors as JSON on stdout, with a code.
+fn not_found(stdout: &[u8]) -> bool {
+    serde_json::from_slice::<Value>(stdout)
+        .is_ok_and(|answer| answer["error"]["code"] == AGENT_NOT_FOUND)
+}
+
+/// The first two words of a herdr command, for an error to name.
+fn command(args: &[String]) -> String {
+    args.iter().take(2).cloned().collect::<Vec<_>>().join(" ")
 }
 
 /// The text at a path in herdr's answer. An answer without it names the path.
@@ -197,6 +258,8 @@ fn words(parts: &[&str]) -> Vec<String> {
 pub(crate) struct FakeLauncher {
     /// Whether herdr names an orchestrator already.
     pub named: bool,
+    /// The error the check answers with, when herdr cannot say.
+    pub check_error: Option<String>,
     /// The error a start answers with, when it fails.
     pub error: Option<String>,
     /// The requests the starts received, in order.
@@ -205,8 +268,11 @@ pub(crate) struct FakeLauncher {
 
 #[cfg(test)]
 impl Launcher for FakeLauncher {
-    fn orchestrator_named(&self) -> bool {
-        self.named
+    fn orchestrator_named(&self) -> Result<bool> {
+        match &self.check_error {
+            Some(error) => bail!("{error}"),
+            None => Ok(self.named),
+        }
     }
 
     fn start_orchestrator(&self, req: &LaunchRequest) -> Result<Launched> {
@@ -268,11 +334,26 @@ mod tests {
                 "opencode",
                 "--pane",
                 "w1:p9",
+                "--timeout",
+                "30000",
                 "--",
                 "--model",
                 "opencode-go/glm-5.3#high"
             ]
         );
+    }
+
+    #[test]
+    fn the_agent_start_bound_outlasts_herdrs_readiness_timeout() {
+        // herdr gives up on readiness at its timeout; hugo must not give up on
+        // the call first, or a slow harness is killed before it is prompted.
+        let args = agent_start_args(&request(), "w1:p9");
+        let flag = args
+            .iter()
+            .position(|arg| arg == "--timeout")
+            .expect("a readiness timeout");
+        let timeout = Duration::from_millis(args[flag + 1].parse().expect("milliseconds"));
+        assert!(AGENT_START_BOUND > timeout, "{timeout:?}");
     }
 
     #[test]
@@ -343,6 +424,29 @@ mod tests {
         };
         let error = start(&fake, &request()).expect_err("the start fails");
         assert!(error.to_string().contains("no pane"), "{error}");
+    }
+
+    #[test]
+    fn a_check_herdr_cannot_answer_starts_nothing() {
+        // An error from the check is not "not named": a tab opened on a
+        // failed check could be a second orchestrator.
+        let fake = FakeLauncher {
+            check_error: Some("herdr agent get: timed out after 10s".to_string()),
+            ..Default::default()
+        };
+        let error = start(&fake, &request()).expect_err("the check fails");
+        assert!(error.to_string().contains("timed out"), "{error}");
+        assert!(fake.requests.lock().expect("the requests").is_empty());
+    }
+
+    #[test]
+    fn only_herdrs_agent_not_found_answer_means_not_named() {
+        let missing = br#"{"error":{"code":"agent_not_found","message":"agent target orchestrator not found"},"id":"cli:agent:get"}"#;
+        assert!(not_found(missing));
+        let other = br#"{"error":{"code":"agent_blocked","message":"busy"},"id":"cli:agent:get"}"#;
+        assert!(!not_found(other));
+        assert!(!not_found(b"herdr: socket refused"));
+        assert!(!not_found(b""));
     }
 
     #[test]

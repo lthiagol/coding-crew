@@ -14,20 +14,15 @@
 //! missing or fails is an error the caller shows, never a window that waits
 //! on it.
 
-use std::io::Read;
-use std::process::{Command, Stdio};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use crate::bounded;
 
 /// How long the catalogue's tool may take before the read is given up.
 ///
 /// A catalogue is a list of names: a tool that takes longer than this is not
 /// answering, and the human is not left waiting on it.
 pub const READ_BOUND: Duration = Duration::from_secs(5);
-
-/// How often the read looks at the tool it started.
-const POLL: Duration = Duration::from_millis(10);
 
 /// The models a harness's tool lists.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -62,45 +57,10 @@ impl Catalog {
     /// timeout on the monotonic clock, not the frame's instant, which only
     /// the loop reads.
     pub fn read_within(tool: &str, bound: Duration) -> Result<Self, String> {
-        let mut child = Command::new(tool)
-            .arg("models")
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
+        let answer = bounded::run(tool, ["models"], bound)
             .map_err(|error| format!("{tool} models: {error}"))?;
-        // Both pipes are drained beside the wait: a tool that prints more than
-        // a pipe holds would block before it exits, and the bound would then
-        // kill a read that was only slow to be drained.
-        let stdout = drain(child.stdout.take());
-        let stderr = drain(child.stderr.take());
-        let deadline = Instant::now() + bound;
-        let status = loop {
-            match child.try_wait() {
-                Ok(Some(status)) => break Some(status),
-                Ok(None) if Instant::now() >= deadline => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    break None;
-                }
-                Ok(None) => thread::sleep(POLL),
-                Err(error) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(format!("{tool} models: {error}"));
-                }
-            }
-        };
-        let timed_out = || format!("{tool} models timed out after {bound:?}");
-        let Some(status) = status else {
-            return Err(timed_out());
-        };
-        // The output is held to the same bound as the wait: a tool that left a
-        // child holding its pipes must not hold this read past it.
-        let stdout = received(&stdout, deadline).ok_or_else(timed_out)?;
-        let stderr = received(&stderr, deadline).ok_or_else(timed_out)?;
-        if !status.success() {
-            let why = String::from_utf8_lossy(&stderr);
+        if !answer.status.success() {
+            let why = String::from_utf8_lossy(&answer.stderr);
             let why = why.trim();
             return Err(if why.is_empty() {
                 format!("{tool} models failed")
@@ -108,7 +68,8 @@ impl Catalog {
                 format!("{tool} models failed: {why}")
             });
         }
-        let text = String::from_utf8(stdout).map_err(|error| format!("{tool} models: {error}"))?;
+        let text =
+            String::from_utf8(answer.stdout).map_err(|error| format!("{tool} models: {error}"))?;
         Ok(Self::from_lines(&text))
     }
 
@@ -172,33 +133,6 @@ pub fn model_args(tool: &str, model: &str) -> Vec<String> {
     args
 }
 
-/// Read a pipe to its end on its own thread, so the wait on the tool is not
-/// the wait on its output. The bytes come back over a channel, so the read
-/// can give up on them at the bound.
-fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> Receiver<Vec<u8>> {
-    let (sender, receiver) = mpsc::channel();
-    thread::spawn(move || {
-        let mut bytes = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = pipe.read_to_end(&mut bytes);
-        }
-        let _ = sender.send(bytes);
-    });
-    receiver
-}
-
-/// The bytes a drain read, when it finishes by the deadline. A drain that
-/// ended without sending (its thread failed) reads as no bytes. A drain still
-/// reading at the deadline is abandoned, not joined: its thread ends with the
-/// pipe.
-fn received(drain: &Receiver<Vec<u8>>, deadline: Instant) -> Option<Vec<u8>> {
-    match drain.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-        Ok(bytes) => Some(bytes),
-        Err(RecvTimeoutError::Timeout) => None,
-        Err(RecvTimeoutError::Disconnected) => Some(Vec::new()),
-    }
-}
-
 /// A scratch folder holding an executable tool that answers with the script's
 /// own words. The caller removes the folder.
 #[cfg(test)]
@@ -220,6 +154,7 @@ pub(crate) fn scratch_tool(name: &str, script: &str) -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     #[test]
     fn claude_takes_the_variant_as_its_effort() {
