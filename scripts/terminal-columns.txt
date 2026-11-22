@@ -14,7 +14,9 @@
 # codepoint no other rule holds; the range readers take one when no range
 # holds a codepoint, so W is one. `rule join-after CP` names the codepoint
 # after which the next codepoint joins the cluster before it, so a joined
-# emoji counts once. `rule tab-stop N` is the stop a tab advances to; a tab is
+# emoji counts once. `rule presentation-selector CP` names the codepoint that,
+# after the cluster before it, makes that cluster take two columns: an emoji
+# presentation. `rule tab-stop N` is the stop a tab advances to; a tab is
 # measured by its position in the line, not by itself.
 #
 # The ranges below are the rules unrolled: the first range holding a
@@ -33,8 +35,9 @@
 
 rule tab-stop 8
 rule join-after 200D
+rule presentation-selector FE0F
 rule tab tab range 0009-0009
-rule conjoining-hangul-jamo 1 range 1100-11FF A960-A97C D7B0-D7FF
+rule conjoining-hangul-vowel-and-trailing join range 1160-11FF D7B0-D7C6 D7CB-D7FB
 rule control 0 category Cc
 rule combining-and-format join category Mn Me Cf
 rule emoji-modifier join range 1F3FB-1F3FF
@@ -164,7 +167,8 @@ rule default 1
 1085-1086 join
 108D-108D join
 109D-109D join
-1100-11FF 1
+1100-115F 2
+1160-11FF join
 135D-135F join
 1712-1714 join
 1732-1733 join
@@ -290,7 +294,7 @@ A8E0-A8F1 join
 A8FF-A8FF join
 A926-A92D join
 A947-A951 join
-A960-A97C 1
+A960-A97C 2
 A980-A982 join
 A9B3-A9B3 join
 A9B6-A9B9 join
@@ -313,7 +317,8 @@ ABE5-ABE5 join
 ABE8-ABE8 join
 ABED-ABED join
 AC00-D7A3 2
-D7B0-D7FF 1
+D7B0-D7C6 join
+D7CB-D7FB join
 F900-FAFF 2
 FB1E-FB1E join
 FE00-FE0F join
@@ -558,9 +563,12 @@ case zero-width-joiner 200D 0
 case joined-emoji 1F469,200D,1F4BB 2
 case joined-emoji-chain 1F469,200D,1F4BB,200D,1F527 2
 case emoji-with-modifier 1F44D,1F3FD 2
-case conjoining-hangul-leading 1100 1
-case conjoining-hangul-medial 1161 1
-case conjoining-hangul-final 11A8 1
+case conjoining-hangul-leading 1100 2
+case conjoining-hangul-medial 1161 0
+case conjoining-hangul-final 11A8 0
+case conjoining-hangul-syllable 1100,1161,11A8 2
+case emoji-presentation 26A0,FE0F 2
+case emoji-keycap 0031,FE0F,20E3 2
 case soft-hyphen 00AD 0
 case control-character 0001 0
 case tab 0009 8

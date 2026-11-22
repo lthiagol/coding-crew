@@ -78,6 +78,7 @@ def parse_rules(text):
     """
     tab_stop = None
     join_after = None
+    presentation = None
     default = None
     rules = []
     for number, raw in enumerate(text.split("\n"), start=1):
@@ -101,6 +102,12 @@ def parse_rules(text):
                 raise ValueError(f"line {number}: want rule join-after CP")
             join_after = int(fields[2], 16)
             if not 0 <= join_after <= LAST_CODEPOINT:
+                raise ValueError(f"line {number}: not a codepoint: {fields[2]}")
+        elif kind == "presentation-selector":
+            if len(fields) != 3:
+                raise ValueError(f"line {number}: want rule presentation-selector CP")
+            presentation = int(fields[2], 16)
+            if not 0 <= presentation <= LAST_CODEPOINT:
                 raise ValueError(f"line {number}: not a codepoint: {fields[2]}")
         elif kind == "default":
             if len(fields) != 3:
@@ -128,6 +135,8 @@ def parse_rules(text):
         raise ValueError("the table's rules do not name a tab stop")
     if join_after is None:
         raise ValueError("the table's rules do not name a join-after codepoint")
+    if presentation is None:
+        raise ValueError("the table's rules do not name a presentation selector")
     if default is None:
         raise ValueError("the table's rules do not name a default width")
     if default != DEFAULT_WIDTH:

@@ -51,6 +51,10 @@ TABLE_PATH = Path(__file__).with_name("terminal-columns.txt")
 # A codepoint the table does not name takes one column.
 DEFAULT_COLUMNS = 1
 
+# The columns a cluster takes once the table's presentation selector follows
+# it: an emoji presentation is two columns wide.
+PRESENTATION_COLUMNS = 2
+
 
 class ColumnTable:
     """The terminal-column rules in `terminal-columns.txt`.
@@ -64,9 +68,10 @@ class ColumnTable:
     this same table.
     """
 
-    def __init__(self, tab_stop, join_after, ranges, cases):
+    def __init__(self, tab_stop, join_after, presentation, ranges, cases):
         self.tab_stop = tab_stop
         self.join_after = join_after
+        self.presentation = presentation
         self.ranges = ranges
         self.cases = cases
         self._starts = [start for start, _, _ in ranges]
@@ -76,6 +81,7 @@ class ColumnTable:
         """Read a table file, refusing a malformed one."""
         tab_stop = None
         join_after = None
+        presentation = None
         ranges = []
         cases = []
         for number, raw in enumerate(
@@ -89,7 +95,8 @@ class ColumnTable:
                 if fields[0] == "rule":
                     if len(fields) < 3:
                         raise ValueError(
-                            "want: rule tab-stop N or rule join-after CP"
+                            "want: rule tab-stop N, rule join-after CP "
+                            "or rule presentation-selector CP"
                         )
                     if fields[1] == "tab-stop":
                         if len(fields) != 3:
@@ -101,8 +108,12 @@ class ColumnTable:
                         if len(fields) != 3:
                             raise ValueError("want: rule join-after CP")
                         join_after = chr(int(fields[2], 16))
+                    elif fields[1] == "presentation-selector":
+                        if len(fields) != 3:
+                            raise ValueError("want: rule presentation-selector CP")
+                        presentation = chr(int(fields[2], 16))
                     # The other rule lines derive the ranges; the generator
-                    # reads them, so this reader only needs the two above.
+                    # reads them, so this reader only needs the three above.
                 elif fields[0] == "case":
                     if len(fields) != 4:
                         raise ValueError("want: case NAME CODEPOINTS COLUMNS")
@@ -133,6 +144,8 @@ class ColumnTable:
             raise ValueError(f"{path}: no tab-stop rule")
         if join_after is None:
             raise ValueError(f"{path}: no join-after rule")
+        if presentation is None:
+            raise ValueError(f"{path}: no presentation-selector rule")
         if not ranges:
             raise ValueError(f"{path}: no ranges")
         if not cases:
@@ -142,7 +155,7 @@ class ColumnTable:
             if start <= previous:
                 raise ValueError(f"{path}: ranges are not in order")
             previous = end
-        return cls(tab_stop, join_after, ranges, cases)
+        return cls(tab_stop, join_after, presentation, ranges, cases)
 
     def advance(self, character, column):
         """The columns `character` adds when it starts a cluster at `column`."""
@@ -175,14 +188,19 @@ class ColumnTable:
         its first codepoint, and the codepoints that join it take none. A
         codepoint joins when the table says `join`, or when the codepoint
         before it is the table's joiner, so an emoji sequence counts once.
-        A tab advances in place.
+        The table's presentation selector gives the cluster before it two
+        columns, when that is more than the cluster already takes. A tab
+        advances in place.
         """
         column = 0
+        cluster_start = 0
         open_cluster = False
         previous_was_joiner = False
         for character in text:
-            joins = self.joins(character) or (open_cluster and previous_was_joiner)
-            if not joins:
+            if open_cluster and character == self.presentation:
+                column = max(column, cluster_start + PRESENTATION_COLUMNS)
+            elif not (self.joins(character) or (open_cluster and previous_was_joiner)):
+                cluster_start = column
                 column += self.advance(character, column)
                 open_cluster = True
             previous_was_joiner = character == self.join_after

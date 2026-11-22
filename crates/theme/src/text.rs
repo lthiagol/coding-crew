@@ -1,11 +1,20 @@
 //! Measuring and cutting text the way ratatui draws it.
 
+use ratatui::buffer::CellWidth;
 use ratatui::style::Style;
 use ratatui::text::Span;
 
-/// The terminal columns a text takes.
+/// The terminal columns a text takes: the sum of the graphemes ratatui draws.
+///
+/// The whole string is not measured at once. ratatui draws a grapheme at a
+/// time and drops the control characters, so a tab takes no column, and a
+/// ligature script takes one column per grapheme where the whole string
+/// takes one.
 pub fn text_width(text: &str) -> usize {
-    Span::raw(text.to_string()).width()
+    Span::raw(text.to_string())
+        .styled_graphemes(Style::default())
+        .map(|grapheme| usize::from(grapheme.symbol.cell_width()))
+        .sum()
 }
 
 /// The text, cut to `width` columns.
@@ -61,11 +70,35 @@ pub fn pad(text: &str, width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
 
     #[test]
     fn the_first_grapheme_is_what_the_terminal_draws_once() {
         assert_eq!(first_grapheme("e\u{301}x"), "e\u{301}");
         assert_eq!(first_grapheme("界x"), "界");
         assert_eq!(first_grapheme(""), "");
+    }
+
+    #[test]
+    fn the_width_is_the_width_ratatui_draws() {
+        // The whole-string width of a tab or an Arabic ligature differs from
+        // what ratatui paints, so each text is measured against the paint.
+        for text in [
+            "a\tb",
+            "\u{644}\u{627}",
+            "e\u{301}x",
+            "界x",
+            "\u{26a0}\u{fe0f}",
+        ] {
+            assert_eq!(text_width(text), drawn(text), "{text:?}");
+        }
+    }
+
+    /// The columns ratatui paints a text in, from column zero.
+    fn drawn(text: &str) -> usize {
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 20, 1));
+        let (column, _) = buffer.set_stringn(0, 0, text, 20, Style::default());
+        usize::from(column)
     }
 }

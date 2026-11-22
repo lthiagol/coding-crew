@@ -4,6 +4,7 @@
 //! domain knows nothing about this: `crates/core` never names a colour, and
 //! a phase names a slot, never a colour.
 
+use crate::text::text_width;
 use coding_crew_core::{Reason, Status};
 use coding_crew_engine::MarkdownTheme;
 use ratatui::style::{Color, Modifier, Style};
@@ -694,7 +695,11 @@ pub fn block_title_style(theme: &Theme) -> Style {
 /// The line the cursor is on: every cell takes the selection's paint, and
 /// the bar runs to the edge of the pane.
 pub fn selected_line(line: Line<'static>, width: usize, theme: &Theme) -> Line<'static> {
-    let used = line.width();
+    let used: usize = line
+        .spans
+        .iter()
+        .map(|span| text_width(&span.content))
+        .sum();
     let mut spans: Vec<Span<'static>> = line
         .spans
         .into_iter()
@@ -3670,18 +3675,38 @@ mod tests {
 
     #[test]
     fn the_presets_differ_in_paint() {
-        // The presets are not the same palette under another name.
+        // The presets are not the same palette under another name. The whole
+        // theme is not compared: its `preset` field always differs, so the
+        // paint is compared slot by slot and role by role.
+        let paint = |preset: Preset| {
+            let theme = Theme::preset(preset);
+            (Slot::ALL.map(|slot| theme.slot(slot)), theme.document())
+        };
         for (index, one) in Preset::ALL.iter().enumerate() {
             for other in &Preset::ALL[index + 1..] {
                 assert_ne!(
-                    Theme::preset(*one),
-                    Theme::preset(*other),
+                    paint(*one),
+                    paint(*other),
                     "{} and {} paint the same",
                     one.name(),
                     other.name()
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_selected_line_fills_the_pane_by_the_columns_it_draws() {
+        // A tab draws no column, so the whole-string width would leave the
+        // bar one column short.
+        let theme = Theme::preset(Preset::Dark);
+        let line = selected_line(Line::from("a\tb"), 4, &theme);
+        let drawn: String = line
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert_eq!(text_width(&drawn), 4);
     }
 
     #[test]
