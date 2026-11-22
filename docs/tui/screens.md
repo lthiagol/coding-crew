@@ -46,6 +46,7 @@ row. The cursor is never on a row the pane does not show.
 | Overview | what is the state of the project | counts, attention, what agents can claim, recent activity |
 | Needs you | what waits on a human | tasks whose next action is the human's |
 | Path | what happens next, in order | claimable, in flight, blocked — with the reason |
+| Tasks | what tasks exist, in any state | every task file, searchable and sortable |
 | Backlog | what is not a task yet | smaller tasks and draft tasks |
 | Settings | how the tool behaves | the themes, the keys and the sorts |
 
@@ -142,6 +143,58 @@ Rules:
 This is master-plan's shape with our statuses: its lanes were *awaiting
 approval*, *blocked*, *grooming* and *review*, and it grouped the blocked
 items under their first dependency too.
+
+### Tasks
+
+The index: **every task file**, in every status from `draft` to `done` — the
+one place a finished task can be reached without knowing its id. Needs you
+and Path stay the views that act; Backlog stays the view that shapes. A draft
+is in both Backlog and Tasks, as itself. Decided 2026-11-22.
+
+**The row** is the Needs you row: the status icon on its slot, the id, the
+title. The right-hand column shows **the value of the sort key in force** —
+the created date when sorted by creation, the priority when sorted by
+priority — so the order explains itself and no fact is painted twice. Sorted
+by id, the column is the status. A subtask is a row like any other, flat,
+with its parent in the suffix: `↑ TSK03` (the link icon). Subtasks are never
+nested: nesting breaks under any sort but the id and under a filter.
+
+**The order.** `o` cycles the sort key — `id`, `created`, `updated`,
+`status` (lifecycle order: draft → done), `priority`, `effort` — and `O`
+reverses it. Ties break by id, so the order is stable. The default is `id`
+ascending. Sorted by a category (`status`, `priority`, `effort`), the rows sit
+under group headers in the Backlog's style, the count a badge: `DONE  5`; a
+sort by id or a date is flat. The Settings tab's sort group names the order in
+force on its Tasks row.
+
+**The filter** is one line of text, not a form. `/` opens it in the footer
+and every key narrows the rows as it is typed; `enter` keeps it and returns
+to the rows, `esc` clears it. The text is words and `key:value` tokens:
+
+| token | matches |
+|---|---|
+| a plain word | the id, the title or a tag, case-insensitive, as a substring |
+| `status:<s>` | the status, by name or prefix: `status:review`, `status:done` |
+| `priority:<p>` | `low` · `medium` · `high` (and the model's other values) |
+| `effort:<e>` | the effort: `S`, `M`, `L`… |
+| `kind:<k>` | the task kind |
+| `tag:<t>` | a tag, exactly |
+| `claimed:yes` / `claimed:no` | whether a claim is held |
+| `parent:<id>` | the subtasks of a task |
+
+Different keys combine with AND; the same key repeated combines with OR —
+`status:review status:remediating priority:high`. A token with an unknown key
+or value is named in the footer (`unknown key: colour`) and matches nothing,
+rather than being ignored silently.
+
+**A filtered list says so.** The footer reads `12 of 30 · 18 filtered out`
+while a filter is in force, and the filter text stays visible; the window's
+own announcement of rows scrolled out of view is unchanged and separate. A
+filter that matches nothing is a named empty state — `no task matches` and the
+filter — never a blank pane.
+
+The order and the filter live for the session: they are not saved between
+runs (persisting them is under *Not defined yet*).
 
 ### Backlog
 
