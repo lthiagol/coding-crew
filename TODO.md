@@ -56,16 +56,14 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-None groomed. Units 49–59 and the redesign's whole review closed on 2026-11-22 — the full code review's 35
-findings, the redesign (`docs/tui/redesign.md`), `hugo --skill` and hugo
-starting the orchestrator; their record is in `DONE.md`. Next candidates, for
-the human to pick or groom:
+Queued in `docs/plan.md`, in order. Units 49–63 are closed; their record is in
+`DONE.md`.
 
-- **hugo drives more of the loop** — the orchestrator is started from hugo;
-  the runtime record's writer (G2) is what would let hugo show the live crew
-  instead of the mock's.
-- **Light themes** — still deferred.
-- **Done tasks have no home** — see the open question under decisions.
+- 64 · The harness table, and a harness per role (M)
+- 65 · hugo picks harness, model and effort from lists (M)
+- 66 · The footer: centred, dotted, only what matters (M)
+- 67 · hugo has depth, and selection is soft (M)
+- 68 · The document in colour (L)
 
 ---
 
@@ -206,6 +204,42 @@ None blocking. Carried from the closed units.
   read can leave partial stdout; a non-JSON Herdr failure loses its message; a
   Herdr warning on stderr can break the merged JSON parse; the test's wall-clock
   windows can flake on a loaded CI runner.
+- **Backlog keeps its own announcement code** (2026-11-22, unit 60). Tasks and
+  Needs you share `crates/raul/src/announce.rs`; the Backlog still has a copy
+  with a dropped-header variant. Moving it onto `announce.rs` is the follow-up.
+- **The Tasks nerd glyph is unchecked** (2026-11-22, unit 60). The unicode set
+  draws the tab as `☑`, because `☰` measures two columns. The nerd glyph
+  (U+F0AE7) was not checked against a font; no nerd font is installed here.
+- **`priority:medium` is an alias for `normal`** (2026-11-22, unit 61). The
+  spec's table lists `low · medium · high`; the model has `urgent · high ·
+  normal · low`. The filter reads `medium` as `normal`. The human decides
+  whether the spec row changes or the alias goes.
+- **The filter's count gives way at 40 columns** (2026-11-22, unit 61). While
+  typing at 40 columns the count takes 27 columns, leaving about nine
+  characters of the typed text. Recommendation: leave it. A shorter count when
+  narrow would change the spec's wording.
+- **Filter choices to check** (2026-11-22, unit 61). Plain words are AND'd; the
+  spec is silent. `status:review` matches `code-review` by a hyphen-separated
+  word. `tag:` and `parent:` are exact and case-sensitive. `esc` clears a
+  filter before it quits. The footer has a `/ filter` chip the spec does not
+  list.
+- **The config guard has no test** (2026-11-22, unit 62). No current file shape
+  reaches the refusal that compares the written text with the config. It runs
+  before the write, so a mismatch leaves the file alone. The human says whether
+  it should run after.
+- **A resized list is written whole** (2026-11-22, unit 62). When `agents` or
+  `order` changes length, `save` rewrites the list, and comments inside it are
+  lost. A list of the same length keeps its comments.
+- **The key table's words are gone** (2026-11-22, unit 63). `keys.rs` no longer
+  holds `key` and `says`, since nothing read them. The footer and the help name
+  keys by hand. Making the help read the table is a larger change, not done.
+- **The Settings preview ignores a flag** (2026-11-22, unit 63). With
+  `--theme dark`, a pick of `nord` previews `dark` and says `(overridden by
+  --theme dark)`. The spec says a pick repaints the screen. The human decides
+  which. The switch is `Panel::theme` and `Panel::icons`.
+- **Quitting from Settings** (2026-11-22, unit 63). `q` and `esc` ask when there
+  are unsaved changes. `ctrl-c` quits at once, and `r` drops unsaved changes
+  without asking. Check both against `docs/tui/screens.md` § Settings.
 
 ## WHAT WAITS ON THE FLOW
 

@@ -1155,6 +1155,45 @@ header card is one item per field (the border title carries the status icon),
 and only the Overview's cards are padded — a list pane draws against its
 border, because its columns are spent on words.
 
+Unit closed: the Tasks tab (plan 60). Two build and review rounds. raul has
+six tabs, keys 1–6. Tasks lists every task file, drafts and done included,
+with the sort key's value on the right and subtasks flat with `↑ parent`; `o`
+and `O` cycle and reverse the six sort keys. Round one found that a category
+sort announced a hidden count without naming its groups, and that the suffix
+drew a link icon where the spec writes `↑`. Both are fixed. Ruling: the
+parent suffix gets a parent icon, and the spec is not changed. Commit
+`e36b62c`.
+
+Unit closed: the Tasks filter (plan 61). Three build and review rounds. `/`
+narrows the Tasks rows as it is typed: words, and `key:value` tokens with AND
+across keys and OR within one. An unknown token is named in the footer. Round
+one found the filter line dropped whole at 40 columns; round two found the
+error hidden by the count. The line is now cut from the left, and the error
+takes precedence over the count. Ruling: `priority:medium` reads as `normal`,
+the model's own word, and the spec row is left for the human to correct.
+Commit `b01891b`.
+
+Unit closed: one configuration, written without loss (plan 62). Three build
+and review rounds. `config.toml` is read and written through `toml_edit`, so
+comments, order and unknown keys survive a write. It holds a `[raul]` table
+beside the flow's sections, and raul reads it at startup with flag over env
+over file over default. Ruling, from review round one: a bad file does not
+stop raul. It starts on the defaults, names the file and the error, and
+leaves the file byte-identical, as hugo does. A save refuses when the file
+changed on disk. Round one found a save into an inline table silently
+dropped; round two found a refused save leaving its edits in memory. Both
+fixed. Commit `e4f4da7`.
+
+Unit closed: Settings is the file (plan 63). Three build and review rounds.
+The Settings tab draws `config.toml` as TOML and edits each value in it:
+choices cycle with ←→, text and numbers edit inline, and each is checked
+before it is kept. A change previews live; `w` saves, `u` undoes, `r`
+reloads, and quitting with unsaved changes asks. Round one found that a file
+without `[raul]` offered nothing to change and that a refused save from the
+quit question said nothing; both fixed. Ruling, from review round two:
+inline tables and dotted keys are shown as text, not stops, until a design
+call is made. It is recorded in TODO.md. Commit `26fcd50`.
+
 ---
 
 ## Lessons
