@@ -43,7 +43,7 @@ bytes cannot drift apart silently.
 | `src/markdown/mod.rs` | `53177c3e6b309cdca9c9af0e9ef511e7bb7581c29248a4c489fa76b63bfbcebb` | `crates/engine/src/markdown/mod.rs` | `66d0328d26037453ae6e6b4072c1be4697850e5810ea1881ce69ebd1d69b19bc` | 1, 4, 5, 6, 7, 9, 11, 18, 19, 20, 21, 22 |
 | `src/markdown/spans.rs` | `51f40f57a3fbea5638ee3d74b157122c7616b3c480721b7888e6fedd3e2e3be6` | `crates/engine/src/markdown/spans.rs` | `ef8844a9c341d9a5bc79d04e3129baa902d5b7daaaf95eeaecd746593ddd50a6` | 7, 11, 21, 24 |
 | `src/markdown/syntax.rs` | `b46409c050d4c9fc859be1acf958859958f000c77217cec453caff49b81e1403` | `crates/engine/src/markdown/syntax.rs` | `6c60870f950e420442734ce06fe612dcbd7813ba41a45443e3f85a11c72bfbf3` | 1, 6, 11, 12, 23 |
-| `src/markdown/table_layout.rs` | `05e2d328a05ae048f2d52c4f72eb365414e21fe621ac62e67f04f8b9f03703a7` | `crates/engine/src/markdown/table_layout.rs` | `7f29379ec9fd0d9e65177c720770e5814008ccebbbdfbd2f499a92d76ad28306` | 7, 11, 12, 15, 21, 24 |
+| `src/markdown/table_layout.rs` | `05e2d328a05ae048f2d52c4f72eb365414e21fe621ac62e67f04f8b9f03703a7` | `crates/engine/src/markdown/table_layout.rs` | `108c3621ecf055de7253310473c5cf6df9b93a583a877676584a1e0665801b9c` | 7, 11, 12, 15, 21, 24, 25 |
 | `src/markdown/tables.rs` | `b824647992b0bb665f516e95b8537594ceba3b6846f2d845d66695febfa66a10` | `crates/engine/src/markdown/tables.rs` | `9c2782f24a93aafc2f94ae555ae82e04dc00e907dc590f20f7906418699cd250` | 2, 3, 5, 7, 11, 15, 20, 21, 24 |
 | `src/markdown/toc.rs` | `68ae47f2387f7cb66ae50929d6554684a25312eb1a5323bbefdf5b82aadca0bd` | `crates/engine/src/markdown/toc.rs` | `9640a529ae05aff4ca96cdde1ff72772bceb7ca336294a81bf79722beec873e8` | 1, 4, 6, 9, 11 |
 | `src/markdown/width.rs` | `e577f4896abf16ec68a9c3a837ddd6e743e1f4da4e86c52b8fa9411b458a7ad2` | `crates/engine/src/markdown/width.rs` | `3becdd8c8c833d7deca5a027a9e29a585b7731109450af386737f32f0f0346bc` | 1, 6, 7, 11 |
@@ -343,3 +343,13 @@ ends with it, as any spaced word does. In a table cell the space is the label's
 leading text, so the column measures it. The cell wrap no longer glues a label
 to its marker: the `glue` flag is gone, and the label's first text is separated
 by its own `adj` flag alone.
+
+### 25. Table leftover is shared fairly when the minimums do not fit
+
+When the minimum widths exceed the available width, `fit_table_widths` starts
+each column at its fair share, `available / cols`, or at its minimum if that is
+smaller, and never below its floor (deviation 15). The leftover then goes in
+rounds, in proportion to natural width, up to each column's minimum. The
+allocation this replaces gave the leftover to the widest minimums first, which
+left a prose column at one or two cells. `table_layout.rs` carries this deviation; a forced update of
+it erases the deviation and the test that covers it in `markdown_tables.rs`.

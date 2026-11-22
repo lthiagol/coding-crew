@@ -317,3 +317,24 @@ fn table_borders_line_up_on_every_row_at_every_width() {
         }
     }
 }
+
+#[test]
+fn table_prose_column_keeps_words_whole_at_40_columns() {
+    let (ss, theme) = test_assets();
+    let md = "| `field_name_long` | `role_name_long` | paints |\n|---|---|---|\n| `kind` | `title` | the first-level heading |\n| `a` | `b` | the second line of text here |\n";
+    let (lines, _, _, _) =
+        parse_markdown_with_width(md, &ss, &theme, 40, &test_md_theme(), false, true).into();
+    let rendered = rendered_non_empty_lines(&lines);
+
+    assert!(rendered.iter().all(|line| display_width(line) <= 40));
+    let words: Vec<&str> = rendered
+        .iter()
+        .flat_map(|line| line.split_whitespace())
+        .collect();
+    for word in ["heading", "second", "line", "text", "here"] {
+        assert!(
+            words.contains(&word),
+            "{word} breaks inside itself: {rendered:?}"
+        );
+    }
+}

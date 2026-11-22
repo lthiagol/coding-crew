@@ -69,17 +69,32 @@ pub(super) fn fit_table_widths(
     let min_total: usize = min_widths.iter().sum();
 
     if min_total >= available {
-        let mut widths = floor_widths.to_vec();
+        let natural = col_widths.to_vec();
+        // Every column starts at its fair share, or at its minimum if that is
+        // smaller, and never below its floor.
+        let fair = available / col_count;
+        let mut widths: Vec<usize> = floor_widths
+            .iter()
+            .zip(min_widths)
+            .map(|(&floor, &min)| floor.max(fair.min(min)))
+            .collect();
         let mut remaining = available.saturating_sub(widths.iter().sum());
-        let mut order: Vec<usize> = (0..col_count).collect();
-        order.sort_by_key(|&idx| std::cmp::Reverse(min_widths[idx]));
-        for idx in order {
-            if remaining == 0 {
+        // The rest is shared in rounds, in proportion to natural width, up to
+        // each column's minimum; a column at its minimum drops out.
+        while remaining > 0 {
+            let open: Vec<usize> = (0..col_count)
+                .filter(|&idx| widths[idx] < min_widths[idx])
+                .collect();
+            if open.is_empty() {
                 break;
             }
-            let extra = min_widths[idx].saturating_sub(widths[idx]).min(remaining);
-            widths[idx] += extra;
-            remaining -= extra;
+            let weight: usize = open.iter().map(|&idx| natural[idx]).sum();
+            for idx in open {
+                let share = (remaining * natural[idx] / weight).max(1);
+                let extra = share.min(min_widths[idx] - widths[idx]).min(remaining);
+                widths[idx] += extra;
+                remaining -= extra;
+            }
         }
         col_widths.copy_from_slice(&widths);
         return;
