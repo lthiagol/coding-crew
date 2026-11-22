@@ -10,8 +10,8 @@
 
 use anyhow::Result;
 
-use coding_crew_core::Config;
 use coding_crew_core::harness;
+use coding_crew_core::{Config, FlowRole};
 
 use crate::config::{ConfigRead, ConfigState};
 
@@ -19,7 +19,7 @@ use crate::config::{ConfigRead, ConfigState};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkillName {
     Orchestrator,
-    Runner,
+    Builder,
     Reviewer,
 }
 
@@ -27,7 +27,7 @@ impl SkillName {
     /// Every role, in the order the list prints them.
     pub const ALL: [SkillName; 3] = [
         SkillName::Orchestrator,
-        SkillName::Runner,
+        SkillName::Builder,
         SkillName::Reviewer,
     ];
 
@@ -35,7 +35,7 @@ impl SkillName {
     pub fn name(self) -> &'static str {
         match self {
             SkillName::Orchestrator => "orchestrator",
-            SkillName::Runner => "runner",
+            SkillName::Builder => "builder",
             SkillName::Reviewer => "reviewer",
         }
     }
@@ -44,7 +44,7 @@ impl SkillName {
     fn describe(self) -> &'static str {
         match self {
             SkillName::Orchestrator => "runs the build, review and fix loop",
-            SkillName::Runner => "builds one job, and fixes what a review found",
+            SkillName::Builder => "builds one job, and fixes what a review found",
             SkillName::Reviewer => "reviews the change and reports its actionable defects",
         }
     }
@@ -53,7 +53,7 @@ impl SkillName {
     fn text(self) -> &'static str {
         match self {
             SkillName::Orchestrator => include_str!("../skills/orchestrator.md"),
-            SkillName::Runner => include_str!("../skills/runner.md"),
+            SkillName::Builder => include_str!("../skills/builder.md"),
             SkillName::Reviewer => include_str!("../skills/reviewer.md"),
         }
     }
@@ -113,7 +113,9 @@ pub fn for_role(role: SkillName, read: ConfigRead) -> String {
 }
 
 /// The crew section: each agent's role, its harness, model and effort, the
-/// arguments and environment that start it, and the review-round limit.
+/// arguments and environment that start it, and the review-round limit. A role
+/// the crew leaves out is named `none`, and who does its work: the orchestrator
+/// builds or reviews in its own context, so the skill never starts it.
 ///
 /// The environment is part of the start: a harness that reads its model from
 /// it is started with the variable set, so it is named beside the arguments.
@@ -127,15 +129,15 @@ fn crew(config: &Config, note: Option<&str>) -> String {
     for agent in &config.agents {
         let effort = agent.effort.as_deref().unwrap_or("default");
         out.push_str(&format!(
-            "- {} ({}): harness {}, model {}, effort {effort}\n",
-            agent.name,
+            "- {}: harness {}, model {}, effort {effort}\n",
             agent.role.as_str(),
             agent.harness,
             agent.model
         ));
         match harness::find(&agent.harness) {
             Some(known) => {
-                let start = known.invocation(&agent.name, &agent.model, agent.effort.as_deref());
+                let start =
+                    known.invocation(agent.role.as_str(), &agent.model, agent.effort.as_deref());
                 out.push_str(&format!("  start kind: {}\n", known.kind));
                 out.push_str(&format!("  start args: {}\n", start.args.join(" ")));
                 for (key, value) in &start.env {
@@ -143,6 +145,17 @@ fn crew(config: &Config, note: Option<&str>) -> String {
                 }
             }
             None => out.push_str("  start: the harness is not in the table\n"),
+        }
+    }
+    for (role, work) in [
+        (FlowRole::Builder, "builds"),
+        (FlowRole::Reviewer, "reviews"),
+    ] {
+        if !config.agents.iter().any(|agent| agent.role == role) {
+            out.push_str(&format!(
+                "- {}: none; the orchestrator {work} it\n",
+                role.as_str()
+            ));
         }
     }
     out.push('\n');
@@ -157,7 +170,7 @@ mod tests {
     #[test]
     fn the_list_names_the_three_roles_with_a_line_each() {
         let text = list();
-        for role in ["orchestrator", "runner", "reviewer"] {
+        for role in ["orchestrator", "builder", "reviewer"] {
             let line = text
                 .lines()
                 .find(|line| line.starts_with(role))
@@ -171,8 +184,8 @@ mod tests {
         for role in SkillName::ALL {
             assert_eq!(role_of(role.name()).expect("a role"), role);
         }
-        let error = role_of("builder").expect_err("builder is an agent's name, not a role");
-        for role in ["orchestrator", "runner", "reviewer"] {
+        let error = role_of("runner").expect_err("runner is the task model's word, not a skill");
+        for role in ["orchestrator", "builder", "reviewer"] {
             assert!(error.to_string().contains(role), "{error}");
         }
     }
@@ -191,15 +204,11 @@ mod tests {
     fn the_crew_names_each_agent_with_its_harness_model_effort_and_start_args() {
         let text = crew(&Config::default(), None);
         assert!(
-            text.contains(
-                "- builder (runner): harness claude, model claude-haiku-5-5, effort high\n"
-            ),
+            text.contains("- builder: harness claude, model claude-haiku-5-5, effort high\n"),
             "{text}"
         );
         assert!(
-            text.contains(
-                "- reviewer (reviewer): harness claude, model claude-opus-5-5, effort medium\n"
-            ),
+            text.contains("- reviewer: harness claude, model claude-opus-5-5, effort medium\n"),
             "{text}"
         );
         assert!(
@@ -214,9 +223,9 @@ mod tests {
     #[test]
     fn a_harness_that_reads_its_model_names_the_environment_it_starts_with() {
         let mut config = Config::default();
-        config.agents[1].harness = "opencode".to_string();
-        config.agents[1].model = "opencode-go/glm-5.3".to_string();
-        config.agents[1].effort = Some("high".to_string());
+        config.agents[2].harness = "opencode".to_string();
+        config.agents[2].model = "opencode-go/glm-5.3".to_string();
+        config.agents[2].effort = Some("high".to_string());
         let text = crew(&config, None);
         assert!(
             text.contains("  start args: --standalone --auto\n"),
@@ -233,7 +242,7 @@ mod tests {
     #[test]
     fn an_agent_with_no_effort_names_the_default() {
         let mut config = Config::default();
-        config.agents[0].effort = None;
+        config.agents[1].effort = None;
         let text = crew(&config, None);
         assert!(text.contains("effort default\n"), "{text}");
         assert!(
@@ -248,12 +257,12 @@ mod tests {
             file: "config.toml".to_string(),
             error: "syntax error".to_string(),
         }));
-        let text = for_role(SkillName::Runner, read);
+        let text = for_role(SkillName::Builder, read);
         assert!(
             text.contains("config.toml is unreadable: the defaults are in force.\n"),
             "{text}"
         );
-        assert!(text.contains("- builder (runner): "), "{text}");
+        assert!(text.contains("- builder: "), "{text}");
     }
 
     #[test]
@@ -262,7 +271,49 @@ mod tests {
         config.agents.clear();
         config.round_limit = 1;
         let text = crew(&config, None);
-        assert!(!text.contains("- "), "{text}");
+        assert!(!text.contains("harness"), "{text}");
         assert!(text.contains("Review-round limit: 1."), "{text}");
+    }
+
+    #[test]
+    fn a_crew_without_a_reviewer_starts_no_reviewer() {
+        let mut config = Config::default();
+        config
+            .agents
+            .retain(|agent| agent.role != FlowRole::Reviewer);
+        let text = for_role(
+            SkillName::Orchestrator,
+            ConfigRead::of(ConfigState::Config(config)),
+        );
+        assert!(
+            text.contains("- reviewer: none; the orchestrator reviews it\n"),
+            "{text}"
+        );
+        assert!(!text.contains("- reviewer: harness"), "{text}");
+        // The orchestrator and the builder are started; nothing else is.
+        assert_eq!(text.matches("  start args: ").count(), 2, "{text}");
+    }
+
+    #[test]
+    fn a_crew_of_one_starts_no_agent_but_the_orchestrator() {
+        let mut config = Config::default();
+        config
+            .agents
+            .retain(|agent| agent.role == FlowRole::Orchestrator);
+        let text = for_role(
+            SkillName::Orchestrator,
+            ConfigRead::of(ConfigState::Config(config)),
+        );
+        assert!(
+            text.contains("- builder: none; the orchestrator builds it\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("- reviewer: none; the orchestrator reviews it\n"),
+            "{text}"
+        );
+        assert!(!text.contains("- builder: harness"), "{text}");
+        assert!(!text.contains("- reviewer: harness"), "{text}");
+        assert_eq!(text.matches("  start args: ").count(), 1, "{text}");
     }
 }

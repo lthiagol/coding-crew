@@ -15,7 +15,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::actor::Role;
+use crate::actor::FlowRole;
 use crate::lifecycle::Status;
 use crate::task::RoundKind;
 
@@ -76,7 +76,7 @@ impl Runtime {
 /// One agent of the flow.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrewMember {
-    pub role: Role,
+    pub role: FlowRole,
     /// The model it runs, as its configuration names it.
     pub model: String,
     /// The task it holds, when it holds one.
@@ -159,14 +159,14 @@ pub struct Stamp {
 
 /// How the crew's size composes into who reviews.
 ///
-/// The size is a composition, not a number: three agents are one per role
-/// and the reviewer reviews; two are an orchestrator and a worker, and the
-/// orchestrator reviews; one is a worker, and the human reviews — an agent
-/// cannot review itself. A crew with more than one agent in a role has no
-/// rule for who reviews, and is named as what it is.
+/// The size is a composition, not a number: the crew is the roles present.
+/// Three agents are one per role and the reviewer reviews; an orchestrator and
+/// a builder, or the orchestrator alone, and the orchestrator reviews. A crew
+/// with more than one agent in a role has no rule for who reviews, and is
+/// named as what it is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Composition {
-    /// Exactly one runner, one reviewer and one orchestrator.
+    /// Exactly one builder, one reviewer and one orchestrator.
     OnePerRole,
     /// A reviewer is in the crew, no role is doubled, and the three roles
     /// are not all there.
@@ -174,6 +174,8 @@ pub enum Composition {
     /// No reviewer and no doubled role: the orchestrator reviews.
     OrchestratorReviews,
     /// No reviewer, no orchestrator and no doubled role: the human reviews.
+    /// The configuration cannot produce this crew, since the orchestrator is
+    /// always present; a runtime record with no orchestrator is named so.
     HumanReviews,
     /// A role is filled more than once: no rule says who reviews.
     MoreThanOnePerRole,
@@ -202,13 +204,13 @@ impl Composition {
 /// role. A crew with more than one agent in a role is not one per role, and
 /// has no rule: it is named as what it is.
 pub fn composition(crew: &[CrewMember]) -> Composition {
-    let count = |role: Role| crew.iter().filter(|member| member.role == role).count();
-    let orchestrators = count(Role::Orchestrator);
-    let runners = count(Role::Runner);
-    let reviewers = count(Role::Reviewer);
-    if orchestrators == 1 && runners == 1 && reviewers == 1 {
+    let count = |role: FlowRole| crew.iter().filter(|member| member.role == role).count();
+    let orchestrators = count(FlowRole::Orchestrator);
+    let builders = count(FlowRole::Builder);
+    let reviewers = count(FlowRole::Reviewer);
+    if orchestrators == 1 && builders == 1 && reviewers == 1 {
         Composition::OnePerRole
-    } else if orchestrators > 1 || runners > 1 || reviewers > 1 {
+    } else if orchestrators > 1 || builders > 1 || reviewers > 1 {
         Composition::MoreThanOnePerRole
     } else if reviewers == 1 {
         Composition::ReviewerReviews
@@ -231,7 +233,7 @@ pub enum RuntimeError {
 mod tests {
     use super::*;
 
-    fn member(role: Role, holds: Option<&str>, state: AgentState) -> CrewMember {
+    fn member(role: FlowRole, holds: Option<&str>, state: AgentState) -> CrewMember {
         CrewMember {
             role,
             model: "opencode-go/model#high".to_string(),
@@ -274,7 +276,7 @@ mod tests {
         }"#;
         let runtime: Runtime = serde_json::from_str(text).expect("a runtime record");
         assert_eq!(runtime.crew.len(), 2);
-        assert_eq!(runtime.crew[0].role, Role::Orchestrator);
+        assert_eq!(runtime.crew[0].role, FlowRole::Orchestrator);
         assert_eq!(runtime.crew[0].holds, None);
         assert_eq!(runtime.crew[1].state, AgentState::Executing);
         assert_eq!(runtime.queue[0].status, Status::Approved);
@@ -311,7 +313,11 @@ mod tests {
         // A held task belongs to the crew, not the queue, even when a writer
         // left it in both: the pane paints it once.
         let runtime = record(
-            vec![member(Role::Runner, Some("TSK10"), AgentState::Executing)],
+            vec![member(
+                FlowRole::Builder,
+                Some("TSK10"),
+                AgentState::Executing,
+            )],
             vec![
                 QueueItem {
                     id: "TSK10".to_string(),
@@ -334,9 +340,9 @@ mod tests {
     #[test]
     fn three_agents_are_one_per_role_and_the_reviewer_reviews() {
         let crew = vec![
-            member(Role::Orchestrator, None, AgentState::Idle),
-            member(Role::Runner, Some("TSK10"), AgentState::Executing),
-            member(Role::Reviewer, Some("TSK13"), AgentState::Reviewing),
+            member(FlowRole::Orchestrator, None, AgentState::Idle),
+            member(FlowRole::Builder, Some("TSK10"), AgentState::Executing),
+            member(FlowRole::Reviewer, Some("TSK13"), AgentState::Reviewing),
         ];
         assert_eq!(composition(&crew), Composition::OnePerRole);
         let says = Composition::OnePerRole.says();
@@ -347,8 +353,8 @@ mod tests {
     #[test]
     fn two_agents_mean_the_orchestrator_reviews() {
         let crew = vec![
-            member(Role::Orchestrator, None, AgentState::Idle),
-            member(Role::Runner, Some("TSK10"), AgentState::Executing),
+            member(FlowRole::Orchestrator, None, AgentState::Idle),
+            member(FlowRole::Builder, Some("TSK10"), AgentState::Executing),
         ];
         assert_eq!(composition(&crew), Composition::OrchestratorReviews);
         assert_eq!(
@@ -359,7 +365,11 @@ mod tests {
 
     #[test]
     fn one_agent_means_the_human_reviews() {
-        let crew = vec![member(Role::Runner, Some("TSK10"), AgentState::Executing)];
+        let crew = vec![member(
+            FlowRole::Builder,
+            Some("TSK10"),
+            AgentState::Executing,
+        )];
         assert_eq!(composition(&crew), Composition::HumanReviews);
         assert_eq!(Composition::HumanReviews.says(), "the human reviews");
     }
@@ -367,8 +377,8 @@ mod tests {
     #[test]
     fn a_reviewer_reviews_without_the_three_roles() {
         let crew = vec![
-            member(Role::Runner, Some("TSK10"), AgentState::Executing),
-            member(Role::Reviewer, Some("TSK13"), AgentState::Reviewing),
+            member(FlowRole::Builder, Some("TSK10"), AgentState::Executing),
+            member(FlowRole::Reviewer, Some("TSK13"), AgentState::Reviewing),
         ];
         assert_eq!(composition(&crew), Composition::ReviewerReviews);
         assert_eq!(Composition::ReviewerReviews.says(), "the reviewer reviews");
@@ -380,15 +390,15 @@ mod tests {
         // duplicated role: no rule says who reviews them.
         for crew in [
             vec![
-                member(Role::Orchestrator, None, AgentState::Idle),
-                member(Role::Runner, Some("TSK10"), AgentState::Executing),
-                member(Role::Runner, Some("TSK11"), AgentState::Executing),
-                member(Role::Reviewer, Some("TSK13"), AgentState::Reviewing),
+                member(FlowRole::Orchestrator, None, AgentState::Idle),
+                member(FlowRole::Builder, Some("TSK10"), AgentState::Executing),
+                member(FlowRole::Builder, Some("TSK11"), AgentState::Executing),
+                member(FlowRole::Reviewer, Some("TSK13"), AgentState::Reviewing),
             ],
             vec![
-                member(Role::Runner, Some("TSK10"), AgentState::Executing),
-                member(Role::Runner, Some("TSK11"), AgentState::Executing),
-                member(Role::Reviewer, Some("TSK13"), AgentState::Reviewing),
+                member(FlowRole::Builder, Some("TSK10"), AgentState::Executing),
+                member(FlowRole::Builder, Some("TSK11"), AgentState::Executing),
+                member(FlowRole::Reviewer, Some("TSK13"), AgentState::Reviewing),
             ],
         ] {
             assert_eq!(composition(&crew), Composition::MoreThanOnePerRole);

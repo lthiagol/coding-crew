@@ -30,7 +30,7 @@ use coding_crew_core::{Store, StoreError};
 use coding_crew_theme::{IconSet, Preset, Theme};
 use skill::SkillRequest;
 
-const USAGE: &str = "usage: hugo [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N]] [--skill [orchestrator|runner|reviewer]]";
+const USAGE: &str = "usage: hugo [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N]] [--skill [orchestrator|builder|reviewer]]";
 /// The columns of a plain render when --width is not given.
 const DEFAULT_WIDTH: u16 = 100;
 /// The rows of a plain render when --height is not given.
@@ -407,7 +407,7 @@ fn config_home() -> Option<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use coding_crew_core::Role;
+    use coding_crew_core::FlowRole;
     use coding_crew_core::runtime::{AgentState, CrewMember};
 
     #[test]
@@ -636,7 +636,7 @@ mod tests {
     #[test]
     fn only_a_working_agent_turns_the_spinner() {
         let member = |state| CrewMember {
-            role: Role::Runner,
+            role: FlowRole::Builder,
             model: "m".to_string(),
             holds: None,
             since: None,

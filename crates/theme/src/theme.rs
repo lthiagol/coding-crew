@@ -5,7 +5,7 @@
 //! a phase names a slot, never a colour.
 
 use crate::text::text_width;
-use coding_crew_core::{Reason, Role, Status};
+use coding_crew_core::{FlowRole, Reason, Status};
 use coding_crew_engine::MarkdownTheme;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -825,17 +825,17 @@ pub fn reason_style(theme: &Theme, reason: Reason) -> Style {
 ///
 /// The creator grooms with a human, so it takes the human lane's slot, the
 /// way its icon is the human's.
-pub fn role_slot(role: Role) -> Slot {
+pub fn role_slot(role: FlowRole) -> Slot {
     match role {
-        Role::Orchestrator => Slot::RoleOrchestrator,
-        Role::Runner => Slot::RoleRunner,
-        Role::Reviewer => Slot::RoleReviewer,
-        Role::Creator => Slot::SemanticHuman,
+        FlowRole::Orchestrator => Slot::RoleOrchestrator,
+        FlowRole::Builder => Slot::RoleRunner,
+        FlowRole::Reviewer => Slot::RoleReviewer,
+        FlowRole::Creator => Slot::SemanticHuman,
     }
 }
 
 /// The style of a role in a theme.
-pub fn role_style(theme: &Theme, role: Role) -> Style {
+pub fn role_style(theme: &Theme, role: FlowRole) -> Style {
     theme.slot(role_slot(role))
 }
 

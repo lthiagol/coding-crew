@@ -15,25 +15,25 @@
 │ # The build-and-fix cycles a task ge…│
 │▌round_limit = 5                      │
 │                                      │
-│ # One entry per agent of the automat…│
-│ # gives it, the role it fills, the h…│
-│ # and the effort. The harnesses are …│
-│ [[agents]]                           │
-│ name = "builder"                     │
-│ role = "runner"                      │
+│ # The crew: one table per role. The …│
+│ # a builder and a reviewer are optio…│
+│ # orchestrator reviews, and with no …│
+│ # names the harness it runs in, the …│
+│ # harnesses are claude, opencode and…│
+│ [agents.orchestrator]                │
+│ harness = "claude"                   │
+│ model = "claude-opus-5-5"            │
+│ effort = "medium"                    │
+│                                      │
+│ [agents.builder]                     │
 │ harness = "claude"                   │
 │ model = "claude-haiku-5-5"           │
 │ effort = "high"                      │
 │                                      │
-│ [[agents]]                           │
-│ name = "reviewer"                    │
-│ role = "reviewer"                    │
+│ [agents.reviewer]                    │
 │ harness = "claude"                   │
 │ model = "claude-opus-5-5"            │
-│ effort = "medium"                    │
-│ not shown: agents (5 hidden)         │
-│ order (18 hidden), raul (2 hidden)   │
-│ raul.tasks (2 hidden)                │
+│ agents 1,order 18,raul 2,raul.tasks 2│
 ╰──────────────────────────────────────╯
 ────────────────────────────────────────
        w save · u undo · r reload

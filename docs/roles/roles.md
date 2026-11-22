@@ -91,6 +91,10 @@ Full gate conditions are in
 
 ## The order
 
+The flow names the code-writing role **builder**. The task model calls the same
+role `runner` in task files, and a configuration or runtime record that still
+says `runner` is read as the builder.
+
 The flow's order, step by step, as the configuration defaults to it: the steps
 the sequence diagram shows, and the gate each one passes — a transition of
 *Where roles act*.
@@ -98,15 +102,15 @@ the sequence diagram shows, and the gate each one passes — a transition of
 | # | step | role | gate |
 |---|---|---|---|
 | 1 | `groom` | `creator` | `groomed → approved` |
-| 2 | `build` | `runner` | `approved → executing` |
-| 3 | `self-review` | `runner` | `executing → code-review` |
+| 2 | `build` | `builder` | `approved → executing` |
+| 3 | `self-review` | `builder` | `executing → code-review` |
 | 4 | `review` | `reviewer` | `code-review → done`, `code-review → remediating`, `code-review → needs-human` |
-| 5 | `remediate` | `runner` | `remediating → code-review` |
+| 5 | `remediate` | `builder` | `remediating → code-review` |
 | 6 | `re-review` | `reviewer` | `code-review → done` |
 
 A review that escalates leaves the order at `needs-human`: a human decides, and
 the task returns to `executing`, which is the creator's gate. The creator is the
-human's grooming session, so the agents a configuration names are the runner,
+human's grooming session, so the agents a configuration names are the builder,
 the reviewer and the orchestrator.
 
 `crates/core`'s default configuration is this table, and a test reads it from

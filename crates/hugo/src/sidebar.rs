@@ -15,7 +15,7 @@
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
-use coding_crew_core::Role;
+use coding_crew_core::FlowRole;
 use coding_crew_core::config::Config;
 use coding_crew_theme::text::{cut_to, text_width};
 use coding_crew_theme::{Icon, IconSet, Theme, role_style, selected_line};
@@ -262,13 +262,15 @@ fn groups(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<
 fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<Row> {
     let mut rows = Vec::new();
     for (index, agent) in config.agents.iter().enumerate() {
-        // A name that is its role is not said twice. The role's word stays
-        // beside its icon: an icon decorates a word, it never replaces one.
-        let head = format!("{} {}", role_icon(agent.role).glyph(icons), agent.name);
-        let mut spans = vec![(head, role_style(theme, agent.role))];
-        if agent.name != agent.role.as_str() {
-            spans.push((format!(" · {}", agent.role.as_str()), theme.text.dim));
-        }
+        // The agent is named by its role: its table is the role's name. The
+        // role's word stays beside its icon: an icon decorates a word, it never
+        // replaces one.
+        let head = format!(
+            "{} {}",
+            role_icon(agent.role).glyph(icons),
+            agent.role.as_str()
+        );
+        let spans = vec![(head, role_style(theme, agent.role))];
         rows.push(Row {
             spans,
             selected: false,
@@ -302,12 +304,12 @@ fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> 
 
 /// The icon of a role. A creator grooms with a human, so it takes the
 /// human's icon: the table has no creator of its own.
-pub fn role_icon(role: Role) -> Icon {
+pub fn role_icon(role: FlowRole) -> Icon {
     match role {
-        Role::Creator => Icon::RoleHuman,
-        Role::Runner => Icon::RoleRunner,
-        Role::Reviewer => Icon::RoleReviewer,
-        Role::Orchestrator => Icon::RoleOrchestrator,
+        FlowRole::Creator => Icon::RoleHuman,
+        FlowRole::Builder => Icon::RoleRunner,
+        FlowRole::Reviewer => Icon::RoleReviewer,
+        FlowRole::Orchestrator => Icon::RoleOrchestrator,
     }
 }
 
@@ -579,7 +581,7 @@ mod tests {
                 .position(|row| row.ends_with(needle))
                 .unwrap_or_else(|| panic!("{needle} is not on the sidebar: {rows:#?}"))
         };
-        let head = at("builder · runner");
+        let head = at("builder");
         assert_eq!(rows[head + 1], "  harness claude", "{rows:#?}");
         assert_eq!(rows[head + 2], "  model   claude-haiku-5-5", "{rows:#?}");
         assert_eq!(rows[head + 3], "  effort  high", "{rows:#?}");
@@ -599,7 +601,7 @@ mod tests {
     #[test]
     fn an_agent_with_no_effort_says_pick_an_effort_on_the_warning_slot() {
         let mut config = Config::default();
-        config.agents[0].effort = None;
+        config.agents[1].effort = None;
         let state = ConfigRead::of(ConfigState::Config(config));
         let drawn = lines(&state, None, &theme(), IconSet::Nerd, 30, 40, usize::MAX);
         let row = drawn
@@ -640,10 +642,10 @@ mod tests {
         let text = rows.join("\n");
         for (number, step, role) in [
             (1, "groom", "creator"),
-            (2, "build", "runner"),
-            (3, "self-review", "runner"),
+            (2, "build", "builder"),
+            (3, "self-review", "builder"),
             (4, "review", "reviewer"),
-            (5, "remediate", "runner"),
+            (5, "remediate", "builder"),
             (6, "re-review", "reviewer"),
         ] {
             let head = format!("{number} {step} · {role}");
@@ -776,7 +778,7 @@ mod tests {
             "syntax error",
             USING_DEFAULTS,
             AGENTS_TITLE,
-            "builder · runner",
+            "builder",
             "harness claude",
             LIMIT_TITLE,
             "5 build-and-fix rounds",
@@ -988,7 +990,7 @@ mod tests {
     #[test]
     fn a_model_that_is_empty_says_pick_a_model_on_the_warning_slot() {
         let mut config = Config::default();
-        config.agents[0].model.clear();
+        config.agents[1].model.clear();
         let state = ConfigRead::of(ConfigState::Config(config));
         let drawn = lines(&state, None, &theme(), IconSet::Nerd, 30, 40, usize::MAX);
         let row = drawn
@@ -1058,15 +1060,13 @@ mod tests {
         let config = Config {
             agents: vec![
                 Agent {
-                    name: "builder".to_string(),
-                    role: coding_crew_core::Role::Runner,
+                    role: coding_crew_core::FlowRole::Builder,
                     harness: "cursor-agent".to_string(),
                     model: "auto".to_string(),
                     effort: Some("low".to_string()),
                 },
                 Agent {
-                    name: "reviewer".to_string(),
-                    role: coding_crew_core::Role::Reviewer,
+                    role: coding_crew_core::FlowRole::Reviewer,
                     harness: "cursor-agent".to_string(),
                     model: "auto".to_string(),
                     effort: None,
@@ -1075,7 +1075,7 @@ mod tests {
             round_limit: 2,
             order: vec![OrderStep {
                 step: "plan".to_string(),
-                role: coding_crew_core::Role::Creator,
+                role: coding_crew_core::FlowRole::Creator,
                 gates: vec![coding_crew_core::Gate {
                     from: coding_crew_core::Status::Draft,
                     to: coding_crew_core::Status::Groomed,

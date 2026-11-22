@@ -1698,7 +1698,7 @@ mod tests {
         let work = mock_work();
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.settings = settings_panel("enter");
-        app.selection = Some("agents.0.model".to_string());
+        app.selection = Some("agents.builder.model".to_string());
         app.on_key(key(KeyCode::Enter), &work, now());
         assert!(app.settings.editing(), "enter did not start the edit");
         assert!(app.detail.is_none(), "enter opened a record on Settings");
@@ -1706,7 +1706,7 @@ mod tests {
         assert!(!app.settings.editing(), "esc did not drop the edit");
         // The rows still move: the tab scrolls like the other lists.
         app.on_key(key(KeyCode::Down), &work, now());
-        assert_ne!(app.selection.as_deref(), Some("agents.0.model"));
+        assert_ne!(app.selection.as_deref(), Some("agents.builder.model"));
     }
 
     #[test]
@@ -2092,7 +2092,7 @@ mod tests {
                     app.settings = settings_panel(&format!("every-{scope:?}"));
                     app.selection = Some(
                         if binding.act == Act::Begin {
-                            "agents.0.model"
+                            "agents.builder.model"
                         } else {
                             "raul.theme"
                         }
@@ -2100,7 +2100,7 @@ mod tests {
                     );
                     match scope {
                         Scope::Picking => app.settings.begin("raul.theme"),
-                        Scope::Value => app.settings.begin("agents.0.model"),
+                        Scope::Value => app.settings.begin("agents.builder.model"),
                         Scope::Asking => {
                             theme_changed(&mut app);
                             app.settings.ask();
@@ -3583,7 +3583,7 @@ mod tests {
         // An unsaved change for w and u to act on, and a reload for r.
         theme_changed(&mut app);
         app.apply_look();
-        app.selection = Some("agents.0.model".to_string());
+        app.selection = Some("agents.builder.model".to_string());
         app.on_key(key(KeyCode::Enter), &work, now());
         assert!(app.settings.editing(), "enter did not start the edit");
         for code in [

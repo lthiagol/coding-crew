@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use coding_crew_core::config::{Config, Gate};
 use coding_crew_core::harness::{self, Models};
-use coding_crew_core::{Role, Status};
+use coding_crew_core::{FlowRole, Status};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -22,7 +22,7 @@ fn status_of(word: &str) -> Status {
 }
 
 /// A role the doc names, by its stored word.
-fn role_of(word: &str) -> Role {
+fn role_of(word: &str) -> FlowRole {
     serde_json::from_str(&format!("\"{word}\""))
         .unwrap_or_else(|_| panic!("the doc names an unknown role: {word}"))
 }
@@ -33,7 +33,7 @@ fn decks(word: &str) -> String {
 
 /// The order table of `docs/roles/roles.md`: the numbered rows, in the order
 /// they are read.
-fn doc_order() -> Vec<(u32, String, Role, Vec<Gate>)> {
+fn doc_order() -> Vec<(u32, String, FlowRole, Vec<Gate>)> {
     let doc = include_str!("../../../docs/roles/roles.md");
     let mut rows = Vec::new();
     for line in doc.lines() {
@@ -102,7 +102,7 @@ fn the_default_models_are_the_ones_the_flows_role_configs_name() {
         let agent = config
             .agents
             .iter()
-            .find(|agent| agent.name == agent_name)
+            .find(|agent| agent.role.as_str() == agent_name)
             .unwrap_or_else(|| panic!("the defaults name no {agent_name}"));
         assert_eq!(
             agent.model, model,
@@ -133,7 +133,7 @@ fn the_model_doc_shows_the_configurations_toml_shape() {
         "config.toml",
         "config.json",
         "TOML",
-        "[[agents]]",
+        "[agents.builder]",
         "harness = ",
         "[[order]]",
         "provisional",
@@ -151,7 +151,11 @@ fn a_role_runs_the_same_model_in_the_configuration_and_in_the_crew() {
         coding_crew_core::Runtime::read(&repo_root().join("mock-data/coding-crew/runtime.json"))
             .expect("the mock's runtime record");
     let config = Config::default();
-    for role in [Role::Runner, Role::Reviewer, Role::Orchestrator] {
+    for role in [
+        FlowRole::Builder,
+        FlowRole::Reviewer,
+        FlowRole::Orchestrator,
+    ] {
         let configured = config
             .agents
             .iter()
@@ -174,20 +178,25 @@ fn every_agent_runs_a_model_its_harness_lists_at_an_effort_it_takes() {
     // The harness table is the only list of harnesses, and a model is one the
     // harness lists: a configuration that names neither cannot start.
     for agent in Config::default().agents {
-        let harness = harness::find(&agent.harness)
-            .unwrap_or_else(|| panic!("{} runs in no harness: {}", agent.name, agent.harness));
+        let harness = harness::find(&agent.harness).unwrap_or_else(|| {
+            panic!(
+                "{} runs in no harness: {}",
+                agent.role.as_str(),
+                agent.harness
+            )
+        });
         if let Models::Curated(models) = harness.models {
             assert!(
                 models.contains(&agent.model.as_str()),
                 "{} runs {} on a model it does not list: {}",
-                agent.name,
+                agent.role.as_str(),
                 harness.name,
                 agent.model
             );
         }
         let effort = agent
             .effort
-            .unwrap_or_else(|| panic!("{} names no effort", agent.name));
-        assert!(harness.takes(&effort), "{}: {effort}", agent.name);
+            .unwrap_or_else(|| panic!("{} names no effort", agent.role.as_str()));
+        assert!(harness.takes(&effort), "{}: {effort}", agent.role.as_str());
     }
 }

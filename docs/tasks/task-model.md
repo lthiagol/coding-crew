@@ -588,17 +588,20 @@ A crew entry:
 
 | field | rule |
 |---|---|
-| `role` | `orchestrator`, `runner` or `reviewer` |
+| `role` | `orchestrator`, `builder` or `reviewer`; `runner` reads as `builder` |
 | `model` | the model the agent runs |
 | `holds` | the task it holds, or none |
 | `since` | when it took it, RFC 3339 |
 | `state` | `idle`, `executing` or `reviewing` |
 
-The crew's size is a **composition**, not a number: three agents are one per
-role and the reviewer reviews; two are an orchestrator and a worker, so the
-orchestrator reviews; one leaves the review to the human, because an agent
-cannot review itself. The rule is `runtime::composition`, derived from the
-roles, and the pane paints it in words. A crew with more than one agent in a
+The crew's size is a **composition**, not a number: the crew is the roles
+present. Three agents are one per role and the reviewer reviews; an
+orchestrator and a builder, so the orchestrator reviews; the orchestrator
+alone, which builds and reviews, so the orchestrator reviews. A record with no
+orchestrator has the human reviewing; the configuration cannot produce that
+crew, since the orchestrator is always present. The rule is
+`runtime::composition`, derived from the roles, and the pane paints it in
+words. A crew with more than one agent in a
 role has no rule that says who reviews; it is named as what it is, never as
 one per role. A held task belongs to the crew, not the queue.
 
@@ -632,7 +635,7 @@ found beside the configuration, hugo says so and converts nothing.
 
 | field | rule |
 |---|---|
-| `agents` | one entry per agent of the automation: its harness, model and effort |
+| `agents` | the crew: one table per role, each with its harness, model and effort |
 | `round_limit` | the build-and-fix cycles a task gets: five |
 | `order` | the flow's steps, in the order they run |
 | `[raul]` | raul's own settings: the palette and the icons |
@@ -644,13 +647,22 @@ The TOML shape:
 # The build-and-fix cycles a task gets.
 round_limit = 5
 
-# One entry per agent of the automation: its harness, model and effort.
-[[agents]]
-name = "builder"
-role = "runner"
+# The crew: one table per role. The orchestrator is always present; a builder
+# and a reviewer are optional. Each names its harness, model and effort.
+[agents.orchestrator]
+harness = "claude"
+model = "claude-opus-5-5"
+effort = "medium"
+
+[agents.builder]
 harness = "claude"
 model = "claude-haiku-5-5"
 effort = "high"
+
+[agents.reviewer]
+harness = "claude"
+model = "claude-opus-5-5"
+effort = "medium"
 
 # The order the flow follows: one step per entry, in the order they run.
 [[order]]
@@ -671,12 +683,24 @@ sort = "id"
 reverse = false
 ```
 
-An agent entry:
+An agent's table is named by its role. The table holds no `name` and no
+`role` key:
+
+| table | rule |
+|---|---|
+| `[agents.orchestrator]` | always present: the orchestrator runs the loop |
+| `[agents.builder]` | writes the code; optional |
+| `[agents.reviewer]` | reviews the code; optional |
+
+The crew is the roles present. Three tables are one per role, and the reviewer
+reviews. Two are the orchestrator and the builder, and the orchestrator
+reviews. One is the orchestrator alone, which builds and reviews. Two tables
+of one role are unreadable: the file holds one table per role.
+
+Each agent table holds:
 
 | field | rule |
 |---|---|
-| `name` | the name its role config gives it — `builder`, `reviewer` |
-| `role` | `runner`, `reviewer` or `orchestrator` |
 | `harness` | the harness it runs in: `claude` · `opencode` · `cursor-agent`, the names of the harness table in `crates/core/src/harness.rs` |
 | `model` | the model it runs, as its harness names it — `claude-haiku-5-5`, `opencode-go/glm-5.3` |
 | `effort` | the effort it runs at, one of its harness's levels; absent, it is not yet picked and hugo will not start until it is |
@@ -687,18 +711,20 @@ effort become the arguments that start it. `claude` lists a curated set of
 models; `opencode` lists `opencode models`; `cursor-agent` lists
 `cursor-agent --list-models`. Nothing else is a harness.
 
-A file written before agents named their harness has one `[harness]` table
-for all of them, and a model that carries its effort as `#effort`. It still
-loads: an agent with no `harness` takes the old table's `tool`, and the
-`#effort` is split off into `effort`. Nothing is rewritten until a save; a
-save writes the harness and effort of each agent it changes.
+A file written before the crew was one table per role has an `[[agents]]`
+array, each entry naming its `role`; `runner` is the builder. It still loads.
+An older file has one `[harness]` table for all of them and a model that
+carries its effort as `#effort`: an agent with no `harness` takes the old
+table's `tool`, and the `#effort` is split off into `effort`. Nothing is
+rewritten until a save. A save that changes an agent writes the crew as tables,
+and keeps the rest of the file as it was.
 
 An order step:
 
 | field | rule |
 |---|---|
 | `step` | the step's name — `groom`, `build` |
-| `role` | the role that does it |
+| `role` | the role that does it: `creator`, `builder` or `reviewer` |
 | `gates` | the transitions it passes: each a `from` and a `to` status |
 
 raul's table:

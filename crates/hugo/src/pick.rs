@@ -48,13 +48,13 @@ pub fn gaps(config: &Config) -> Vec<String> {
     let mut gaps = Vec::new();
     for agent in &config.agents {
         if harness::find(&agent.harness).is_none() {
-            gaps.push(format!("{} has no harness", agent.name));
+            gaps.push(format!("{} has no harness", agent.role.as_str()));
         }
         if agent.model.is_empty() {
-            gaps.push(format!("{} has no model", agent.name));
+            gaps.push(format!("{} has no model", agent.role.as_str()));
         }
         if agent.effort.is_none() {
-            gaps.push(format!("{} has no effort", agent.name));
+            gaps.push(format!("{} has no effort", agent.role.as_str()));
         }
     }
     gaps
@@ -63,13 +63,12 @@ pub fn gaps(config: &Config) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use coding_crew_core::Role;
+    use coding_crew_core::FlowRole;
     use coding_crew_core::harness::Models;
 
     fn agent(harness: &str, model: &str, effort: Option<&str>) -> Agent {
         Agent {
-            name: "builder".to_string(),
-            role: Role::Runner,
+            role: FlowRole::Builder,
             harness: harness.to_string(),
             model: model.to_string(),
             effort: effort.map(str::to_string),
@@ -164,8 +163,8 @@ mod tests {
     #[test]
     fn a_gap_names_the_agent_and_what_it_lacks() {
         let mut config = Config::default();
-        config.agents[0].model.clear();
-        config.agents[1].effort = None;
+        config.agents[1].model.clear();
+        config.agents[2].effort = None;
         assert_eq!(
             gaps(&config),
             ["builder has no model", "reviewer has no effort"]
@@ -175,7 +174,7 @@ mod tests {
     #[test]
     fn a_harness_the_table_does_not_hold_is_a_gap() {
         let mut config = Config::default();
-        config.agents[0].harness = "aider".to_string();
+        config.agents[1].harness = "aider".to_string();
         assert_eq!(gaps(&config), ["builder has no harness"]);
     }
 }

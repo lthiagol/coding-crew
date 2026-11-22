@@ -19,7 +19,7 @@ use ratatui::widgets::{Block, Clear, Paragraph};
 use coding_crew_core::config::{CONFIG_FILE, Config};
 use coding_crew_core::harness::{self, HARNESSES, Harness};
 use coding_crew_core::runtime::{CrewMember, Runtime};
-use coding_crew_core::{Role, age_text, parse_rfc3339};
+use coding_crew_core::{FlowRole, age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, tail_to, text_width};
 use coding_crew_theme::{Icon, IconSet, Slot, Theme, chrome, phase_style, picker, role_style};
 
@@ -136,7 +136,7 @@ struct Choice {
     /// The choice's title: the agent's name and the field's name.
     title: String,
     /// The role the agent fills, for its icon.
-    role: Role,
+    role: FlowRole,
     /// The field the choice picks: the harness, the model or the effort.
     field: Field,
     /// The entries of the list, in order.
@@ -286,15 +286,32 @@ pub struct App {
     present: Option<fn(&Harness) -> bool>,
 }
 
+/// The row the cursor starts on: the builder's harness, when the crew has a
+/// builder; otherwise the orchestrator's, the first row. A window with no
+/// configuration starts as the defaults do.
+fn first_cursor(state: &ConfigState) -> usize {
+    let builder = |agents: &[coding_crew_core::Agent]| {
+        agents
+            .iter()
+            .position(|agent| agent.role == FlowRole::Builder)
+    };
+    let row = match state {
+        ConfigState::Config(config) => builder(&config.agents),
+        _ => builder(&Config::default().agents),
+    };
+    row.map_or(0, |agent| sidebar::cursor_of(agent, Field::Harness))
+}
+
 impl App {
     /// A window with a theme and a configuration of its own.
     pub fn new(theme: Theme, icons: IconSet, config: ConfigRead, home: Option<PathBuf>) -> Self {
+        let cursor = first_cursor(&config.state);
         Self {
             theme,
             icons,
             config,
             home,
-            cursor: 0,
+            cursor,
             agents_drawn: true,
             choice: None,
             reading: None,
@@ -664,7 +681,7 @@ impl App {
         let Some((title, role)) = self
             .loaded()
             .and_then(|config| config.agents.get(agent))
-            .map(|row| (format!("{} {}", row.name, field.label()), row.role))
+            .map(|row| (format!("{} {}", row.role.as_str(), field.label()), row.role))
         else {
             return;
         };
@@ -990,11 +1007,11 @@ impl App {
         let agent = config
             .agents
             .iter()
-            .find(|agent| agent.role == Role::Orchestrator)
+            .find(|agent| agent.role == FlowRole::Orchestrator)
             .ok_or_else(|| "the configuration names no orchestrator".to_string())?;
         let harness = harness::find(&agent.harness)
             .ok_or_else(|| format!("{} is not a harness", agent.harness))?;
-        let start = harness.invocation(&agent.name, &agent.model, agent.effort.as_deref());
+        let start = harness.invocation(agent.role.as_str(), &agent.model, agent.effort.as_deref());
         let project = self
             .root
             .clone()
@@ -2136,7 +2153,7 @@ mod tests {
     use coding_crew_core::runtime::{
         Budget, Composition, CrewMember, QueueItem, RuntimeRound, Severities, Stamp,
     };
-    use coding_crew_core::{Role, Status};
+    use coding_crew_core::{FlowRole, Status};
     use coding_crew_theme::Preset;
     use std::path::Path;
 
@@ -2160,7 +2177,7 @@ mod tests {
     }
 
     fn member(
-        role: Role,
+        role: FlowRole,
         model: &str,
         holds: Option<&str>,
         since: Option<&str>,
@@ -2189,21 +2206,21 @@ mod tests {
             started_at: "2026-11-09T08:30Z".to_string(),
             crew: vec![
                 member(
-                    Role::Orchestrator,
+                    FlowRole::Orchestrator,
                     "opencode-go/glm-5.3#high",
                     None,
                     None,
                     AgentState::Idle,
                 ),
                 member(
-                    Role::Runner,
+                    FlowRole::Builder,
                     "opencode-go/deepseek-v4.1-flash#high",
                     Some("TSK10"),
                     Some("2026-11-09T09:00Z"),
                     AgentState::Executing,
                 ),
                 member(
-                    Role::Reviewer,
+                    FlowRole::Reviewer,
                     "opencode-go/glm-5.3#high",
                     Some("TSK13"),
                     Some("2026-11-10T16:00Z"),
@@ -2260,14 +2277,14 @@ mod tests {
             .loaded()?
             .agents
             .iter()
-            .find(|agent| agent.name == name)
+            .find(|agent| agent.role.as_str() == name)
             .map(|agent| agent.model.as_str())
     }
 
     /// Open the orchestrator's model choice as a catalogue read that answered
     /// with `loaded` would open it.
     fn answer_choice(window: &mut App, loaded: Result<Catalog, String>) {
-        window.show(2, Field::Model, Vec::new(), 0, ChoiceState::Reading);
+        window.show(0, Field::Model, Vec::new(), 0, ChoiceState::Reading);
         window.fill_choice(loaded);
     }
 
@@ -2502,7 +2519,7 @@ mod tests {
         }
         // On the orchestrator's model row, enter has a choice to open.
         let mut app = App::new(theme(), IconSet::Nerd, sidebar_config(), None);
-        app.cursor = sidebar::cursor_of(2, Field::Model);
+        app.cursor = sidebar::cursor_of(0, Field::Model);
         app.agents_drawn = true;
         let line: String = app
             .footer_lines(100, 1)
@@ -2726,7 +2743,7 @@ mod tests {
         let text = rows.join("\n");
         for fact in [
             "orchestrator",
-            "runner",
+            "builder",
             "reviewer",
             "deepseek-v4.1-flash#high",
             "glm-5.3#high",
@@ -2741,7 +2758,7 @@ mod tests {
         // The provider is the configuration's; the crew row names the model.
         assert!(!text.contains("opencode-go/"), "{text}");
         // One entry per agent: each role is on its own row.
-        for role in ["orchestrator", "runner", "reviewer"] {
+        for role in ["orchestrator", "builder", "reviewer"] {
             let row = rows
                 .iter()
                 .find(|row| row.contains(role))
@@ -2764,14 +2781,15 @@ mod tests {
         }
 
         let mut two = runtime.clone();
-        two.crew.retain(|member| member.role != Role::Reviewer);
+        two.crew.retain(|member| member.role != FlowRole::Reviewer);
         let (rows, _) = render_runtime(100, 40, &two);
         let text = rows.join("\n");
         assert!(text.contains("the orchestrator reviews"), "{text}");
         assert!(!text.contains("the human reviews"), "{text}");
 
         let mut one = two.clone();
-        one.crew.retain(|member| member.role != Role::Orchestrator);
+        one.crew
+            .retain(|member| member.role != FlowRole::Orchestrator);
         let (rows, _) = render_runtime(100, 40, &one);
         let text = rows.join("\n");
         assert!(text.contains("the human reviews"), "{text}");
@@ -2780,7 +2798,7 @@ mod tests {
         // the crew is rather than claiming a rule it does not follow.
         let mut four = runtime.clone();
         four.crew.push(member(
-            Role::Runner,
+            FlowRole::Builder,
             "opencode-go/deepseek-v4.1-flash#high",
             Some("TSK11"),
             Some("2026-11-10T09:00Z"),
@@ -2802,7 +2820,7 @@ mod tests {
         let mut runtime = runtime();
         runtime.round = None;
         runtime.crew[1] = member(
-            Role::Runner,
+            FlowRole::Builder,
             "opencode-go/deepseek-v4.1-flash#high",
             Some("TSK29"),
             Some("2026-11-09T09:00Z"),
@@ -3005,22 +3023,22 @@ mod tests {
         let runtime = runtime();
         let (rows, _) = render_runtime(60, 40, &runtime);
         let orchestrator = row_of(&rows, "orchestrator");
-        let runner = row_of(&rows, "runner");
+        let runner = row_of(&rows, "builder");
         let reviewer = row_of(&rows, "reviewer");
         assert_eq!(runner - orchestrator, 2, "{rows:?}");
         assert_eq!(reviewer - runner, 2, "{rows:?}");
         assert!(
-            rows[runner].contains("runner deepseek-v4.1-flash#high ⠋ executing"),
+            rows[runner].contains("builder deepseek-v4.1-flash#high ⠋ executing"),
             "{rows:?}"
         );
 
         let (rows, _) = render_runtime(40, 40, &runtime);
         let orchestrator = row_of(&rows, "orchestrator");
-        let runner = row_of(&rows, "runner");
+        let runner = row_of(&rows, "builder");
         let reviewer = row_of(&rows, "reviewer");
         assert_eq!(runner - orchestrator, 3, "{rows:?}");
         assert_eq!(reviewer - runner, 3, "{rows:?}");
-        assert!(rows[runner].contains("runner ⠋ executing"), "{rows:?}");
+        assert!(rows[runner].contains("builder ⠋ executing"), "{rows:?}");
     }
 
     #[test]
@@ -3031,7 +3049,7 @@ mod tests {
         for width in [60u16, 40] {
             let runtime = runtime();
             let (rows, _) = render_runtime(width, 40, &runtime);
-            let runner = row_of(&rows, "runner");
+            let runner = row_of(&rows, "builder");
             let reviewer = row_of(&rows, "reviewer");
             assert!(reviewer > runner + 1, "{width}: {rows:?}");
             let agent = leading(&rows[runner]);
@@ -3136,7 +3154,7 @@ mod tests {
         // the rightmost one on it: the sidebar draws the same name on the left.
         let roles = [
             ("idle", "orchestrator", theme().roles.orchestrator),
-            ("TSK10", "runner", theme().roles.runner),
+            ("TSK10", "builder", theme().roles.runner),
             ("TSK13 ", "reviewer", theme().roles.reviewer),
         ];
         for (row_word, name, style) in roles {
@@ -3200,7 +3218,7 @@ mod tests {
             let (rows, _) = render_runtime(width, 40, &runtime);
             let text = rows.join("\n");
             for fact in [
-                "runner",
+                "builder",
                 "deepseek-v4.1-flash#high",
                 "TSK10",
                 "10d",
@@ -3302,7 +3320,7 @@ mod tests {
         let text = rows.join("\n");
         for fact in [
             "AGENTS",
-            "builder · runner",
+            "builder",
             "harness",
             "claude",
             "claude-haiku-5-5",
@@ -3328,11 +3346,33 @@ mod tests {
     }
 
     #[test]
+    fn a_crew_of_one_starts_the_cursor_on_a_row_it_has() {
+        // The orchestrator alone: there is no builder's row to start on, so
+        // the cursor starts on the first row, and enter opens its choice.
+        let mut config = Config::default();
+        config
+            .agents
+            .retain(|agent| agent.role == FlowRole::Orchestrator);
+        let mut app = App::new(
+            theme(),
+            IconSet::Nerd,
+            ConfigRead::of(ConfigState::Config(config)),
+            None,
+        );
+        app.agents_drawn = true;
+        assert_eq!(app.cursor, 0);
+        assert!(app.can_choose(), "the first row is the orchestrator's");
+        app.on_key(press(KeyCode::Enter));
+        let choice = app.choice.as_ref().expect("enter opened no choice");
+        assert_eq!(choice.title, "orchestrator harness");
+    }
+
+    #[test]
     fn the_cursor_moves_over_each_agents_rows_and_enter_opens_that_rows_choice() {
         let mut app = app();
         app.agents_drawn = true;
         // The cursor starts on the builder's harness row.
-        assert_eq!(app.cursor, sidebar::cursor_of(0, Field::Harness));
+        assert_eq!(app.cursor, sidebar::cursor_of(1, Field::Harness));
         app.on_key(press(KeyCode::Enter));
         let choice = app.choice.as_ref().expect("enter opened no choice");
         assert_eq!(choice.title, "builder harness");
@@ -3344,10 +3384,7 @@ mod tests {
             app.on_key(press(KeyCode::Down));
         }
         assert_eq!(app.cursor, sidebar::cursor_of(2, Field::Effort));
-        assert!(
-            app.can_choose(),
-            "the last row is the orchestrator's effort"
-        );
+        assert!(app.can_choose(), "the last row is the reviewer's effort");
         app.on_key(press(KeyCode::Down));
         assert_eq!(app.cursor, sidebar::cursor_of(2, Field::Effort));
         for _ in 0..8 {
@@ -3367,8 +3404,9 @@ mod tests {
         // must not walk rows the pane does not draw, and enter opens nothing.
         let mut app = app();
         app.agents_drawn = false;
+        let before = app.cursor;
         app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-        assert_eq!(app.cursor, 0);
+        assert_eq!(app.cursor, before);
         app.cursor = 2;
         assert!(!app.can_choose(), "the hidden cursor can choose");
     }
@@ -3399,7 +3437,7 @@ mod tests {
         // the tool would use.
         assert!(text.contains(sidebar::USING_DEFAULTS), "{text}");
         assert!(text.contains("5 build-and-fix rounds"), "{text}");
-        assert!(text.contains("builder · runner"), "{text}");
+        assert!(text.contains("builder"), "{text}");
     }
 
     #[test]
@@ -3612,29 +3650,35 @@ mod tests {
         for (crew, says) in [
             (
                 vec![
-                    member(Role::Orchestrator, "m", None, None, AgentState::Idle),
-                    member(Role::Runner, "m", None, None, AgentState::Executing),
-                    member(Role::Reviewer, "m", None, None, AgentState::Reviewing),
+                    member(FlowRole::Orchestrator, "m", None, None, AgentState::Idle),
+                    member(FlowRole::Builder, "m", None, None, AgentState::Executing),
+                    member(FlowRole::Reviewer, "m", None, None, AgentState::Reviewing),
                 ],
                 Composition::OnePerRole,
             ),
             (
                 vec![
-                    member(Role::Orchestrator, "m", None, None, AgentState::Idle),
-                    member(Role::Runner, "m", None, None, AgentState::Executing),
+                    member(FlowRole::Orchestrator, "m", None, None, AgentState::Idle),
+                    member(FlowRole::Builder, "m", None, None, AgentState::Executing),
                 ],
                 Composition::OrchestratorReviews,
             ),
             (
-                vec![member(Role::Runner, "m", None, None, AgentState::Executing)],
+                vec![member(
+                    FlowRole::Builder,
+                    "m",
+                    None,
+                    None,
+                    AgentState::Executing,
+                )],
                 Composition::HumanReviews,
             ),
             (
                 vec![
-                    member(Role::Orchestrator, "m", None, None, AgentState::Idle),
-                    member(Role::Runner, "m", None, None, AgentState::Executing),
-                    member(Role::Runner, "m", None, None, AgentState::Executing),
-                    member(Role::Reviewer, "m", None, None, AgentState::Reviewing),
+                    member(FlowRole::Orchestrator, "m", None, None, AgentState::Idle),
+                    member(FlowRole::Builder, "m", None, None, AgentState::Executing),
+                    member(FlowRole::Builder, "m", None, None, AgentState::Executing),
+                    member(FlowRole::Reviewer, "m", None, None, AgentState::Reviewing),
                 ],
                 Composition::MoreThanOnePerRole,
             ),
@@ -3667,7 +3711,7 @@ mod tests {
             home,
         );
         app.agents_drawn = true;
-        app.cursor = sidebar::cursor_of(2, Field::Model);
+        app.cursor = sidebar::cursor_of(0, Field::Model);
         app
     }
 
@@ -3699,7 +3743,7 @@ mod tests {
             None,
         );
         window.agents_drawn = true;
-        window.cursor = sidebar::cursor_of(2, Field::Model);
+        window.cursor = sidebar::cursor_of(0, Field::Model);
         window.catalog_tool = Some(tool.to_path_buf());
         window
     }
@@ -3928,7 +3972,7 @@ mod tests {
             saved
                 .agents
                 .iter()
-                .find(|agent| agent.role == Role::Orchestrator)
+                .find(|agent| agent.role == FlowRole::Orchestrator)
                 .map(|agent| agent.model.as_str()),
             Some("claude-sonnet-5-5"),
             "the sidebar does not show the pick"
@@ -3938,7 +3982,7 @@ mod tests {
             saved
                 .agents
                 .iter()
-                .find(|agent| agent.role == Role::Runner)
+                .find(|agent| agent.role == FlowRole::Builder)
                 .map(|agent| agent.model.as_str()),
             Some("claude-haiku-5-5")
         );
@@ -3946,7 +3990,7 @@ mod tests {
             saved
                 .agents
                 .iter()
-                .find(|agent| agent.role == Role::Reviewer)
+                .find(|agent| agent.role == FlowRole::Reviewer)
                 .map(|agent| agent.model.as_str()),
             Some("claude-opus-5-5")
         );
@@ -4200,7 +4244,7 @@ mod tests {
         // On the orchestrator's model row, enter has a choice to open, and the
         // help names it.
         window.on_key(press(KeyCode::Char('x')));
-        window.cursor = sidebar::cursor_of(2, Field::Model);
+        window.cursor = sidebar::cursor_of(0, Field::Model);
         window.agents_drawn = true;
         window.on_key(press(KeyCode::Char('?')));
         let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
@@ -4455,7 +4499,7 @@ mod tests {
             Some(home.to_path_buf()),
         );
         window.agents_drawn = true;
-        window.cursor = sidebar::cursor_of(0, field);
+        window.cursor = sidebar::cursor_of(1, field);
         window
     }
 
@@ -4516,7 +4560,12 @@ mod tests {
         assert!(window.choice.is_none(), "the switch left its choice open");
         let builder = window
             .loaded()
-            .and_then(|config| config.agents.first())
+            .and_then(|config| {
+                config
+                    .agents
+                    .iter()
+                    .find(|agent| agent.role == FlowRole::Builder)
+            })
             .expect("the builder");
         assert_eq!(builder.harness, "opencode");
         assert_eq!(builder.model, "");
@@ -4550,7 +4599,7 @@ mod tests {
         window.catalog_tool = Some(tool.clone());
         window.config = ConfigRead::of(ConfigState::Config({
             let mut config = Config::default();
-            config.agents[0].effort = Some("xhigh".to_string());
+            config.agents[1].effort = Some("xhigh".to_string());
             config
         }));
         window.on_key(press(KeyCode::Enter));
@@ -4559,7 +4608,12 @@ mod tests {
         wait_for_catalog(&mut window);
         let builder = window
             .loaded()
-            .and_then(|config| config.agents.first())
+            .and_then(|config| {
+                config
+                    .agents
+                    .iter()
+                    .find(|agent| agent.role == FlowRole::Builder)
+            })
             .expect("the builder");
         assert_eq!(builder.harness, "opencode");
         assert_eq!(builder.model, "claude-haiku-5-5");
@@ -4595,7 +4649,7 @@ mod tests {
             "a refused switch was saved"
         );
         assert_eq!(
-            window.loaded().expect("the configuration").agents[0].harness,
+            window.loaded().expect("the configuration").agents[1].harness,
             "claude"
         );
         let _ = fs::remove_dir_all(&home);
@@ -4605,7 +4659,7 @@ mod tests {
     fn the_model_choice_lists_the_catalogue_and_type_an_id_last() {
         let home = scratch("model-choice-type");
         let mut window = on_builder(&home, Field::Model);
-        answer_choice_for(&mut window, 0, Ok(Catalog::from_lines("p/m0\np/m1\n")));
+        answer_choice_for(&mut window, 1, Ok(Catalog::from_lines("p/m0\np/m1\n")));
         assert_eq!(
             entries_of(&window),
             [
@@ -4629,7 +4683,7 @@ mod tests {
         // letter, not the window's quit.
         let home = scratch("type-an-id");
         let mut window = on_builder(&home, Field::Model);
-        answer_choice_for(&mut window, 0, Ok(Catalog::from_lines("p/m0\n")));
+        answer_choice_for(&mut window, 1, Ok(Catalog::from_lines("p/m0\n")));
         window.on_key(press(KeyCode::Down));
         window.on_key(press(KeyCode::Enter));
         assert_eq!(
@@ -4663,7 +4717,7 @@ mod tests {
     fn an_id_that_is_not_shaped_as_a_model_id_is_not_picked() {
         let home = scratch("type-an-id-shape");
         let mut window = on_builder(&home, Field::Model);
-        answer_choice_for(&mut window, 0, Ok(Catalog::from_lines("p/m0\n")));
+        answer_choice_for(&mut window, 1, Ok(Catalog::from_lines("p/m0\n")));
         window.on_key(press(KeyCode::Down));
         window.on_key(press(KeyCode::Enter));
         for letter in "glm 5.3#high".chars() {
@@ -4698,7 +4752,7 @@ mod tests {
         // a catalogue that does not work.
         let home = scratch("model-choice-failed");
         let mut window = on_builder(&home, Field::Model);
-        answer_choice_for(&mut window, 0, Err("opencode timed out".to_string()));
+        answer_choice_for(&mut window, 1, Err("opencode timed out".to_string()));
         let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
         assert!(
             text_of(&rows).contains(CATALOG_UNREADABLE),
@@ -4747,7 +4801,10 @@ mod tests {
         assert_eq!(
             window
                 .loaded()
-                .and_then(|config| config.agents.first())
+                .and_then(|config| config
+                    .agents
+                    .iter()
+                    .find(|agent| agent.role == FlowRole::Builder))
                 .and_then(|agent| agent.effort.as_deref()),
             Some("xhigh")
         );
@@ -4766,7 +4823,7 @@ mod tests {
                 let mut window = on_builder(&home, field);
                 window.present = Some(all_but_cursor_agent);
                 if field == Field::Model {
-                    answer_choice_for(&mut window, 0, Ok(Catalog::from_lines("p/m0\n")));
+                    answer_choice_for(&mut window, 1, Ok(Catalog::from_lines("p/m0\n")));
                 } else {
                     window.on_key(press(KeyCode::Enter));
                 }
@@ -4793,8 +4850,8 @@ mod tests {
         let mut window = in_herdr(&fake);
         window.config = ConfigRead::of(ConfigState::Config({
             let mut config = Config::default();
-            config.agents[0].model.clear();
-            config.agents[1].effort = None;
+            config.agents[1].model.clear();
+            config.agents[2].effort = None;
             config
         }));
         let runtime = RuntimeRead::Record(runtime());

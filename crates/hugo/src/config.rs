@@ -428,7 +428,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
             saved
                 .agents
                 .iter()
-                .find(|agent| agent.role == coding_crew_core::Role::Orchestrator)
+                .find(|agent| agent.role == coding_crew_core::FlowRole::Orchestrator)
                 .map(|agent| agent.model.as_str()),
             Some("opencode-go/kimi-k3")
         );
@@ -476,7 +476,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         let home = scratch("pick-absent");
         let mut config = Config::default();
         config.agents.iter_mut().for_each(|agent| {
-            if agent.role == coding_crew_core::Role::Orchestrator {
+            if agent.role == coding_crew_core::FlowRole::Orchestrator {
                 agent.model = "opencode-go/kimi-k3".to_string();
             }
         });

@@ -43,7 +43,9 @@ pub enum ActorKind {
     Agent,
 }
 
-/// The agent roles. `orchestrator` drives autopilot flows.
+/// The actor roles of the task model: the words a task file holds. `runner` is
+/// the role that claims and executes a task; the flow names it `builder`
+/// (see [`FlowRole`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Role {
@@ -60,6 +62,32 @@ impl Role {
             Role::Runner => "runner",
             Role::Reviewer => "reviewer",
             Role::Orchestrator => "orchestrator",
+        }
+    }
+}
+
+/// A role in the flow: the seat an agent fills in the crew, or the role an
+/// order step names. The flow's code-writing role is the **builder**; the task
+/// model calls the same role `runner` in task files, and `runner` is still read
+/// here so an older configuration or runtime record loads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FlowRole {
+    Creator,
+    #[serde(alias = "runner")]
+    Builder,
+    Reviewer,
+    Orchestrator,
+}
+
+impl FlowRole {
+    /// The word the flow writes and the screens show.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FlowRole::Creator => "creator",
+            FlowRole::Builder => "builder",
+            FlowRole::Reviewer => "reviewer",
+            FlowRole::Orchestrator => "orchestrator",
         }
     }
 }

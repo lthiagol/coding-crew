@@ -25,9 +25,10 @@ use ratatui::widgets::Paragraph;
 use crate::announce;
 use crate::tasks::{Key, Order};
 use crate::view::{self, BAR, View};
-use coding_crew_core::actor::Role;
+use coding_crew_core::FlowRole;
 use coding_crew_core::config::{
-    Config, ConfigError, ConfigFile, config_path, gates_from_text, gates_text, home_at, quote,
+    Agent, Config, ConfigError, ConfigFile, config_path, gates_from_text, gates_text, home_at,
+    quote,
 };
 use coding_crew_core::harness;
 use coding_crew_theme::chrome;
@@ -38,8 +39,9 @@ use coding_crew_theme::{Icon, IconSet, Preset, Theme};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
-/// The words a role is written with, in the order the picker lists them.
-const ROLES: [&str; 4] = ["creator", "runner", "reviewer", "orchestrator"];
+/// The words a role is written with, in the order the picker lists them: the
+/// crew's roles first, then the order's creator.
+const ROLES: [&str; 4] = ["orchestrator", "builder", "reviewer", "creator"];
 /// The words a boolean is written with.
 const BOOLEANS: [&str; 2] = ["true", "false"];
 /// The values of raul's own table: the ones a file may leave out, when the
@@ -66,11 +68,10 @@ pub struct Overrides {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Field {
     Round,
-    AgentName(usize),
-    AgentRole(usize),
-    AgentHarness(usize),
-    AgentModel(usize),
-    AgentEffort(usize),
+    /// An agent's values, by the role its table names.
+    AgentHarness(FlowRole),
+    AgentModel(FlowRole),
+    AgentEffort(FlowRole),
     StepName(usize),
     StepRole(usize),
     StepGates(usize),
@@ -101,11 +102,9 @@ impl Field {
     fn place(self) -> (&'static str, Option<usize>) {
         match self {
             Field::Round => ("", None),
-            Field::AgentName(index)
-            | Field::AgentRole(index)
-            | Field::AgentHarness(index)
-            | Field::AgentModel(index)
-            | Field::AgentEffort(index) => ("agents", Some(index)),
+            Field::AgentHarness(_) | Field::AgentModel(_) | Field::AgentEffort(_) => {
+                ("agents", None)
+            }
             Field::StepName(index) | Field::StepRole(index) | Field::StepGates(index) => {
                 ("order", Some(index))
             }
@@ -118,8 +117,7 @@ impl Field {
     fn key(self) -> &'static str {
         match self {
             Field::Round => "round_limit",
-            Field::AgentName(_) => "name",
-            Field::AgentRole(_) | Field::StepRole(_) => "role",
+            Field::StepRole(_) => "role",
             Field::AgentHarness(_) => "harness",
             Field::AgentModel(_) => "model",
             Field::AgentEffort(_) => "effort",
@@ -135,11 +133,24 @@ impl Field {
     /// The value's id: its TOML path, which the cursor and the window name it
     /// by. `agents.0.model` is the model of the first agent.
     fn id(self) -> String {
+        if let Some(role) = self.role() {
+            return format!("agents.{}.{}", role.as_str(), self.key());
+        }
         let (section, index) = self.place();
         match (section, index) {
             ("", _) => self.key().to_string(),
             (section, Some(index)) => format!("{section}.{index}.{}", self.key()),
             (section, None) => format!("{section}.{}", self.key()),
+        }
+    }
+
+    /// The role of an agent's value: the table the value sits in.
+    fn role(self) -> Option<FlowRole> {
+        match self {
+            Field::AgentHarness(role) | Field::AgentModel(role) | Field::AgentEffort(role) => {
+                Some(role)
+            }
+            _ => None,
         }
     }
 
@@ -150,11 +161,10 @@ impl Field {
             Field::Theme
             | Field::Icons
             | Field::Sort
-            | Field::AgentRole(_)
             | Field::AgentHarness(_)
             | Field::AgentEffort(_)
             | Field::StepRole(_) => Kind::Choice,
-            Field::AgentName(_) | Field::AgentModel(_) | Field::StepName(_) => Kind::Text,
+            Field::AgentModel(_) | Field::StepName(_) => Kind::Text,
             Field::StepGates(_) => Kind::Gates,
         }
     }
@@ -166,11 +176,9 @@ impl Field {
             Field::Theme => Preset::ALL.iter().map(|preset| preset.name()).collect(),
             Field::Icons => IconSet::ALL.iter().map(|set| set.name()).collect(),
             Field::Sort => Key::ALL.iter().map(|key| key.name()).collect(),
-            Field::AgentRole(_) | Field::StepRole(_) => ROLES.to_vec(),
+            Field::StepRole(_) => ROLES.to_vec(),
             Field::AgentHarness(_) => harness::names(),
-            Field::AgentEffort(index) => config
-                .agents
-                .get(index)
+            Field::AgentEffort(role) => agent_of(config, role)
                 .and_then(|agent| harness::find(&agent.harness))
                 .map(|harness| harness.efforts.to_vec())
                 .unwrap_or_default(),
@@ -182,19 +190,16 @@ impl Field {
     /// The value as the text it is edited and compared in: a word without its
     /// quotes, a number, `true`, or a list of gates as TOML.
     fn text(self, config: &Config) -> String {
-        let agent = |index: usize| config.agents.get(index);
         let step = |index: usize| config.order.get(index);
         match self {
             Field::Round => config.round_limit.to_string(),
-            Field::AgentName(index) => agent(index).map_or_else(String::new, |a| a.name.clone()),
-            Field::AgentRole(index) => {
-                agent(index).map_or_else(String::new, |a| a.role.as_str().to_string())
+            Field::AgentHarness(role) => {
+                agent_of(config, role).map_or_else(String::new, |a| a.harness.clone())
             }
-            Field::AgentHarness(index) => {
-                agent(index).map_or_else(String::new, |a| a.harness.clone())
+            Field::AgentModel(role) => {
+                agent_of(config, role).map_or_else(String::new, |a| a.model.clone())
             }
-            Field::AgentModel(index) => agent(index).map_or_else(String::new, |a| a.model.clone()),
-            Field::AgentEffort(index) => agent(index)
+            Field::AgentEffort(role) => agent_of(config, role)
                 .and_then(|a| a.effort.clone())
                 .unwrap_or_default(),
             Field::StepName(index) => step(index).map_or_else(String::new, |s| s.step.clone()),
@@ -233,33 +238,21 @@ impl Field {
                 }
                 config.round_limit = value;
             }
-            Field::AgentName(index) => {
-                let name = filled(text, "name")?;
-                if let Some(agent) = config.agents.get_mut(index) {
-                    agent.name = name;
-                }
-            }
-            Field::AgentRole(index) => {
+            Field::AgentHarness(role) => {
                 let name = choice(text, &self.options(config))?;
-                if let (Some(agent), Some(role)) = (config.agents.get_mut(index), role_of(name)) {
-                    agent.role = role;
-                }
-            }
-            Field::AgentHarness(index) => {
-                let name = choice(text, &self.options(config))?;
-                if let Some(agent) = config.agents.get_mut(index) {
+                if let Some(agent) = agent_mut(config, role) {
                     agent.harness = name.to_string();
                 }
             }
-            Field::AgentModel(index) => {
+            Field::AgentModel(role) => {
                 let model = model_id(text)?;
-                if let Some(agent) = config.agents.get_mut(index) {
+                if let Some(agent) = agent_mut(config, role) {
                     agent.model = model;
                 }
             }
-            Field::AgentEffort(index) => {
+            Field::AgentEffort(role) => {
                 let effort = choice(text, &self.options(config))?;
-                if let Some(agent) = config.agents.get_mut(index) {
+                if let Some(agent) = agent_mut(config, role) {
                     agent.effort = Some(effort.to_string());
                 }
             }
@@ -325,15 +318,26 @@ fn model_id(text: &str) -> Result<String, String> {
     }
 }
 
-/// The role a word names.
-fn role_of(name: &str) -> Option<Role> {
+/// The role a word names. `runner` is the task model's word for the builder,
+/// and a file that still says it is read as the builder.
+fn role_of(name: &str) -> Option<FlowRole> {
     match name {
-        "creator" => Some(Role::Creator),
-        "runner" => Some(Role::Runner),
-        "reviewer" => Some(Role::Reviewer),
-        "orchestrator" => Some(Role::Orchestrator),
+        "creator" => Some(FlowRole::Creator),
+        "builder" => Some(FlowRole::Builder),
+        "reviewer" => Some(FlowRole::Reviewer),
+        "orchestrator" => Some(FlowRole::Orchestrator),
         _ => None,
     }
+}
+
+/// The agent whose table is `role`, when the configuration holds one.
+fn agent_of(config: &Config, role: FlowRole) -> Option<&Agent> {
+    config.agents.iter().find(|agent| agent.role == role)
+}
+
+/// The agent whose table is `role`, to be changed.
+fn agent_mut(config: &mut Config, role: FlowRole) -> Option<&mut Agent> {
+    config.agents.iter_mut().find(|agent| agent.role == role)
 }
 
 /// The Tasks order a configuration names. An unknown key is the default, as
@@ -751,10 +755,11 @@ impl Panel {
         let mut place = Place::default();
         let mut agents = 0;
         let mut steps = 0;
+        let crew = array_roles(&self.text);
         for raw in &self.text {
             let trimmed = raw.trim();
             let shape = if trimmed.starts_with('[') {
-                place = header(trimmed, &mut agents, &mut steps);
+                place = header(trimmed, &mut agents, &mut steps, &crew);
                 Shape::Text(raw.clone(), Paint::Strong)
             } else if let Some((field, value)) = assignment(trimmed, &place) {
                 let (value, comment) = split_comment(value.trim_start());
@@ -774,6 +779,9 @@ impl Panel {
             };
             let section = if place.name.is_empty() {
                 TOP.to_string()
+            } else if place.name.starts_with("agents.") {
+                // An agent's table is one group: the agents, whatever their roles.
+                "agents".to_string()
             } else {
                 place.name.clone()
             };
@@ -1097,9 +1105,48 @@ fn read_lines(path: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The place a `[section]` or `[[array]]` header opens. An array's tables are
-/// counted, so each table has its index.
-fn header(trimmed: &str, agents: &mut usize, steps: &mut usize) -> Place {
+/// The roles of an old file's `[[agents]]` entries, in the order they are
+/// written: each entry's `role` line, with `runner` read as the builder. An
+/// entry with no role line, or a role that is not an agent's, has none.
+fn array_roles(lines: &[String]) -> Vec<Option<FlowRole>> {
+    let mut roles = Vec::new();
+    let mut inside = false;
+    for raw in lines {
+        let trimmed = raw.trim();
+        if trimmed.starts_with('[') {
+            inside = trimmed.starts_with("[[agents]]");
+            if inside {
+                roles.push(None);
+            }
+            continue;
+        }
+        if inside
+            && let Some(last) = roles.last_mut()
+            && let Some((key, value)) = trimmed.split_once('=')
+            && key.trim() == "role"
+        {
+            let word = split_comment(value.trim_start())
+                .0
+                .trim()
+                .trim_matches(['"', '\'']);
+            *last = match word {
+                "runner" => Some(FlowRole::Builder),
+                other => role_of(other).filter(|role| *role != FlowRole::Creator),
+            };
+        }
+    }
+    roles
+}
+
+/// The place a `[section]` or `[[array]]` header opens. An agent's table is
+/// named by its role, as `agents.builder`; an entry of an old array is named
+/// by the role its `role` line gives it.
+fn header(
+    trimmed: &str,
+    agents: &mut usize,
+    steps: &mut usize,
+    crew: &[Option<FlowRole>],
+) -> Place {
     let array = trimmed.starts_with("[[");
     let name = trimmed
         .trim_start_matches('[')
@@ -1119,6 +1166,13 @@ fn header(trimmed: &str, agents: &mut usize, steps: &mut usize) -> Place {
         }
         _ => None,
     };
+    let name = match (array, name.as_str(), index) {
+        (true, "agents", Some(index)) => match crew.get(index).copied().flatten() {
+            Some(role) => format!("agents.{}", role.as_str()),
+            None => name,
+        },
+        _ => name,
+    };
     Place { name, index }
 }
 
@@ -1130,17 +1184,20 @@ fn assignment<'a>(trimmed: &'a str, place: &Place) -> Option<(Field, &'a str)> {
     }
     let (key, value) = trimmed.split_once('=')?;
     let index = place.index;
+    let agent = place
+        .name
+        .strip_prefix("agents.")
+        .and_then(role_of)
+        .filter(|role| *role != FlowRole::Creator);
     let field = match (place.name.as_str(), key.trim()) {
         ("", "round_limit") => Field::Round,
         ("raul", "theme") => Field::Theme,
         ("raul", "icons") => Field::Icons,
         ("raul.tasks", "sort") => Field::Sort,
         ("raul.tasks", "reverse") => Field::Reverse,
-        ("agents", "name") => Field::AgentName(index?),
-        ("agents", "role") => Field::AgentRole(index?),
-        ("agents", "harness") => Field::AgentHarness(index?),
-        ("agents", "model") => Field::AgentModel(index?),
-        ("agents", "effort") => Field::AgentEffort(index?),
+        (_, "harness") if agent.is_some() => Field::AgentHarness(agent?),
+        (_, "model") if agent.is_some() => Field::AgentModel(agent?),
+        (_, "effort") if agent.is_some() => Field::AgentEffort(agent?),
         ("order", "step") => Field::StepName(index?),
         ("order", "role") => Field::StepRole(index?),
         ("order", "gates") => Field::StepGates(index?),
@@ -1556,21 +1613,15 @@ mod tests {
             ids,
             [
                 "round_limit",
-                "agents.0.name",
-                "agents.0.role",
-                "agents.0.harness",
-                "agents.0.model",
-                "agents.0.effort",
-                "agents.1.name",
-                "agents.1.role",
-                "agents.1.harness",
-                "agents.1.model",
-                "agents.1.effort",
-                "agents.2.name",
-                "agents.2.role",
-                "agents.2.harness",
-                "agents.2.model",
-                "agents.2.effort",
+                "agents.orchestrator.harness",
+                "agents.orchestrator.model",
+                "agents.orchestrator.effort",
+                "agents.builder.harness",
+                "agents.builder.model",
+                "agents.builder.effort",
+                "agents.reviewer.harness",
+                "agents.reviewer.model",
+                "agents.reviewer.effort",
                 "order.0.step",
                 "order.0.role",
                 "order.0.gates",
@@ -1747,7 +1798,7 @@ mod tests {
         assert!(panel.editing());
         assert!(!panel.picking());
         panel.drop_edit();
-        panel.begin("agents.0.model");
+        panel.begin("agents.builder.model");
         assert!(panel.editing());
         assert!(!panel.picking());
         panel.drop_edit();
@@ -1757,22 +1808,18 @@ mod tests {
     #[test]
     fn a_word_is_typed_inline_and_kept_or_dropped() {
         let (mut panel, _) = panel("typed");
-        panel.begin("agents.0.model");
+        panel.begin("agents.builder.model");
         assert!(panel.editing());
         panel.typing().expect("the text").push_str("-x");
-        let rows = draw(&panel, 100, 60, Some("agents.0.model"));
+        let rows = draw(&panel, 100, 60, Some("agents.builder.model"));
         assert!(row_with(&rows, "claude-haiku-5-5-x").contains("-x"));
         panel.keep();
         assert!(!panel.editing());
-        assert_eq!(panel.draft.agents[0].model, "claude-haiku-5-5-x");
+        assert_eq!(panel.draft.agents[1].model, "claude-haiku-5-5-x");
 
-        panel.begin("agents.1.name");
-        panel.typing().expect("the text").push('x');
-        panel.drop_edit();
-        assert!(!panel.editing());
-        assert_eq!(
-            panel.draft.agents[1].name, "reviewer",
-            "a dropped edit was kept"
+        assert!(
+            !panel.ids().iter().any(|id| id.ends_with(".name")),
+            "an agent's name is its table's, not a value"
         );
     }
 
@@ -1781,13 +1828,13 @@ mod tests {
         let (mut panel, _) = panel("harness");
         // The builder runs claude at high: opencode is next in the table, and
         // its levels are low, medium and high, so the effort is still high.
-        panel.begin("agents.0.harness");
+        panel.begin("agents.builder.harness");
         panel.step_pick(1);
         panel.keep_pick();
-        assert_eq!(panel.draft.agents[0].harness, "opencode");
-        assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("high"));
+        assert_eq!(panel.draft.agents[1].harness, "opencode");
+        assert_eq!(panel.draft.agents[1].effort.as_deref(), Some("high"));
         // The effort is picked from opencode's levels; the cursor starts on high.
-        panel.begin("agents.0.effort");
+        panel.begin("agents.builder.effort");
         let rows = draw_pick(&panel, 100, 40);
         assert!(
             rows.iter().any(|row| row.contains("medium")),
@@ -1796,12 +1843,12 @@ mod tests {
         );
         panel.step_pick(-1);
         panel.keep_pick();
-        assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("medium"));
+        assert_eq!(panel.draft.agents[1].effort.as_deref(), Some("medium"));
         // The harness list ends at the last harness and does not wrap.
-        panel.begin("agents.0.harness");
+        panel.begin("agents.builder.harness");
         panel.step_pick(9);
         panel.keep_pick();
-        assert_eq!(panel.draft.agents[0].harness, "cursor-agent");
+        assert_eq!(panel.draft.agents[1].harness, "cursor-agent");
     }
 
     #[test]
@@ -1809,10 +1856,10 @@ mod tests {
         let (mut panel, _) = panel("unset-effort");
         // No effort in force: the pick opens on the harness's first level, and
         // enter keeps that level rather than the old, unset value.
-        panel.draft.agents[0].effort = None;
-        panel.begin("agents.0.effort");
+        panel.draft.agents[1].effort = None;
+        panel.begin("agents.builder.effort");
         panel.keep_pick();
-        assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("low"));
+        assert_eq!(panel.draft.agents[1].effort.as_deref(), Some("low"));
         assert!(!panel.picking());
     }
 
@@ -1820,14 +1867,14 @@ mod tests {
     fn an_effort_the_harness_does_not_take_is_refused_on_save() {
         let (mut panel, path) = panel("refused-effort");
         // claude's xhigh is not one of cursor-agent's levels.
-        panel.begin("agents.0.effort");
+        panel.begin("agents.builder.effort");
         panel.step_pick(1);
         panel.keep_pick();
-        assert_eq!(panel.draft.agents[0].effort.as_deref(), Some("xhigh"));
-        panel.begin("agents.0.harness");
+        assert_eq!(panel.draft.agents[1].effort.as_deref(), Some("xhigh"));
+        panel.begin("agents.builder.harness");
         panel.step_pick(2);
         panel.keep_pick();
-        assert_eq!(panel.draft.agents[0].harness, "cursor-agent");
+        assert_eq!(panel.draft.agents[1].harness, "cursor-agent");
         assert!(
             !panel.save(),
             "an effort the harness does not take was saved"
@@ -1897,25 +1944,25 @@ mod tests {
             );
         }
         let (mut panel, _) = panel("model");
-        panel.begin("agents.0.model");
+        panel.begin("agents.builder.model");
         panel.typing().expect("the text").replace_range(.., "a b");
         panel.keep();
         assert!(panel.editing());
-        assert_eq!(panel.draft.agents[0].model, "claude-haiku-5-5");
+        assert_eq!(panel.draft.agents[1].model, "claude-haiku-5-5");
     }
 
     #[test]
     fn a_reason_is_drawn_under_the_value_it_names() {
         let (mut panel, _) = panel("reason");
-        panel.begin("agents.0.name");
+        panel.begin("agents.builder.model");
         panel.typing().expect("the text").replace_range(.., "");
-        let rows = draw(&panel, 100, 60, Some("agents.0.name"));
+        let rows = draw(&panel, 100, 60, Some("agents.builder.model"));
         let at = rows
             .iter()
-            .position(|row| row.contains("name = \""))
+            .position(|row| row.contains("▌model"))
             .expect("the value");
         assert!(
-            rows[at + 1].contains("name is empty"),
+            rows[at + 1].contains("a model is one word"),
             "{}",
             rows.join("\n")
         );

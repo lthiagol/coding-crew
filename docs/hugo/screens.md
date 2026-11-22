@@ -17,33 +17,33 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 ```text
  󰚩 hugo · mock-data                                                                       󰑮 running
 ╭─ 󰒓 configuration ────────────╮╭─ 󰑮 flow ─────────────────────────────────────────────────────────╮
-│ AGENTS                       ││╭─ 󰚩 crew ───────────────────────────────────────────────────────╮│
-│ 󰖷 builder · runner           │││role           model            task  held  state               ││
-│▌  harness claude             │││󰚩 orchestrator claude-opus-5-5  —     —     idle                ││
-│   model claude-haiku-5-5     │││󰖷 runner       claude-haiku-5-5 TSK10 󰥔 10d ⠋ executing         ││
-│   effort high                │││󰈈 reviewer     claude-opus-5-5  TSK13 󰥔 8d  ⠋ reviewing         ││
-│ 󰈈 reviewer                   │││one per role · the reviewer reviews                             ││
+│ AGENTS ──────────────────────││╭─ 󰚩 crew ───────────────────────────────────────────────────────╮│
+│ 󰚩 orchestrator               │││role           model            task  held  state               ││
+│   harness claude             │││󰚩 orchestrator claude-opus-5-5  —     —     idle                ││
+│   model   claude-opus-5-5    │││󰖷 builder      claude-haiku-5-5 TSK10 󰥔 10d ⠋ executing         ││
+│   effort  medium             │││󰈈 reviewer     claude-opus-5-5  TSK13 󰥔 8d  ⠋ reviewing         ││
+│ 󰖷 builder                    │││one per role · the reviewer reviews                             ││
+│▌  harness claude             ││╰────────────────────────────────────────────────────────────────╯│
+│   model   claude-haiku-5-5   ││╭─ 󰚇 queue ──────────────────────────────────────────────────────╮│
+│   effort  high               │││the automation's queue · 1 task                                 ││
+│ 󰈈 reviewer                   │││TSK29  approved                                                 ││
 │   harness claude             ││╰────────────────────────────────────────────────────────────────╯│
-│   model claude-opus-5-5      ││╭─ 󰚇 queue ──────────────────────────────────────────────────────╮│
-│   effort medium              │││the automation's queue · 1 task                                 ││
-│ 󰚩 orchestrator               │││TSK29  approved                                                 ││
-│   harness claude             ││╰────────────────────────────────────────────────────────────────╯│
-│   model claude-opus-5-5      ││╭─ 󰈈 round ──────────────────────────────────────────────────────╮│
-│   effort medium              │││TSK13 · external · round 1                                      ││
-│ ROUNDS                       ││╰────────────────────────────────────────────────────────────────╯│
+│   model   claude-opus-5-5    ││╭─ 󰈈 round ──────────────────────────────────────────────────────╮│
+│   effort  medium             │││TSK13 · external · round 1                                      ││
+│ ROUNDS ──────────────────────││╰────────────────────────────────────────────────────────────────╯│
 │ 5 build-and-fix rounds       ││╭─ 󰥔 budget ─────────────────────────────────────────────────────╮│
-│ ORDER                        │││external rounds ████░░░░░░ 18 of 45                             ││
+│ ORDER ───────────────────────│││external rounds ████░░░░░░ 18 of 45                             ││
 │ 1 groom · creator            ││╰────────────────────────────────────────────────────────────────╯│
 │   groomed → approved         ││╭─ 󰅚 findings ───────────────────────────────────────────────────╮│
-│ 2 build · runner             │││17 open findings · 8 high · 8 medium · 1 low                    ││
+│ 2 build · builder            │││17 open findings · 8 high · 8 medium · 1 low                    ││
 │   approved → executing       ││╰────────────────────────────────────────────────────────────────╯│
-│ 3 self-review · runner       ││                                                                  │
+│ 3 self-review · builder      ││                                                                  │
 │   executing → code-review    ││                                                                  │
 │ 4 review · reviewer          ││                                                                  │
 │   code-review → done         ││                                                                  │
 │   code-review → remediating  ││                                                                  │
 │   code-review → needs-human  ││                                                                  │
-│ 5 remediate · runner         ││                                                                  │
+│ 5 remediate · builder        ││                                                                  │
 │   remediating → code-review  ││                                                                  │
 │ 6 re-review · reviewer       ││                                                                  │
 │   code-review → done         ││                                                                  │
@@ -60,7 +60,7 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 | part | behaviour |
 |---|---|
 | title line | the tool's icon and name, `hugo`, then a dim `·` and the project's folder when one is found; a window too narrow for the name shows no title rather than a cut of the name |
-| sidebar | the configuration, on the left: each agent with its harness, model and effort, the review-round limit and the order, in that order. The agents group has a cursor on each agent's harness, model and effort: `↑ k` and `↓ j` move it, and `enter` on one of those rows opens its choice. An agent's name and role are read-only. `r` reloads the configuration from the file |
+| sidebar | the configuration, on the left: each agent with its harness, model and effort, the review-round limit and the order, in that order. The agents group has a cursor on each agent's harness, model and effort: `↑ k` and `↓ j` move it, and `enter` on one of those rows opens its choice. An agent is named by its role, its table's name: a name or role is read-only, and nothing in the sidebar edits it. `r` reloads the configuration from the file |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
 | footer | the keys that work, centred under a thin rule — never a key that does nothing. The window's keys are `enter choose` (on an agent's row), `r reload` and `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)), then `? help · q quit`; `ctrl-c quit` works too, unnamed. While a choice is open its keys are `esc close`, `enter pick` (when the cursor's row can be picked), then `? help · q quit`; while the id input is open its keys are `esc back`, `enter pick` and `ctrl-c quit`, and every other key types. The movement keys are in the help, not the footer |
 | choice | the choice of the row under the cursor, titled with the agent and the field (`builder model`): a small list with a cursor of its own. A harness lists the table's three; a model lists the harness's models, with `type an id…` last; an effort lists the harness's levels. `enter` picks and saves, `esc` closes without saving |
@@ -85,10 +85,12 @@ The blocks are read in this order; the crew leads.
 | 5 | `findings` | the open findings, as a count, and by severity when the record holds them |
 | 6 | stamp | at the foot: whether the automation runs, **and why** when it does not |
 
-**The crew's size is a composition, not a number.** Three agents are one per
-role and the reviewer reviews; two are an orchestrator and a worker, and the
-orchestrator reviews; one leaves the review to the human, because an agent
-cannot review itself. The pane says who reviews in words — one per role · the
+**The crew's size is a composition, not a number.** The crew is the roles
+present. Three agents are one per role and the reviewer reviews; an
+orchestrator and a builder, and the orchestrator reviews; the orchestrator
+alone builds and reviews, and the orchestrator reviews. A record with no
+orchestrator has the human reviewing, a crew the configuration cannot produce.
+The pane says who reviews in words — one per role · the
 reviewer reviews; the orchestrator reviews; the human reviews — and never
 prints a bare count of agents. A crew with more than one agent in a role has
 no such rule: the pane says `more than one agent per role` rather than
@@ -145,7 +147,7 @@ groups, in this order:
 
 | order | group | shows |
 |---|---|---|
-| 1 | `AGENTS` | one entry per agent: its role's icon, its name and role, then the harness it runs in, the model it runs and its effort, on the rows under it |
+| 1 | `AGENTS` | one entry per agent: its role's icon and role, then the harness it runs in, the model it runs and its effort, on the rows under it |
 | 2 | `ROUNDS` | the build-and-fix cycles a task gets, and the set the count counts |
 | 3 | `ORDER` | the numbered steps, each with the gates it passes |
 
@@ -332,7 +334,7 @@ runtime record and the default configuration.
 
 ```sh
 hugo --skill
-hugo --skill orchestrator|runner|reviewer
+hugo --skill orchestrator|builder|reviewer
 ```
 
 `--skill` prints text and exits; no window is set up. A bare `--skill` lists

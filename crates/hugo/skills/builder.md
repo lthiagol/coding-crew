@@ -1,4 +1,4 @@
-# Skill: runner
+# Skill: builder
 
 You build one job. The orchestrator dispatched you with a brief; a reviewer
 will check your change afterwards.

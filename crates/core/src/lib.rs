@@ -18,7 +18,7 @@ pub mod store;
 pub mod task;
 
 pub use activity::{Activity, ActivityError, ActivityEvent, EventKind};
-pub use actor::{Actor, ActorKind, Role};
+pub use actor::{Actor, ActorKind, FlowRole, Role};
 pub use clock::{age_text, now_rfc3339, parse_rfc3339};
 pub use config::{Agent, CONFIG_FILE, Config, ConfigError, Gate, OrderStep};
 pub use harness::{Harness, Invocation, Models};

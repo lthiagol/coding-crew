@@ -16,9 +16,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use toml_edit::{DocumentMut, Item, Table, TableLike, TomlError};
+use toml_edit::{DocumentMut, Item, RawString, Table, TableLike, TomlError};
 
-use crate::actor::Role;
+use crate::actor::FlowRole;
 use crate::harness;
 use crate::lifecycle::Status;
 
@@ -36,7 +36,8 @@ pub const LEGACY_CONFIG_FILE: &str = "config.json";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "Stored")]
 pub struct Config {
-    /// One entry per agent of the automation.
+    /// The crew: one agent per role present, in the order orchestrator,
+    /// builder, reviewer. The orchestrator is always there.
     pub agents: Vec<Agent>,
     /// The build-and-fix cycles a task gets.
     pub round_limit: u32,
@@ -108,7 +109,7 @@ impl Config {
         match self
             .agents
             .iter_mut()
-            .find(|agent| agent.role == Role::Orchestrator)
+            .find(|agent| agent.role == FlowRole::Orchestrator)
         {
             Some(agent) => {
                 agent.model = model.to_string();
@@ -138,27 +139,25 @@ impl Config {
         );
         out.push_str("# The build-and-fix cycles a task gets.\n");
         out.push_str(&format!("round_limit = {}\n\n", self.round_limit));
-        if self.agents.is_empty() {
-            out.push_str("# One entry per agent of the automation: none is configured.\n");
-            out.push_str("agents = []\n\n");
-        }
         // An empty order is a root key, not an array of tables: it has to be
         // written before the first table, where root keys still live.
         if self.order.is_empty() {
             out.push_str("# The order the flow follows: no step is configured.\n");
             out.push_str("order = []\n\n");
         }
-        for (index, agent) in self.agents.iter().enumerate() {
+        let mut agents = self.agents.clone();
+        agents.sort_by_key(|agent| rank(agent.role));
+        for (index, agent) in agents.iter().enumerate() {
             if index == 0 {
                 out.push_str(
-                    "# One entry per agent of the automation: the name its role config\n\
-                     # gives it, the role it fills, the harness it runs in, the model\n\
-                     # and the effort. The harnesses are claude, opencode and cursor-agent.\n",
+                    "# The crew: one table per role. The orchestrator is always present;\n\
+                     # a builder and a reviewer are optional. With no reviewer the\n\
+                     # orchestrator reviews, and with no builder it builds too. Each table\n\
+                     # names the harness it runs in, the model and the effort. The\n\
+                     # harnesses are claude, opencode and cursor-agent.\n",
                 );
             }
-            out.push_str("[[agents]]\n");
-            out.push_str(&format!("name = {}\n", quote(&agent.name)));
-            out.push_str(&format!("role = {}\n", quote(agent.role.as_str())));
+            out.push_str(&format!("[agents.{}]\n", agent.role.as_str()));
             out.push_str(&format!("harness = {}\n", quote(&agent.harness)));
             out.push_str(&format!("model = {}\n", quote(&agent.model)));
             if let Some(effort) = &agent.effort {
@@ -286,6 +285,17 @@ impl ConfigFile {
         // The edits go into a copy: a refused save must not leave them in the
         // document, where the next save would write them.
         let mut document = self.document.clone();
+        // A file in the shape before this one holds its agents as an array of
+        // tables, which cannot hold the crew's tables. Its agents are written
+        // in the table shape, as the loaded configuration reads back, and the
+        // save then edits only the values that changed.
+        let agents_changed = match (before.get("agents"), after.get("agents")) {
+            (Some(was), Some(now)) => !same(was, now),
+            _ => true,
+        };
+        if agents_changed {
+            table_shape(&mut document, &before, &after);
+        }
         apply(document.as_table_mut(), before.as_table(), after.as_table());
         let text = document.to_string();
         // A value the text does not hold would be lost on the next read. The
@@ -321,11 +331,115 @@ fn document_of(config: &Config) -> Result<DocumentMut, ConfigError> {
         })
 }
 
+/// Move a file's agents from the array shape into the table shape, once a save
+/// changes one of them. Each `[[agents]]` entry becomes the table of its role:
+/// its values keep their places and comments, and its `name` and `role` lines
+/// go, since the table's name is the role. A `runner` entry is the builder.
+///
+/// The table then takes what the loaded configuration says of each changed
+/// agent: a harness or an effort the file left out, and a model without its
+/// `#effort`.
+fn table_shape(document: &mut DocumentMut, before: &DocumentMut, after: &DocumentMut) {
+    let Some(entries) = document.get("agents").and_then(Item::as_array_of_tables) else {
+        return;
+    };
+    let mut crew = Table::new();
+    crew.set_implicit(true);
+    for entry in entries.iter() {
+        let Some(role) = entry.get("role").and_then(Item::as_str) else {
+            continue;
+        };
+        let role = if role == "runner" { "builder" } else { role };
+        let mut table = entry.clone();
+        drop_identity(&mut table);
+        crew.insert(role, Item::Table(table));
+    }
+    for (key, item) in crew.iter_mut() {
+        let role = key.get();
+        let now = after.get("agents").and_then(|agents| agents.get(role));
+        let was = before.get("agents").and_then(|agents| agents.get(role));
+        if let (Some(now), Some(table)) = (now, item.as_table_mut())
+            && !was.is_some_and(|was| same(was, now))
+        {
+            name_the_shape(table, now.as_table_like().expect("an agent is a table"));
+        }
+    }
+    document.insert("agents", Item::Table(crew));
+}
+
+/// Remove an entry's `name` and `role` lines: the table's name is the role.
+/// A comment written above either line is the human's, so it moves onto the
+/// next line the entry keeps, or onto the table's own decor when none is left.
+fn drop_identity(table: &mut Table) {
+    const IDENTITY: [&str; 2] = ["name", "role"];
+    let keys: Vec<String> = table
+        .iter()
+        .map(|(key, _)| key.to_string())
+        .filter(|key| IDENTITY.contains(&key.as_str()))
+        .collect();
+    let mut carried = String::new();
+    for key in keys {
+        if let Some(prefix) = table
+            .key(&key)
+            .and_then(|key| key.leaf_decor().prefix())
+            .and_then(RawString::as_str)
+        {
+            carried.push_str(prefix);
+        }
+        table.remove(&key);
+    }
+    if carried.is_empty() {
+        return;
+    }
+    let next = table.iter().next().map(|(key, _)| key.to_string());
+    match next {
+        Some(next) => {
+            if let Some(mut key) = table.key_mut(&next) {
+                let decor = key.leaf_decor_mut();
+                let old = decor.prefix().and_then(RawString::as_str).unwrap_or("");
+                let prefix = format!("{carried}{old}");
+                decor.set_prefix(prefix);
+            }
+        }
+        None => {
+            let decor = table.decor_mut();
+            let old = decor.prefix().and_then(RawString::as_str).unwrap_or("");
+            let prefix = format!("{old}{carried}");
+            decor.set_prefix(prefix);
+        }
+    }
+}
+
+/// Give a changed agent the keys the file may not name yet. A file in the array
+/// shape may leave out its harness, and its effort may be a model's `#variant`;
+/// once the agent is saved it names both itself, so the file reads back as it
+/// was saved. The model is written without its `#variant` too, or an explicit
+/// effort would leave the `#variant` in the model.
+fn name_the_shape(table: &mut Table, now: &dyn TableLike) {
+    for key in ["harness", "effort"] {
+        if !table.contains_key(key)
+            && let Some(item) = now.get(key)
+        {
+            table.insert(key, item.clone());
+        }
+    }
+    if let Some(model) = now.get("model")
+        && table.get("model").and_then(Item::as_str) != model.as_str()
+    {
+        set(table, "model", model);
+    }
+}
+
 /// Write into `document` the values that differ between `before` and `after`,
 /// and nothing else. A value that did not change keeps its place; a key the
 /// document does not have yet is added. A table the human wrote inline is
 /// written into in place, so it stays inline.
 fn apply(document: &mut dyn TableLike, before: &Table, after: &Table) {
+    for (key, _) in before.iter() {
+        if !after.contains_key(key) {
+            document.remove(key);
+        }
+    }
     for (key, now) in after.iter() {
         let was = before.get(key);
         if was.is_some_and(|was| same(was, now)) {
@@ -348,36 +462,12 @@ fn apply(document: &mut dyn TableLike, before: &Table, after: &Table) {
                     for (index, (was, now)) in was.iter().zip(now.iter()).enumerate() {
                         if let Some(table) = tables.get_mut(index) {
                             apply(table, was, now);
-                            if !same(&Item::Table(was.clone()), &Item::Table(now.clone())) {
-                                name_the_shape(table, now);
-                            }
                         }
                     }
                 }
             }
             _ => set(document, key, now),
         }
-    }
-}
-
-/// Give a changed agent the keys the file may not name yet. A file written
-/// before agents named their harness and effort reads them from the old
-/// global harness and from the model's `#variant`; once an agent is saved, it
-/// names both itself, so the file reads back as it was saved. The model is
-/// written without its `#variant` too, or an explicit effort would leave the
-/// `#variant` in the model.
-fn name_the_shape(table: &mut dyn TableLike, now: &Table) {
-    for key in ["harness", "effort"] {
-        if !table.contains_key(key)
-            && let Some(item) = now.get(key)
-        {
-            table.insert(key, item.clone());
-        }
-    }
-    if let Some(model) = now.get("model")
-        && table.get("model").and_then(Item::as_str) != model.as_str()
-    {
-        set(table, "model", model);
     }
 }
 
@@ -543,29 +633,26 @@ fn location(text: &str, index: usize) -> String {
 }
 
 impl Default for Config {
-    /// The project's own flow: the agents it runs, the models and efforts they
-    /// run at, the budget it works to, the order `docs/roles/roles.md` records,
-    /// and raul's own defaults.
+    /// The project's own flow: the crew it runs, the models and efforts each
+    /// runs at, the budget it works to, the order `docs/roles/roles.md`
+    /// records, and raul's own defaults.
     fn default() -> Self {
         Self {
             agents: vec![
                 Agent {
-                    name: "builder".to_string(),
-                    role: Role::Runner,
-                    harness: "claude".to_string(),
-                    model: "claude-haiku-5-5".to_string(),
-                    effort: Some("high".to_string()),
-                },
-                Agent {
-                    name: "reviewer".to_string(),
-                    role: Role::Reviewer,
+                    role: FlowRole::Orchestrator,
                     harness: "claude".to_string(),
                     model: "claude-opus-5-5".to_string(),
                     effort: Some("medium".to_string()),
                 },
                 Agent {
-                    name: "orchestrator".to_string(),
-                    role: Role::Orchestrator,
+                    role: FlowRole::Builder,
+                    harness: "claude".to_string(),
+                    model: "claude-haiku-5-5".to_string(),
+                    effort: Some("high".to_string()),
+                },
+                Agent {
+                    role: FlowRole::Reviewer,
                     harness: "claude".to_string(),
                     model: "claude-opus-5-5".to_string(),
                     effort: Some("medium".to_string()),
@@ -575,22 +662,22 @@ impl Default for Config {
             order: vec![
                 OrderStep {
                     step: "groom".to_string(),
-                    role: Role::Creator,
+                    role: FlowRole::Creator,
                     gates: vec![gate(Status::Groomed, Status::Approved)],
                 },
                 OrderStep {
                     step: "build".to_string(),
-                    role: Role::Runner,
+                    role: FlowRole::Builder,
                     gates: vec![gate(Status::Approved, Status::Executing)],
                 },
                 OrderStep {
                     step: "self-review".to_string(),
-                    role: Role::Runner,
+                    role: FlowRole::Builder,
                     gates: vec![gate(Status::Executing, Status::CodeReview)],
                 },
                 OrderStep {
                     step: "review".to_string(),
-                    role: Role::Reviewer,
+                    role: FlowRole::Reviewer,
                     gates: vec![
                         gate(Status::CodeReview, Status::Done),
                         gate(Status::CodeReview, Status::Remediating),
@@ -599,12 +686,12 @@ impl Default for Config {
                 },
                 OrderStep {
                     step: "remediate".to_string(),
-                    role: Role::Runner,
+                    role: FlowRole::Builder,
                     gates: vec![gate(Status::Remediating, Status::CodeReview)],
                 },
                 OrderStep {
                     step: "re-review".to_string(),
-                    role: Role::Reviewer,
+                    role: FlowRole::Reviewer,
                     gates: vec![gate(Status::CodeReview, Status::Done)],
                 },
             ],
@@ -617,13 +704,11 @@ fn gate(from: Status, to: Status) -> Gate {
     Gate { from, to }
 }
 
-/// One agent of the automation: its name, the role it fills, the harness it
-/// runs in, and the model and effort it runs at.
+/// One agent of the crew: the role it fills, the harness it runs in, and the
+/// model and effort it runs at. Its role is the name of its table.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Agent {
-    /// The name its role config gives it — `builder`, `reviewer`.
-    pub name: String,
-    pub role: Role,
+    pub role: FlowRole,
     /// The harness it runs in: a name of the harness table.
     pub harness: String,
     /// The model it runs, as the harness names it.
@@ -634,14 +719,25 @@ pub struct Agent {
     pub effort: Option<String>,
 }
 
+/// The order of the crew's roles, as the screens list them.
+fn rank(role: FlowRole) -> u8 {
+    match role {
+        FlowRole::Orchestrator => 0,
+        FlowRole::Builder => 1,
+        FlowRole::Reviewer => 2,
+        FlowRole::Creator => 3,
+    }
+}
+
 /// The configuration as a file holds it.
 ///
-/// Two shapes read: the one this code writes, and the one before agents named
-/// their harness. That one had a global `[harness]` table, and a model that
-/// carried its effort as `#effort`.
+/// Two shapes read: the one this code writes, one table per role under
+/// `[agents]`, and the one before it, an `[[agents]]` array whose entries name
+/// their role. That one also had a global `[harness]` table for all of them,
+/// and a model that carried its effort as `#effort`.
 #[derive(Deserialize)]
 struct Stored {
-    agents: Vec<StoredAgent>,
+    agents: StoredAgents,
     /// The old shape's harness: an agent that names none runs in it.
     harness: Option<StoredHarness>,
     round_limit: u32,
@@ -650,10 +746,36 @@ struct Stored {
     raul: Raul,
 }
 
+/// The list comes first: a struct also reads a sequence, field by field.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredAgents {
+    List(Vec<StoredListAgent>),
+    Tables(StoredTables),
+}
+
+/// The crew's tables: one for each role it may hold.
+#[derive(Deserialize)]
+struct StoredTables {
+    orchestrator: Option<StoredAgent>,
+    builder: Option<StoredAgent>,
+    reviewer: Option<StoredAgent>,
+}
+
+/// An agent's table. Its role is the table's name, so it is not repeated here.
 #[derive(Deserialize)]
 struct StoredAgent {
+    harness: Option<String>,
+    model: String,
+    effort: Option<String>,
+}
+
+/// An agent of the old `[[agents]]` array: its name and role were its own.
+#[derive(Deserialize)]
+struct StoredListAgent {
+    #[allow(dead_code)]
     name: String,
-    role: Role,
+    role: FlowRole,
     harness: Option<String>,
     model: String,
     effort: Option<String>,
@@ -671,11 +793,56 @@ impl TryFrom<Stored> for Config {
 
     fn try_from(stored: Stored) -> Result<Self, String> {
         let legacy = stored.harness.as_ref().map(|harness| harness.tool.clone());
-        let agents = stored
-            .agents
+        let entries: Vec<(FlowRole, StoredAgent)> = match stored.agents {
+            StoredAgents::Tables(tables) => [
+                (FlowRole::Orchestrator, tables.orchestrator),
+                (FlowRole::Builder, tables.builder),
+                (FlowRole::Reviewer, tables.reviewer),
+            ]
             .into_iter()
-            .map(|agent| agent_of(agent, legacy.as_deref()))
-            .collect::<Result<Vec<Agent>, String>>()?;
+            .filter_map(|(role, agent)| agent.map(|agent| (role, agent)))
+            .collect(),
+            StoredAgents::List(list) => {
+                let mut entries: Vec<(FlowRole, StoredAgent)> = Vec::new();
+                for agent in list {
+                    if agent.role == FlowRole::Creator {
+                        return Err(format!(
+                            "{} is not an agent's role: the crew holds the orchestrator, the builder and the reviewer",
+                            agent.role.as_str()
+                        ));
+                    }
+                    entries.push((
+                        agent.role,
+                        StoredAgent {
+                            harness: agent.harness,
+                            model: agent.model,
+                            effort: agent.effort,
+                        },
+                    ));
+                }
+                entries
+            }
+        };
+        let mut agents = Vec::new();
+        for (role, agent) in entries {
+            if agents.iter().any(|done: &Agent| done.role == role) {
+                return Err(format!(
+                    "the {} is in the crew twice: the file holds one table per role",
+                    role.as_str()
+                ));
+            }
+            agents.push(agent_of(role, agent, legacy.as_deref())?);
+        }
+        if !agents
+            .iter()
+            .any(|agent| agent.role == FlowRole::Orchestrator)
+        {
+            return Err(
+                "the crew has no orchestrator: [agents.orchestrator] is missing, and the orchestrator is always present"
+                    .to_string(),
+            );
+        }
+        agents.sort_by_key(|agent| rank(agent.role));
         Ok(Self {
             agents,
             round_limit: stored.round_limit,
@@ -688,15 +855,15 @@ impl TryFrom<Stored> for Config {
 /// An agent as the file states it, checked against the harness table. An
 /// agent that names no harness takes the old global one; a model's `#effort`
 /// is split off into the effort when the file names none.
-fn agent_of(stored: StoredAgent, legacy: Option<&str>) -> Result<Agent, String> {
+fn agent_of(role: FlowRole, stored: StoredAgent, legacy: Option<&str>) -> Result<Agent, String> {
+    let name = role.as_str();
     let harness = stored
         .harness
         .or_else(|| legacy.map(str::to_string))
-        .ok_or_else(|| format!("{} names no harness", stored.name))?;
+        .ok_or_else(|| format!("{name} names no harness"))?;
     let known = harness::find(&harness).ok_or_else(|| {
         format!(
-            "{} runs in {harness}, which is not a harness: the harnesses are {}",
-            stored.name,
+            "{name} runs in {harness}, which is not a harness: the harnesses are {}",
             harness::names().join(", ")
         )
     })?;
@@ -708,14 +875,12 @@ fn agent_of(stored: StoredAgent, legacy: Option<&str>) -> Result<Agent, String> 
         && !known.takes(effort)
     {
         return Err(format!(
-            "{} runs {harness} at {effort}, which is not one of its efforts: {}",
-            stored.name,
+            "{name} runs {harness} at {effort}, which is not one of its efforts: {}",
             known.efforts.join(", ")
         ));
     }
     Ok(Agent {
-        name: stored.name,
-        role: stored.role,
+        role,
         harness,
         model,
         effort,
@@ -770,7 +935,7 @@ impl Default for RaulTasks {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderStep {
     pub step: String,
-    pub role: Role,
+    pub role: FlowRole,
     /// The transitions the step performs.
     pub gates: Vec<Gate>,
 }
@@ -819,14 +984,18 @@ mod tests {
         assert_eq!(config.round_limit, 5);
         // One agent per role the automation runs; the creator is the human's
         // grooming session and holds no agent.
-        let roles: Vec<Role> = config.agents.iter().map(|agent| agent.role).collect();
+        let roles: Vec<FlowRole> = config.agents.iter().map(|agent| agent.role).collect();
         assert_eq!(
             roles,
-            vec![Role::Runner, Role::Reviewer, Role::Orchestrator]
+            vec![
+                FlowRole::Orchestrator,
+                FlowRole::Builder,
+                FlowRole::Reviewer
+            ]
         );
         for agent in &config.agents {
-            assert_eq!(agent.harness, "claude", "{}", agent.name);
-            assert!(agent.effort.is_some(), "{}", agent.name);
+            assert_eq!(agent.harness, "claude", "{}", agent.role.as_str());
+            assert!(agent.effort.is_some(), "{}", agent.role.as_str());
         }
     }
 
@@ -838,7 +1007,7 @@ mod tests {
             .iter()
             .map(|agent| {
                 (
-                    agent.name.as_str(),
+                    agent.role.as_str(),
                     agent.model.as_str(),
                     agent.effort.as_deref(),
                 )
@@ -847,9 +1016,9 @@ mod tests {
         assert_eq!(
             runs,
             [
+                ("orchestrator", "claude-opus-5-5", Some("medium")),
                 ("builder", "claude-haiku-5-5", Some("high")),
                 ("reviewer", "claude-opus-5-5", Some("medium")),
-                ("orchestrator", "claude-opus-5-5", Some("medium")),
             ]
         );
     }
@@ -957,7 +1126,9 @@ mod tests {
         assert!(text.contains("provisional"), "{text}");
         for part in [
             "round_limit",
-            "[[agents]]",
+            "[agents.orchestrator]",
+            "[agents.builder]",
+            "[agents.reviewer]",
             "harness = \"claude\"",
             "effort = \"high\"",
             "[[order]]",
@@ -1018,21 +1189,128 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_crew_and_order_round_trip() {
-        // The writer writes its own type, empty vectors included: an empty
+    fn an_empty_order_round_trips() {
+        // The writer writes its own type, an empty order included: an empty
         // list is a root key, written where root keys still live.
         let config = Config {
-            agents: Vec::new(),
             order: Vec::new(),
             ..Config::default()
         };
         let text = config.to_toml();
-        assert!(text.contains("agents = []"), "{text}");
         assert!(text.contains("order = []"), "{text}");
         assert_eq!(
             Config::from_toml(&text).expect("the written shape parses"),
             config
         );
+    }
+
+    #[test]
+    fn a_crew_without_an_orchestrator_is_unreadable() {
+        // The orchestrator is always in the crew: a file that names only the
+        // builder and the reviewer is named, not filled in.
+        let text =
+            Config::default()
+                .to_toml()
+                .replacen("[agents.orchestrator]", "[agents.unused]", 1);
+        let error = Config::from_toml(&text).expect_err("no orchestrator");
+        assert!(matches!(&error, ConfigError::Shape { .. }), "{error:?}");
+        assert!(error.to_string().contains("orchestrator"), "{error}");
+    }
+
+    #[test]
+    fn a_crew_of_one_is_the_orchestrator_alone() {
+        // One table is a crew: the orchestrator builds and reviews.
+        let mut config = Config::default();
+        config
+            .agents
+            .retain(|agent| agent.role == FlowRole::Orchestrator);
+        let text = config.to_toml();
+        assert!(!text.contains("[agents.builder]"), "{text}");
+        assert!(!text.contains("[agents.reviewer]"), "{text}");
+        assert_eq!(Config::from_toml(&text).expect("a crew of one"), config);
+    }
+
+    #[test]
+    fn a_crew_of_two_is_the_orchestrator_and_the_builder() {
+        // Without a reviewer the orchestrator reviews the builder's work.
+        let mut config = Config::default();
+        config
+            .agents
+            .retain(|agent| agent.role != FlowRole::Reviewer);
+        let text = config.to_toml();
+        assert!(text.contains("[agents.builder]"), "{text}");
+        assert!(!text.contains("[agents.reviewer]"), "{text}");
+        assert_eq!(Config::from_toml(&text).expect("a crew of two"), config);
+    }
+
+    #[test]
+    fn the_crew_reads_in_the_order_the_screens_list_it() {
+        // The tables may be written in any order; the crew is read in the order
+        // the screens list it, so an index means the same role in every reader.
+        let text = "\
+round_limit = 5
+
+[agents.reviewer]
+harness = \"claude\"
+model = \"claude-opus-5-5\"
+
+[agents.builder]
+harness = \"claude\"
+model = \"claude-haiku-5-5\"
+
+[agents.orchestrator]
+harness = \"claude\"
+model = \"claude-opus-5-5\"
+
+[[order]]
+step = \"groom\"
+role = \"creator\"
+gates = []
+";
+        let read = Config::from_toml(text).expect("the tables in another order");
+        let roles: Vec<FlowRole> = read.agents.iter().map(|agent| agent.role).collect();
+        assert_eq!(
+            roles,
+            vec![
+                FlowRole::Orchestrator,
+                FlowRole::Builder,
+                FlowRole::Reviewer
+            ]
+        );
+    }
+
+    #[test]
+    fn a_role_in_the_crew_twice_is_named() {
+        // The array shape allows two entries of one role; the table shape
+        // cannot, so the file is named rather than one of them dropped.
+        let text = "\
+round_limit = 5
+
+[[agents]]
+name = \"orchestrator\"
+role = \"orchestrator\"
+harness = \"claude\"
+model = \"claude-opus-5-5\"
+
+[[agents]]
+name = \"a\"
+role = \"runner\"
+harness = \"claude\"
+model = \"claude-haiku-5-5\"
+
+[[agents]]
+name = \"b\"
+role = \"runner\"
+harness = \"claude\"
+model = \"claude-haiku-5-5\"
+
+[[order]]
+step = \"groom\"
+role = \"creator\"
+gates = []
+";
+        let error = Config::from_toml(text).expect_err("two builders");
+        assert!(error.to_string().contains("builder"), "{error}");
     }
 
     #[test]
@@ -1336,7 +1614,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         let orchestrator = config
             .agents
             .iter()
-            .find(|agent| agent.role == Role::Orchestrator)
+            .find(|agent| agent.role == FlowRole::Orchestrator)
             .expect("the orchestrator");
         assert_eq!(orchestrator.model, "claude-sonnet-5-5");
         // The effort is the orchestrator's own: a pick keeps it.
@@ -1346,13 +1624,13 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         let builder = config
             .agents
             .iter()
-            .find(|agent| agent.role == Role::Runner)
+            .find(|agent| agent.role == FlowRole::Builder)
             .expect("the builder");
         assert_eq!(builder.model, "claude-haiku-5-5");
         let reviewer = config
             .agents
             .iter()
-            .find(|agent| agent.role == Role::Reviewer)
+            .find(|agent| agent.role == FlowRole::Reviewer)
             .expect("the reviewer");
         assert_eq!(reviewer.model, "claude-opus-5-5");
         // Every other line is byte-identical: the file is the human's.
@@ -1391,7 +1669,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
                 .expect("the edited text parses")
                 .agents
                 .iter()
-                .find(|agent| agent.role == Role::Orchestrator)
+                .find(|agent| agent.role == FlowRole::Orchestrator)
                 .map(|agent| agent.model.as_str()),
             Some("opencode-go/kimi-k3")
         );
@@ -1410,7 +1688,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
             config
                 .agents
                 .iter()
-                .find(|agent| agent.role == Role::Orchestrator)
+                .find(|agent| agent.role == FlowRole::Orchestrator)
                 .map(|agent| agent.model.as_str()),
             Some("opencode-go/glm-5.3")
         );
@@ -1426,7 +1704,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         let mut config = Config::default();
         config
             .agents
-            .retain(|agent| agent.role != Role::Orchestrator);
+            .retain(|agent| agent.role != FlowRole::Orchestrator);
         assert!(!config.set_orchestrator_model("opencode-go/kimi-k3"));
     }
 
@@ -1474,8 +1752,8 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         // A pick is no longer searched for in the text: a model is what an
         // agent runs, and an agent that names none is not a configuration.
         let text = Config::default().to_toml().replacen(
-            "role = \"orchestrator\"\nharness = \"claude\"\nmodel = \"claude-opus-5-5\"\n",
-            "role = \"orchestrator\"\nharness = \"claude\"\n",
+            "[agents.orchestrator]\nharness = \"claude\"\nmodel = \"claude-opus-5-5\"\n",
+            "[agents.orchestrator]\nharness = \"claude\"\n",
             1,
         );
         let error = Config::from_toml(&text).expect_err("the orchestrator names no model");
@@ -1523,9 +1801,8 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     fn a_role_and_a_status_keep_their_stored_words() {
         let toml = Config::default().to_toml();
         for word in [
-            "\"runner\"",
+            "\"builder\"",
             "\"reviewer\"",
-            "\"orchestrator\"",
             "\"creator\"",
             "\"code-review\"",
             "\"needs-human\"",
@@ -1561,7 +1838,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
             .iter()
             .map(|agent| {
                 (
-                    agent.name.as_str(),
+                    agent.role.as_str(),
                     agent.harness.as_str(),
                     agent.model.as_str(),
                     agent.effort.as_deref(),
@@ -1572,15 +1849,15 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
             runs,
             [
                 (
-                    "builder",
-                    "opencode",
-                    "opencode-go/deepseek-v4.1-flash",
-                    Some("high")
-                ),
-                (
                     "orchestrator",
                     "opencode",
                     "opencode-go/glm-5.3",
+                    Some("high")
+                ),
+                (
+                    "builder",
+                    "opencode",
+                    "opencode-go/deepseek-v4.1-flash",
                     Some("high")
                 ),
             ]
@@ -1598,7 +1875,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         let orchestrator = config
             .agents
             .iter()
-            .find(|agent| agent.role == Role::Orchestrator)
+            .find(|agent| agent.role == FlowRole::Orchestrator)
             .expect("the orchestrator");
         assert_eq!(orchestrator.harness, "cursor-agent");
         assert_eq!(orchestrator.model, "auto");
@@ -1615,7 +1892,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         let orchestrator = config
             .agents
             .iter()
-            .find(|agent| agent.role == Role::Orchestrator)
+            .find(|agent| agent.role == FlowRole::Orchestrator)
             .expect("the orchestrator");
         assert_eq!(orchestrator.harness, "opencode");
         assert_eq!(orchestrator.effort.as_deref(), Some("high"));
@@ -1627,6 +1904,20 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         );
     }
 
+    #[test]
+    fn a_save_of_an_old_file_writes_its_crew_as_tables() {
+        // The array cannot hold the tables, so a save that changes an agent
+        // writes the crew as tables, and keeps the rest of the file as it was.
+        let saved = change_builder("tables", HAND_WRITTEN, |agent| {
+            agent.model = "opencode-go/kimi-k3".to_string();
+        });
+        assert!(saved.contains("[agents.builder]"), "{saved}");
+        assert!(saved.contains("[agents.orchestrator]"), "{saved}");
+        assert!(!saved.contains("[[agents]]"), "{saved}");
+        assert!(saved.contains("extra_root = \"kept\""), "{saved}");
+        assert!(saved.contains("[[order]]"), "{saved}");
+    }
+
     /// Change the builder of a file holding `text`, save it, and check that the
     /// file reads back as the configuration saved. Returns the saved text.
     fn change_builder(name: &str, text: &str, change: impl FnOnce(&mut Agent)) -> String {
@@ -1634,7 +1925,12 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         let path = scratch.path();
         let mut file = ConfigFile::read(&path).expect("the configuration");
         let mut config = file.config().clone();
-        change(&mut config.agents[0]);
+        let builder = config
+            .agents
+            .iter_mut()
+            .find(|agent| agent.role == FlowRole::Builder)
+            .expect("a builder");
+        change(builder);
         file.save(&config).expect("the save");
         let saved = fs::read_to_string(&path).expect("the file");
         assert_eq!(
@@ -1677,9 +1973,11 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
 
     #[test]
     fn an_agent_with_no_harness_and_no_global_one_is_unreadable() {
-        let text = Config::default()
-            .to_toml()
-            .replacen("harness = \"claude\"\n", "", 1);
+        let text = Config::default().to_toml().replacen(
+            "[agents.builder]\nharness = \"claude\"\n",
+            "[agents.builder]\n",
+            1,
+        );
         let error = Config::from_toml(&text).expect_err("the builder names no harness");
         assert!(matches!(&error, ConfigError::Shape { .. }), "{error:?}");
         assert!(
@@ -1718,7 +2016,12 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
             .to_toml()
             .replacen("effort = \"high\"\n", "", 1);
         let config = Config::from_toml(&text).expect("an agent without an effort");
-        assert_eq!(config.agents[0].effort, None);
+        let builder = config
+            .agents
+            .iter()
+            .find(|agent| agent.role == FlowRole::Builder)
+            .expect("a builder");
+        assert_eq!(builder.effort, None);
         assert!(
             !config.to_toml().contains("effort = \"high\""),
             "{}",

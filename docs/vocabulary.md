@@ -14,7 +14,7 @@ interfaces, the machine's records, the agents' jobs — takes plain words.**
 | The place and its views | lane | the **lane**, the human lane, the agent lane, the backlog tab, the board |
 | The interfaces | plain words behind a coined name | **talita**, **raul**, **hugo** |
 | The records | plain | **task**, **smaller task**, acceptance criterion, step, **evidence**, finding, comment, note, question, **event** |
-| The jobs | plain | **creator**, **runner**, **reviewer**, **orchestrator** |
+| The jobs | plain | **creator**, **builder** (the task model's **runner**), **reviewer**, **orchestrator** |
 | The states | plain | `draft` `groomed` `approved` `executing` `code-review` `remediating` `needs-human` `done`; overlays `blocked` `deferred` `cancelled` |
 
 Two consequences that are rules, not accidents:

@@ -4,7 +4,7 @@
 │╭─ 󰚩 crew ───────────────────────────────────────────────╮│
 ││role           model            task  held  state       ││
 ││󰚩 orchestrator claude-opus-5-5  —     —     idle        ││
-││󰖷 runner       claude-haiku-5-5 TSK10 󰥔 10d ⠋ executing ││
+││󰖷 builder      claude-haiku-5-5 TSK10 󰥔 10d ⠋ executing ││
 ││󰈈 reviewer     claude-opus-5-5  TSK13 󰥔 8d  ⠋ reviewing ││
 ││one per role · the reviewer reviews                     ││
 │╰────────────────────────────────────────────────────────╯│

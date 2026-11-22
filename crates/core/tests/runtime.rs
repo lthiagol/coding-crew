@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use coding_crew_core::runtime::{AgentState, Composition, Severities};
 use coding_crew_core::{
-    Activity, FindingStatus, Role, Runtime, Severity, Status, Store, Task, parse_rfc3339,
+    Activity, FindingStatus, FlowRole, Runtime, Severity, Status, Store, Task, parse_rfc3339,
 };
 
 /// The instant the fixtures are read with, as in `mock_data.rs`.
@@ -92,14 +92,14 @@ fn every_held_task_exists_and_is_the_live_work_the_agent_owns() {
             .get(id)
             .unwrap_or_else(|| panic!("{} holds unknown task {id}", member.role.as_str()));
         match member.role {
-            Role::Runner => {
+            FlowRole::Builder => {
                 assert_eq!(task.status, Status::Executing, "{id}");
                 let claim = task.claim.as_ref().expect("the runner's claim");
                 assert!(claim.by.starts_with("runner-"), "{id}: {}", claim.by);
                 assert_eq!(member.since.as_deref(), Some(claim.at.as_str()), "{id}");
                 assert_eq!(member.state, AgentState::Executing, "{id}");
             }
-            Role::Reviewer => {
+            FlowRole::Reviewer => {
                 assert_eq!(task.status, Status::CodeReview, "{id}");
                 assert_eq!(
                     member.since.as_deref(),
@@ -124,10 +124,14 @@ fn every_held_task_exists_and_is_the_live_work_the_agent_owns() {
 #[test]
 fn the_crew_is_one_per_role_and_the_reviewer_reviews() {
     let runtime = runtime();
-    let roles: Vec<Role> = runtime.crew.iter().map(|member| member.role).collect();
+    let roles: Vec<FlowRole> = runtime.crew.iter().map(|member| member.role).collect();
     assert_eq!(
         roles,
-        [Role::Orchestrator, Role::Runner, Role::Reviewer],
+        [
+            FlowRole::Orchestrator,
+            FlowRole::Builder,
+            FlowRole::Reviewer
+        ],
         "the crew is not one per role"
     );
     assert_eq!(runtime.composition(), Composition::OnePerRole);
@@ -140,7 +144,7 @@ fn the_crew_is_one_per_role_and_the_reviewer_reviews() {
     let reviewer = runtime
         .crew
         .iter()
-        .find(|member| member.role == Role::Reviewer)
+        .find(|member| member.role == FlowRole::Reviewer)
         .expect("the reviewer");
     assert_eq!(reviewer.holds.as_deref(), Some(round.task.as_str()));
 }
@@ -271,7 +275,7 @@ fn the_run_began_before_the_first_hold_and_after_the_event_before_it() {
         if let (Some(id), Some(since)) = (&member.holds, &member.since) {
             let task = &tasks[id];
             let named = match member.role {
-                Role::Runner => task.claim.as_ref().expect("a claim").at.clone(),
+                FlowRole::Builder => task.claim.as_ref().expect("a claim").at.clone(),
                 _ => task.status_since.clone(),
             };
             assert_eq!(*since, named, "{id}");

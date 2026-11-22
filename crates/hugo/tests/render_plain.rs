@@ -198,7 +198,7 @@ fn the_crew_leads_the_main_pane_the_shell_has_content() {
     let mut facts = vec![
         "crew".to_string(),
         "orchestrator".to_string(),
-        "runner".to_string(),
+        "builder".to_string(),
         "reviewer".to_string(),
         "one per role · the reviewer reviews".to_string(),
         "external rounds".to_string(),
@@ -448,7 +448,7 @@ fn an_absent_configuration_is_written_with_the_defaults() {
     assert!(!config.exists(), "the test home is not fresh");
     let text = screen_in(&mock_project(), &home);
     for fact in [
-        "builder · runner",
+        "builder",
         "claude-haiku-5-5",
         "claude-opus-5-5",
         "5 build-and-fix rounds",
@@ -459,7 +459,7 @@ fn an_absent_configuration_is_written_with_the_defaults() {
     assert!(config.is_file(), "hugo did not write {}", config.display());
     // The format a human opens is TOML, and it explains itself.
     let written = fs::read_to_string(&config).expect("the configuration");
-    assert!(written.contains("[[agents]]"), "{written}");
+    assert!(written.contains("[agents.builder]"), "{written}");
     assert!(
         written.lines().any(|line| line.starts_with('#')),
         "the written defaults carry no comment: {written}"

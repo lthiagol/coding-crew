@@ -9,7 +9,7 @@ use std::process::{Command, Output};
 
 use coding_crew_core::Config;
 
-const ROLES: [&str; 3] = ["orchestrator", "runner", "reviewer"];
+const ROLES: [&str; 3] = ["orchestrator", "builder", "reviewer"];
 
 /// The text a role's file holds, as the binary embeds it.
 fn skill_text(role: &str) -> String {
@@ -94,17 +94,15 @@ fn the_crew_header_reflects_a_configuration_that_is_not_the_default() {
         round_limit: 2,
         ..Config::default()
     };
-    config.agents[1].harness = "opencode".to_string();
-    config.agents[1].model = "opencode-go/glm-5.3".to_string();
-    config.agents[1].effort = Some("low".to_string());
+    config.agents[2].harness = "opencode".to_string();
+    config.agents[2].model = "opencode-go/glm-5.3".to_string();
+    config.agents[2].effort = Some("low".to_string());
     config.write(&config_file(&home)).expect("a configuration");
 
     let text = stdout_of(&run(Some(&home), &["--skill", "reviewer"]));
     assert!(text.contains("Review-round limit: 2."), "{text}");
     assert!(
-        text.contains(
-            "- reviewer (reviewer): harness opencode, model opencode-go/glm-5.3, effort low\n"
-        ),
+        text.contains("- reviewer: harness opencode, model opencode-go/glm-5.3, effort low\n"),
         "{text}"
     );
     assert!(
@@ -124,7 +122,7 @@ fn an_unreadable_configuration_prints_the_defaults_and_says_so_in_one_line() {
     let config = config_file(&home);
     fs::write(&config, "round_limit = \n").expect("a broken configuration");
 
-    let text = stdout_of(&run(Some(&home), &["--skill", "runner"]));
+    let text = stdout_of(&run(Some(&home), &["--skill", "builder"]));
     assert!(
         text.contains("config.toml is unreadable: the defaults are in force.\n"),
         "{text}"
@@ -150,11 +148,11 @@ fn a_machine_with_no_home_prints_the_defaults_and_says_so() {
 #[test]
 fn an_unknown_role_fails_and_names_the_three() {
     let home = fresh_home("unknown");
-    for args in [vec!["--skill", "builder"], vec!["--skill=builder"]] {
+    for args in [vec!["--skill", "runner"], vec!["--skill=runner"]] {
         let output = run(Some(&home), &args);
         assert!(!output.status.success(), "{args:?} succeeded");
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(stderr.contains("builder"), "{stderr}");
+        assert!(stderr.contains("runner"), "{stderr}");
         for role in ROLES {
             assert!(stderr.contains(role), "{stderr}");
         }
@@ -164,7 +162,7 @@ fn an_unknown_role_fails_and_names_the_three() {
 #[test]
 fn a_skill_is_not_a_render() {
     let home = fresh_home("render");
-    let output = run(Some(&home), &["--skill", "runner", "--render", "--plain"]);
+    let output = run(Some(&home), &["--skill", "builder", "--render", "--plain"]);
     assert!(!output.status.success(), "the skill rendered");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("does not render"), "{stderr}");

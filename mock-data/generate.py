@@ -1523,7 +1523,7 @@ def runtime_record(tasks):
                 "state": "idle",
             },
             {
-                "role": "runner",
+                "role": "builder",
                 "model": RUNNER_MODEL,
                 "holds": runner_task["id"],
                 "since": runner_task["claim"]["at"],
@@ -1626,8 +1626,8 @@ def check_runtime(record, tasks, events):
 
     # The crew is one per role, each entry naming the live work it holds.
     roles = [member["role"] for member in record["crew"]]
-    assert sorted(roles) == ["orchestrator", "reviewer", "runner"], roles
-    runner = next(member for member in record["crew"] if member["role"] == "runner")
+    assert sorted(roles) == ["builder", "orchestrator", "reviewer"], roles
+    runner = next(member for member in record["crew"] if member["role"] == "builder")
     runner_task = by_id[runner["holds"]]
     assert runner_task["status"] == "executing", runner_task["id"]
     assert runner["since"] == runner_task["claim"]["at"], runner

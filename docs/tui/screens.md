@@ -237,8 +237,9 @@ names the path, and `● modified` while there are unsaved changes. Decided
 2026-11-22: the tab that "persists nothing" is overruled.
 
 **Everything in the file is editable** — raul's own `[raul]` table and the
-flow's sections (`round_limit`, each agent's `harness`, `model`, `effort` and
-`role`, the order's steps' values). Rows cannot be added or removed from
+flow's sections (`round_limit`, each agent's `harness`, `model` and `effort`,
+the order's steps' values). An agent's table is its role, so the file names no
+role or name for it to edit. Rows cannot be added or removed from
 raul; only values change. A comment line is not a row the cursor stops on.
 A value written inline (`tasks = { … }`) or as a dotted key
 (`tasks.sort = …`) is shown as text, not a stop, until the follow-up in
@@ -246,8 +247,8 @@ A value written inline (`tasks = { … }`) or as a dotted key
 
 | value | how it changes |
 |---|---|
-| a choice (`theme`, `icons`, `role`, `harness`, `effort`, `sort`, a boolean) | `enter` opens its list: the picker hugo's choices use, with the value in force under the cursor. `↑` `↓` (`j` `k`) move over the choices, `enter` keeps the one under the cursor, `esc` restores the value the list opened on. A `harness` lists the harness table; an `effort` lists the levels of the agent's harness |
-| text or a number (`model`, `name`, `round_limit`) | `enter` edits it inline in the line; `enter` keeps, `esc` drops |
+| a choice (`theme`, `icons`, a step's `role`, `harness`, `effort`, `sort`, a boolean) | `enter` opens its list: the picker hugo's choices use, with the value in force under the cursor. `↑` `↓` (`j` `k`) move over the choices, `enter` keeps the one under the cursor, `esc` restores the value the list opened on. A `harness` lists the harness table; an `effort` lists the levels of the agent's harness |
+| text or a number (`model`, a step's `step`, `round_limit`) | `enter` edits it inline in the line; `enter` keeps, `esc` drops |
 
 The arrows and `h` `l` switch tabs on Settings as on every other tab: they
 change no value.
