@@ -45,6 +45,11 @@ made project ownership depend on which folders happened to exist.
 - A project with `coding-crew/` but no `work/` is not initialized by a reader.
   A writer creates the work folder when it first writes.
 
+- Any folder named `coding-crew/` is a boundary, so a repository whose own
+  root is named `coding-crew` — this one — is discovered as a project from
+  inside it or its parent. Accepted as a known limit (the human, 2026-11-22):
+  an explicit path always works. A marker would fix it, and waits for a writer.
+
 ### Follow-up
 
 - Windows-only path cases are covered by compile-checked tests; CI currently
