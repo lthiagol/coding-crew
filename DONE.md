@@ -1349,6 +1349,16 @@ round closed all three with tests. No ruling was made. One choice stays open:
 a click on a Settings table header selects the value below it, and the two
 reviews disagree on the answer (see THE FOLLOW-UPS). Commit `77cda41`.
 
+Unit closed: the review reads in layers (plan 74). One build round, one fix
+round; the second review clean. Each round is a heading with its kind, number,
+verdict and reviewer. Its findings are grouped high, medium, low, and each is a
+list item, its details one level in and its comments one level deeper. Orphan
+findings get their own group. TSK19 renders at 60 and 100 are in the report.
+Round one found one low: a comment's id overflows a 14-column pane at its
+depth, so the width floor moved to 16, and the known-issue line in TODO.md was
+corrected to match. No ruling was made. The comment depth and the floor are
+open (see THE FOLLOW-UPS). Commit `d17eb39`.
+
 ---
 
 ## Lessons

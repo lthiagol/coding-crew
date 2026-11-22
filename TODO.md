@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 73.
+Updated 2026-11-22 by the orchestrator, after unit 74.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–73, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–74, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- 74 · The review reads in layers (M)
 - 75 · Backlog items have documents (S)
 - 76 · Settings in colour (S)
 
@@ -467,6 +466,18 @@ None blocking. Carried from the closed units.
 - **hugo's queue picks are pinned, not proven** (2026-11-22, unit 73). The mock
   gives the same lines under the old offset, so the test shows the behaviour
   and not the fix.
+- **The comment depth is the builder's reading** (2026-11-22, unit 74). The
+  done-when says comments sit "one level deeper" than their finding's details,
+  so they are at depth 3, under a `comments:` label at depth 2. If it meant one
+  deeper than the finding, the items move to depth 2. The human decides.
+- **The width floor is 16, not 14** (2026-11-22, unit 74). A comment's id at
+  depth 3 needs 14 content columns, so a 14-column pane overflows. The floor
+  moved to 16 in `screens.md` and the test. The orchestrator confirms it, and
+  the human decides whether 14 must hold; that needs comments at depth 2 or a
+  different id rendering.
+- **The round heading wraps at 40 columns** (2026-11-22, unit 74). Four parts
+  (kind, number, verdict, reviewer) run over two lines at 40. The render test
+  allows it. The human confirms it is acceptable.
 
 ## WHAT WAITS ON THE FLOW
 
