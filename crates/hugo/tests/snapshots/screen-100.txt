@@ -1,8 +1,8 @@
  󰚩 hugo · mock-data                                                                       󰑮 running
 ╭─ 󰒓 configuration ────────────╮╭─ 󰑮 flow ─────────────────────────────────────────────────────────╮
 │ AGENTS                       ││╭─ 󰚩 crew ───────────────────────────────────────────────────────╮│
-│▌󰖷 builder · runner           │││role           model            task  held  state               ││
-│   harness claude             │││󰚩 orchestrator claude-opus-5-5  —     —     idle                ││
+│ 󰖷 builder · runner           │││role           model            task  held  state               ││
+│▌  harness claude             │││󰚩 orchestrator claude-opus-5-5  —     —     idle                ││
 │   model claude-haiku-5-5     │││󰖷 runner       claude-haiku-5-5 TSK10 󰥔 10d ⠋ executing         ││
 │   effort high                │││󰈈 reviewer     claude-opus-5-5  TSK13 󰥔 8d  ⠋ reviewing         ││
 │ 󰈈 reviewer                   │││one per role · the reviewer reviews                             ││
@@ -37,4 +37,4 @@
 │                              ││                                                                  │
 │                              ││󰑮 running since 2026-11-09T08:30Z                                 │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
- q  quit   r  reload   ↑↓ j/k  move   ?  help
+ q  quit   r  reload   ↑↓ j/k  move   ?  help   enter  choose

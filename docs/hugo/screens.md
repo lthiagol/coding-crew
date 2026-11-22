@@ -60,10 +60,10 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 | part | behaviour |
 |---|---|
 | title line | the tool's icon and name, `hugo`, then a dim `·` and the project's folder when one is found; a window too narrow for the name shows no title rather than a cut of the name |
-| sidebar | the configuration, on the left: each agent with its harness, model and effort, the review-round limit and the order, in that order. The agents group has a cursor: `↑ k` and `↓ j` move it, and `enter` on the orchestrator's row chooses its model. The builder's and the reviewer's rows are read-only. `r` reloads the configuration from the file |
+| sidebar | the configuration, on the left: each agent with its harness, model and effort, the review-round limit and the order, in that order. The agents group has a cursor on each agent's harness, model and effort: `↑ k` and `↓ j` move it, and `enter` on one of those rows opens its choice. An agent's name and role are read-only. `r` reloads the configuration from the file |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
-| footer | the keys that work — never a key that does nothing. The window's keys are `q quit`, `ctrl-c quit`, `r reload`, `↑ k` `↓ j` move, `enter choose` (on the orchestrator's row), `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)) and `? help`; while the choice is open its keys are `esc close`, `enter pick`, `↑ k` `↓ j` move, and `q quit` and `? help` still work |
-| choice | the `orchestrator model`, as a small list of the catalogue's models with a cursor of its own; `enter` picks one and saves it, `esc` closes it without saving |
+| footer | the keys that work — never a key that does nothing. The window's keys are `q quit`, `ctrl-c quit`, `r reload`, `↑ k` `↓ j` move, `enter choose` (on an agent's row), `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)) and `? help`; while a choice is open its keys are `esc close`, `enter pick`, `↑ k` `↓ j` move, and `q quit` and `? help` still work; while the id input is open its keys are `esc back` and `enter pick`, and every other key types, `ctrl-c quit` aside |
+| choice | the choice of the row under the cursor, titled with the agent and the field (`builder model`): a small list with a cursor of its own. A harness lists the table's three; a model lists the harness's models, with `type an id…` last; an effort lists the harness's levels. `enter` picks and saves, `esc` closes without saving |
 | help | `?` opens the keys, in the sidebar and over the choice; any key closes it and gives the choice back |
 | tab bar | none: the flow has one screen, not a set of tabs |
 
@@ -178,27 +178,43 @@ file that does not parse after a reload is handled as it is at startup — the
 file and the error are named, the file is left alone, and the defaults are
 shown beside it — and a reload with no configuration file writes the defaults.
 
-The orchestrator's row in the agents group is the one editable thing: the
-human moves the cursor to it and presses `enter` to choose the model the
-orchestrator would run on. The choice is a small list with a cursor of its
-own; `enter` saves the model and returns to the sidebar, and `esc` closes it
-without saving anything. The builder's and the reviewer's models are
-read-only: the flow starts those, not hugo, so their rows open nothing.
+Every agent is configured from hugo. The cursor moves over each agent's
+harness, model and effort, and `enter` opens that row's choice: the builder's
+and the reviewer's rows open theirs as the orchestrator's does. A pick is
+saved at once; `esc` closes a choice without saving anything. The title of a
+choice is the agent and the field, as `builder model`.
 
-**The models are the harness's own list.** The list is the orchestrator's
-harness's: `claude` lists its models from the table, `opencode` runs
-`opencode models`, and `cursor-agent` runs `cursor-agent --list-models`. It is
-derived at the moment the choice opens, never written out by hand. A pick is checked
-against the same catalogue the list comes from, so the configuration cannot
-hold a model that does not exist. The read is bounded: the choice opens at
-once and says `reading the model catalog` while the tool runs, and the window
-keeps drawing and taking its keys meanwhile. A tool that takes longer than
-5 seconds is given up, and one that is missing or fails names its error in the
-choice — `the model catalog cannot be read` and the reason — so no key waits
-on a harness tool.
+**The harness choice.** The list is the table's three harnesses. A harness the
+machine does not have is listed dim as `not installed` and cannot be picked.
+Picking another harness reads that harness's catalogue first, bounded as below,
+and then switches the agent. The model stays only when the new harness lists
+it; otherwise it is cleared, and the row says `pick a model` on the warning
+slot. The effort stays when the new harness takes it; otherwise it becomes the
+harness's default level. Nothing is carried over silently. A catalogue that
+cannot be read refuses the switch, and the choice names why.
 
-Nothing else on the sidebar is changed from the screen, and no other setting is
-written. `s` starts the orchestrator; the loop it runs is the orchestrator's.
+**The model choice.** The list is the harness's own list: `claude` lists its models
+from the table, `opencode` runs `opencode models`, and `cursor-agent` runs
+`cursor-agent --list-models`. It is derived at the moment the choice opens,
+never written out by hand. The last entry, `type an id…`, opens an inline
+input. A typed id is checked by its shape — one word or `provider/model`, no
+whitespace, no `#variant` — and not against the list; one that is not shaped
+so says `not a model id` on the input's line. While the input is open
+every key is text but `ctrl-c`, and `esc` returns to the list. The read is
+bounded: the choice opens at once and says `reading the model catalog` while
+the tool runs, and the window keeps drawing and taking its keys meanwhile. A
+tool that takes longer than 5 seconds is given up, and one that is missing or
+fails names its error in the choice — `the model catalog cannot be read` and
+the reason — so no key waits on a harness tool. The choice still lists
+`type an id…` under the reason, so a model can be typed in by hand.
+
+**The effort choice.** The list is the harness's levels, lowest first, with
+the level in force under the cursor. An agent with no effort says `pick an
+effort` on the warning slot, and `s` refuses until one is picked; the harness's
+default is not assumed.
+
+Nothing else on the sidebar is changed from the screen. `s` starts the
+orchestrator; the loop it runs is the orchestrator's.
 
 **Nothing is dropped without a word.** A row too wide for the pane is cut with
 the theme's marker — the provider and the model's own name are on rows of their
@@ -235,13 +251,14 @@ order. The loop is the orchestrator's: hugo starts it and does not run it.
 
 The queue is the unclaimed work the main pane draws. A task an agent holds is
 that agent's, so no second orchestrator is given it. The footer names `s start`
-only when it can act: herdr hosts hugo, the queue has work, and no start is in
-flight.
+only when it can act: herdr hosts hugo, the queue has work, every agent has its
+harness, model and effort, and no start is in flight.
 
 | state | what `s` does |
 |---|---|
 | outside herdr (`HERDR_ENV` is not `1`) | starts nothing: `start needs herdr` |
 | the queue is empty | starts nothing: `the queue is empty` |
+| an agent has no harness, model or effort | starts nothing: `the orchestrator did not start:` and the gaps, named — `builder has no model` — on the failure slot |
 | herdr already names an orchestrator | starts nothing: `an orchestrator is already running in herdr` |
 | starting | `starting the orchestrator…`, dim. The herdr calls run beside the window, which keeps drawing and taking keys |
 | started | `orchestrator started in tab <id>`, on `semantic.ok` |
@@ -283,9 +300,10 @@ machine with no home folder has nowhere for hugo to write: the shell still
 runs, and the sidebar says `no configuration yet`.
 
 The configuration is read at launch, and `r` reads it again without a
-restart. The only thing hugo writes there from the screen is the
-orchestrator's picked model. `s` starts the orchestrator without writing
-anything.
+restart. The only things hugo writes there from the screen are the picks: an
+agent's harness, model or effort, each saved in place, so the file keeps its
+comments and the values the pick does not change. A pick is made on the file
+as it is now. `s` starts the orchestrator without writing anything.
 
 The records are not part of this file and do not follow it: the journal and
 the runtime record are machine-written, so they stay JSON.

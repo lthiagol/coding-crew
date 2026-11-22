@@ -1,7 +1,7 @@
 //! The models the catalog knows.
 //!
-//! The orchestrator's model is picked in the sidebar, so the list of models
-//! is its harness's own: the table in `coding_crew_core::harness` says where
+//! An agent's model is picked in the sidebar, so the list of models is its
+//! harness's own: the table in `coding_crew_core::harness` says where
 //! each harness lists its models — a curated list, or a command such as
 //! `opencode models`, one model per line. The list is never written out here,
 //! and a pick is checked against the same list it came from, so `config.toml`
@@ -136,7 +136,7 @@ fn model_of(line: &str) -> Option<&str> {
 /// no empty part between slashes. A model may route through more providers
 /// (`openrouter/anthropic/claude-sonnet-4`), and may carry a tag
 /// (`ollama/llama3:8b`), so it may hold slashes and colons.
-fn is_model_id(id: &str) -> bool {
+pub fn is_model_id(id: &str) -> bool {
     !id.is_empty()
         && !id.chars().any(char::is_whitespace)
         && id.starts_with(|character: char| character.is_ascii_alphanumeric())

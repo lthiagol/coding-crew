@@ -17,7 +17,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use coding_crew_core::config::{CONFIG_FILE, Config};
-use coding_crew_core::harness::{self, Harness};
+use coding_crew_core::harness::{self, HARNESSES, Harness};
 use coding_crew_core::runtime::{CrewMember, Runtime};
 use coding_crew_core::{Role, age_text, parse_rfc3339};
 use coding_crew_theme::text::{cut_to, tail_to, text_width};
@@ -26,7 +26,8 @@ use coding_crew_theme::{Icon, IconSet, Slot, Theme, chrome, phase_style, selecte
 use crate::catalog::Catalog;
 use crate::config::{self, ConfigRead, ConfigState};
 use crate::launch::{self, LaunchRequest, Launcher, Start};
-use crate::sidebar::{self, role_icon};
+use crate::pick;
+use crate::sidebar::{self, Field, role_icon};
 
 /// The columns the sidebar takes when it is shown, its border included.
 pub const SIDEBAR_WIDTH: u16 = 32;
@@ -45,7 +46,7 @@ const NAME: &str = "hugo";
 
 /// The key that reads the configuration again.
 pub const RELOAD_KEY: &str = "r";
-/// The key that opens the orchestrator's model choice.
+/// The key that opens the choice of the cursor's row.
 pub const CHOOSE_KEY: &str = "enter";
 /// The key that leaves the choice without saving.
 pub const CLOSE_KEY: &str = "esc";
@@ -61,8 +62,12 @@ pub const STARTING: &str = "starting the orchestrator…";
 pub const ALREADY_RUNNING: &str = "an orchestrator is already running in herdr";
 /// The note's prefix when the start fails: the error follows it.
 pub const START_FAILED: &str = "the orchestrator did not start";
-/// The choice's block title.
-pub const CHOICE_TITLE: &str = "orchestrator model";
+/// The mark a harness the machine does not have carries in its choice.
+pub const NOT_INSTALLED: &str = "not installed";
+/// The line under the id input, while the id typed is a model id.
+pub const TYPE_HINT: &str = "a model id, such as provider/model";
+/// The line under the id input, while the id typed is not a model id.
+pub const NOT_A_MODEL_ID: &str = "not a model id";
 /// The help's block title.
 pub const HELP_TITLE: &str = "keys";
 /// The choice's state when the catalogue cannot be read.
@@ -124,28 +129,102 @@ pub enum Action {
     Redraw,
 }
 
-/// The model choice: the catalogue's models, and the cursor on them.
+/// A choice: the list of one agent's field, and the cursor on it.
 struct Choice {
-    /// The catalogue the list came from, and the list a pick is checked
-    /// against.
+    /// The agent the choice is for, by its place in the configuration.
+    agent: usize,
+    /// The choice's title: the agent's name and the field's name.
+    title: String,
+    /// The role the agent fills, for its icon.
+    role: Role,
+    /// The field the choice picks: the harness, the model or the effort.
+    field: Field,
+    /// The entries of the list, in order.
+    entries: Vec<Entry>,
+    /// The catalogue a model pick is checked against.
     catalog: Catalog,
-    /// The model the cursor is on.
+    /// The entry the cursor is on.
     cursor: usize,
     /// What the choice has to show.
     state: ChoiceState,
 }
 
-/// What the choice has to show, while the catalogue may not be there yet.
+/// One entry of a choice's list.
+struct Entry {
+    /// What the entry says: a harness's name, a model id, an effort level, or
+    /// `type an id…`.
+    text: String,
+    /// Whether enter picks it. A harness the machine does not have is listed,
+    /// and cannot be picked.
+    pickable: bool,
+}
+
+impl Entry {
+    fn new(text: &str, pickable: bool) -> Self {
+        Self {
+            text: text.to_string(),
+            pickable,
+        }
+    }
+}
+
+/// What the choice has to show.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ChoiceState {
-    /// The catalogue's tool is still running: nothing to pick yet.
+    /// A catalogue is being read: nothing to pick yet.
     Reading,
-    /// The catalogue's models are the list.
+    /// The list is the entries.
     Listed,
-    /// The catalogue is there and lists nothing.
+    /// The catalogue is there and lists no model: only `type an id…` is listed.
     Empty,
-    /// The catalogue cannot be read: why.
+    /// The catalogue cannot be read, or the switch cannot be made: why. A model
+    /// choice that failed still lists `type an id…` under the reason.
     Failed(String),
+    /// The inline input for an id is open, with the id typed so far. It takes
+    /// every key but ctrl-c.
+    Typing(String),
+}
+
+impl Choice {
+    /// Whether enter picks what the choice has: the entry under the cursor, or
+    /// the id typed.
+    fn pickable(&self) -> bool {
+        match &self.state {
+            ChoiceState::Listed | ChoiceState::Empty => self.entry_pickable(),
+            // A model that cannot be listed can still be typed.
+            ChoiceState::Failed(_) if self.field == Field::Model => self.entry_pickable(),
+            ChoiceState::Typing(text) => pick::is_typed_id(text),
+            ChoiceState::Reading | ChoiceState::Failed(_) => false,
+        }
+    }
+
+    /// Whether the entry under the cursor can be picked.
+    fn entry_pickable(&self) -> bool {
+        self.entries
+            .get(self.cursor)
+            .is_some_and(|entry| entry.pickable)
+    }
+
+    /// Whether the cursor moves over the list: it is listed, and has more than
+    /// one entry.
+    fn moves(&self) -> bool {
+        self.state == ChoiceState::Listed && self.entries.len() > 1
+    }
+
+    fn typing(&self) -> bool {
+        matches!(self.state, ChoiceState::Typing(_))
+    }
+
+    /// The lines the choice's body takes, before its popup is sized.
+    fn rows(&self) -> usize {
+        match &self.state {
+            ChoiceState::Reading | ChoiceState::Typing(_) => 2,
+            ChoiceState::Failed(_) if self.field == Field::Model => 2 + self.entries.len(),
+            ChoiceState::Failed(_) => 2,
+            ChoiceState::Listed => self.entries.len(),
+            ChoiceState::Empty => 1 + self.entries.len(),
+        }
+    }
 }
 
 /// What the note row says about a start: a notice, a success, or a failure.
@@ -169,7 +248,8 @@ pub struct App {
     pub config: ConfigRead,
     /// The user's home, when there is one: the configuration lives under it.
     home: Option<PathBuf>,
-    /// The agents group's row the cursor is on.
+    /// The sidebar's row the cursor is on, as [`sidebar::cursor_of`] numbers
+    /// it: an agent's harness, model or effort.
     cursor: usize,
     /// The agents group is drawn, so the cursor has rows on screen.
     agents_drawn: bool,
@@ -201,6 +281,9 @@ pub struct App {
     /// list: a test's stand-in for it.
     #[cfg(test)]
     catalog_tool: Option<PathBuf>,
+    /// Which harnesses the machine has, in place of `PATH`: a test's stand-in.
+    #[cfg(test)]
+    present: Option<fn(&Harness) -> bool>,
 }
 
 impl App {
@@ -225,6 +308,8 @@ impl App {
             root: None,
             #[cfg(test)]
             catalog_tool: None,
+            #[cfg(test)]
+            present: None,
         }
     }
 
@@ -239,12 +324,21 @@ impl App {
     /// starts the orchestrator over the queue.
     ///
     /// `q` and `ctrl-c` quit from anywhere, as in raul. The sidebar's keys
-    /// move the cursor between the agents, open the orchestrator's model
-    /// choice, reload the configuration, and open the help. The choice's keys
-    /// move its cursor, pick a model, and close it. No other key does
-    /// anything.
+    /// move the cursor between the agents' harness, model and effort rows,
+    /// open the choice of the row, reload the configuration, and open the
+    /// help. The choice's keys move its cursor, pick an entry, and close it.
+    /// No other key does anything.
     pub fn on_key(&mut self, key: KeyEvent) -> Action {
         if key.kind != KeyEventKind::Press {
+            return Action::Redraw;
+        }
+        // The id input takes every key but ctrl-c: a letter typed into an id
+        // is text, not the window's `q`.
+        if self.typing() {
+            if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                return Action::Quit;
+            }
+            self.typing_key(key);
             return Action::Redraw;
         }
         // Quit is the one key that works in every place.
@@ -275,32 +369,45 @@ impl App {
         Action::Redraw
     }
 
-    /// Handle a key while the choice covers the sidebar.
+    /// Handle a key while a choice covers the sidebar.
     fn choice_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Char('?') => self.help = true,
             KeyCode::Esc => self.close_choice(),
-            KeyCode::Up | KeyCode::Char('k') => {
-                if let Some(choice) = self.choice.as_mut() {
-                    choice.cursor = choice.cursor.saturating_sub(1);
-                }
+            KeyCode::Up | KeyCode::Char('k') => self.move_choice(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_choice(1),
+            // Enter picks only what can be picked: while a catalogue is read,
+            // or when a harness switch failed, enter does nothing.
+            KeyCode::Enter => self.pick(),
+            _ => {}
+        }
+    }
+
+    /// Handle a key while the id input is open. `esc` goes back to the list;
+    /// enter picks the id once it has the shape of a model id.
+    fn typing_key(&mut self, key: KeyEvent) {
+        let Some(choice) = self.choice.as_mut() else {
+            return;
+        };
+        if key.code == KeyCode::Esc {
+            choice.state = ChoiceState::Listed;
+            return;
+        }
+        let agent = choice.agent;
+        let ChoiceState::Typing(text) = &mut choice.state else {
+            return;
+        };
+        match key.code {
+            KeyCode::Char(character) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                text.push(character)
             }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if let Some(choice) = self.choice.as_mut()
-                    && choice.cursor + 1 < choice.catalog.models().len()
-                {
-                    choice.cursor += 1;
-                }
+            KeyCode::Backspace => {
+                text.pop();
             }
-            // Only a listed catalogue has a model to pick: while it is read,
-            // or when it failed or is empty, enter does nothing.
-            KeyCode::Enter
-                if self
-                    .choice
-                    .as_ref()
-                    .is_some_and(|choice| choice.state == ChoiceState::Listed) =>
-            {
-                self.pick()
+            KeyCode::Enter if pick::is_typed_id(text) => {
+                let model = text.trim().to_string();
+                self.set_model(agent, model);
+                self.close_choice();
             }
             _ => {}
         }
@@ -387,86 +494,169 @@ impl App {
         }
     }
 
-    /// The agent the cursor is on, when there is one.
-    fn cursor_agent(&self) -> Option<&coding_crew_core::config::Agent> {
-        self.loaded()
-            .and_then(|config| config.agents.get(self.cursor))
+    /// The agent and the field the cursor is on, when the configuration has
+    /// them.
+    fn cursor_row(&self) -> Option<(usize, Field)> {
+        let config = self.loaded()?;
+        let (agent, field) = sidebar::field_at(self.cursor);
+        (agent < config.agents.len()).then_some((agent, field))
     }
 
-    /// The orchestrator's model, as the configuration holds it.
-    fn orchestrator_model(&self) -> Option<&str> {
-        self.loaded()
-            .and_then(|config| {
-                config
-                    .agents
-                    .iter()
-                    .find(|agent| agent.role == Role::Orchestrator)
-            })
-            .map(|agent| agent.model.as_str())
-    }
-
-    /// Whether `enter` has a choice to open: the cursor is on the
-    /// orchestrator's row, the configuration parsed, and its group is drawn.
+    /// Whether `enter` has a choice to open: the cursor is on an agent's row,
+    /// the configuration parsed, and its group is drawn.
     fn can_choose(&self) -> bool {
-        self.agents_drawn
-            && self
-                .cursor_agent()
-                .is_some_and(|agent| agent.role == Role::Orchestrator)
+        self.agents_drawn && self.cursor_row().is_some()
     }
 
-    /// Move the cursor between the agents, and no further.
+    /// Move the cursor over the agents' rows, and no further.
     fn move_cursor(&mut self, delta: isize) {
         if !self.agents_drawn {
             return;
         }
-        let Some(count) = self.loaded().map(|config| config.agents.len()) else {
+        let Some(rows) = self.loaded().map(sidebar::pick_rows) else {
             return;
         };
-        if count == 0 {
+        if rows == 0 {
             return;
         }
         let next = self.cursor as isize + delta;
-        self.cursor = next.clamp(0, count as isize - 1) as usize;
+        self.cursor = next.clamp(0, rows as isize - 1) as usize;
     }
 
     /// Read the configuration again: the sidebar shows the file as it is now.
     ///
     /// This is the configuration only. The runtime record is already read on
-    /// every redraw, and the catalogue is read when a choice opens.
+    /// every redraw, and a catalogue is read when a choice opens.
     fn reload(&mut self) {
         self.config = config::load(self.home.as_deref());
         self.notice = None;
         self.cursor = match self.loaded() {
-            Some(config) => self.cursor.min(config.agents.len().saturating_sub(1)),
+            Some(config) => self
+                .cursor
+                .min(sidebar::pick_rows(config).saturating_sub(1)),
             None => 0,
         };
     }
 
-    /// Open the orchestrator's model choice, and start reading the catalogue.
+    /// Open the choice of the cursor's row.
     ///
-    /// The read runs beside the window: the choice opens at once, says it is
-    /// reading, and takes the list — or the error — when the harness's tool
-    /// answers. A tool that hangs is bounded by [`Catalog::read`], and the
-    /// window keeps drawing and taking keys meanwhile.
+    /// A harness is listed from the table, and an effort from its harness's
+    /// levels. A model is read off the window's thread: the choice opens at
+    /// once and says it is reading, and takes the list — or the error — when
+    /// the harness's tool answers. A tool that hangs is bounded by
+    /// [`Catalog::read`], and the window keeps drawing and taking keys
+    /// meanwhile.
     fn open_choice(&mut self) {
         if !self.can_choose() {
             return;
         }
-        let Some(harness) = self.orchestrator_harness() else {
+        let Some((agent, field)) = self.cursor_row() else {
+            return;
+        };
+        match field {
+            Field::Harness => self.open_harness_choice(agent),
+            Field::Model => self.open_model_choice(agent),
+            Field::Effort => self.open_effort_choice(agent),
+        }
+    }
+
+    /// Open the harness choice: every harness the table holds, and one the
+    /// machine does not have listed dim and unpickable.
+    fn open_harness_choice(&mut self, agent: usize) {
+        let Some(current) = self
+            .loaded()
+            .and_then(|config| config.agents.get(agent))
+            .map(|row| row.harness.clone())
+        else {
+            return;
+        };
+        let entries: Vec<Entry> = HARNESSES
+            .iter()
+            .map(|harness| Entry::new(harness.name, self.installed(harness)))
+            .collect();
+        let cursor = entries
+            .iter()
+            .position(|entry| entry.text == current)
+            .unwrap_or(0);
+        self.show(agent, Field::Harness, entries, cursor, ChoiceState::Listed);
+    }
+
+    /// Open the model choice, reading the agent's harness's catalogue beside
+    /// the window.
+    fn open_model_choice(&mut self, agent: usize) {
+        let Some(harness) = self
+            .loaded()
+            .and_then(|config| config.agents.get(agent))
+            .and_then(|row| harness::find(&row.harness))
+        else {
             return;
         };
         let reading = self.read_catalog(harness);
-        self.begin_choice(reading);
+        self.reading = Some(reading);
+        self.show(agent, Field::Model, Vec::new(), 0, ChoiceState::Reading);
     }
 
-    /// The harness the orchestrator runs in, when the table holds it.
-    fn orchestrator_harness(&self) -> Option<&'static Harness> {
-        let agent = self
-            .loaded()?
-            .agents
+    /// Open the effort choice: the levels the agent's harness takes, with the
+    /// level in force under the cursor.
+    fn open_effort_choice(&mut self, agent: usize) {
+        let Some(row) = self.loaded().and_then(|config| config.agents.get(agent)) else {
+            return;
+        };
+        let Some(harness) = harness::find(&row.harness) else {
+            return;
+        };
+        let cursor = harness
+            .efforts
             .iter()
-            .find(|agent| agent.role == Role::Orchestrator)?;
-        harness::find(&agent.harness)
+            .position(|level| Some(*level) == row.effort.as_deref())
+            .unwrap_or(0);
+        let entries = harness
+            .efforts
+            .iter()
+            .map(|level| Entry::new(level, true))
+            .collect();
+        self.show(agent, Field::Effort, entries, cursor, ChoiceState::Listed);
+    }
+
+    /// Whether a harness is on the machine. A harness the machine does not
+    /// have cannot run, so it cannot be picked.
+    fn installed(&self, harness: &Harness) -> bool {
+        #[cfg(test)]
+        {
+            if let Some(present) = self.present {
+                return present(harness);
+            }
+        }
+        harness.on_path()
+    }
+
+    /// Open a choice for an agent's field, on the entries and the cursor given.
+    fn show(
+        &mut self,
+        agent: usize,
+        field: Field,
+        entries: Vec<Entry>,
+        cursor: usize,
+        state: ChoiceState,
+    ) {
+        let Some((title, role)) = self
+            .loaded()
+            .and_then(|config| config.agents.get(agent))
+            .map(|row| (format!("{} {}", row.name, field.label()), row.role))
+        else {
+            return;
+        };
+        self.help = false;
+        self.choice = Some(Choice {
+            agent,
+            title,
+            role,
+            field,
+            entries,
+            catalog: Catalog::default(),
+            cursor,
+            state,
+        });
     }
 
     /// Read a harness's catalogue beside the window.
@@ -482,18 +672,7 @@ impl App {
         std::thread::spawn(move || Catalog::read(harness))
     }
 
-    /// Open the choice on a read that has not answered yet.
-    fn begin_choice(&mut self, reading: JoinHandle<Result<Catalog, String>>) {
-        self.help = false;
-        self.reading = Some(reading);
-        self.choice = Some(Choice {
-            catalog: Catalog::default(),
-            cursor: 0,
-            state: ChoiceState::Reading,
-        });
-    }
-
-    /// Whether the choice is waiting on the catalogue.
+    /// Whether a choice is waiting on a catalogue.
     pub fn catalog_pending(&self) -> bool {
         self.reading.is_some()
     }
@@ -514,10 +693,10 @@ impl App {
         let loaded = reading
             .join()
             .unwrap_or_else(|_| Err("the model catalog reader stopped".to_string()));
-        if self.choice.is_some() {
-            // The choice is already open: the answer fills it rather than
-            // opening it again.
-            self.fill_choice(loaded);
+        match self.choice.as_ref().map(|choice| choice.field) {
+            Some(Field::Harness) => self.finish_switch(loaded),
+            Some(_) => self.fill_choice(loaded),
+            None => {}
         }
         true
     }
@@ -528,58 +707,176 @@ impl App {
         self.reading = None;
     }
 
-    /// Put a catalogue — or the reason there is none — in the open choice.
+    /// Put a catalogue — or the reason there is none — in the open model
+    /// choice.
     ///
-    /// The cursor starts on the model in force, so a pick is a move from
-    /// where the configuration is rather than from the top of the list.
+    /// The list is the catalogue's models, with `type an id…` last. The cursor
+    /// starts on the model in force, so a pick is a move from where the
+    /// configuration is rather than from the top of the list.
     fn fill_choice(&mut self, loaded: Result<Catalog, String>) {
+        let Some(agent) = self.choice.as_ref().map(|choice| choice.agent) else {
+            return;
+        };
+        let current = self
+            .loaded()
+            .and_then(|config| config.agents.get(agent))
+            .map(|row| row.model.clone())
+            .unwrap_or_default();
         let (catalog, state) = match loaded {
             Ok(catalog) if catalog.models().is_empty() => (catalog, ChoiceState::Empty),
             Ok(catalog) => (catalog, ChoiceState::Listed),
             Err(error) => (Catalog::default(), ChoiceState::Failed(error)),
         };
-        let cursor = self
-            .orchestrator_model()
-            .and_then(|current| catalog.index_of(current))
-            .unwrap_or(0);
-        self.choice = Some(Choice {
-            catalog,
-            cursor,
-            state,
-        });
+        let entries: Vec<Entry> = catalog
+            .models()
+            .iter()
+            .map(|model| Entry::new(model, true))
+            .chain([Entry::new(pick::TYPE_AN_ID, true)])
+            .collect();
+        let cursor = catalog.index_of(&current).unwrap_or(0);
+        if let Some(choice) = self.choice.as_mut() {
+            choice.entries = entries;
+            choice.catalog = catalog;
+            choice.cursor = cursor;
+            choice.state = state;
+        }
     }
 
-    /// Save the model under the choice's cursor and return to the sidebar.
+    /// Finish a harness switch once the new harness's catalogue has answered.
     ///
-    /// The pick is checked against the catalogue the list came from, so a
-    /// configuration can never hold a model that does not exist.
+    /// The model and the effort are checked against the new harness's list
+    /// before the switch is saved, so the configuration never keeps a model its
+    /// harness does not list.
+    fn finish_switch(&mut self, loaded: Result<Catalog, String>) {
+        let Some((agent, name)) = self.entry_under_cursor() else {
+            return;
+        };
+        match loaded {
+            Ok(catalog) => {
+                self.close_choice();
+                let Some(target) = harness::find(&name) else {
+                    return;
+                };
+                self.save(move |config| match config.agents.get_mut(agent) {
+                    Some(row) => {
+                        pick::switch_harness(row, target, &catalog);
+                        true
+                    }
+                    None => false,
+                });
+            }
+            Err(error) => self.set_state(ChoiceState::Failed(error)),
+        }
+    }
+
+    /// Set the open choice's state, when a choice is open.
+    fn set_state(&mut self, state: ChoiceState) {
+        if let Some(choice) = self.choice.as_mut() {
+            choice.state = state;
+        }
+    }
+
+    /// The agent of the open choice, and the text of the entry under its
+    /// cursor.
+    fn entry_under_cursor(&self) -> Option<(usize, String)> {
+        let choice = self.choice.as_ref()?;
+        let entry = choice.entries.get(choice.cursor)?;
+        Some((choice.agent, entry.text.clone()))
+    }
+
+    /// Pick what the open choice's cursor is on, when it can be picked.
     fn pick(&mut self) {
         let Some(choice) = self.choice.as_ref() else {
             return;
         };
-        let Some(model) = choice.catalog.models().get(choice.cursor).cloned() else {
-            self.close_choice();
+        if !choice.pickable() {
+            return;
+        }
+        match choice.field {
+            Field::Harness => self.pick_harness(),
+            Field::Model => self.pick_model(),
+            Field::Effort => self.pick_effort(),
+        }
+    }
+
+    /// Pick the harness under the cursor. A harness that is not the one in
+    /// force is switched once its catalogue has answered: its models decide
+    /// what the switch keeps.
+    fn pick_harness(&mut self) {
+        let Some((agent, name)) = self.entry_under_cursor() else {
             return;
         };
-        if !choice.catalog.knows(&model) {
+        let Some(target) = harness::find(&name) else {
+            return;
+        };
+        let current = self
+            .loaded()
+            .and_then(|config| config.agents.get(agent))
+            .map(|row| row.harness.clone());
+        if current.as_deref() == Some(name.as_str()) {
             self.close_choice();
             return;
         }
-        let Some(mut config) = self.loaded().cloned() else {
-            self.close_choice();
+        let reading = self.read_catalog(target);
+        self.reading = Some(reading);
+        self.set_state(ChoiceState::Reading);
+    }
+
+    /// Pick the model under the cursor. `type an id…` opens the id input
+    /// instead.
+    fn pick_model(&mut self) {
+        let Some((agent, model)) = self.entry_under_cursor() else {
             return;
         };
-        let Some(agent) = config
-            .agents
-            .iter_mut()
-            .find(|agent| agent.role == Role::Orchestrator)
-        else {
-            self.close_choice();
+        if model == pick::TYPE_AN_ID {
+            self.set_state(ChoiceState::Typing(String::new()));
+            return;
+        }
+        let listed = self
+            .choice
+            .as_ref()
+            .is_some_and(|choice| choice.catalog.knows(&model));
+        if listed {
+            self.set_model(agent, model);
+        }
+        self.close_choice();
+    }
+
+    /// Pick the effort under the cursor.
+    fn pick_effort(&mut self) {
+        let Some((agent, level)) = self.entry_under_cursor() else {
             return;
         };
-        agent.model = model.clone();
+        self.save(move |config| match config.agents.get_mut(agent) {
+            Some(row) => {
+                row.effort = Some(level.clone());
+                true
+            }
+            None => false,
+        });
+        self.close_choice();
+    }
+
+    /// Save an agent's model.
+    fn set_model(&mut self, agent: usize, model: String) {
+        self.save(move |config| match config.agents.get_mut(agent) {
+            Some(row) => {
+                row.model = model.clone();
+                true
+            }
+            None => false,
+        });
+    }
+
+    /// Save one change into the configuration, and show what was saved. A save
+    /// that fails is named on the sidebar, and the configuration in force
+    /// stays.
+    fn save(&mut self, change: impl Fn(&mut Config) -> bool) {
+        let Some(config) = self.loaded().cloned() else {
+            return;
+        };
         let saved = match &self.home {
-            Some(home) => config::save_pick_at(home, &config, &model),
+            Some(home) => config::save_change_at(home, &config, change),
             None => Err(ReadError {
                 file: CONFIG_FILE.to_string(),
                 error: "there is no home to save the configuration in".to_string(),
@@ -592,14 +889,37 @@ impl App {
             }
             Err(error) => self.notice = Some(error),
         }
-        self.close_choice();
-        self.cursor = self.cursor.min(config.agents.len().saturating_sub(1));
     }
 
-    /// Whether `s` can act: herdr hosts hugo, the queue has work, and no start
-    /// is in flight.
+    /// Move the open choice's cursor along its list, while the list is shown.
+    fn move_choice(&mut self, delta: isize) {
+        let Some(choice) = self.choice.as_mut() else {
+            return;
+        };
+        if choice.state != ChoiceState::Listed {
+            return;
+        }
+        let last = choice.entries.len().saturating_sub(1) as isize;
+        choice.cursor = (choice.cursor as isize + delta).clamp(0, last) as usize;
+    }
+
+    /// Whether the id input is open.
+    fn typing(&self) -> bool {
+        self.choice.as_ref().is_some_and(Choice::typing)
+    }
+
+    /// What the configuration lacks before the flow can start.
+    fn gaps(&self) -> Vec<String> {
+        self.loaded().map(pick::gaps).unwrap_or_default()
+    }
+
+    /// Whether `s` can act: herdr hosts hugo, the queue has work, every agent
+    /// has its harness, model and effort, and no start is in flight.
     fn can_start(&self) -> bool {
-        self.launch.is_some() && !self.queued.is_empty() && self.starting.is_none()
+        self.launch.is_some()
+            && !self.queued.is_empty()
+            && self.starting.is_none()
+            && self.gaps().is_empty()
     }
 
     /// Start the orchestrator over the queue, from `s`.
@@ -618,6 +938,11 @@ impl App {
         };
         if self.queued.is_empty() {
             self.note = Some(Note::Notice(QUEUE_EMPTY.to_string()));
+            return;
+        }
+        let gaps = self.gaps();
+        if !gaps.is_empty() {
+            self.note = Some(Note::Failed(format!("{START_FAILED}: {}", gaps.join(", "))));
             return;
         }
         let request = match self.launch_request() {
@@ -1297,29 +1622,26 @@ impl App {
         Line::from(out)
     }
 
-    /// The model choice: a small list of the catalogue's models, centred.
+    /// The choice: a small list centred over the window, with its title on the
+    /// agent's role.
     ///
-    /// The list scrolls to keep its cursor on screen; the row under the
-    /// cursor takes the selection's paint. A choice the catalogue has not
-    /// answered yet says it is reading; one that cannot be filled says why on
-    /// the failure slot rather than opening empty.
+    /// The list scrolls to keep its cursor on screen; the entry under the cursor
+    /// takes the selection's paint. A choice the catalogue has not answered yet
+    /// says it is reading; one that cannot be filled says why on the failure
+    /// slot rather than opening empty. The id input shows the id typed, and
+    /// whether it has the shape of one.
     fn choice_pane(&self, frame: &mut Frame, area: Rect) {
         let Some(choice) = &self.choice else {
             return;
         };
-        let rows = match &choice.state {
-            ChoiceState::Reading | ChoiceState::Failed(_) => 2,
-            ChoiceState::Empty => 0,
-            ChoiceState::Listed => choice.catalog.models().len().min(CHOICE_ROWS),
-        };
-        let popup = choice_popup(area, rows);
+        let popup = choice_popup(area, choice.rows());
         if popup.width < 4 || popup.height < 3 {
             return;
         }
         frame.render_widget(Clear, popup);
         let block = chrome::pane(
-            CHOICE_TITLE,
-            Icon::RoleOrchestrator,
+            &choice.title,
+            role_icon(choice.role),
             self.icons,
             true,
             &self.theme,
@@ -1327,7 +1649,8 @@ impl App {
         let inner = block.inner(popup);
         frame.render_widget(block, popup);
         let width = usize::from(inner.width);
-        if width == 0 || inner.height == 0 {
+        let room = usize::from(inner.height);
+        if width == 0 || room == 0 {
             return;
         }
         let mut lines = Vec::new();
@@ -1345,32 +1668,68 @@ impl App {
                     cut_to(error, width),
                     self.theme.semantic.error,
                 )));
-            }
-            ChoiceState::Empty => lines.push(Line::from(Span::styled(
-                cut_to(NO_MODELS, width),
-                self.theme.text.dim,
-            ))),
-            ChoiceState::Listed => {
-                let models = choice.catalog.models();
-                let height = usize::from(inner.height);
-                let start = if choice.cursor < height {
-                    0
-                } else {
-                    choice.cursor + 1 - height
-                };
-                let end = (start + height).min(models.len());
-                for (offset, model) in models[start..end].iter().enumerate() {
-                    let line =
-                        Line::from(Span::styled(cut_to(model, width), self.theme.text.normal));
-                    if start + offset == choice.cursor {
-                        lines.push(selected_line(line, width, &self.theme));
-                    } else {
-                        lines.push(line);
-                    }
+                if choice.field == Field::Model {
+                    let height = room.saturating_sub(lines.len());
+                    lines.extend(self.entry_lines(choice, width, height));
                 }
+            }
+            ChoiceState::Typing(text) => {
+                lines.push(Line::from(Span::styled(
+                    cut_to(&format!("> {text}_"), width),
+                    self.theme.text.normal,
+                )));
+                let (hint, style) = if text.is_empty() || pick::is_typed_id(text) {
+                    (TYPE_HINT, self.theme.text.dim)
+                } else {
+                    (NOT_A_MODEL_ID, self.theme.semantic.error)
+                };
+                lines.push(Line::from(Span::styled(cut_to(hint, width), style)));
+            }
+            ChoiceState::Listed | ChoiceState::Empty => {
+                if choice.state == ChoiceState::Empty {
+                    lines.push(Line::from(Span::styled(
+                        cut_to(NO_MODELS, width),
+                        self.theme.text.dim,
+                    )));
+                }
+                let height = room.saturating_sub(lines.len());
+                lines.extend(self.entry_lines(choice, width, height));
             }
         }
         frame.render_widget(Paragraph::new(lines), inner);
+    }
+
+    /// The choice's entries that fit in `height` rows, scrolled to keep the
+    /// cursor on screen. The entry under the cursor takes the selection's paint;
+    /// a harness the machine does not have is dim and says so.
+    fn entry_lines(&self, choice: &Choice, width: usize, height: usize) -> Vec<Line<'static>> {
+        if height == 0 {
+            return Vec::new();
+        }
+        let start = choice.cursor.saturating_sub(height - 1);
+        let end = (start + height).min(choice.entries.len());
+        choice.entries[start..end]
+            .iter()
+            .enumerate()
+            .map(|(offset, entry)| {
+                let line = if entry.pickable {
+                    Line::from(Span::styled(
+                        cut_to(&entry.text, width),
+                        self.theme.text.normal,
+                    ))
+                } else {
+                    Line::from(Span::styled(
+                        cut_to(&format!("{} {NOT_INSTALLED}", entry.text), width),
+                        self.theme.text.dim,
+                    ))
+                };
+                if start + offset == choice.cursor {
+                    selected_line(line, width, &self.theme)
+                } else {
+                    line
+                }
+            })
+            .collect()
     }
 
     /// The help: the keys that work, in the sidebar and in the choice, with
@@ -1436,12 +1795,12 @@ impl App {
         };
         if let Some(choice) = &self.choice {
             let mut lines = Vec::new();
-            if choice.catalog.models().len() > 1 {
+            if choice.moves() {
                 lines.push((0, line("↑↓ j/k", "move")));
             }
             lines.push((1, line("ctrl-c", "quit")));
             lines.push((2, line(CLOSE_KEY, "close")));
-            if choice.state == ChoiceState::Listed {
+            if choice.pickable() {
                 lines.push((3, line(CHOOSE_KEY, "pick")));
             }
             lines.push((u8::MAX, line("q", "quit")));
@@ -1483,15 +1842,26 @@ impl App {
             );
         }
         if let Some(choice) = &self.choice {
+            if choice.typing() {
+                // The id input takes the letters, so `q` and `?` are text here.
+                let mut parts = vec![
+                    (0, part(CLOSE_KEY, "back"), true),
+                    (2, part("ctrl-c", "quit"), false),
+                ];
+                if choice.pickable() {
+                    parts.push((1, part(CHOOSE_KEY, "pick"), true));
+                }
+                return footer(parts, width);
+            }
             let mut parts = vec![
                 (0, part(CLOSE_KEY, "close"), true),
                 (2, part("q", "quit"), false),
                 (4, part("?", "help"), false),
             ];
-            if choice.state == ChoiceState::Listed {
+            if choice.pickable() {
                 parts.push((1, part(CHOOSE_KEY, "pick"), true));
             }
-            if choice.catalog.models().len() > 1 {
+            if choice.moves() {
                 parts.push((3, part("↑↓ j/k", "move"), false));
             }
             return footer(parts, width);
@@ -1826,6 +2196,7 @@ mod tests {
     };
     use coding_crew_core::{Role, Status};
     use coding_crew_theme::Preset;
+    use std::path::Path;
 
     use crate::launch::FakeLauncher;
 
@@ -1939,6 +2310,23 @@ mod tests {
     /// The configuration the window draws: the project's own flow.
     fn sidebar_config() -> ConfigRead {
         ConfigRead::of(ConfigState::Config(Config::default()))
+    }
+
+    /// The model an agent runs, as the window's configuration holds it.
+    fn model_of<'a>(window: &'a App, name: &str) -> Option<&'a str> {
+        window
+            .loaded()?
+            .agents
+            .iter()
+            .find(|agent| agent.name == name)
+            .map(|agent| agent.model.as_str())
+    }
+
+    /// Open the orchestrator's model choice as a catalogue read that answered
+    /// with `loaded` would open it.
+    fn answer_choice(window: &mut App, loaded: Result<Catalog, String>) {
+        window.show(2, Field::Model, Vec::new(), 0, ChoiceState::Reading);
+        window.fill_choice(loaded);
     }
 
     /// A window on the project's own configuration.
@@ -2159,19 +2547,29 @@ mod tests {
 
     #[test]
     fn the_footer_names_the_keys_that_work_and_no_key_that_does_nothing() {
-        // The cursor starts on the builder, where enter opens nothing: the
-        // footer names quit, reload, move and help, and not choose.
+        // The cursor starts on the builder's harness row, where enter opens a
+        // choice: the footer names quit, reload, move, help and choose.
         let (rows, _) = render(100, 20);
         let footer = rows.last().expect("a footer row");
-        for works in ["q", "quit", "r", "reload", "↑↓ j/k", "move", "?", "help"] {
+        for works in [
+            "q",
+            "quit",
+            "r",
+            "reload",
+            "↑↓ j/k",
+            "move",
+            "?",
+            "help",
+            "choose",
+        ] {
             assert!(footer.contains(works), "{footer}: {works}");
         }
-        for dead in ["open", "tab", "esc", "choose", "pick"] {
+        for dead in ["open", "tab", "esc", "pick"] {
             assert!(!footer.contains(dead), "{footer}: {dead}");
         }
-        // On the orchestrator's row, enter has a choice to open.
+        // On the orchestrator's model row, enter has a choice to open.
         let mut app = App::new(theme(), IconSet::Nerd, sidebar_config(), None);
-        app.cursor = 2;
+        app.cursor = sidebar::cursor_of(2, Field::Model);
         app.agents_drawn = true;
         let line: String = app
             .footer_line(100)
@@ -2934,30 +3332,35 @@ mod tests {
     }
 
     #[test]
-    fn the_cursor_moves_between_the_agents_and_enter_opens_only_the_orchestrator() {
+    fn the_cursor_moves_over_each_agents_rows_and_enter_opens_that_rows_choice() {
         let mut app = app();
         app.agents_drawn = true;
-        // The cursor starts on the first agent, the builder: enter has
-        // nothing to open there.
-        assert_eq!(app.cursor, 0);
-        assert_eq!(
-            app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-            Action::Redraw
-        );
-        assert!(app.choice.is_none(), "enter opened a choice on the builder");
-        // It stops at the last row and comes back to the first.
-        for _ in 0..5 {
-            app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        // The cursor starts on the builder's harness row.
+        assert_eq!(app.cursor, sidebar::cursor_of(0, Field::Harness));
+        app.on_key(press(KeyCode::Enter));
+        let choice = app.choice.as_ref().expect("enter opened no choice");
+        assert_eq!(choice.title, "builder harness");
+        assert_eq!(choice.field, Field::Harness);
+        app.choice = None;
+        // The rows run harness, model, effort for each agent, and the cursor
+        // stops at the last row and comes back to the first.
+        for _ in 0..8 {
+            app.on_key(press(KeyCode::Down));
         }
-        assert_eq!(app.cursor, 2);
-        assert!(app.can_choose(), "the last row is the orchestrator's");
-        for _ in 0..5 {
-            app.on_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(app.cursor, sidebar::cursor_of(2, Field::Effort));
+        assert!(
+            app.can_choose(),
+            "the last row is the orchestrator's effort"
+        );
+        app.on_key(press(KeyCode::Down));
+        assert_eq!(app.cursor, sidebar::cursor_of(2, Field::Effort));
+        for _ in 0..8 {
+            app.on_key(press(KeyCode::Char('k')));
         }
         assert_eq!(app.cursor, 0);
         // The other keys do not move it.
         for code in [KeyCode::Char('h'), KeyCode::Char('l'), KeyCode::PageDown] {
-            app.on_key(KeyEvent::new(code, KeyModifiers::NONE));
+            app.on_key(press(code));
             assert_eq!(app.cursor, 0, "{code:?} moved the cursor");
         }
     }
@@ -3085,7 +3488,7 @@ mod tests {
         for width in [20u16, 40, 60, 79, 80, 100, 120] {
             for height in [1u16, 2, 3, 5, 8, 12, 20, 40] {
                 let mut window = on_orchestrator(None);
-                window.fill_choice(Ok(Catalog::from_lines("p/m0\np/m1\np/m2\n")));
+                answer_choice(&mut window, Ok(Catalog::from_lines("p/m0\np/m1\np/m2\n")));
                 let (rows, _) = render_app(&mut window, width, height, &RuntimeRead::Absent);
                 assert_eq!(rows.len(), usize::from(height), "{width}x{height}");
                 for row in &rows {
@@ -3162,12 +3565,17 @@ mod tests {
             ALREADY_RUNNING.to_string(),
             "orchestrator started in tab".to_string(),
             START_FAILED.to_string(),
-            CHOICE_TITLE.to_string(),
+            "builder model".to_string(),
             CATALOG_READING.to_string(),
             CATALOG_UNREADABLE.to_string(),
             format!("{} seconds", crate::catalog::READ_BOUND.as_secs()),
             HELP_TITLE.to_string(),
             "the harness's own list".to_string(),
+            pick::TYPE_AN_ID.to_string(),
+            NOT_INSTALLED.to_string(),
+            NOT_A_MODEL_ID.to_string(),
+            "pick a model".to_string(),
+            "has no model".to_string(),
             CREW_TITLE.to_string(),
             QUEUE_TITLE.to_string(),
             ROUND_TITLE.to_string(),
@@ -3254,7 +3662,7 @@ mod tests {
     }
 
     /// A window on the project's configuration, with its cursor on the
-    /// orchestrator's row: the only row a pick can be made from.
+    /// orchestrator's model row.
     fn on_orchestrator(home: Option<PathBuf>) -> App {
         let mut app = App::new(
             theme(),
@@ -3263,7 +3671,7 @@ mod tests {
             home,
         );
         app.agents_drawn = true;
-        app.cursor = 2;
+        app.cursor = sidebar::cursor_of(2, Field::Model);
         app
     }
 
@@ -3285,7 +3693,7 @@ mod tests {
         }
     }
 
-    /// A window on the orchestrator's row, reading its catalogue from `tool`
+    /// A window on the orchestrator's model row, reading its catalogue from `tool`
     /// in place of the harness's own list.
     fn on_orchestrator_with(tool: &std::path::Path) -> App {
         let mut window = App::new(
@@ -3295,7 +3703,7 @@ mod tests {
             None,
         );
         window.agents_drawn = true;
-        window.cursor = 2;
+        window.cursor = sidebar::cursor_of(2, Field::Model);
         window.catalog_tool = Some(tool.to_path_buf());
         window
     }
@@ -3358,10 +3766,11 @@ mod tests {
             colour_of(&rows, &paint, "failed:"),
             theme().semantic.error.fg.expect("the error colour")
         );
-        // Nothing is picked from a catalogue that could not be read: enter does
-        // nothing, and esc is the way out.
+        // Nothing is picked from a catalogue that could not be read: enter opens
+        // the id input, and esc goes back to the list and then closes it.
         window.on_key(press(KeyCode::Enter));
         assert!(window.choice.is_some(), "enter closed the failed choice");
+        window.on_key(press(KeyCode::Esc));
         window.on_key(press(KeyCode::Esc));
         assert!(window.choice.is_none());
         let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
@@ -3474,9 +3883,12 @@ mod tests {
     fn the_choice_lists_the_catalogue_and_starts_on_the_model_in_force() {
         let home = scratch("choice");
         let mut app = on_orchestrator(Some(home.clone()));
-        app.fill_choice(Ok(Catalog::from_lines(
-            "claude-sonnet-5-5\nclaude-opus-5-5\nclaude-haiku-5-5\n",
-        )));
+        answer_choice(
+            &mut app,
+            Ok(Catalog::from_lines(
+                "claude-sonnet-5-5\nclaude-opus-5-5\nclaude-haiku-5-5\n",
+            )),
+        );
         let choice = app.choice.as_ref().expect("the choice");
         assert_eq!(
             choice.catalog.models(),
@@ -3489,7 +3901,7 @@ mod tests {
 
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         let text = text_of(&rows);
-        assert!(text.contains(CHOICE_TITLE), "{text}");
+        assert!(text.contains("orchestrator model"), "{text}");
         for model in models {
             assert!(text.contains(&model), "{model} is not in the list: {text}");
         }
@@ -3500,9 +3912,12 @@ mod tests {
     fn a_pick_is_saved_and_the_sidebar_shows_what_it_saved() {
         let home = scratch("pick");
         let mut app = on_orchestrator(Some(home.clone()));
-        app.fill_choice(Ok(Catalog::from_lines(
-            "claude-sonnet-5-5\nclaude-opus-5-5\nclaude-haiku-5-5\n",
-        )));
+        answer_choice(
+            &mut app,
+            Ok(Catalog::from_lines(
+                "claude-sonnet-5-5\nclaude-opus-5-5\nclaude-haiku-5-5\n",
+            )),
+        );
         // The cursor starts on glm-5.3; move up to kimi-k3 and pick it.
         app.on_key(press(KeyCode::Char('k')));
         assert_eq!(app.choice.as_ref().expect("the choice").cursor, 0);
@@ -3561,13 +3976,14 @@ mod tests {
         // enter on that model in force must not save it without its variant.
         let home = scratch("pick-in-force");
         let mut app = on_orchestrator(Some(home.clone()));
-        app.fill_choice(Ok(Catalog::from_lines(
-            "claude-opus-5-5\nclaude-sonnet-5-5\n",
-        )));
+        answer_choice(
+            &mut app,
+            Ok(Catalog::from_lines("claude-opus-5-5\nclaude-sonnet-5-5\n")),
+        );
         assert_eq!(app.choice.as_ref().expect("the choice").cursor, 0);
         app.on_key(press(KeyCode::Enter));
         assert_eq!(
-            app.orchestrator_model(),
+            model_of(&app, "orchestrator"),
             Some("claude-opus-5-5"),
             "the pick dropped the variant in force"
         );
@@ -3634,9 +4050,10 @@ mod tests {
     fn esc_closes_the_choice_and_saves_nothing() {
         let home = scratch("choice-esc");
         let mut app = on_orchestrator(Some(home.clone()));
-        app.fill_choice(Ok(Catalog::from_lines(
-            "claude-sonnet-5-5\nclaude-opus-5-5\n",
-        )));
+        answer_choice(
+            &mut app,
+            Ok(Catalog::from_lines("claude-sonnet-5-5\nclaude-opus-5-5\n")),
+        );
         app.on_key(press(KeyCode::Char('k')));
         app.on_key(press(KeyCode::Esc));
         assert!(app.choice.is_none(), "esc left the choice open");
@@ -3645,7 +4062,7 @@ mod tests {
             "esc wrote a configuration"
         );
         assert_eq!(
-            app.orchestrator_model(),
+            model_of(&app, "orchestrator"),
             Some("claude-opus-5-5"),
             "esc changed the model in force"
         );
@@ -3656,7 +4073,7 @@ mod tests {
     fn a_choice_with_no_catalogue_says_why_and_picks_nothing() {
         let home = scratch("choice-error");
         let mut app = on_orchestrator(Some(home.clone()));
-        app.fill_choice(Err("opencode models: not found".to_string()));
+        answer_choice(&mut app, Err("opencode models: not found".to_string()));
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         let text = text_of(&rows);
         assert!(text.contains(CATALOG_UNREADABLE), "{text}");
@@ -3668,13 +4085,14 @@ mod tests {
             "a pick was saved from an empty catalogue"
         );
         app.on_key(press(KeyCode::Esc));
+        app.on_key(press(KeyCode::Esc));
         assert!(app.choice.is_none());
         let _ = fs::remove_dir_all(&home);
 
         // A catalogue that lists nothing says so, rather than opening blank.
         let home = scratch("choice-empty");
         let mut app = on_orchestrator(Some(home.clone()));
-        app.fill_choice(Ok(Catalog::default()));
+        answer_choice(&mut app, Ok(Catalog::default()));
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         assert!(text_of(&rows).contains(NO_MODELS), "{}", text_of(&rows));
         let _ = fs::remove_dir_all(&home);
@@ -3687,7 +4105,7 @@ mod tests {
         let list: String = (0..40)
             .map(|index| format!("provider/model-{index:02}\n"))
             .collect();
-        app.fill_choice(Ok(Catalog::from_lines(&list)));
+        answer_choice(&mut app, Ok(Catalog::from_lines(&list)));
         app.choice.as_mut().expect("the choice").cursor = 30;
         let (rows, _) = render_app(&mut app, 100, 20, &RuntimeRead::Absent);
         let text = text_of(&rows);
@@ -3711,7 +4129,7 @@ mod tests {
     #[test]
     fn the_choice_footer_names_its_keys_and_the_help_names_both_scopes() {
         let mut choosing = on_orchestrator(None);
-        choosing.fill_choice(Ok(Catalog::from_lines("a/b\nc/d\n")));
+        answer_choice(&mut choosing, Ok(Catalog::from_lines("a/b\nc/d\n")));
         let line: String = choosing
             .footer_line(100)
             .spans
@@ -3762,18 +4180,18 @@ mod tests {
         );
 
         // The help is one key away. In the window it names the sidebar's
-        // keys only: enter is on the builder's row, where it opens nothing.
+        // keys: enter is on the builder's harness row, where it opens a choice.
         let mut window = app();
         window.on_key(press(KeyCode::Char('?')));
         assert!(window.help, "? did not open the help");
         let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
         let text = text_of(&rows);
         assert!(text.contains(HELP_TITLE), "{text}");
-        for says in ["reload", "move", "quit"] {
+        for says in ["reload", "move", "quit", "choose"] {
             assert!(text.contains(says), "{says} is not in the help: {text}");
         }
         let body = rows[..rows.len() - 1].join("\n");
-        for dead in ["choose", "pick", "close"] {
+        for dead in ["pick", "close"] {
             assert!(
                 !body.contains(dead),
                 "{dead} is in the window's help: {text}"
@@ -3781,10 +4199,10 @@ mod tests {
         }
         let footer = rows.last().expect("a footer");
         assert!(footer.contains("close help"), "{footer}");
-        // On the orchestrator's row, enter has a choice to open, and the
+        // On the orchestrator's model row, enter has a choice to open, and the
         // help names it.
         window.on_key(press(KeyCode::Char('x')));
-        window.cursor = 2;
+        window.cursor = sidebar::cursor_of(2, Field::Model);
         window.agents_drawn = true;
         window.on_key(press(KeyCode::Char('?')));
         let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
@@ -3807,15 +4225,16 @@ mod tests {
         )
         .expect("a blocking file");
         let mut app = on_orchestrator(Some(home.clone()));
-        app.fill_choice(Ok(Catalog::from_lines(
-            "claude-sonnet-5-5\nclaude-opus-5-5\n",
-        )));
+        answer_choice(
+            &mut app,
+            Ok(Catalog::from_lines("claude-sonnet-5-5\nclaude-opus-5-5\n")),
+        );
         app.on_key(press(KeyCode::Char('k')));
         app.on_key(press(KeyCode::Enter));
         assert!(app.choice.is_none());
         assert!(app.notice.is_some(), "the failed save is silent");
         assert_eq!(
-            app.orchestrator_model(),
+            model_of(&app, "orchestrator"),
             Some("claude-opus-5-5"),
             "a failed save changed the configuration on screen"
         );
@@ -3836,16 +4255,19 @@ mod tests {
     }
 
     #[test]
-    fn enter_on_a_read_only_agent_opens_nothing() {
-        // The builder and the reviewer are the flow's: their rows name a
-        // model, and the screen changes none of it.
+    fn enter_opens_a_choice_on_every_agents_rows() {
+        // Every agent is configured from hugo: each of its three rows opens
+        // the choice of that field.
         let mut app = app();
         app.agents_drawn = true;
-        for cursor in [0usize, 1] {
-            app.cursor = cursor;
-            assert!(!app.can_choose(), "agent {cursor} is choosable");
-            app.on_key(press(KeyCode::Enter));
-            assert!(app.choice.is_none(), "agent {cursor} opened a choice");
+        for agent in 0..3 {
+            for field in [Field::Harness, Field::Model, Field::Effort] {
+                app.cursor = sidebar::cursor_of(agent, field);
+                app.on_key(press(KeyCode::Enter));
+                let choice = app.choice.take().expect("enter opened no choice");
+                assert_eq!(choice.field, field, "agent {agent}");
+                assert_eq!(choice.agent, agent, "agent {agent}");
+            }
         }
     }
 
@@ -4007,5 +4429,403 @@ mod tests {
         wait_for_start(&mut window);
         assert_eq!(window.note, Some(Note::Notice(ALREADY_RUNNING.to_string())));
         assert!(fake.requests.lock().expect("the requests").is_empty());
+    }
+
+    /// The harnesses the test machine has: every one but cursor-agent.
+    fn all_but_cursor_agent(harness: &Harness) -> bool {
+        harness.name != "cursor-agent"
+    }
+
+    /// The entries of the open choice, and whether enter picks each.
+    fn entries_of(window: &App) -> Vec<(String, bool)> {
+        window
+            .choice
+            .as_ref()
+            .expect("the choice")
+            .entries
+            .iter()
+            .map(|entry| (entry.text.clone(), entry.pickable))
+            .collect()
+    }
+
+    /// The window on the builder's row of the given field, with a home.
+    fn on_builder(home: &Path, field: Field) -> App {
+        let mut window = App::new(
+            theme(),
+            IconSet::Nerd,
+            ConfigRead::of(ConfigState::Config(Config::default())),
+            Some(home.to_path_buf()),
+        );
+        window.agents_drawn = true;
+        window.cursor = sidebar::cursor_of(0, field);
+        window
+    }
+
+    #[test]
+    fn the_harness_choice_lists_the_table_and_a_missing_harness_cannot_be_picked() {
+        let home = scratch("harness-choice");
+        let mut window = on_builder(&home, Field::Harness);
+        window.present = Some(all_but_cursor_agent);
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(
+            entries_of(&window),
+            [
+                ("claude".to_string(), true),
+                ("opencode".to_string(), true),
+                ("cursor-agent".to_string(), false),
+            ]
+        );
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains("cursor-agent not installed"),
+            "{}",
+            text_of(&rows)
+        );
+        // On the missing harness the cursor is on a row enter does not pick:
+        // the footer does not name it, and enter saves nothing.
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Down));
+        let footer: String = window
+            .footer_line(100)
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(!footer.contains("pick"), "{footer}");
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_some(), "enter closed the choice");
+        assert!(
+            !config::config_path(&home).exists(),
+            "a missing harness was picked"
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn picking_a_harness_clears_a_model_the_new_harness_does_not_list() {
+        // The builder runs claude-haiku-5-5 at high. opencode does not list
+        // that model: the switch clears it, keeps high, and says so on the row.
+        let home = scratch("switch-clears");
+        let tool = crate::catalog::scratch_tool("switch-clears", "#!/bin/sh\necho p/m0\n");
+        let mut window = on_builder(&home, Field::Harness);
+        window.present = Some(all_but_cursor_agent);
+        window.catalog_tool = Some(tool.clone());
+        window.on_key(press(KeyCode::Enter));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.catalog_pending(), "the switch did not read its list");
+        wait_for_catalog(&mut window);
+        assert!(window.choice.is_none(), "the switch left its choice open");
+        let builder = window
+            .loaded()
+            .and_then(|config| config.agents.first())
+            .expect("the builder");
+        assert_eq!(builder.harness, "opencode");
+        assert_eq!(builder.model, "");
+        assert_eq!(builder.effort.as_deref(), Some("high"));
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains("pick a model"),
+            "{}",
+            text_of(&rows)
+        );
+        let text = fs::read_to_string(config::config_path(&home)).expect("the file");
+        assert!(text.contains("harness = \"opencode\""), "{text}");
+        assert!(text.contains("model = \"\""), "{text}");
+        let _ = fs::remove_dir_all(&home);
+        let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
+    }
+
+    #[test]
+    fn a_harness_switch_keeps_a_model_the_new_harness_lists_and_resets_an_effort_it_does_not_take()
+    {
+        // The builder runs at xhigh, which claude takes and opencode does not:
+        // the switch resets the effort to opencode's default level and keeps
+        // the model, which opencode lists.
+        let home = scratch("switch-keeps");
+        let tool = crate::catalog::scratch_tool(
+            "switch-keeps",
+            "#!/bin/sh\necho claude-haiku-5-5\necho p/m0\n",
+        );
+        let mut window = on_builder(&home, Field::Harness);
+        window.present = Some(all_but_cursor_agent);
+        window.catalog_tool = Some(tool.clone());
+        window.config = ConfigRead::of(ConfigState::Config({
+            let mut config = Config::default();
+            config.agents[0].effort = Some("xhigh".to_string());
+            config
+        }));
+        window.on_key(press(KeyCode::Enter));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Enter));
+        wait_for_catalog(&mut window);
+        let builder = window
+            .loaded()
+            .and_then(|config| config.agents.first())
+            .expect("the builder");
+        assert_eq!(builder.harness, "opencode");
+        assert_eq!(builder.model, "claude-haiku-5-5");
+        assert_eq!(builder.effort.as_deref(), Some("medium"));
+        let _ = fs::remove_dir_all(&home);
+        let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
+    }
+
+    #[test]
+    fn a_harness_switch_whose_catalogue_cannot_be_read_saves_nothing() {
+        // The switch cannot tell what the model keeps: it is refused, the
+        // reason is named in the choice, and the configuration stays.
+        let home = scratch("switch-refused");
+        let mut window = on_builder(&home, Field::Harness);
+        window.present = Some(all_but_cursor_agent);
+        window.catalog_tool = Some(PathBuf::from("/nonexistent/coding-crew-tool"));
+        window.on_key(press(KeyCode::Enter));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Enter));
+        wait_for_catalog(&mut window);
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains(CATALOG_UNREADABLE),
+            "{}",
+            text_of(&rows)
+        );
+        assert!(
+            window.choice.is_some(),
+            "the refused switch closed the choice"
+        );
+        assert!(
+            !config::config_path(&home).exists(),
+            "a refused switch was saved"
+        );
+        assert_eq!(
+            window.loaded().expect("the configuration").agents[0].harness,
+            "claude"
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_model_choice_lists_the_catalogue_and_type_an_id_last() {
+        let home = scratch("model-choice-type");
+        let mut window = on_builder(&home, Field::Model);
+        answer_choice_for(&mut window, 0, Ok(Catalog::from_lines("p/m0\np/m1\n")));
+        assert_eq!(
+            entries_of(&window),
+            [
+                ("p/m0".to_string(), true),
+                ("p/m1".to_string(), true),
+                (pick::TYPE_AN_ID.to_string(), true),
+            ]
+        );
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains(pick::TYPE_AN_ID),
+            "{}",
+            text_of(&rows)
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn type_an_id_takes_its_letters_as_text_and_saves_a_shaped_id() {
+        // The input takes every key but ctrl-c: a `q` typed into an id is a
+        // letter, not the window's quit.
+        let home = scratch("type-an-id");
+        let mut window = on_builder(&home, Field::Model);
+        answer_choice_for(&mut window, 0, Ok(Catalog::from_lines("p/m0\n")));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(
+            window.choice.as_ref().expect("the choice").state,
+            ChoiceState::Typing(String::new())
+        );
+        for letter in "opencode-go/qwen".chars() {
+            assert_eq!(
+                window.on_key(press(KeyCode::Char(letter))),
+                Action::Redraw,
+                "{letter:?} quit the window"
+            );
+        }
+        // `?` is a letter too, so help does not open over the input.
+        window.on_key(press(KeyCode::Char('?')));
+        assert!(!window.help, "? opened the help over the id input");
+        window.on_key(press(KeyCode::Backspace));
+        assert_eq!(
+            window.choice.as_ref().expect("the choice").state,
+            ChoiceState::Typing("opencode-go/qwen".to_string())
+        );
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_none(), "enter did not pick the typed id");
+        assert_eq!(model_of(&window, "builder"), Some("opencode-go/qwen"));
+        let text = fs::read_to_string(config::config_path(&home)).expect("the file");
+        assert!(text.contains("model = \"opencode-go/qwen\""), "{text}");
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn an_id_that_is_not_shaped_as_a_model_id_is_not_picked() {
+        let home = scratch("type-an-id-shape");
+        let mut window = on_builder(&home, Field::Model);
+        answer_choice_for(&mut window, 0, Ok(Catalog::from_lines("p/m0\n")));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Enter));
+        for letter in "glm 5.3#high".chars() {
+            window.on_key(press(KeyCode::Char(letter)));
+        }
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains(NOT_A_MODEL_ID),
+            "{}",
+            text_of(&rows)
+        );
+        window.on_key(press(KeyCode::Enter));
+        assert!(
+            window.choice.is_some(),
+            "enter picked an id that is not one"
+        );
+        assert!(!config::config_path(&home).exists(), "a bad id was saved");
+        // Esc goes back to the list, and a second esc closes the choice.
+        window.on_key(press(KeyCode::Esc));
+        assert_eq!(
+            window.choice.as_ref().expect("the list").state,
+            ChoiceState::Listed
+        );
+        window.on_key(press(KeyCode::Esc));
+        assert!(window.choice.is_none());
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_model_catalogue_that_cannot_be_read_still_lets_an_id_be_typed() {
+        // The reason is named above the list, and `type an id…` is the way past
+        // a catalogue that does not work.
+        let home = scratch("model-choice-failed");
+        let mut window = on_builder(&home, Field::Model);
+        answer_choice_for(&mut window, 0, Err("opencode timed out".to_string()));
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains(CATALOG_UNREADABLE),
+            "{}",
+            text_of(&rows)
+        );
+        assert!(
+            text_of(&rows).contains(pick::TYPE_AN_ID),
+            "{}",
+            text_of(&rows)
+        );
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(
+            window.choice.as_ref().expect("the choice").state,
+            ChoiceState::Typing(String::new())
+        );
+        for letter in "opencode-go/glm-5.3".chars() {
+            window.on_key(press(KeyCode::Char(letter)));
+        }
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_none(), "enter did not pick the typed id");
+        assert_eq!(model_of(&window, "builder"), Some("opencode-go/glm-5.3"));
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_effort_choice_lists_the_harnesses_levels_and_saves_the_one_picked() {
+        let home = scratch("effort-choice");
+        let mut window = on_builder(&home, Field::Effort);
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(
+            entries_of(&window),
+            [
+                ("low".to_string(), true),
+                ("medium".to_string(), true),
+                ("high".to_string(), true),
+                ("xhigh".to_string(), true),
+                ("max".to_string(), true),
+            ]
+        );
+        // The builder runs at high: the cursor starts there.
+        assert_eq!(window.choice.as_ref().expect("the choice").cursor, 2);
+        window.on_key(press(KeyCode::Char('j')));
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_none());
+        assert_eq!(
+            window
+                .loaded()
+                .and_then(|config| config.agents.first())
+                .and_then(|agent| agent.effort.as_deref()),
+            Some("xhigh")
+        );
+        let text = fs::read_to_string(config::config_path(&home)).expect("the file");
+        assert!(text.contains("effort = \"xhigh\""), "{text}");
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn every_picker_renders_at_40_and_at_100_columns() {
+        // The choice is a popup over the window: at the narrow design width
+        // it keeps its title and its entries, and at 100 it keeps them too.
+        for width in [40u16, 100] {
+            for field in [Field::Harness, Field::Model, Field::Effort] {
+                let home = scratch("picker-width");
+                let mut window = on_builder(&home, field);
+                window.present = Some(all_but_cursor_agent);
+                if field == Field::Model {
+                    answer_choice_for(&mut window, 0, Ok(Catalog::from_lines("p/m0\n")));
+                } else {
+                    window.on_key(press(KeyCode::Enter));
+                }
+                let (rows, _) = render_app(&mut window, width, 40, &RuntimeRead::Absent);
+                let text = text_of(&rows);
+                assert!(
+                    text.contains(&format!("builder {}", field.label())),
+                    "{width} {field:?}: {text}"
+                );
+                for row in &rows {
+                    assert!(
+                        text_width(row) <= usize::from(width),
+                        "{width} {field:?}: {row:?}"
+                    );
+                }
+                let _ = fs::remove_dir_all(&home);
+            }
+        }
+    }
+
+    #[test]
+    fn s_refuses_while_an_agent_has_no_model_and_names_which() {
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = in_herdr(&fake);
+        window.config = ConfigRead::of(ConfigState::Config({
+            let mut config = Config::default();
+            config.agents[0].model.clear();
+            config.agents[1].effort = None;
+            config
+        }));
+        let runtime = RuntimeRead::Record(runtime());
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(
+            !rows.last().expect("a footer row").contains("start"),
+            "the footer offers a start that cannot act"
+        );
+        window.on_key(press(KeyCode::Char('s')));
+        assert!(!window.start_pending(), "s started with a gap");
+        assert_eq!(
+            window.note,
+            Some(Note::Failed(format!(
+                "{START_FAILED}: builder has no model, reviewer has no effort"
+            )))
+        );
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(
+            text_of(&rows).contains("builder has no model"),
+            "{}",
+            text_of(&rows)
+        );
+        assert!(fake.requests.lock().expect("the requests").is_empty());
+    }
+
+    /// Open the choice of an agent's model as a catalogue read that answered
+    /// with `loaded` would open it, for the agent at `agent`.
+    fn answer_choice_for(window: &mut App, agent: usize, loaded: Result<Catalog, String>) {
+        window.show(agent, Field::Model, Vec::new(), 0, ChoiceState::Reading);
+        window.fill_choice(loaded);
     }
 }

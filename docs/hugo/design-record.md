@@ -231,6 +231,16 @@ agents would read "2 agents — the orchestrator reviews", one would read
 - **One interface, the build loop first**: the runtime is an abstraction,
   and the flow this repository runs itself is its first implementation.
 
+## Ruling, 2026-11-22: every agent is configured from hugo
+
+The rule that the builder's and the reviewer's rows open nothing is overruled.
+Each agent's harness, model and effort opens a choice, as the orchestrator's
+model did, so hugo is the one place the automation is governed from. A pick
+saves in place. A harness switch keeps the model only when the new harness
+lists it, and the effort only when the new harness takes it; the rest is
+cleared or reset, and the row says so. `s` refuses while any agent lacks a
+harness, a model or an effort, and names which.
+
 ## Not decided here
 
 - Whether the autopilot runs at all, or hugo describes a policy the human

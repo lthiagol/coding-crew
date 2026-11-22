@@ -8,8 +8,8 @@
 │ # comments. The format is provisiona…│
 │ # writes one itself. hugo reads this…│
 │ # defaults only when it is absent, s…│
-│ # model in place, and never writes o…│
-│ # machine-written records - the jour…│
+│ # and effort in place, and never wri…│
+│ # The machine-written records - the …│
 │ # stay JSON.                         │
 │                                      │
 │ # The build-and-fix cycles a task ge…│

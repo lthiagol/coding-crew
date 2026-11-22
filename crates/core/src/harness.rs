@@ -23,6 +23,8 @@ pub struct Harness {
     pub kind: &'static str,
     /// The effort levels the tool takes, lowest first.
     pub efforts: &'static [&'static str],
+    /// The level an agent takes when its effort is reset: one of `efforts`.
+    pub default_effort: &'static str,
     /// Where the tool's models are listed.
     pub models: Models,
     /// The arguments and environment that start an agent: the agent's name,
@@ -56,6 +58,7 @@ const CLAUDE: Harness = Harness {
     binary: "claude",
     kind: "claude",
     efforts: &["low", "medium", "high", "xhigh", "max"],
+    default_effort: "medium",
     models: Models::Curated(&[
         "opus",
         "sonnet",
@@ -74,6 +77,7 @@ const OPENCODE: Harness = Harness {
     binary: "opencode",
     kind: "opencode",
     efforts: &["low", "medium", "high"],
+    default_effort: "medium",
     models: Models::Command(&["models"]),
     start: opencode_start,
 };
@@ -83,6 +87,7 @@ const CURSOR: Harness = Harness {
     binary: "cursor-agent",
     kind: "cursor",
     efforts: &["low", "medium", "high"],
+    default_effort: "medium",
     models: Models::Command(&["--list-models"]),
     start: cursor_start,
 };
@@ -213,6 +218,13 @@ mod tests {
     }
 
     #[test]
+    fn every_harness_resets_to_a_level_it_takes() {
+        for harness in HARNESSES {
+            assert!(harness.takes(harness.default_effort), "{}", harness.name);
+        }
+    }
+
+    #[test]
     fn claude_lists_its_aliases_and_full_ids() {
         let Models::Curated(models) = find("claude").expect("claude").models else {
             panic!("claude's models are curated");
@@ -326,6 +338,7 @@ mod tests {
             binary: "coding-crew-no-such-harness-binary",
             kind: "missing",
             efforts: &["low"],
+            default_effort: "low",
             models: Models::Command(&[]),
             start: claude_start,
         };

@@ -9,6 +9,7 @@ mod bounded;
 mod catalog;
 mod config;
 mod launch;
+mod pick;
 mod sidebar;
 mod skill;
 

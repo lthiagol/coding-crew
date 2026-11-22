@@ -7,9 +7,9 @@
 │ # This is the one file a human edits, so it is TOML and can carry                                │
 │ # comments. The format is provisional: it may change when the flow                               │
 │ # writes one itself. hugo reads this file at startup, writes the                                 │
-│ # defaults only when it is absent, saves the orchestrator's picked                               │
-│ # model in place, and never writes over a file it cannot read. The                               │
-│ # machine-written records - the journal and the runtime record -                                 │
+│ # defaults only when it is absent, saves each agent's harness, model                             │
+│ # and effort in place, and never writes over a file it cannot read.                              │
+│ # The machine-written records - the journal and the runtime record -                             │
 │ # stay JSON.                                                                                     │
 │                                                                                                  │
 │ # The build-and-fix cycles a task gets.                                                          │

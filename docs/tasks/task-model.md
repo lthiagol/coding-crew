@@ -679,7 +679,7 @@ An agent entry:
 | `role` | `runner`, `reviewer` or `orchestrator` |
 | `harness` | the harness it runs in: `claude` · `opencode` · `cursor-agent`, the names of the harness table in `crates/core/src/harness.rs` |
 | `model` | the model it runs, as its harness names it — `claude-haiku-5-5`, `opencode-go/glm-5.3` |
-| `effort` | the effort it runs at, one of its harness's levels; absent, the harness's own default |
+| `effort` | the effort it runs at, one of its harness's levels; absent, it is not yet picked and hugo will not start until it is |
 
 The harness table holds, for each harness, its program, the agent kind herdr
 starts it as, its efforts, how its models are listed, and how a model and an

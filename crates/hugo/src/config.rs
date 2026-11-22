@@ -116,14 +116,19 @@ pub fn load(home: Option<&Path>) -> ConfigRead {
     }
 }
 
-/// Save the orchestrator's model into the configuration under `home`.
+/// Save one change into the configuration under `home`.
 ///
-/// The pick goes into the file the human wrote: the file is read again, the
-/// orchestrator's model is set, and only that value is written back, so every
-/// comment and every other setting stays. When the file is gone, the
-/// configuration in hand is written whole, with the pick. Returns the
-/// configuration as saved, so the sidebar shows what the file holds.
-pub fn save_pick_at(home: &Path, config: &Config, model: &str) -> Result<Config, ReadError> {
+/// The change is made on the configuration the file holds now, not on the one
+/// in hand, so a value the human edited since the last read is kept. Only the
+/// values the change sets are written back: every comment and every other
+/// setting stays. When the file is gone, the configuration in hand is written
+/// whole, with the change. `change` says whether there was an agent to change.
+/// Returns the configuration as saved, so the sidebar shows what the file holds.
+pub fn save_change_at(
+    home: &Path,
+    config: &Config,
+    change: impl Fn(&mut Config) -> bool,
+) -> Result<Config, ReadError> {
     let _ = ensure_at(home)
         .map_err(|error| unreadable(home_at(home).display().to_string(), error.to_string()))?;
     let path = config_path(home);
@@ -131,8 +136,8 @@ pub fn save_pick_at(home: &Path, config: &Config, model: &str) -> Result<Config,
         Ok(file) => file,
         Err(ConfigError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
             let mut whole = config.clone();
-            if !whole.set_orchestrator_model(model) {
-                return Err(no_orchestrator());
+            if !change(&mut whole) {
+                return Err(no_agent());
             }
             whole
                 .write(&path)
@@ -141,19 +146,19 @@ pub fn save_pick_at(home: &Path, config: &Config, model: &str) -> Result<Config,
         }
         Err(error) => return Err(unreadable(CONFIG_FILE.to_string(), error.to_string())),
     };
-    let mut picked = file.config().clone();
-    if !picked.set_orchestrator_model(model) {
-        return Err(no_orchestrator());
+    let mut changed = file.config().clone();
+    if !change(&mut changed) {
+        return Err(no_agent());
     }
-    file.save(&picked)
+    file.save(&changed)
         .map_err(|error| unreadable(CONFIG_FILE.to_string(), error.to_string()))?;
     Ok(file.config().clone())
 }
 
-fn no_orchestrator() -> ReadError {
+fn no_agent() -> ReadError {
     unreadable(
         CONFIG_FILE.to_string(),
-        "the configuration has no orchestrator".to_string(),
+        "the configuration has no such agent".to_string(),
     )
 }
 
@@ -415,7 +420,10 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
         let config = Config::from_toml(text).expect("the configuration");
         fs::write(&path, text).expect("a human's configuration");
 
-        let saved = save_pick_at(&home, &config, "opencode-go/kimi-k3").expect("the pick");
+        let saved = save_change_at(&home, &config, |config| {
+            config.set_orchestrator_model("opencode-go/kimi-k3")
+        })
+        .expect("the pick");
         assert_eq!(
             saved
                 .agents
@@ -437,6 +445,33 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     }
 
     #[test]
+    fn a_change_is_made_on_the_file_as_it_is_now_and_keeps_what_the_human_edited() {
+        // The window's copy says five rounds; the human has since edited the
+        // file to three. The pick keeps the file's three.
+        let home = scratch("change-now");
+        fs::create_dir_all(home_at(&home)).expect("the home");
+        let path = config_path(&home);
+        fs::write(
+            &path,
+            Config::default()
+                .to_toml()
+                .replace("round_limit = 5", "round_limit = 3"),
+        )
+        .expect("an edited configuration");
+        let saved = save_change_at(&home, &Config::default(), |config| {
+            config.set_orchestrator_model("opencode-go/kimi-k3")
+        })
+        .expect("the pick");
+        assert_eq!(saved.round_limit, 3, "the pick reverted the human's edit");
+        assert_eq!(
+            Config::read(&path).expect("the file").round_limit,
+            3,
+            "the file lost the human's edit"
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
     fn a_pick_with_no_file_writes_the_configuration_whole() {
         let home = scratch("pick-absent");
         let mut config = Config::default();
@@ -445,7 +480,10 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
                 agent.model = "opencode-go/kimi-k3".to_string();
             }
         });
-        let saved = save_pick_at(&home, &config, "opencode-go/kimi-k3").expect("the pick");
+        let saved = save_change_at(&home, &config, |config| {
+            config.set_orchestrator_model("opencode-go/kimi-k3")
+        })
+        .expect("the pick");
         let after = fs::read_to_string(config_path(&home)).expect("the file");
         assert!(after.contains("model = \"opencode-go/kimi-k3\""), "{after}");
         assert_eq!(saved, config);
@@ -456,8 +494,10 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     fn a_pick_that_cannot_be_written_names_the_home() {
         let home = scratch("pick-blocked");
         fs::write(home.join(CONFIG_DIR), "not a folder").expect("a blocking file");
-        let error = save_pick_at(&home, &Config::default(), "opencode-go/kimi-k3")
-            .expect_err("the home cannot be made");
+        let error = save_change_at(&home, &Config::default(), |config| {
+            config.set_orchestrator_model("opencode-go/kimi-k3")
+        })
+        .expect_err("the home cannot be made");
         assert_eq!(error.file, home_at(&home).display().to_string());
         assert!(!error.error.is_empty(), "{error:?}");
         let _ = fs::remove_dir_all(&home);

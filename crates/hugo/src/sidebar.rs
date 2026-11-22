@@ -1,13 +1,12 @@
-//! The sidebar's content: the configuration, and the cursor that picks the
-//! orchestrator's model.
+//! The sidebar's content: the configuration, and the cursor that picks each
+//! agent's harness, model and effort.
 //!
 //! The groups, in the order the screen reads them: the **agents**, each with
 //! its harness, model and effort, the **review-round limit**, and the
 //! **order** — the numbered steps with their gates. The configuration is
-//! provisional and lives in the tool's home. The agents group has a cursor:
-//! the orchestrator's row is the one row a screen changes, because the
-//! orchestrator is the agent hugo starts. The builder's and the reviewer's
-//! rows are read-only.
+//! provisional and lives in the tool's home. The agents group has a cursor on
+//! each agent's harness, model and effort: every one of those rows is picked
+//! from a choice, and the agent's name and role are read-only.
 //!
 //! Nothing is dropped without a word: a row too wide for the pane is cut with
 //! the theme's marker, and a group that does not fit the height is left out
@@ -22,6 +21,47 @@ use coding_crew_theme::text::cut_to;
 use coding_crew_theme::{Icon, IconSet, Theme, selected_line};
 
 use crate::config::{ConfigRead, ConfigState};
+
+/// The rows of an agent that a human picks, in the order they are drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Field {
+    Harness,
+    Model,
+    Effort,
+}
+
+/// The fields of an agent, in the order they are drawn.
+pub const FIELDS: [Field; 3] = [Field::Harness, Field::Model, Field::Effort];
+
+impl Field {
+    /// The field's name, as its row and its choice say it.
+    pub fn label(self) -> &'static str {
+        match self {
+            Field::Harness => "harness",
+            Field::Model => "model",
+            Field::Effort => "effort",
+        }
+    }
+}
+
+/// The number of rows the cursor moves over: each agent's three fields.
+pub fn pick_rows(config: &Config) -> usize {
+    config.agents.len() * FIELDS.len()
+}
+
+/// The cursor's row for an agent's field.
+pub fn cursor_of(agent: usize, field: Field) -> usize {
+    let position = FIELDS
+        .iter()
+        .position(|known| *known == field)
+        .unwrap_or_default();
+    agent * FIELDS.len() + position
+}
+
+/// The agent and the field a cursor's row is.
+pub fn field_at(cursor: usize) -> (usize, Field) {
+    (cursor / FIELDS.len(), FIELDS[cursor % FIELDS.len()])
+}
 
 /// The sidebar's groups, in the order they are read. Each label is the dim
 /// upper-case word the screen draws.
@@ -70,7 +110,8 @@ pub struct Drawn {
 ///
 /// `notice` is a pick that could not be saved: it is drawn first, as the
 /// sidebar's leading rows, so the fit counts it. `cursor` is the agents
-/// group's row the cursor is on; `usize::MAX` draws no cursor. A group that
+/// group's row the cursor is on, as [`cursor_of`] numbers it; `usize::MAX`
+/// draws no cursor. A group that
 /// does not fit the height is left out whole; one line under the groups says
 /// `not shown:` with each group's name and how much it held, the way the main
 /// pane names the blocks it leaves out. An unreadable configuration names the
@@ -204,9 +245,10 @@ fn groups(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<
     ]
 }
 
-/// One entry per agent: its role icon, its name and role, then the harness it
-/// runs in, its model and its effort on the rows under it. The cursor is on an
-/// entry's head row.
+/// One entry per agent: its role icon and its name and role, then the harness
+/// it runs in, its model and its effort on the rows under it. The head row is
+/// not picked; the cursor is on one of the three rows under it. A model that
+/// is empty, or an effort that is absent, says so on the warning slot.
 fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> Vec<Row> {
     let mut rows = Vec::new();
     for (index, agent) in config.agents.iter().enumerate() {
@@ -217,27 +259,27 @@ fn agent_rows(config: &Config, theme: &Theme, icons: IconSet, cursor: usize) -> 
         } else {
             format!("{} · {}", agent.name, agent.role.as_str())
         };
-        let selected = index == cursor;
         rows.push(Row {
             text: format!("{} {name}", role_icon(agent.role).glyph(icons)),
             style: theme.text.normal,
-            selected,
+            selected: false,
         });
-        for (label, value) in [
-            ("harness", agent.harness.clone()),
-            ("model", agent.model.clone()),
-            (
-                "effort",
-                agent
-                    .effort
-                    .clone()
-                    .unwrap_or_else(|| "default".to_string()),
-            ),
-        ] {
+        for field in FIELDS {
+            let (value, style) = match field {
+                Field::Harness => (agent.harness.clone(), theme.text.dim),
+                Field::Model if agent.model.is_empty() => {
+                    ("pick a model".to_string(), theme.semantic.warn)
+                }
+                Field::Model => (agent.model.clone(), theme.text.dim),
+                Field::Effort => match &agent.effort {
+                    Some(effort) => (effort.clone(), theme.text.dim),
+                    None => ("pick an effort".to_string(), theme.semantic.warn),
+                },
+            };
             rows.push(Row {
-                text: format!("  {label} {value}"),
-                style: theme.text.dim,
-                selected: false,
+                text: format!("  {} {value}", field.label()),
+                style,
+                selected: cursor_of(index, field) == cursor,
             });
         }
     }
@@ -504,13 +546,31 @@ mod tests {
     }
 
     #[test]
-    fn an_agent_with_no_effort_says_it_runs_on_the_default() {
+    fn an_agent_with_no_effort_says_pick_an_effort_on_the_warning_slot() {
         let mut config = Config::default();
         config.agents[0].effort = None;
-        let rows = rendered(&ConfigRead::of(ConfigState::Config(config)), 30, 40);
+        let state = ConfigRead::of(ConfigState::Config(config));
+        let drawn = lines(&state, None, &theme(), IconSet::Nerd, 30, 40, usize::MAX);
+        let row = drawn
+            .lines
+            .iter()
+            .find(|line| {
+                line.spans
+                    .iter()
+                    .any(|span| span.content.contains("pick an effort"))
+            })
+            .expect("the effort row");
         assert!(
-            rows.iter().any(|row| row == "  effort default"),
-            "{rows:#?}"
+            row.spans
+                .iter()
+                .any(|span| span.style == theme().semantic.warn),
+            "{row:?}"
+        );
+        assert!(
+            !rendered(&state, 30, 40)
+                .iter()
+                .any(|row| row.contains("default")),
+            "an absent effort is not the default"
         );
     }
 
@@ -839,8 +899,16 @@ mod tests {
     }
 
     #[test]
-    fn the_cursor_is_on_an_agents_head_row_and_the_bar_reaches_the_edge() {
-        let drawn = lines(&configured(), None, &theme(), IconSet::Nerd, 30, 40, 2);
+    fn the_cursor_is_on_a_pickable_row_and_the_bar_reaches_the_edge() {
+        let drawn = lines(
+            &configured(),
+            None,
+            &theme(),
+            IconSet::Nerd,
+            30,
+            40,
+            cursor_of(2, Field::Model),
+        );
         let selected: Vec<&Line<'static>> = drawn
             .lines
             .iter()
@@ -857,13 +925,42 @@ mod tests {
             .map(|span| span.content.as_ref())
             .collect();
         assert!(says.starts_with('▌'), "{says:?}");
-        assert!(says.contains("orchestrator"), "{says:?}");
+        assert!(says.contains("model claude-opus-5-5"), "{says:?}");
         assert_eq!(
             selected[0].width(),
             30,
             "the selection bar stops before the pane's edge"
         );
         assert!(drawn.agents, "the cursor's group is not drawn");
+    }
+
+    #[test]
+    fn a_model_that_is_empty_says_pick_a_model_on_the_warning_slot() {
+        let mut config = Config::default();
+        config.agents[0].model.clear();
+        let state = ConfigRead::of(ConfigState::Config(config));
+        let drawn = lines(&state, None, &theme(), IconSet::Nerd, 30, 40, usize::MAX);
+        let row = drawn
+            .lines
+            .iter()
+            .find(|line| {
+                line.spans
+                    .iter()
+                    .any(|span| span.content.contains("pick a model"))
+            })
+            .expect("the model row");
+        assert!(
+            row.spans
+                .iter()
+                .any(|span| span.style == theme().semantic.warn),
+            "{row:?}"
+        );
+        // The cleared model's old id is not carried onto the row.
+        assert!(
+            !rendered(&state, 30, 40)
+                .iter()
+                .any(|row| row.contains("claude-haiku-5-5"))
+        );
     }
 
     #[test]

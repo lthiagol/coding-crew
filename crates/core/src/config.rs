@@ -130,9 +130,9 @@ impl Config {
              # This is the one file a human edits, so it is TOML and can carry\n\
              # comments. The format is provisional: it may change when the flow\n\
              # writes one itself. hugo reads this file at startup, writes the\n\
-             # defaults only when it is absent, saves the orchestrator's picked\n\
-             # model in place, and never writes over a file it cannot read. The\n\
-             # machine-written records - the journal and the runtime record -\n\
+             # defaults only when it is absent, saves each agent's harness, model\n\
+             # and effort in place, and never writes over a file it cannot read.\n\
+             # The machine-written records - the journal and the runtime record -\n\
              # stay JSON.\n\
              \n",
         );
@@ -628,8 +628,9 @@ pub struct Agent {
     pub harness: String,
     /// The model it runs, as the harness names it.
     pub model: String,
-    /// The effort it runs at: one of the harness's levels. `None` is the
-    /// harness's own default, and the file leaves the key out.
+    /// The effort it runs at: one of the harness's levels. `None` is not yet
+    /// picked, a gap that hugo refuses to start over; the file leaves the key
+    /// out.
     pub effort: Option<String>,
 }
 
@@ -1066,8 +1067,8 @@ mod tests {
     #[test]
     fn the_written_defaults_say_that_a_pick_is_saved_in_place() {
         let text = Config::default().to_toml();
-        assert!(text.contains("saves the orchestrator's picked"), "{text}");
-        assert!(text.contains("model in place"), "{text}");
+        assert!(text.contains("saves each agent's harness, model"), "{text}");
+        assert!(text.contains("and effort in place"), "{text}");
     }
 
     /// A scratch folder holding one configuration file. The folder is removed
@@ -1712,7 +1713,7 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     }
 
     #[test]
-    fn an_agent_with_no_effort_runs_on_the_harness_default() {
+    fn an_agent_with_no_effort_reads_back_unpicked() {
         let text = Config::default()
             .to_toml()
             .replacen("effort = \"high\"\n", "", 1);
