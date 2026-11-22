@@ -15,10 +15,13 @@ pub enum Scope {
     Window,
     /// The rows of a tab that lists them.
     Rows,
-    /// The Tasks tab's rows: the order keys.
+    /// The Tasks tab's rows: the order keys and the filter's opening key.
     Tasks,
     /// The detail pane, while it covers the window.
     Detail,
+    /// The filter line, while it is typed into: its keys type, and no other
+    /// key of the window answers.
+    Filter,
 }
 
 impl Scope {
@@ -29,6 +32,7 @@ impl Scope {
             Scope::Rows => "rows",
             Scope::Tasks => "tasks",
             Scope::Detail => "detail",
+            Scope::Filter => "filter",
         }
     }
 }
@@ -62,6 +66,16 @@ pub enum Act {
     ReverseSort,
     /// Return from the detail pane to the tab it came from.
     Back,
+    /// Open the filter: the footer takes the keys as its text.
+    Filter,
+    /// Keep the filter text and return to the rows.
+    KeepFilter,
+    /// Clear the filter text.
+    ClearFilter,
+    /// Delete the last letter of the filter text.
+    EraseFilter,
+    /// Type the key into the filter text.
+    TypeFilter,
 }
 
 /// A key, or the keys that share one binding: `Control` says the key is
@@ -73,6 +87,8 @@ pub enum Chord {
     Key(KeyCode, bool),
     /// The digits that name a tab.
     Digits,
+    /// A printable key: a letter, a digit or a sign, with no ctrl or alt.
+    Typed,
 }
 
 impl Chord {
@@ -85,6 +101,12 @@ impl Chord {
             Chord::Digits => {
                 let last = char::from(b'0' + Tab::ALL.len() as u8);
                 matches!(key.code, KeyCode::Char(digit) if ('1'..=last).contains(&digit))
+            }
+            Chord::Typed => {
+                matches!(key.code, KeyCode::Char(_))
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
             }
         }
     }
@@ -127,8 +149,8 @@ impl Binding {
 }
 
 /// The keys of the window, in the order the groups read them: the window
-/// first, then the rows, then the detail pane.
-pub const BINDINGS: [Binding; 25] = [
+/// first, then the rows, then the filter line, then the detail pane.
+pub const BINDINGS: [Binding; 32] = [
     Binding {
         scopes: &[Scope::Window, Scope::Detail],
         chords: &[Chord::Key(KeyCode::Char('q'), false)],
@@ -270,6 +292,56 @@ pub const BINDINGS: [Binding; 25] = [
         act: Act::ReverseSort,
     },
     Binding {
+        scopes: &[Scope::Tasks],
+        chords: &[Chord::Key(KeyCode::Char('/'), false)],
+        key: "/",
+        says: "filter",
+        act: Act::Filter,
+    },
+    Binding {
+        // With a filter in force, esc clears it before it quits the window.
+        scopes: &[Scope::Tasks],
+        chords: &[Chord::Key(KeyCode::Esc, false)],
+        key: "esc",
+        says: "clear the filter",
+        act: Act::ClearFilter,
+    },
+    Binding {
+        scopes: &[Scope::Filter],
+        chords: &[Chord::Key(KeyCode::Enter, false)],
+        key: "enter",
+        says: "keep the filter",
+        act: Act::KeepFilter,
+    },
+    Binding {
+        scopes: &[Scope::Filter],
+        chords: &[Chord::Key(KeyCode::Esc, false)],
+        key: "esc",
+        says: "clear the filter",
+        act: Act::ClearFilter,
+    },
+    Binding {
+        scopes: &[Scope::Filter],
+        chords: &[Chord::Key(KeyCode::Backspace, false)],
+        key: "backspace",
+        says: "delete a letter",
+        act: Act::EraseFilter,
+    },
+    Binding {
+        scopes: &[Scope::Filter],
+        chords: &[Chord::Typed],
+        key: "type",
+        says: "the filter text",
+        act: Act::TypeFilter,
+    },
+    Binding {
+        scopes: &[Scope::Filter],
+        chords: &[Chord::Key(KeyCode::Char('c'), true)],
+        key: "ctrl-c",
+        says: "quit",
+        act: Act::Quit,
+    },
+    Binding {
         scopes: &[Scope::Detail],
         chords: &[Chord::Key(KeyCode::Esc, false)],
         key: "esc",
@@ -341,6 +413,14 @@ pub fn leaves_overlay(key: &KeyEvent) -> bool {
     binding(Scope::Detail, key).is_some_and(|binding| binding.act == Act::Back)
 }
 
+/// The letter, digit or sign a key press types, when it types one.
+pub fn typed(key: &KeyEvent) -> Option<char> {
+    match key.code {
+        KeyCode::Char(letter) if Chord::Typed.matches(key) => Some(letter),
+        _ => None,
+    }
+}
+
 /// The digit a key press names, when it names one.
 pub fn digit(key: &KeyEvent) -> Option<usize> {
     match key.code {
@@ -383,7 +463,7 @@ mod tests {
         // in two scopes sits with the first of them.
         let rank = |scope: Scope| match scope {
             Scope::Window => 0,
-            Scope::Rows | Scope::Tasks => 1,
+            Scope::Rows | Scope::Tasks | Scope::Filter => 1,
             Scope::Detail => 2,
         };
         let mut last = 0;
@@ -411,7 +491,13 @@ mod tests {
             }
         }
         // Every scope is listed by at least one key.
-        for scope in [Scope::Window, Scope::Rows, Scope::Tasks, Scope::Detail] {
+        for scope in [
+            Scope::Window,
+            Scope::Rows,
+            Scope::Tasks,
+            Scope::Detail,
+            Scope::Filter,
+        ] {
             assert!(scopes.contains(&scope), "{scope:?} has no key");
         }
     }

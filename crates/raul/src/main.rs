@@ -7,6 +7,7 @@ mod app;
 mod backlog;
 mod data;
 mod detail;
+mod filter;
 mod keys;
 mod needs;
 mod overview;

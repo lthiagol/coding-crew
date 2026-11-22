@@ -1113,13 +1113,13 @@ mod tests {
             Preset::ALL.len() + keys::BINDINGS.len() + Tab::ALL.len() + IconSet::ALL.len()
         );
         // The empty state is gone: the tab has no state to be empty.
-        let text = inner(&draw(&theme(), 100, 46)).join("\n");
+        let text = inner(&draw(&theme(), 100, 60)).join("\n");
         assert!(!text.contains("nothing to set yet"), "{text}");
     }
 
     #[test]
     fn the_groups_are_named_with_their_counts() {
-        let text = inner(&draw(&theme(), 100, 46)).join("\n");
+        let text = inner(&draw(&theme(), 100, 60)).join("\n");
         for (name, count) in [
             ("theme", Preset::ALL.len()),
             ("keys", keys::BINDINGS.len()),
@@ -1172,7 +1172,7 @@ mod tests {
                 .find(|row| row.set == Some(set))
                 .map(|row| row.says.as_str())
                 .expect("a row for the set");
-            let (lines, _, _, _) = window(&groups, 98, 44, &theme(), set, None, 0);
+            let (lines, _, _, _) = window(&groups, 98, 60, &theme(), set, None, 0);
             let text = text_of(&lines);
             let mark = Icon::InUse.glyph(set);
             let marked: Vec<&str> = text
@@ -1192,9 +1192,12 @@ mod tests {
     #[test]
     fn the_tab_renders_at_40_60_and_100_columns() {
         for width in [40u16, 60, 100] {
-            let text = inner(&draw(&theme(), width, 46)).join("\n");
+            let text = inner(&draw(&theme(), width, 60)).join("\n");
             assert!(text.contains("theme · 5"), "{width}: {text}");
-            assert!(text.contains("keys · 25"), "{width}: {text}");
+            assert!(
+                text.contains(&format!("keys · {}", keys::BINDINGS.len())),
+                "{width}: {text}"
+            );
             assert!(text.contains("sort · 6"), "{width}: {text}");
             assert!(text.contains("Dracula"), "{width}: {text}");
             assert!(text.contains("palette"), "{width}: {text}");
@@ -1369,7 +1372,10 @@ mod tests {
             None,
         );
         let text = text_of(&rows);
-        assert!(text.starts_with("  keys · 25"), "{text}");
+        assert!(
+            text.starts_with(&format!("  keys · {}", keys::BINDINGS.len())),
+            "{text}"
+        );
         assert!(!text.contains("theme · 5"), "{text}");
         assert_eq!(shown.first(), Some(&10), "{shown:?}");
     }
@@ -1379,10 +1385,12 @@ mod tests {
         // The window starts at the end of the keys group. What is above it
         // is counted too, by the group it belongs to.
         let groups = groups(Order::default());
-        let (rows, _, _, _) = window(&groups, 98, 10, &theme(), IconSet::Nerd, None, 29);
+        let keys = keys::BINDINGS.len();
+        let end_of_keys = Preset::ALL.len() + keys;
+        let (rows, _, _, _) = window(&groups, 98, 10, &theme(), IconSet::Nerd, None, end_of_keys);
         let text = text_of(&rows);
         assert!(text.contains("theme (5 hidden)"), "{text}");
-        assert!(text.contains("keys (24 hidden)"), "{text}");
+        assert!(text.contains(&format!("keys ({keys} hidden)")), "{text}");
         assert!(text.contains("sort (0 hidden)"), "{text}");
     }
 

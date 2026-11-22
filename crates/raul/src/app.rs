@@ -5,13 +5,14 @@ use std::path::PathBuf;
 use crossterm::event::{KeyEvent, KeyEventKind};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 
 use crate::backlog;
 use crate::data::Work;
 use crate::detail::{self, Detail};
+use crate::filter::Filter;
 use crate::keys::{self, Act, Scope};
 use crate::needs;
 use crate::overview;
@@ -51,6 +52,11 @@ pub struct App {
     pub icons: IconSet,
     /// The order the Tasks tab keeps its rows in. It lives for the session.
     pub order: Order,
+    /// The filter text the Tasks tab narrows its rows by. It lives for the
+    /// session.
+    pub filter: String,
+    /// The filter line is open: the keys type into it.
+    pub typing: bool,
 }
 
 impl App {
@@ -66,6 +72,8 @@ impl App {
             theme,
             icons,
             order: Order::default(),
+            filter: String::new(),
+            typing: false,
         }
     }
 
@@ -121,12 +129,45 @@ impl App {
                 _ => Action::Redraw,
             };
         }
+        if self.typing {
+            // The filter line takes the keys as its text: no other key of the
+            // window answers while it is open.
+            return match keys::binding(Scope::Filter, &key).map(|binding| binding.act) {
+                Some(Act::Quit) => Action::Quit,
+                Some(Act::KeepFilter) => {
+                    self.typing = false;
+                    Action::Redraw
+                }
+                Some(Act::ClearFilter) => {
+                    self.typing = false;
+                    self.filter.clear();
+                    Action::Redraw
+                }
+                Some(Act::EraseFilter) => {
+                    erase_grapheme(&mut self.filter);
+                    Action::Redraw
+                }
+                Some(Act::TypeFilter) => {
+                    if let Some(letter) = keys::typed(&key) {
+                        self.filter.push(letter);
+                    }
+                    Action::Redraw
+                }
+                _ => Action::Redraw,
+            };
+        }
         // The row keys are for the tabs that are lists; the window keys work
         // everywhere. The Settings tab is a list too, though enter opens
         // nothing there.
-        // The Tasks tab's order keys are its own scope: no other tab answers
-        // them, so the footer and the help name them there alone.
-        let act = keys::binding(Scope::Window, &key)
+        // The Tasks tab's order and filter keys are its own scope: no other
+        // tab answers them, so the footer and the help name them there alone.
+        // With a filter in force, esc clears it before it quits the window.
+        let clearing = (self.tab == Tab::Tasks && self.filter_in_force())
+            .then(|| keys::binding(Scope::Tasks, &key))
+            .flatten()
+            .filter(|binding| binding.act == Act::ClearFilter);
+        let act = clearing
+            .or_else(|| keys::binding(Scope::Window, &key))
             .or_else(|| {
                 self.tab
                     .lists()
@@ -180,8 +221,25 @@ impl App {
                 self.order = self.order.reversed();
                 Action::Redraw
             }
-            Some(Act::Back) | None => Action::Redraw,
+            Some(Act::Filter) => {
+                self.typing = true;
+                Action::Redraw
+            }
+            Some(Act::ClearFilter) => {
+                self.filter.clear();
+                Action::Redraw
+            }
+            // The filter's keys answer while the line is open, in its scope.
+            Some(Act::KeepFilter | Act::EraseFilter | Act::TypeFilter | Act::Back) | None => {
+                Action::Redraw
+            }
         }
+    }
+
+    /// Whether a filter narrows the Tasks rows: its text reads as words or
+    /// tokens. Blank text is no filter.
+    fn filter_in_force(&self) -> bool {
+        !Filter::parse(&self.filter).is_empty()
     }
 
     /// Switch to a tab. The selection starts over: the first row of the
@@ -207,7 +265,7 @@ impl App {
     /// The row the cursor is on: the selection, or the tab's first row when
     /// nothing is selected yet.
     fn cursor(&self, work: &Work, now: &str) -> Option<String> {
-        let ids = rows_of(work, self.tab, now, self.order)?;
+        let ids = rows_of(work, self.tab, now, self.order, &self.filter)?;
         let selected = self.selection.clone().filter(|id| ids.contains(id));
         selected.or_else(|| ids.into_iter().next())
     }
@@ -215,7 +273,7 @@ impl App {
     /// Move the cursor one row, clamped to the tab's rows. A tab without
     /// rows has nowhere to move.
     fn move_selection(&mut self, work: &Work, step: isize, now: &str) -> Action {
-        let Some(ids) = rows_of(work, self.tab, now, self.order) else {
+        let Some(ids) = rows_of(work, self.tab, now, self.order, &self.filter) else {
             return Action::Redraw;
         };
         if ids.is_empty() {
@@ -233,7 +291,7 @@ impl App {
     /// Move the cursor to a row, clamped to the tab's rows. The first and
     /// the last row are the ends the `g` and `G` keys reach.
     fn move_to(&mut self, work: &Work, index: usize, now: &str) -> Action {
-        let Some(ids) = rows_of(work, self.tab, now, self.order) else {
+        let Some(ids) = rows_of(work, self.tab, now, self.order, &self.filter) else {
             return Action::Redraw;
         };
         let Some(id) = ids.get(index.min(ids.len().saturating_sub(1))) else {
@@ -311,6 +369,7 @@ impl App {
                 selected,
                 &mut self.view,
                 self.order,
+                &self.filter,
             ),
             Tab::Backlog => backlog::render_view(
                 frame,
@@ -342,9 +401,10 @@ impl App {
         frame.render_widget(self.footer(rows[4].width, work, now, hidden), rows[4]);
 
         if self.help {
-            let has_rows =
-                rows_of(work, self.tab, now, self.order).is_some_and(|ids| !ids.is_empty());
-            render_help(frame, area, &self.theme, has_rows, self.tab == Tab::Tasks);
+            let has_rows = rows_of(work, self.tab, now, self.order, &self.filter)
+                .is_some_and(|ids| !ids.is_empty());
+            let tasks = self.tab == Tab::Tasks;
+            render_help(frame, area, &self.theme, has_rows, tasks, tasks);
         }
     }
 
@@ -523,7 +583,7 @@ impl App {
     fn badge(&self, tab: Tab, work: &Work, now: &str) -> Option<usize> {
         match tab {
             Tab::NeedsYou | Tab::Backlog => {
-                rows_of(work, tab, now, self.order).map(|ids| ids.len())
+                rows_of(work, tab, now, self.order, &self.filter).map(|ids| ids.len())
             }
             Tab::Overview | Tab::Path | Tab::Tasks | Tab::Settings => None,
         }
@@ -560,6 +620,11 @@ impl App {
 
     /// The footer: the keys that do something on this tab.
     ///
+    /// While the filter line is open, the footer is the line: its keys do not
+    /// answer, so the footer names none. A filter in force puts its text, the
+    /// count it leaves and the token it cannot read in the footer beside the
+    /// keys.
+    ///
     /// A terminal too narrow for every key keeps the keys that matter most,
     /// and no key is ever cut in half. Enter is named only where it opens:
     /// a tab without rows never offers it, and the Settings tab reads even
@@ -568,6 +633,9 @@ impl App {
     /// keys, and the content pane says nothing about it — the same fact is
     /// never painted twice.
     fn footer(&self, width: u16, work: &Work, now: &str, hidden: Option<usize>) -> Line<'static> {
+        if self.typing {
+            return footer_line(self.filter_parts(work, usize::from(width)), width);
+        }
         // A key chip, parted from the chip before it by two spaces.
         let chip = |key: &str, action: &str| {
             [
@@ -590,9 +658,12 @@ impl App {
                 true,
             ));
         }
+        // The filter parts go here, once the room they take is known.
+        let filter_at = parts.len();
         parts.push((1, chip("1-6", "tab"), true));
         let mut next = 3;
-        let has_rows = rows_of(work, self.tab, now, self.order).is_some_and(|ids| !ids.is_empty());
+        let has_rows = rows_of(work, self.tab, now, self.order, &self.filter)
+            .is_some_and(|ids| !ids.is_empty());
         // Enter is named only where it opens: the Settings tab is a list
         // whose rows are facts, and the tab reads.
         if has_rows && self.tab.opens() {
@@ -617,14 +688,92 @@ impl App {
             parts.push((next, chip("o/O", "sort"), false));
             next += 1;
         }
+        if self.tab == Tab::Tasks {
+            parts.push((next, chip("/", "filter"), false));
+            next += 1;
+        }
         parts.push((next, chip("?", "help"), true));
         if self.help {
             parts.push((next + 1, chip("esc", "close help"), true));
         }
+        // The filter parts take the room the needed parts before them leave;
+        // the keys after them give way first in a narrow footer.
+        let before: usize = parts[..filter_at]
+            .iter()
+            .filter(|(_, _, needed)| *needed)
+            .map(|(_, spans, _)| columns(spans))
+            .sum();
+        let room = usize::from(width).saturating_sub(before);
+        parts.splice(filter_at..filter_at, self.filter_parts(work, room));
         // The tab pair is the last optional part: a pane too narrow for
         // everything gives it up before a key that works on the tab.
         parts.push((2, chip("←→", "switch tab"), false));
         footer_line(parts, width)
+    }
+
+    /// The footer's parts for the filter: the line, with a cursor while it is
+    /// open; the count a filter in force leaves; and the token it cannot
+    /// read. Empty when no filter is open or in force.
+    ///
+    /// The parts take `room` columns between them. The token comes first, then
+    /// the count if it fits beside it; the line takes what is left, cut from
+    /// the left so its tail and its cursor stay in view.
+    fn filter_parts(&self, work: &Work, room: usize) -> Vec<(usize, Vec<Span<'static>>, bool)> {
+        let open = self.typing;
+        if !open && !self.filter_in_force() {
+            return Vec::new();
+        }
+        let theme = &self.theme;
+        let count = if self.filter_in_force() {
+            let total = work.tasks.len();
+            let shown = tasks::row_ids(work, self.order, &self.filter).len();
+            vec![
+                Span::raw("  "),
+                Span::styled(format!("{shown} of {total}"), theme.text.strong),
+                Span::styled(
+                    format!(" · {} filtered out", total - shown),
+                    theme.chrome.footer,
+                ),
+            ]
+        } else {
+            Vec::new()
+        };
+        let error = match Filter::parse(&self.filter).unknown() {
+            Some(error) => vec![
+                Span::raw("  "),
+                Span::styled(error.to_string(), theme.semantic.error),
+            ],
+            None => Vec::new(),
+        };
+        // The line's own columns: "/ " and, while open, the cursor.
+        let cursor = usize::from(open);
+        let fixed = 2 + cursor + columns(&error);
+        // The error names the token that matches nothing, so the count gives
+        // way to it when both do not fit beside the line.
+        let count = if error.is_empty() || fixed + columns(&count) <= room {
+            count
+        } else {
+            Vec::new()
+        };
+        let text_room = room.saturating_sub(fixed + columns(&count));
+        let mut line = vec![
+            Span::styled("/ ", theme.text.dim),
+            Span::styled(tail(&self.filter, text_room), theme.text.strong),
+        ];
+        if open {
+            line.push(Span::styled(
+                " ",
+                Style::default().add_modifier(Modifier::REVERSED),
+            ));
+        }
+        let mut parts = vec![(1, line, true)];
+        if !count.is_empty() {
+            parts.push((1, count, true));
+        }
+        if !error.is_empty() {
+            parts.push((1, error, true));
+        }
+        parts
     }
 }
 
@@ -640,6 +789,46 @@ fn tab_icon(tab: Tab) -> Icon {
     }
 }
 
+/// Delete the last grapheme of the text: what a backspace takes off the line.
+fn erase_grapheme(text: &mut String) {
+    let length = Span::raw(text.clone())
+        .styled_graphemes(Style::default())
+        .last()
+        .map(|grapheme| grapheme.symbol.len());
+    if let Some(length) = length {
+        text.truncate(text.len() - length);
+    }
+}
+
+/// The text cut from the left to `room` columns, with a `…` before the part
+/// kept. The cut falls on a grapheme boundary: no character is split.
+fn tail(text: &str, room: usize) -> String {
+    if text.chars().count() <= room {
+        return text.to_string();
+    }
+    let graphemes: Vec<String> = Span::raw(text.to_string())
+        .styled_graphemes(Style::default())
+        .map(|grapheme| grapheme.symbol.to_string())
+        .collect();
+    // The ellipsis takes a column.
+    let mut used = 1;
+    let mut kept = Vec::new();
+    for grapheme in graphemes.iter().rev() {
+        let width = grapheme.chars().count();
+        if used + width > room {
+            break;
+        }
+        used += width;
+        kept.push(grapheme.as_str());
+    }
+    format!("…{}", kept.into_iter().rev().collect::<String>())
+}
+
+/// The columns the spans take in the footer.
+fn columns(spans: &[Span]) -> usize {
+    spans.iter().map(|span| span.content.chars().count()).sum()
+}
+
 /// The footer line: the parts that fit, the ones that matter most first.
 pub(crate) fn footer_line(
     parts: Vec<(usize, Vec<Span<'static>>, bool)>,
@@ -653,13 +842,10 @@ pub(crate) fn footer_line(
             if *needed != matters {
                 continue;
             }
-            let columns = spans
-                .iter()
-                .map(|span| span.content.chars().count())
-                .sum::<usize>();
-            if used + columns <= usize::from(width) {
+            let width_of_part = columns(spans);
+            if used + width_of_part <= usize::from(width) {
                 chosen[index] = true;
-                used += columns;
+                used += width_of_part;
             }
         }
     }
@@ -678,11 +864,11 @@ pub(crate) fn footer_line(
 ///
 /// The Overview is a summary, not a list: it has no rows. The Settings tab
 /// lists what is true, so it has rows too, though enter opens nothing there.
-fn rows_of(work: &Work, tab: Tab, now: &str, order: Order) -> Option<Vec<String>> {
+fn rows_of(work: &Work, tab: Tab, now: &str, order: Order, filter: &str) -> Option<Vec<String>> {
     match tab {
         Tab::NeedsYou => Some(needs::row_ids(work, now)),
         Tab::Path => Some(path::row_ids(work, now)),
-        Tab::Tasks => Some(tasks::row_ids(work, order)),
+        Tab::Tasks => Some(tasks::row_ids(work, order, filter)),
         Tab::Backlog => Some(backlog::row_ids(work)),
         Tab::Settings => Some(settings::row_ids()),
         Tab::Overview => None,
@@ -706,10 +892,15 @@ fn help_popup(area: Rect) -> Rect {
 /// A popup three fifths of a short window cannot hold every line, so the
 /// lines give way from the least to the most useful: `shift-tab`, then
 /// `h l`, then `tab`, then `← →` (each has a twin that remains), then
-/// `g/G`, then `pgup`/`pgdn` (the arrows still move), then `↑↓`/`j`/`k`,
-/// then `1-6`. `q` and `?` are dropped last: a human who is stuck needs to
-/// leave and to ask what the keys are.
-fn help_lines(theme: &Theme, has_rows: bool, sorts: bool) -> Vec<(u8, Line<'static>)> {
+/// `g/G`, `o O` and the filter's keys, then `pgup`/`pgdn` (the arrows still
+/// move), then `↑↓`/`j`/`k`, then `1-6`. `q` and `?` are dropped last: a
+/// human who is stuck needs to leave and to ask what the keys are.
+fn help_lines(
+    theme: &Theme,
+    has_rows: bool,
+    sorts: bool,
+    filter: bool,
+) -> Vec<(u8, Line<'static>)> {
     let line = |key: &str, says: &str| {
         Line::from(vec![
             Span::styled(format!(" {key} "), theme.chrome.key),
@@ -732,6 +923,11 @@ fn help_lines(theme: &Theme, has_rows: bool, sorts: bool) -> Vec<(u8, Line<'stat
     }
     if sorts {
         lines.push((4, line("o O", "sort")));
+    }
+    if filter {
+        lines.push((4, line("/", "filter")));
+        lines.push((4, line("enter", "keep the filter")));
+        lines.push((4, line("esc", "clear the filter")));
     }
     lines.push((u8::MAX, line("q", "quit")));
     lines.push((u8::MAX, line("?", "this help")));
@@ -756,12 +952,19 @@ fn help_rows(line: &Line<'_>, inner: usize) -> usize {
 }
 
 /// The help overlay.
-fn render_help(frame: &mut Frame, area: Rect, theme: &Theme, has_rows: bool, sorts: bool) {
+fn render_help(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    has_rows: bool,
+    sorts: bool,
+    filter: bool,
+) {
     let popup = help_popup(area);
     // The border takes one row at the top and one at the bottom.
     let inner_width = usize::from(popup.width).saturating_sub(2);
     let room = usize::from(popup.height).saturating_sub(2);
-    let lines = help_lines(theme, has_rows, sorts);
+    let lines = help_lines(theme, has_rows, sorts, filter);
     let lines: Vec<Line<'static>> = if inner_width == 0 {
         Vec::new()
     } else {
@@ -1107,9 +1310,9 @@ mod tests {
         // whose counts matter carry the count of their rows.
         let work = mock_work();
         let needs =
-            rows_of(&work, Tab::NeedsYou, now(), Order::default()).map_or(0, |ids| ids.len());
+            rows_of(&work, Tab::NeedsYou, now(), Order::default(), "").map_or(0, |ids| ids.len());
         let backlog =
-            rows_of(&work, Tab::Backlog, now(), Order::default()).map_or(0, |ids| ids.len());
+            rows_of(&work, Tab::Backlog, now(), Order::default(), "").map_or(0, |ids| ids.len());
         let glyph = |icon: Icon| icon.glyph(IconSet::Nerd);
         let rows = draw(100, 20);
         let bar = rows.get(1).expect("the tab bar").trim_end();
@@ -1230,12 +1433,16 @@ mod tests {
         let rows = render(
             &mut window(&Theme::preset(Preset::Dark), Tab::Settings, false),
             100,
-            44,
+            60,
         )
         .0;
         let text = rows.join("\n");
-        for group in ["theme · 5", "keys · 25", "sort · 6"] {
-            assert!(text.contains(group), "{group} is missing: {text}");
+        for group in [
+            "theme · 5".to_string(),
+            format!("keys · {}", keys::BINDINGS.len()),
+            "sort · 6".to_string(),
+        ] {
+            assert!(text.contains(&group), "{group} is missing: {text}");
         }
         // The groups say what is true, derived from their own sources.
         assert!(text.contains("Catppuccin"), "{text}");
@@ -1252,7 +1459,7 @@ mod tests {
     fn the_settings_tab_has_rows_but_enter_opens_nothing() {
         let work = mock_work();
         let ids =
-            rows_of(&work, Tab::Settings, now(), Order::default()).expect("Settings is a list");
+            rows_of(&work, Tab::Settings, now(), Order::default(), "").expect("Settings is a list");
         assert!(!ids.is_empty(), "Settings has no rows");
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
         app.on_key(key(KeyCode::Enter), &work, now());
@@ -1315,7 +1522,7 @@ mod tests {
         // the mark's own paint is on display. The pane is tall enough for
         // every row: the scroll would otherwise hide the theme at the top.
         app.selection = Some("sort:settings".to_string());
-        let (rows, paint) = render(&mut app, 100, 50);
+        let (rows, paint) = render(&mut app, 100, 60);
         // The icon set in force is marked too, on its own group's rows: the
         // theme's rows are the ones that say what kind of theme they are.
         let mark = Icon::InUse.glyph(IconSet::Nerd);
@@ -1382,6 +1589,7 @@ mod tests {
                 event
             }
             keys::Chord::Digits => KeyEvent::from(KeyCode::Char('6')),
+            keys::Chord::Typed => KeyEvent::from(KeyCode::Char('x')),
         }
     }
 
@@ -1394,20 +1602,26 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         for binding in keys::BINDINGS {
             for scope in binding.scopes {
-                // The sort keys answer on the Tasks tab alone; the rest on Path.
-                let tab = if *scope == Scope::Tasks {
+                // The sort and filter keys answer on the Tasks tab alone; the
+                // rest on Path.
+                let tab = if matches!(scope, Scope::Tasks | Scope::Filter) {
                     Tab::Tasks
                 } else {
                     Tab::Path
                 };
                 let mut app = window(&theme, tab, false);
-                let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
+                let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
                 if *scope == Scope::Detail {
                     let mut detail = Detail::opened("TSK13".to_string(), tab, None);
                     detail.scroll = 5;
                     app.detail = Some(detail);
+                } else if *scope == Scope::Filter {
+                    // The filter's keys answer while the line is open.
+                    app.filter = "ab".to_string();
+                    app.on_key(key(KeyCode::Char('/')), &work, now());
                 } else {
                     match binding.act {
+                        Act::ClearFilter => app.filter = "x".to_string(),
                         Act::Move(-1) => app.selection = Some(ids[1].clone()),
                         Act::Move(1) => app.selection = Some(ids[0].clone()),
                         Act::Page(pages) => {
@@ -1441,6 +1655,23 @@ mod tests {
                     }
                     Act::Back => {
                         assert!(app.detail.is_none(), "{} did not close", binding.key);
+                    }
+                    Act::Filter => {
+                        assert!(app.typing, "{} did not open the filter", binding.key);
+                    }
+                    Act::KeepFilter => {
+                        assert!(!app.typing, "{} did not keep the filter", binding.key);
+                        assert_eq!(app.filter, "ab", "{}", binding.key);
+                    }
+                    Act::ClearFilter => {
+                        assert!(!app.typing, "{} kept the line open", binding.key);
+                        assert!(app.filter.is_empty(), "{} kept the text", binding.key);
+                    }
+                    Act::EraseFilter => {
+                        assert_eq!(app.filter, "a", "{}", binding.key);
+                    }
+                    Act::TypeFilter => {
+                        assert_eq!(app.filter, "abx", "{}", binding.key);
                     }
                     Act::Move(step) => {
                         if *scope == Scope::Detail {
@@ -1580,7 +1811,7 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
-        let ids = rows_of(&work, Tab::Settings, now(), Order::default()).expect("a list tab");
+        let ids = rows_of(&work, Tab::Settings, now(), Order::default(), "").expect("a list tab");
         let rows_of_settings = settings::groups(Order::default());
         let mut app = window(&theme, Tab::Settings, false);
         for height in [12u16, 8, 6] {
@@ -1737,7 +1968,7 @@ mod tests {
         Tab::ALL
             .into_iter()
             .filter(|tab| {
-                rows_of(&work, *tab, now(), Order::default()).is_some_and(|ids| !ids.is_empty())
+                rows_of(&work, *tab, now(), Order::default(), "").is_some_and(|ids| !ids.is_empty())
             })
             .collect()
     }
@@ -1770,7 +2001,7 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         for tab in list_tabs() {
-            let ids = rows_of(&work, tab, now(), Order::default()).expect("a list tab");
+            let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a list tab");
             assert!(ids.len() > 4, "{tab:?}: not enough rows to scroll");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 10);
@@ -1842,12 +2073,12 @@ mod tests {
         let before = "2029-12-31T23:59:55Z";
         let after = "2030-01-01T00:00:05Z";
         assert_eq!(
-            rows_of(&work, Tab::NeedsYou, before, Order::default()).expect("rows"),
+            rows_of(&work, Tab::NeedsYou, before, Order::default(), "").expect("rows"),
             ["TSK01", "TSK02"],
             "the boundary moved: before it the id breaks a zero tie"
         );
         assert_eq!(
-            rows_of(&work, Tab::NeedsYou, after, Order::default()).expect("rows"),
+            rows_of(&work, Tab::NeedsYou, after, Order::default(), "").expect("rows"),
             ["TSK02", "TSK01"],
             "the boundary moved: after it TSK02 has waited"
         );
@@ -2008,7 +2239,7 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 10);
             for _ in 0..ids.len() + 3 {
@@ -2056,7 +2287,7 @@ mod tests {
         let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
         for tab in list_tabs() {
-            let ids = rows_of(&work, tab, now(), Order::default()).expect("a list tab");
+            let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a list tab");
             let mut app = window(&theme, tab, false);
             render(&mut app, 100, 15);
             let page = app.view.page();
@@ -2102,7 +2333,7 @@ mod tests {
         // The page is what the last draw held; a key pressed before any
         // draw moves one row rather than nothing.
         let work = mock_work();
-        let ids = rows_of(&work, Tab::NeedsYou, now(), Order::default()).expect("a row tab");
+        let ids = rows_of(&work, Tab::NeedsYou, now(), Order::default(), "").expect("a row tab");
         let mut app = window(&Theme::preset(Preset::Dark), Tab::NeedsYou, false);
         app.on_key(key(KeyCode::PageDown), &work, now());
         assert_eq!(
@@ -2172,7 +2403,7 @@ mod tests {
             let mut app = window(&theme, tab, false);
             let rows = render(&mut app, width, height).0;
             let footer = rows.last().expect("a footer row").trim_end().to_string();
-            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
             let hidden = ids.len() - app.view.page();
             assert!(hidden > 0, "{tab:?}: nothing is hidden");
             assert!(
@@ -2320,7 +2551,7 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
             for height in [7u16, 8, 10] {
                 let mut app = window(&theme, tab, false);
                 render(&mut app, 100, height);
@@ -2371,7 +2602,7 @@ mod tests {
         for tab in row_tabs() {
             let mut app = window(&theme, tab, false);
             let (rows, paint) = render(&mut app, 100, 40);
-            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
             let first = ids.first().expect("a row");
             let (y, x) = cell_of(&rows, first)
                 .unwrap_or_else(|| panic!("{tab:?}: {first} is not on screen"));
@@ -2399,7 +2630,7 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
             assert!(ids.len() >= 3, "{tab:?}: not enough rows to move through");
             let mut app = window(&theme, tab, false);
             // Down moves the paint to the second row.
@@ -2450,7 +2681,7 @@ mod tests {
         let theme = Theme::preset(Preset::Dark);
         let selection = paint_of(theme.text.selected);
         for tab in row_tabs() {
-            let ids = rows_of(&work, tab, now(), Order::default()).expect("a row tab");
+            let ids = rows_of(&work, tab, now(), Order::default(), "").expect("a row tab");
             let target = &ids[2];
             let mut app = window(&theme, tab, false);
             app.on_key(key(KeyCode::Down), &work, now());
@@ -2540,7 +2771,7 @@ mod tests {
         let work = mock_work();
         let mut app = app();
         app.tab = Tab::Backlog;
-        let ids = rows_of(&work, Tab::Backlog, now(), Order::default()).expect("rows");
+        let ids = rows_of(&work, Tab::Backlog, now(), Order::default(), "").expect("rows");
         assert!(ids.len() >= 2, "{ids:?}");
         app.selection = Some(ids[1].clone());
         app.on_key(key(KeyCode::Enter), &work, now());
@@ -2663,6 +2894,255 @@ mod tests {
         assert!(
             !(footer.contains("enter") && footer.contains("open")),
             "{footer}: enter has already opened"
+        );
+    }
+
+    /// Type the text into the filter line, one key at a time.
+    fn type_text(app: &mut App, work: &Work, text: &str) {
+        for letter in text.chars() {
+            app.on_key(key(KeyCode::Char(letter)), work, now());
+        }
+    }
+
+    #[test]
+    fn slash_opens_the_filter_on_the_tasks_tab_alone() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut tasks = window(&theme, Tab::Tasks, false);
+        tasks.on_key(key(KeyCode::Char('/')), &work, now());
+        assert!(tasks.typing, "/ did not open the filter on Tasks");
+        let mut path = window(&theme, Tab::Path, false);
+        path.on_key(key(KeyCode::Char('/')), &work, now());
+        assert!(!path.typing, "/ opened a filter on Path");
+    }
+
+    #[test]
+    fn typing_narrows_the_rows_live_and_the_cursor_stays_on_a_visible_row() {
+        let work = mock_work();
+        let total = rows_of(&work, Tab::Tasks, now(), Order::default(), "").expect("rows");
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.on_key(key(KeyCode::Char('/')), &work, now());
+        type_text(&mut app, &work, "TSK13");
+        assert_eq!(app.filter, "TSK13");
+        let shown = rows_of(&work, Tab::Tasks, now(), Order::default(), &app.filter).expect("rows");
+        assert_eq!(shown, ["TSK13"], "{shown:?} of {} rows", total.len());
+        assert_eq!(app.cursor(&work, now()).as_deref(), Some("TSK13"));
+        // A selection the narrowing hides is not the cursor: the cursor falls
+        // to the first visible row.
+        app.selection = Some(total[0].clone());
+        assert_eq!(app.cursor(&work, now()).as_deref(), Some("TSK13"));
+        // Nothing matches: no row, and no cursor.
+        type_text(&mut app, &work, "zzzz");
+        assert_eq!(app.cursor(&work, now()), None);
+    }
+
+    #[test]
+    fn while_typing_the_other_keys_of_the_window_do_not_fire() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Tasks, false);
+        app.on_key(key(KeyCode::Char('/')), &work, now());
+        let action = app.on_key(key(KeyCode::Char('q')), &work, now());
+        assert_eq!(action, Action::Redraw, "q quit while typing");
+        app.on_key(key(KeyCode::Char('2')), &work, now());
+        assert_eq!(app.tab, Tab::Tasks, "a digit changed the tab");
+        app.on_key(key(KeyCode::Char('o')), &work, now());
+        assert_eq!(app.order, Order::default(), "o sorted while typing");
+        app.on_key(key(KeyCode::Enter), &work, now());
+        assert_eq!(app.filter, "q2o", "the keys were not typed");
+        assert!(app.detail.is_none(), "enter opened a row inside the filter");
+    }
+
+    #[test]
+    fn enter_keeps_the_filter_and_returns_to_the_rows() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.on_key(key(KeyCode::Char('/')), &work, now());
+        type_text(&mut app, &work, "TSK13");
+        app.on_key(key(KeyCode::Enter), &work, now());
+        assert!(!app.typing, "enter did not return to the rows");
+        assert_eq!(app.filter, "TSK13", "enter cleared the filter");
+        // The rows answer again: q quits.
+        assert_eq!(
+            app.on_key(key(KeyCode::Char('q')), &work, now()),
+            Action::Quit
+        );
+    }
+
+    #[test]
+    fn esc_clears_the_line_while_typing_and_a_kept_filter_before_it_quits() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.on_key(key(KeyCode::Char('/')), &work, now());
+        type_text(&mut app, &work, "x");
+        app.on_key(key(KeyCode::Esc), &work, now());
+        assert!(
+            !app.typing && app.filter.is_empty(),
+            "esc while typing kept the text"
+        );
+        // A kept filter: the first esc clears it and the window stays open.
+        app.on_key(key(KeyCode::Char('/')), &work, now());
+        type_text(&mut app, &work, "TSK13");
+        app.on_key(key(KeyCode::Enter), &work, now());
+        assert_eq!(app.on_key(key(KeyCode::Esc), &work, now()), Action::Redraw);
+        assert!(app.filter.is_empty(), "esc did not clear the kept filter");
+        // With no filter in force, esc quits as it always did.
+        assert_eq!(app.on_key(key(KeyCode::Esc), &work, now()), Action::Quit);
+    }
+
+    #[test]
+    fn backspace_deletes_a_grapheme_not_a_scalar() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.on_key(key(KeyCode::Char('/')), &work, now());
+        // An e with a combining accent is one grapheme: one backspace takes both.
+        type_text(&mut app, &work, "ae\u{301}");
+        app.on_key(key(KeyCode::Backspace), &work, now());
+        assert_eq!(app.filter, "a");
+        app.on_key(key(KeyCode::Backspace), &work, now());
+        assert_eq!(app.filter, "");
+        app.on_key(key(KeyCode::Backspace), &work, now());
+        assert_eq!(app.filter, "", "backspace on an empty line");
+    }
+
+    #[test]
+    fn the_footer_counts_the_rows_a_filter_leaves() {
+        let work = mock_work();
+        let total = work.tasks.len();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.filter = "TSK13".to_string();
+        let shown = rows_of(&work, Tab::Tasks, now(), Order::default(), &app.filter)
+            .expect("rows")
+            .len();
+        let footer = render_work(&mut app, &work, 100, 20, now()).0;
+        let footer = footer.last().expect("a footer row").trim_end().to_string();
+        assert!(
+            footer.contains(&format!(
+                "{shown} of {total} · {} filtered out",
+                total - shown
+            )),
+            "{footer}"
+        );
+        assert!(
+            footer.contains("/ TSK13"),
+            "the filter text is not in the footer: {footer}"
+        );
+    }
+
+    #[test]
+    fn the_footer_names_an_unknown_token() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.filter = "colour:red".to_string();
+        let footer = render_work(&mut app, &work, 100, 20, now()).0;
+        let footer = footer.last().expect("a footer row").trim_end().to_string();
+        assert!(footer.contains("unknown key: colour"), "{footer}");
+        assert!(footer.contains("0 of"), "{footer}");
+    }
+
+    #[test]
+    fn a_narrow_footer_keeps_the_tail_of_the_line_and_the_count_while_typing() {
+        // The spec's example is longer than the footer at 40 columns: the
+        // line gives way from the left, the cursor and the count stay.
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.on_key(key(KeyCode::Char('/')), &work, now());
+        type_text(
+            &mut app,
+            &work,
+            "status:review status:remediating priority:high",
+        );
+        let footer = render_work(&mut app, &work, 40, 20, now()).0;
+        let footer = footer.last().expect("a footer row").to_string();
+        assert!(footer.contains("…"), "the line is not cut: {footer}");
+        assert!(footer.contains("…rity:high "), "tail or cursor: {footer}");
+        assert!(footer.contains(" of "), "the count is dropped: {footer}");
+    }
+
+    #[test]
+    fn a_narrow_footer_names_an_unknown_token_while_typing() {
+        // At 40 columns the count does not fit beside the error: the error
+        // stays, and the typed text keeps its cursor.
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.on_key(key(KeyCode::Char('/')), &work, now());
+        type_text(&mut app, &work, "colour:red");
+        let footer = render_work(&mut app, &work, 40, 20, now()).0;
+        let footer = footer.last().expect("a footer row").trim_end().to_string();
+        assert!(footer.contains("unknown key: colour"), "{footer}");
+        assert!(footer.contains("colour:red"), "{footer}");
+    }
+
+    #[test]
+    fn a_narrow_footer_keeps_the_count_once_the_filter_is_kept() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.on_key(key(KeyCode::Char('/')), &work, now());
+        type_text(
+            &mut app,
+            &work,
+            "status:review status:remediating priority:high",
+        );
+        app.on_key(key(KeyCode::Enter), &work, now());
+        let footer = render_work(&mut app, &work, 40, 20, now()).0;
+        let footer = footer.last().expect("a footer row").trim_end().to_string();
+        assert!(footer.contains("/ …"), "the line is not cut: {footer}");
+        assert!(footer.contains(" of "), "the count is dropped: {footer}");
+    }
+
+    #[test]
+    fn the_tail_cuts_on_a_grapheme_boundary() {
+        assert_eq!(tail("abc", 3), "abc");
+        assert_eq!(tail("abcdef", 4), "…def");
+        // The e with its accent is one grapheme: it is kept whole or not at all.
+        assert_eq!(tail("abe\u{301}f", 4), "…e\u{301}f");
+        assert_eq!(tail("abe\u{301}f", 3), "…f");
+    }
+
+    #[test]
+    fn an_empty_result_is_named_in_the_pane_with_the_filter() {
+        let work = mock_work();
+        for width in [40u16, 100] {
+            let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+            app.filter = "zzzz".to_string();
+            let rows = render_work(&mut app, &work, width, 20, now()).0.join("\n");
+            assert!(rows.contains("no task matches"), "{width}: {rows}");
+            assert!(rows.contains("/ zzzz"), "{width}: {rows}");
+        }
+    }
+
+    #[test]
+    fn the_filter_line_is_drawn_with_the_text_while_typing() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.on_key(key(KeyCode::Char('/')), &work, now());
+        type_text(&mut app, &work, "TSK1");
+        for width in [40u16, 100] {
+            let footer = render_work(&mut app, &work, width, 20, now()).0;
+            let footer = footer.last().expect("a footer row").trim_end().to_string();
+            assert!(footer.starts_with("/ TSK1"), "{width}: {footer}");
+            assert!(
+                !footer.contains("quit"),
+                "{width}: the keys show while typing: {footer}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_help_names_the_filter_keys_on_the_tasks_tab_and_no_other() {
+        let theme = Theme::preset(Preset::Dark);
+        let help = render(&mut window(&theme, Tab::Tasks, true), 100, 20)
+            .0
+            .join("\n");
+        for words in ["filter", "keep the filter", "clear the filter"] {
+            assert!(help.contains(words), "{words} is missing: {help}");
+        }
+        let path = render(&mut window(&theme, Tab::Path, true), 100, 20)
+            .0
+            .join("\n");
+        assert!(
+            !path.contains("keep the filter"),
+            "Path names the filter: {path}"
         );
     }
 }

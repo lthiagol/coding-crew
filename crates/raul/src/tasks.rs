@@ -21,6 +21,7 @@ use coding_crew_core::{Status, Task};
 
 use crate::announce;
 use crate::data::{STATUSES, Work};
+use crate::filter::Filter;
 use crate::view::{self, View};
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, pad, text_width};
@@ -40,7 +41,7 @@ const MARGIN: usize = 1;
 const MIN_TITLE: usize = 8;
 
 /// The priorities, most urgent first: the order `priority` sorts by.
-const PRIORITIES: [Priority; 4] = [
+pub(crate) const PRIORITIES: [Priority; 4] = [
     Priority::Urgent,
     Priority::High,
     Priority::Normal,
@@ -48,7 +49,7 @@ const PRIORITIES: [Priority; 4] = [
 ];
 
 /// The efforts, smallest first: the order `effort` sorts by.
-const EFFORTS: [Effort; 3] = [Effort::Small, Effort::Medium, Effort::Large];
+pub(crate) const EFFORTS: [Effort; 3] = [Effort::Small, Effort::Medium, Effort::Large];
 
 /// The key the rows are ordered by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -209,9 +210,15 @@ pub struct Group {
 /// The groups of the tab, in the order of its rows.
 ///
 /// A categorical order holds one group per value, the headings in the order
-/// the key runs. A flat order holds one group with no heading.
-pub fn groups(work: &Work, order: Order) -> Vec<Group> {
-    let mut tasks: Vec<&Task> = work.tasks.iter().collect();
+/// the key runs. A flat order holds one group with no heading. Only the tasks
+/// the filter text lets through are rows.
+pub fn groups(work: &Work, order: Order, filter: &str) -> Vec<Group> {
+    let filter = Filter::parse(filter);
+    let mut tasks: Vec<&Task> = work
+        .tasks
+        .iter()
+        .filter(|task| filter.matches(task))
+        .collect();
     tasks.sort_by(|one, other| order.compare(one, other));
     let mut groups: Vec<Group> = Vec::new();
     for task in tasks {
@@ -242,8 +249,8 @@ pub fn groups(work: &Work, order: Order) -> Vec<Group> {
 /// The ids of the tab's rows, in the order they are shown.
 ///
 /// The detail pane opens from this tab: the rows are what it can open.
-pub fn row_ids(work: &Work, order: Order) -> Vec<String> {
-    groups(work, order)
+pub fn row_ids(work: &Work, order: Order, filter: &str) -> Vec<String> {
+    groups(work, order, filter)
         .into_iter()
         .flat_map(|group| group.rows.into_iter().map(|row| row.id))
         .collect()
@@ -312,6 +319,7 @@ pub fn render_view(
     selected: Option<&str>,
     view: &mut View,
     order: Order,
+    filter: &str,
 ) -> Option<usize> {
     let block = chrome::pane("tasks", Icon::TabTasks, icons, false, theme);
     if let Some(missing) = work.missing {
@@ -338,7 +346,20 @@ pub fn render_view(
     }
     let width = usize::from(area.width).saturating_sub(BORDER);
     let height = usize::from(area.height).saturating_sub(BORDER);
-    let groups = groups(work, order);
+    let groups = groups(work, order, filter);
+    if groups.is_empty() {
+        // Only the filter empties the tab: a folder with no tasks was named above.
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::from(Span::styled("no task matches", theme.text.dim)),
+                Line::from(Span::styled(format!("/ {filter}"), theme.text.normal)),
+            ])
+            .wrap(Wrap { trim: true })
+            .block(block),
+            area,
+        );
+        return None;
+    }
     let columns = Columns::of(&groups);
     let rows: Vec<&Row> = groups.iter().flat_map(|group| group.rows.iter()).collect();
     let line_cells = cells(&groups);
@@ -679,7 +700,7 @@ mod tests {
     }
 
     fn ids(work: &Work, order: Order) -> Vec<String> {
-        row_ids(work, order)
+        row_ids(work, order, "")
     }
 
     fn theme() -> Theme {
@@ -693,6 +714,18 @@ mod tests {
         width: u16,
         height: u16,
         selected: Option<&str>,
+    ) -> Vec<String> {
+        draw_filtered(work, order, width, height, selected, "")
+    }
+
+    /// The tab drawn at a size through a filter, as plain text.
+    fn draw_filtered(
+        work: &Work,
+        order: Order,
+        width: u16,
+        height: u16,
+        selected: Option<&str>,
+        filter: &str,
     ) -> Vec<String> {
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).expect("a terminal");
@@ -710,6 +743,7 @@ mod tests {
                     selected,
                     &mut view,
                     order,
+                    filter,
                 );
             })
             .expect("a frame");
@@ -726,7 +760,7 @@ mod tests {
     /// The rows of a flat list of lines drawn with no heading and no bar, for
     /// the width checks.
     fn plain_lines(work: &Work, order: Order, width: usize, icons: IconSet) -> Vec<Line<'static>> {
-        let groups = groups(work, order);
+        let groups = groups(work, order, "");
         let columns = Columns::of(&groups);
         groups
             .iter()
@@ -892,7 +926,7 @@ mod tests {
             Priority::Normal,
             Effort::Medium,
         ));
-        let grouped = groups(&work, by(Key::Status));
+        let grouped = groups(&work, by(Key::Status), "");
         assert_eq!(grouped.len(), 8, "one group per status present");
         let done = grouped
             .iter()
@@ -900,7 +934,7 @@ mod tests {
             .expect("done");
         assert_eq!(done.rows.len(), 2);
         assert_eq!(done.status, Some(Status::Done));
-        let flat = groups(&work, by(Key::Id));
+        let flat = groups(&work, by(Key::Id), "");
         assert_eq!(flat.len(), 1, "a flat order has one group");
         assert!(flat[0].value.is_empty(), "and no heading");
         assert_eq!(cells(&flat).len(), 9, "nine rows, no headings");
@@ -911,7 +945,7 @@ mod tests {
     fn the_right_column_is_the_value_of_the_key_in_force() {
         let work = every_status();
         let value_of = |key: Key, id: &str| {
-            groups(&work, by(key))
+            groups(&work, by(key), "")
                 .into_iter()
                 .flat_map(|group| group.rows)
                 .find(|row| row.id == id)
@@ -1009,7 +1043,7 @@ mod tests {
     #[test]
     fn a_heading_names_its_value_and_counts_its_rows() {
         let work = every_status();
-        let grouped = groups(&work, by(Key::Status));
+        let grouped = groups(&work, by(Key::Status), "");
         let done = grouped
             .iter()
             .find(|group| group.value == "done")
@@ -1074,6 +1108,41 @@ mod tests {
         let joined = draw(&work, by(Key::Id), 60, 14, None).join("\n");
         assert!(!joined.contains("hidden"), "{joined}");
         assert!(joined.contains("TSK08"), "{joined}");
+    }
+
+    #[test]
+    fn a_filter_narrows_the_rows_and_its_words_and_tokens_combine() {
+        let work = every_status();
+        assert_eq!(row_ids(&work, by(Key::Id), "status:done"), ["TSK08"]);
+        assert_eq!(
+            row_ids(&work, by(Key::Id), "status:draft status:done"),
+            ["TSK01", "TSK08"],
+            "the same key is OR'd"
+        );
+        assert_eq!(
+            row_ids(&work, by(Key::Id), "status:draft priority:high"),
+            Vec::<String>::new(),
+            "different keys are AND'd"
+        );
+        assert_eq!(
+            row_ids(&work, by(Key::Id), "TSK03 TSK04"),
+            Vec::<String>::new()
+        );
+        // The groups of a categorical order hold the rows the filter lets
+        // through, and only those.
+        let grouped = groups(&work, by(Key::Status), "status:draft status:done");
+        assert_eq!(grouped.len(), 2, "{grouped:?}");
+    }
+
+    #[test]
+    fn a_filter_that_matches_nothing_says_so_at_forty_and_one_hundred_columns() {
+        let work = every_status();
+        for width in [40u16, 100] {
+            let text = draw_filtered(&work, by(Key::Id), width, 6, None, "zzz").join("\n");
+            assert!(text.contains("no task matches"), "{width}: {text}");
+            assert!(text.contains("/ zzz"), "{width}: {text}");
+            assert!(!text.contains("TSK01"), "{width}: a row is drawn: {text}");
+        }
     }
 
     #[test]

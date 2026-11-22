@@ -679,19 +679,19 @@ fn render_tab_at(preset: &str, tab: &str, width: u16, height: u16) -> String {
 
 #[test]
 fn the_settings_tab_is_reachable_in_render_mode_at_every_canonical_width() {
-    // The tab's groups take 42 rows, so the render is taller than the
+    // The tab's groups take 49 rows, so the render is taller than the
     // default: every group is on screen to be named.
     for width in [40, 60, 100] {
-        let text = render_tab_at("dark", "settings", width, 46);
+        let text = render_tab_at("dark", "settings", width, 60);
         assert_eq!(
             text.lines().count(),
-            46,
+            60,
             "the render did not take --height at width {width}"
         );
         // The tab bar names it, so the screen is the Settings tab.
         assert!(text.contains("Settings"), "width {width}: {text}");
         // It lists what is true: the themes, the keys and the sorts.
-        for group in ["theme · 5", "keys · 25", "sort · 6"] {
+        for group in ["theme · 5", "keys · 32", "sort · 6"] {
             assert!(text.contains(group), "width {width}: {group} is missing");
         }
         for words in ["Catppuccin", "palette", "terminal colours", "quit", "open"] {
