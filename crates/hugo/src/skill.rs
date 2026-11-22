@@ -14,6 +14,7 @@ use coding_crew_core::harness;
 use coding_crew_core::{Config, FlowRole};
 
 use crate::config::{ConfigRead, ConfigState};
+use crate::pick::effort_word;
 
 /// The roles a skill is printed for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -127,7 +128,7 @@ fn crew(config: &Config, note: Option<&str>) -> String {
     }
     out.push_str(&format!("Review-round limit: {}.\n\n", config.round_limit));
     for agent in &config.agents {
-        let effort = agent.effort.as_deref().unwrap_or("default");
+        let effort = agent.effort.as_deref().map_or("default", effort_word);
         out.push_str(&format!(
             "- {}: harness {}, model {}, effort {effort}\n",
             agent.role.as_str(),

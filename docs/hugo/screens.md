@@ -227,14 +227,15 @@ machine does not have is listed dim as `not installed` and cannot be picked.
 Picking another harness reads that harness's catalogue first, bounded as below,
 and then switches the agent. The model stays only when the new harness lists
 it; otherwise it is cleared, and the row says `pick a model` on the warning
-slot. The effort stays when the new harness takes it; otherwise it becomes the
-harness's default level. Nothing is carried over silently. A catalogue that
-cannot be read refuses the switch, and the choice names why.
+slot. The effort stays when the model takes it; otherwise it is cleared, since
+an effort is a level of a model. Nothing is carried over silently. A catalogue
+that cannot be read refuses the switch, and the choice names why.
 
 **The model choice.** The list is the harness's own list: `claude` lists its models
-from the table, `opencode` runs `opencode models`, and `cursor-agent` runs
-`cursor-agent --list-models`. It is derived at the moment the choice opens,
-never written out by hand. The last entry, `type an id…`, opens an inline
+from the table, `opencode` reads its server's `model.list`, and `cursor-agent`
+runs `cursor-agent --list-models`. It is derived when the harness is first read,
+never written out by hand. A pick that takes a model the new level list lacks
+clears the effort: a model change keeps only the levels the new model takes. The last entry, `type an id…`, opens an inline
 input. A typed id is checked by its shape — one word or `provider/model`, no
 whitespace, no `#variant` — and not against the list; one that is not shaped
 so says `not a model id` on the input's line. While the input is open
@@ -246,10 +247,17 @@ fails names its error in the choice — `the model catalog cannot be read` and
 the reason — so no key waits on a harness tool. The choice still lists
 `type an id…` under the reason, so a model can be typed in by hand.
 
-**The effort choice.** The list is the harness's levels, lowest first, with
-the level in force under the cursor. An agent with no effort says `pick an
-effort` on the warning slot, and `s` refuses until one is picked; the harness's
-default is not assumed.
+**The effort choice.** The list is the levels of the agent's model, lowest
+first, with the level in force under the cursor. The levels come from the model,
+not the harness: `claude`'s Opus, Sonnet and Fable take five, Haiku three;
+`opencode`'s are its variants; `cursor-agent`'s are the level ending each id.
+An agent with no effort says `pick an effort` on the warning slot, and `s`
+refuses until one is picked. A model that takes no level shows `—` and needs
+none. With no model the choice says `pick a model first`. A model the catalogue
+does not list has no levels of its own, so its list is the harness's levels, then
+`none` (start with no effort flag, stored as an empty `effort`), then `type a
+level…`, an inline input that takes one word, unchecked; any of them completes the
+effort.
 
 Nothing else on the sidebar is changed from the screen. `s` starts the
 orchestrator over the session's crew; the loop it runs is the orchestrator's.

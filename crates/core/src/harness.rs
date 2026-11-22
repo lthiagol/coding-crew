@@ -2,11 +2,12 @@
 //! what each one takes.
 //!
 //! This table is the only list of harnesses. The configuration names one by
-//! its `name`; hugo lists its models and starts its agents through it, and
-//! raul offers its names and efforts. An entry says how the tool is found,
-//! how herdr names its kind, the efforts it takes, how its models are listed,
-//! and how a model and an effort become the arguments and environment that
-//! start an agent in it.
+//! its `name`; hugo and raul list its models and starts its agents through it.
+//! An entry says how the tool is found, how herdr names its kind, how its
+//! models are listed — and so which effort levels each model takes, since the
+//! levels belong to the model — and how a model and an effort become the
+//! arguments and environment that start an agent in it. The listing itself is
+//! read by [`crate::catalog`].
 
 use std::env;
 
@@ -21,11 +22,7 @@ pub struct Harness {
     pub binary: &'static str,
     /// The agent kind herdr starts the tool as.
     pub kind: &'static str,
-    /// The effort levels the tool takes, lowest first.
-    pub efforts: &'static [&'static str],
-    /// The level an agent takes when its effort is reset: one of `efforts`.
-    pub default_effort: &'static str,
-    /// Where the tool's models are listed.
+    /// Where the tool's models are listed, and the levels each one takes.
     pub models: Models,
     /// The arguments and environment that start an agent: the agent's name,
     /// its model and its effort, when it has one.
@@ -35,11 +32,36 @@ pub struct Harness {
 /// Where a harness's models are listed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Models {
-    /// The ids the table holds.
-    Curated(&'static [&'static str]),
-    /// The output of the harness's program with these arguments, one model per
-    /// line.
-    Command(&'static [&'static str]),
+    /// The models the table holds, each with the levels it takes.
+    Curated(&'static [CuratedModel]),
+    /// The output of the harness's program with these arguments, read by
+    /// `listing`.
+    Command {
+        args: &'static [&'static str],
+        listing: Listing,
+    },
+}
+
+/// A model the table holds, and the effort levels it takes, lowest first. An
+/// empty list is a model that takes no level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CuratedModel {
+    pub id: &'static str,
+    pub efforts: &'static [&'static str],
+}
+
+/// How a harness's listing reads: the format its program prints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Listing {
+    /// One model id per line, with an optional ` - label`. No levels.
+    Lines,
+    /// `cursor-agent --list-models`: one id per line. An id ending in a level
+    /// (`claude-opus-5-5-high`) is that model at that level, so the model is
+    /// the id without it.
+    Cursor,
+    /// `opencode api --standalone model.list`: JSON, one entry per model, with
+    /// its `variants` as the levels.
+    Opencode,
 }
 
 /// What starts an agent in a harness: the arguments after the program, and the
@@ -53,21 +75,48 @@ pub struct Invocation {
 /// The supported harnesses. Nothing else is a harness.
 pub const HARNESSES: [Harness; 3] = [CLAUDE, OPENCODE, CURSOR];
 
+/// Claude's levels, for the models that take all five.
+const FIVE: &[&str] = &["low", "medium", "high", "xhigh", "max"];
+/// Claude's levels, for the models that take three.
+const THREE: &[&str] = &["low", "medium", "high"];
+
 const CLAUDE: Harness = Harness {
     name: "claude",
     binary: "claude",
     kind: "claude",
-    efforts: &["low", "medium", "high", "xhigh", "max"],
-    default_effort: "medium",
     models: Models::Curated(&[
-        "opus",
-        "sonnet",
-        "haiku",
-        "fable",
-        "claude-opus-5-5",
-        "claude-sonnet-5-5",
-        "claude-haiku-5-5",
-        "claude-fable-5-1",
+        CuratedModel {
+            id: "opus",
+            efforts: FIVE,
+        },
+        CuratedModel {
+            id: "sonnet",
+            efforts: FIVE,
+        },
+        CuratedModel {
+            id: "haiku",
+            efforts: THREE,
+        },
+        CuratedModel {
+            id: "fable",
+            efforts: FIVE,
+        },
+        CuratedModel {
+            id: "claude-opus-5-5",
+            efforts: FIVE,
+        },
+        CuratedModel {
+            id: "claude-sonnet-5-5",
+            efforts: FIVE,
+        },
+        CuratedModel {
+            id: "claude-haiku-5-5",
+            efforts: THREE,
+        },
+        CuratedModel {
+            id: "claude-fable-5-1",
+            efforts: FIVE,
+        },
     ]),
     start: claude_start,
 };
@@ -76,9 +125,12 @@ const OPENCODE: Harness = Harness {
     name: "opencode",
     binary: "opencode",
     kind: "opencode",
-    efforts: &["low", "medium", "high"],
-    default_effort: "medium",
-    models: Models::Command(&["models"]),
+    models: Models::Command {
+        // The server's model list: `opencode models` names the same models,
+        // but not their variants, which are the levels.
+        args: &["api", "--standalone", "model.list"],
+        listing: Listing::Opencode,
+    },
     start: opencode_start,
 };
 
@@ -86,9 +138,10 @@ const CURSOR: Harness = Harness {
     name: "cursor-agent",
     binary: "cursor-agent",
     kind: "cursor",
-    efforts: &["low", "medium", "high"],
-    default_effort: "medium",
-    models: Models::Command(&["--list-models"]),
+    models: Models::Command {
+        args: &["--list-models"],
+        listing: Listing::Cursor,
+    },
     start: cursor_start,
 };
 
@@ -124,11 +177,13 @@ fn opencode_start(agent: &str, model: &str, effort: Option<&str>) -> Invocation 
     }
 }
 
-/// cursor-agent takes the effort in the model's brackets, and runs unattended
+/// cursor-agent lists a parameterised model as its id ending in the level, so
+/// the effort is joined back on with a dash: `claude-opus-5-5` at `high` is
+/// `claude-opus-5-5-high`. With no effort it is the bare id. It runs unattended
 /// with its force flag.
 fn cursor_start(_agent: &str, model: &str, effort: Option<&str>) -> Invocation {
     let model = match effort {
-        Some(effort) => format!("{model}[effort={effort}]"),
+        Some(effort) => format!("{model}-{effort}"),
         None => model.to_string(),
     };
     let mut args = words(&["--model"]);
@@ -156,14 +211,23 @@ pub fn names() -> Vec<&'static str> {
 
 impl Harness {
     /// The arguments and environment that start `agent` on `model` at
-    /// `effort`. An agent with no effort starts on the tool's own default.
+    /// `effort`. An agent with no effort starts on the tool's own default, and
+    /// so does one whose effort is empty: the `none` an unlisted model is given.
     pub fn invocation(&self, agent: &str, model: &str, effort: Option<&str>) -> Invocation {
-        (self.start)(agent, model, effort)
+        (self.start)(agent, model, effort.filter(|effort| !effort.is_empty()))
     }
 
-    /// Whether the harness takes an effort by this name.
-    pub fn takes(&self, effort: &str) -> bool {
-        self.efforts.contains(&effort)
+    /// The levels a model the table holds takes, when the table holds it. A
+    /// model read from a command is not in the table, so its levels are the
+    /// catalogue's to say.
+    pub fn curated_efforts(&self, model: &str) -> Option<&'static [&'static str]> {
+        match self.models {
+            Models::Curated(models) => models
+                .iter()
+                .find(|known| known.id == model)
+                .map(|known| known.efforts),
+            Models::Command { .. } => None,
+        }
     }
 
     /// Whether the program is on `PATH`, so the tool can be run at all.
@@ -185,14 +249,13 @@ mod tests {
     }
 
     #[test]
-    fn every_harness_has_a_program_a_kind_efforts_and_models() {
+    fn every_harness_has_a_program_a_kind_and_models() {
         for harness in HARNESSES {
             assert!(!harness.binary.is_empty(), "{}", harness.name);
             assert!(!harness.kind.is_empty(), "{}", harness.name);
-            assert!(!harness.efforts.is_empty(), "{}", harness.name);
             match harness.models {
                 Models::Curated(models) => assert!(!models.is_empty(), "{}", harness.name),
-                Models::Command(args) => assert!(!args.is_empty(), "{}", harness.name),
+                Models::Command { args, .. } => assert!(!args.is_empty(), "{}", harness.name),
             }
         }
     }
@@ -204,24 +267,25 @@ mod tests {
     }
 
     #[test]
-    fn the_efforts_are_the_levels_each_tool_takes() {
-        assert_eq!(
-            find("claude").expect("claude").efforts,
-            ["low", "medium", "high", "xhigh", "max"]
-        );
-        assert_eq!(
-            find("cursor-agent").expect("cursor-agent").efforts,
-            ["low", "medium", "high"]
-        );
-        assert!(find("claude").expect("claude").takes("xhigh"));
-        assert!(!find("cursor-agent").expect("cursor-agent").takes("xhigh"));
-    }
-
-    #[test]
-    fn every_harness_resets_to_a_level_it_takes() {
-        for harness in HARNESSES {
-            assert!(harness.takes(harness.default_effort), "{}", harness.name);
+    fn claude_takes_five_levels_on_opus_sonnet_and_fable_and_three_on_haiku() {
+        let claude = find("claude").expect("claude");
+        for model in [
+            "opus",
+            "sonnet",
+            "fable",
+            "claude-opus-5-5",
+            "claude-fable-5-1",
+        ] {
+            assert_eq!(
+                claude.curated_efforts(model),
+                Some(FIVE),
+                "{model} takes five levels"
+            );
         }
+        for model in ["haiku", "claude-haiku-5-5"] {
+            assert_eq!(claude.curated_efforts(model), Some(THREE), "{model}");
+        }
+        assert_eq!(claude.curated_efforts("claude-nothing-5"), None);
     }
 
     #[test]
@@ -239,7 +303,10 @@ mod tests {
             "claude-haiku-5-5",
             "claude-fable-5-1",
         ] {
-            assert!(models.contains(&model), "{model} is not listed");
+            assert!(
+                models.iter().any(|known| known.id == model),
+                "{model} is not listed"
+            );
         }
     }
 
@@ -247,11 +314,28 @@ mod tests {
     fn opencode_and_cursor_list_their_models_from_their_own_command() {
         assert_eq!(
             find("opencode").expect("opencode").models,
-            Models::Command(&["models"])
+            Models::Command {
+                args: &["api", "--standalone", "model.list"],
+                listing: Listing::Opencode,
+            }
         );
         assert_eq!(
             find("cursor-agent").expect("cursor-agent").models,
-            Models::Command(&["--list-models"])
+            Models::Command {
+                args: &["--list-models"],
+                listing: Listing::Cursor,
+            }
+        );
+    }
+
+    #[test]
+    fn a_command_harness_has_no_curated_levels() {
+        // Their levels are read from the listing, not held in the table.
+        assert_eq!(
+            find("opencode")
+                .expect("opencode")
+                .curated_efforts("opencode-go/glm-5.3"),
+            None
         );
     }
 
@@ -281,6 +365,20 @@ mod tests {
             claude.invocation("builder", "opus", None).args,
             ["--model", "opus", "--permission-mode", "auto"]
         );
+    }
+
+    #[test]
+    fn an_empty_effort_starts_with_no_effort_flag() {
+        // The `none` an unlisted model is given is stored empty: it starts as
+        // an agent with no effort does, on every harness.
+        for harness in HARNESSES {
+            assert_eq!(
+                harness.invocation("builder", "some-model", Some("")),
+                harness.invocation("builder", "some-model", None),
+                "{}",
+                harness.name
+            );
+        }
     }
 
     #[test]
@@ -316,18 +414,30 @@ mod tests {
     }
 
     #[test]
-    fn cursor_takes_the_effort_in_the_models_brackets() {
+    fn cursor_starts_a_model_at_the_id_its_listing_names_for_the_level() {
+        // The listed id is the model and its level joined by a dash: that is
+        // the id cursor-agent accepts. A bracketed `[effort=…]` is refused.
         let cursor = find("cursor-agent").expect("cursor-agent");
         assert_eq!(
-            cursor.invocation("builder", "gpt-5.3-codex", Some("low")),
+            cursor.invocation("builder", "claude-opus-5-5", Some("high")),
             Invocation {
-                args: words(&["--model", "gpt-5.3-codex[effort=low]", "--force"]),
+                args: words(&["--model", "claude-opus-5-5-high", "--force"]),
                 env: Vec::new(),
             }
         );
         assert_eq!(
+            cursor
+                .invocation("builder", "gpt-5.3-codex", Some("low"))
+                .args,
+            ["--model", "gpt-5.3-codex-low", "--force"]
+        );
+        assert_eq!(
             cursor.invocation("builder", "auto", None).args,
             ["--model", "auto", "--force"]
+        );
+        assert_eq!(
+            cursor.invocation("builder", "gpt-5.3-codex", None).args,
+            ["--model", "gpt-5.3-codex", "--force"]
         );
     }
 
@@ -337,9 +447,10 @@ mod tests {
             name: "missing",
             binary: "coding-crew-no-such-harness-binary",
             kind: "missing",
-            efforts: &["low"],
-            default_effort: "low",
-            models: Models::Command(&[]),
+            models: Models::Command {
+                args: &[],
+                listing: Listing::Lines,
+            },
             start: claude_start,
         };
         assert!(!missing.on_path());

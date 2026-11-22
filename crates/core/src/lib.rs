@@ -6,6 +6,8 @@
 
 pub mod activity;
 pub mod actor;
+pub mod bounded;
+pub mod catalog;
 pub mod clock;
 pub mod config;
 pub mod harness;

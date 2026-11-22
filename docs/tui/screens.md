@@ -247,8 +247,8 @@ A value written inline (`tasks = { … }`) or as a dotted key
 
 | value | how it changes |
 |---|---|
-| a choice (`theme`, `icons`, a step's `role`, `harness`, `effort`, `sort`, a boolean) | `enter` opens its list: the picker hugo's choices use, with the value in force under the cursor. `↑` `↓` (`j` `k`) move over the choices, `enter` keeps the one under the cursor, `esc` restores the value the list opened on. A `harness` lists the harness table; an `effort` lists the levels of the agent's harness |
-| text or a number (`model`, a step's `step`, `round_limit`) | `enter` edits it inline in the line; `enter` keeps, `esc` drops |
+| a choice (`theme`, `icons`, a step's `role`, `harness`, `model`, `effort`, `sort`, a boolean) | `enter` opens its list: the picker hugo's choices use, with the value in force under the cursor. `↑` `↓` (`j` `k`) move over the choices, `enter` keeps the one under the cursor, `esc` restores the value the list opened on. A `harness` lists the harness table; a `model` lists its harness's models, with `type an id…` last, which opens the inline input; an `effort` lists the levels of the agent's model, and says why it has none when it has none: `takes no effort level` for a model that takes none, the read's error when the read fails; a model the catalogue does not list has no levels of its own, so its list is the harness's levels, then `none` (start with no effort flag, stored as an empty `effort`), then `type a level…`, an inline input that takes one word, unchecked, and any of them completes the value. A model that takes no level shows its effort as a dim `—` |
+| text or a number (a step's `step`, `round_limit`) | `enter` edits it inline in the line; `enter` keeps, `esc` drops |
 
 The arrows and `h` `l` switch tabs on Settings as on every other tab: they
 change no value.
@@ -260,10 +260,10 @@ unsaved changes asks first, in the footer: `w` save, `q` quit without saving,
 `esc` stay.
 
 **A value is checked before it is kept.** A choice can only be one of its
-choices; a number must be in its range (`round_limit` ≥ 1); a `model` is one
-word with no `#` — its effort is the agent's own `effort`, and the catalogue
-is the harness's, so raul checks the shape only. A value that fails names its reason on its own
-line and is not kept.
+choices; a number must be in its range (`round_limit` ≥ 1); a typed `model` is
+one word with no `#` — its effort is the agent's own `effort`. An `effort` is one
+of its model's levels once they have been read; until then the word is kept as
+written. A value that fails names its reason on its own line and is not kept.
 
 **Nothing on disk is lost.** The file is written format-preserving: the
 comments, the order, the spacing and the keys raul does not know survive a

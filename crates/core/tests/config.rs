@@ -187,7 +187,7 @@ fn every_agent_runs_a_model_its_harness_lists_at_an_effort_it_takes() {
         });
         if let Models::Curated(models) = harness.models {
             assert!(
-                models.contains(&agent.model.as_str()),
+                models.iter().any(|known| known.id == agent.model),
                 "{} runs {} on a model it does not list: {}",
                 agent.role.as_str(),
                 harness.name,
@@ -197,6 +197,13 @@ fn every_agent_runs_a_model_its_harness_lists_at_an_effort_it_takes() {
         let effort = agent
             .effort
             .unwrap_or_else(|| panic!("{} names no effort", agent.role.as_str()));
-        assert!(harness.takes(&effort), "{}: {effort}", agent.role.as_str());
+        // A command harness's levels are read from its listing, not here.
+        if let Some(levels) = harness.curated_efforts(&agent.model) {
+            assert!(
+                levels.contains(&effort.as_str()),
+                "{}: {effort}",
+                agent.role.as_str()
+            );
+        }
     }
 }

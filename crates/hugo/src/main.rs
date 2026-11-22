@@ -5,7 +5,6 @@
 //! configuration home.
 
 mod app;
-mod bounded;
 mod catalog;
 mod config;
 mod launch;

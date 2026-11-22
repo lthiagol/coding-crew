@@ -871,12 +871,14 @@ fn agent_of(role: FlowRole, stored: StoredAgent, legacy: Option<&str>) -> Result
         (None, Some((model, effort))) => (model.to_string(), Some(effort.to_string())),
         (effort, _) => (stored.model, effort),
     };
-    if let Some(effort) = &effort
-        && !known.takes(effort)
+    // A model the table holds names its levels; any other model's levels are
+    // its listing's to say, and the file cannot be checked against them here.
+    if let (Some(effort), Some(levels)) = (&effort, known.curated_efforts(&model))
+        && !levels.contains(&effort.as_str())
     {
         return Err(format!(
-            "{name} runs {harness} at {effort}, which is not one of its efforts: {}",
-            known.efforts.join(", ")
+            "{name} runs {model} at {effort}, which is not one of its efforts: {}",
+            levels.join(", ")
         ));
     }
     Ok(Agent {
@@ -2006,12 +2008,25 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     fn an_effort_the_harness_does_not_take_is_unreadable_and_named() {
         let text = Config::default().to_toml().replacen(
             "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\neffort = \"high\"",
+            "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\neffort = \"xhigh\"",
+            1,
+        );
+        let error = Config::from_toml(&text).expect_err("haiku takes no xhigh");
+        assert!(error.to_string().contains("xhigh"), "{error}");
+        assert!(error.to_string().contains("low, medium, high"), "{error}");
+    }
+
+    #[test]
+    fn an_effort_on_a_command_harness_is_not_checked_until_its_listing_is_read() {
+        // A command harness's model is not in the table, so its levels are
+        // not known from the file: the file reads, and the listing decides.
+        let text = Config::default().to_toml().replacen(
+            "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\neffort = \"high\"",
             "harness = \"cursor-agent\"\nmodel = \"claude-haiku-5-5\"\neffort = \"xhigh\"",
             1,
         );
-        let error = Config::from_toml(&text).expect_err("cursor takes no xhigh");
-        assert!(error.to_string().contains("xhigh"), "{error}");
-        assert!(error.to_string().contains("low, medium, high"), "{error}");
+        let config = Config::from_toml(&text).expect("the file reads");
+        assert_eq!(config.agents[1].effort.as_deref(), Some("xhigh"));
     }
 
     #[test]

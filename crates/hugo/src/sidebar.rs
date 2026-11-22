@@ -21,6 +21,7 @@ use coding_crew_theme::text::{cut_to, text_width};
 use coding_crew_theme::{Icon, IconSet, Theme, role_style, selected_line};
 
 use crate::config::{ConfigRead, ConfigState};
+use crate::pick::{Levels, effort_word};
 
 /// The rows of an agent that a human picks, in the order they are drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,9 +131,11 @@ pub struct Drawn {
 /// held, the way the main pane names the blocks it leaves out. An unreadable
 /// configuration names the file and the error, then shows the defaults beside
 /// them. An old `config.json` is named at the top: it is never read silently.
+#[allow(clippy::too_many_arguments)]
 pub fn lines(
     state: &ConfigRead,
     session: Option<&Config>,
+    levels: &Levels,
     theme: &Theme,
     icons: IconSet,
     width: usize,
@@ -161,7 +164,7 @@ pub fn lines(
             let shown = session.unwrap_or(config);
             return fits(
                 prefix,
-                groups(shown, config, theme, icons, cursor),
+                groups(shown, config, levels, theme, icons, cursor),
                 theme,
                 icons,
                 width,
@@ -199,6 +202,7 @@ pub fn lines(
             groups(
                 &Config::default(),
                 &Config::default(),
+                levels,
                 theme,
                 icons,
                 usize::MAX,
@@ -230,6 +234,7 @@ fn legacy_notice(file: &str) -> String {
 fn groups(
     config: &Config,
     file: &Config,
+    levels: &Levels,
     theme: &Theme,
     icons: IconSet,
     cursor: usize,
@@ -239,7 +244,7 @@ fn groups(
         Group {
             title: AGENTS_TITLE,
             tag: crew_differs.then_some(SESSION_TAG),
-            rows: agent_rows(config, file, theme, icons, cursor),
+            rows: agent_rows(config, file, levels, theme, icons, cursor),
         },
         Group {
             title: LIMIT_TITLE,
@@ -291,6 +296,7 @@ fn differs(agent: &Agent, file: Option<&Agent>, field: Field) -> bool {
 fn agent_rows(
     config: &Config,
     file: &Config,
+    levels: &Levels,
     theme: &Theme,
     icons: IconSet,
     cursor: usize,
@@ -327,7 +333,9 @@ fn agent_rows(
                 }
                 Field::Model => (agent.model.clone(), theme.text.strong),
                 Field::Effort => match &agent.effort {
-                    Some(effort) => (effort.clone(), theme.text.normal),
+                    Some(effort) => (effort_word(effort).to_string(), theme.text.normal),
+                    // A model that takes no level needs none: its listing says so.
+                    None if levels.takes_none(agent) => ("—".to_string(), theme.text.dim),
                     None => ("pick an effort".to_string(), theme.semantic.warn),
                 },
             };
@@ -603,7 +611,19 @@ mod tests {
         height: usize,
         cursor: usize,
     ) -> Vec<String> {
-        text(&lines(state, None, &theme(), IconSet::Nerd, width, height, cursor).lines)
+        text(
+            &lines(
+                state,
+                None,
+                &Levels::default(),
+                &theme(),
+                IconSet::Nerd,
+                width,
+                height,
+                cursor,
+            )
+            .lines,
+        )
     }
 
     #[test]
@@ -649,11 +669,70 @@ mod tests {
     }
 
     #[test]
+    fn a_model_that_takes_no_level_shows_a_dash_and_no_warning() {
+        // The listing says the model takes no level: its effort is not a gap,
+        // and the row says so with a dash.
+        let mut config = Config::default();
+        config.agents[1].harness = "opencode".to_string();
+        config.agents[1].model = "opencode-go/kimi-k3".to_string();
+        config.agents[1].effort = None;
+        let mut levels = Levels::default();
+        levels.insert(
+            "opencode",
+            coding_crew_core::catalog::Catalog::from_curated(&[
+                coding_crew_core::harness::CuratedModel {
+                    id: "opencode-go/kimi-k3",
+                    efforts: &[],
+                },
+            ]),
+        );
+        let state = ConfigRead::of(ConfigState::Config(config));
+        let drawn = lines(
+            &state,
+            None,
+            &levels,
+            &theme(),
+            IconSet::Nerd,
+            30,
+            40,
+            usize::MAX,
+        );
+        let text: Vec<String> = drawn
+            .lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.to_string())
+                    .collect()
+            })
+            .collect();
+        assert!(
+            text.iter()
+                .any(|row| row.contains("effort") && row.contains('—')),
+            "{text:#?}"
+        );
+        assert!(
+            !text.iter().any(|row| row.contains("pick an effort")),
+            "{text:#?}"
+        );
+    }
+
+    #[test]
     fn an_agent_with_no_effort_says_pick_an_effort_on_the_warning_slot() {
         let mut config = Config::default();
         config.agents[1].effort = None;
         let state = ConfigRead::of(ConfigState::Config(config));
-        let drawn = lines(&state, None, &theme(), IconSet::Nerd, 30, 40, usize::MAX);
+        let drawn = lines(
+            &state,
+            None,
+            &Levels::default(),
+            &theme(),
+            IconSet::Nerd,
+            30,
+            40,
+            usize::MAX,
+        );
         let row = drawn
             .lines
             .iter()
@@ -731,6 +810,7 @@ mod tests {
             let drawn = lines(
                 &configured(),
                 None,
+                &Levels::default(),
                 &theme(),
                 IconSet::Nerd,
                 width,
@@ -791,6 +871,7 @@ mod tests {
         let drawn = lines(
             &ConfigRead::of(ConfigState::Absent),
             None,
+            &Levels::default(),
             &theme(),
             IconSet::Nerd,
             30,
@@ -805,7 +886,16 @@ mod tests {
     #[test]
     fn a_configuration_that_cannot_be_read_is_named_not_called_empty() {
         let state = unreadable();
-        let drawn = lines(&state, None, &theme(), IconSet::Nerd, 40, 40, usize::MAX);
+        let drawn = lines(
+            &state,
+            None,
+            &Levels::default(),
+            &theme(),
+            IconSet::Nerd,
+            40,
+            40,
+            usize::MAX,
+        );
         let rows = text(&drawn.lines);
         assert_eq!(rows[0], UNREADABLE);
         assert!(rows[1].contains("config.toml"), "{rows:#?}");
@@ -893,7 +983,16 @@ mod tests {
             "{rows:#?}"
         );
         // The notice is secondary text, not the failure slot.
-        let drawn = lines(&state, None, &theme(), IconSet::Nerd, 30, 40, usize::MAX);
+        let drawn = lines(
+            &state,
+            None,
+            &Levels::default(),
+            &theme(),
+            IconSet::Nerd,
+            30,
+            40,
+            usize::MAX,
+        );
         assert_eq!(drawn.lines[0].spans[1].style, theme().text.dim);
     }
 
@@ -982,6 +1081,7 @@ mod tests {
         let drawn = lines(
             &state,
             Some(&session),
+            &Levels::default(),
             &theme(),
             IconSet::Nerd,
             30,
@@ -1013,6 +1113,7 @@ mod tests {
         let drawn = lines(
             &state,
             Some(&session),
+            &Levels::default(),
             &theme(),
             IconSet::Nerd,
             30,
@@ -1036,6 +1137,7 @@ mod tests {
         let drawn = lines(
             &configured(),
             None,
+            &Levels::default(),
             &theme(),
             IconSet::Nerd,
             30,
@@ -1072,7 +1174,16 @@ mod tests {
         let mut config = Config::default();
         config.agents[1].model.clear();
         let state = ConfigRead::of(ConfigState::Config(config));
-        let drawn = lines(&state, None, &theme(), IconSet::Nerd, 30, 40, usize::MAX);
+        let drawn = lines(
+            &state,
+            None,
+            &Levels::default(),
+            &theme(),
+            IconSet::Nerd,
+            30,
+            40,
+            usize::MAX,
+        );
         let row = drawn
             .lines
             .iter()
@@ -1101,6 +1212,7 @@ mod tests {
         let drawn = lines(
             &configured(),
             None,
+            &Levels::default(),
             &theme(),
             IconSet::Nerd,
             30,
@@ -1121,7 +1233,16 @@ mod tests {
     fn a_short_pane_that_leaves_the_agents_out_says_the_cursor_has_nowhere_to_be() {
         // The agents group is left out whole, and the announcement says so:
         // the cursor must not act on a row the pane does not draw.
-        let drawn = lines(&configured(), None, &theme(), IconSet::Nerd, 30, 5, 0);
+        let drawn = lines(
+            &configured(),
+            None,
+            &Levels::default(),
+            &theme(),
+            IconSet::Nerd,
+            30,
+            5,
+            0,
+        );
         assert!(!drawn.agents, "{:#?}", text(&drawn.lines));
         assert!(
             drawn

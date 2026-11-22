@@ -703,13 +703,17 @@ Each agent table holds:
 |---|---|
 | `harness` | the harness it runs in: `claude` · `opencode` · `cursor-agent`, the names of the harness table in `crates/core/src/harness.rs` |
 | `model` | the model it runs, as its harness names it — `claude-haiku-5-5`, `opencode-go/glm-5.3` |
-| `effort` | the effort it runs at, one of its harness's levels; absent, it is not yet picked and hugo will not start until it is |
+| `effort` | the effort it runs at, one of its model's levels; absent, it is not yet picked and hugo will not start until it is, unless its model takes none. For a model its harness does not list, it may be any level the harness knows, a typed word, or `""` — none: started with no effort flag |
 
 The harness table holds, for each harness, its program, the agent kind herdr
-starts it as, its efforts, how its models are listed, and how a model and an
-effort become the arguments that start it. `claude` lists a curated set of
-models; `opencode` lists `opencode models`; `cursor-agent` lists
-`cursor-agent --list-models`. Nothing else is a harness.
+starts it as, how its models are listed, and how a model and an effort become
+the arguments that start it. The levels belong to the model, not the harness,
+and come from the same listing: `claude` holds a curated table, with five
+levels for Opus, Sonnet and Fable and three for Haiku; `opencode` reads
+`opencode api --standalone model.list`, whose variants are the levels;
+`cursor-agent` reads `cursor-agent --list-models`, where a model's level is the
+suffix of its id. A model that lists no level takes no effort, and so does a
+base the listing also names bare (`gpt-5.3-codex`). Nothing else is a harness.
 
 A file written before the crew was one table per role has an `[[agents]]`
 array, each entry naming its `role`; `runner` is the builder. It still loads.

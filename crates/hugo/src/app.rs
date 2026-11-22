@@ -85,6 +85,11 @@ pub const NOT_INSTALLED: &str = "not installed";
 pub const TYPE_HINT: &str = "a model id, such as provider/model";
 /// The line under the id input, while the id typed is not a model id.
 pub const NOT_A_MODEL_ID: &str = "not a model id";
+/// The line under the level input, while no level is typed yet or the level
+/// typed has the shape of one.
+pub const TYPE_LEVEL_HINT: &str = "a level, such as high";
+/// The line under the level input, while the level typed is not one word.
+pub const NOT_A_LEVEL: &str = "not a level";
 /// The help's block title.
 pub const HELP_TITLE: &str = "keys";
 /// The choice's state when the catalogue cannot be read.
@@ -93,6 +98,11 @@ pub const CATALOG_UNREADABLE: &str = "the model catalog cannot be read";
 pub const CATALOG_READING: &str = "reading the model catalog";
 /// The choice's state when the catalogue lists no model.
 pub const NO_MODELS: &str = "no models in the catalog";
+/// The line an effort choice says when the agent has no model to take levels
+/// from.
+pub const NO_MODEL_FIRST: &str = "pick a model first";
+/// The line an effort choice says when the model takes no level.
+pub const NO_LEVELS: &str = "this model takes no effort level";
 
 /// The sidebar's block title.
 pub const SIDEBAR_TITLE: &str = "configuration";
@@ -210,6 +220,7 @@ impl Choice {
             ChoiceState::Listed | ChoiceState::Empty => self.entry_pickable(),
             // A model that cannot be listed can still be typed.
             ChoiceState::Failed(_) if self.field == Field::Model => self.entry_pickable(),
+            ChoiceState::Typing(text) if self.field == Field::Effort => pick::is_typed_level(text),
             ChoiceState::Typing(text) => pick::is_typed_id(text),
             ChoiceState::Reading | ChoiceState::Failed(_) => false,
         }
@@ -319,6 +330,8 @@ pub struct App {
     /// The catalogue read in flight, when the choice waits on one. It runs
     /// off the window's thread, so no key handling waits on a harness tool.
     reading: Option<JoinHandle<Result<Catalog, String>>>,
+    /// The levels each harness's models take, as the reads so far have said.
+    levels: pick::Levels,
     /// The help overlay is open.
     help: bool,
     /// The crew-size selector is open, with its cursor on this size minus one.
@@ -373,6 +386,7 @@ impl App {
             agents_drawn: true,
             choice: None,
             reading: None,
+            levels: pick::Levels::new(),
             help: false,
             crew_cursor: None,
             launch: None,
@@ -491,6 +505,7 @@ impl App {
             return;
         }
         let agent = choice.agent;
+        let field = choice.field;
         let ChoiceState::Typing(text) = &mut choice.state else {
             return;
         };
@@ -501,9 +516,15 @@ impl App {
             KeyCode::Backspace => {
                 text.pop();
             }
-            KeyCode::Enter if pick::is_typed_id(text) => {
+            KeyCode::Enter if field == Field::Effort && pick::is_typed_level(text) => {
+                let level = text.trim().to_string();
+                self.store_effort(agent, &level, false);
+                self.close_choice();
+            }
+            KeyCode::Enter if field == Field::Model && pick::is_typed_id(text) => {
                 let model = text.trim().to_string();
-                self.set_model(agent, model);
+                let levels = self.levels_of(agent, &model);
+                self.set_model(agent, model, &levels);
                 self.close_choice();
             }
             _ => {}
@@ -591,6 +612,7 @@ impl App {
         let drawn = sidebar::lines(
             &self.config,
             self.session(),
+            &self.levels,
             &self.theme,
             self.icons,
             usize::from(width),
@@ -766,26 +788,19 @@ impl App {
         self.show(agent, Field::Model, Vec::new(), 0, ChoiceState::Reading);
     }
 
-    /// Open the effort choice: the levels the agent's harness takes, with the
-    /// level in force under the cursor.
+    /// Open the effort choice: the levels the agent's model takes, read from
+    /// its harness's catalogue beside the window.
     fn open_effort_choice(&mut self, agent: usize) {
-        let Some(row) = self.session().and_then(|config| config.agents.get(agent)) else {
+        let Some(harness) = self
+            .session()
+            .and_then(|config| config.agents.get(agent))
+            .and_then(|row| harness::find(&row.harness))
+        else {
             return;
         };
-        let Some(harness) = harness::find(&row.harness) else {
-            return;
-        };
-        let cursor = harness
-            .efforts
-            .iter()
-            .position(|level| Some(*level) == row.effort.as_deref())
-            .unwrap_or(0);
-        let entries = harness
-            .efforts
-            .iter()
-            .map(|level| Entry::new(level, true))
-            .collect();
-        self.show(agent, Field::Effort, entries, cursor, ChoiceState::Listed);
+        let reading = self.read_catalog(harness);
+        self.reading = Some(reading);
+        self.show(agent, Field::Effort, Vec::new(), 0, ChoiceState::Reading);
     }
 
     /// Whether a harness is on the machine. A harness the machine does not
@@ -835,7 +850,12 @@ impl App {
         {
             if let Some(tool) = self.catalog_tool.clone() {
                 return std::thread::spawn(move || {
-                    Catalog::read_command(&tool.to_string_lossy(), &[], crate::catalog::READ_BOUND)
+                    Catalog::read_command(
+                        &tool.to_string_lossy(),
+                        &[],
+                        coding_crew_core::harness::Listing::Lines,
+                        crate::catalog::READ_BOUND,
+                    )
                 });
             }
         }
@@ -865,7 +885,8 @@ impl App {
             .unwrap_or_else(|_| Err("the model catalog reader stopped".to_string()));
         match self.choice.as_ref().map(|choice| choice.field) {
             Some(Field::Harness) => self.finish_switch(loaded),
-            Some(_) => self.fill_choice(loaded),
+            Some(Field::Effort) => self.fill_effort(loaded),
+            Some(Field::Model) => self.fill_choice(loaded),
             None => {}
         }
         true
@@ -892,14 +913,24 @@ impl App {
             .and_then(|config| config.agents.get(agent))
             .map(|row| row.model.clone())
             .unwrap_or_default();
+        let harness = self.harness_of(agent);
         let (catalog, state) = match loaded {
-            Ok(catalog) if catalog.models().is_empty() => (catalog, ChoiceState::Empty),
-            Ok(catalog) => (catalog, ChoiceState::Listed),
+            Ok(catalog) => {
+                if let Some(harness) = harness {
+                    self.levels.insert(harness, catalog.clone());
+                }
+                let state = if catalog.ids().is_empty() {
+                    ChoiceState::Empty
+                } else {
+                    ChoiceState::Listed
+                };
+                (catalog, state)
+            }
             Err(error) => (Catalog::default(), ChoiceState::Failed(error)),
         };
         let entries: Vec<Entry> = catalog
-            .models()
-            .iter()
+            .ids()
+            .into_iter()
             .map(|model| Entry::new(model, true))
             .chain([Entry::new(pick::TYPE_AN_ID, true)])
             .collect();
@@ -907,6 +938,58 @@ impl App {
         if let Some(choice) = self.choice.as_mut() {
             choice.entries = entries;
             choice.catalog = catalog;
+            choice.cursor = cursor;
+            choice.state = state;
+        }
+    }
+
+    /// Put the levels of the open effort choice's model in it, from the
+    /// catalogue the read brought, or the reason there are none.
+    ///
+    /// The list is the model's levels, with the level in force under the
+    /// cursor. A model that takes none says so in place of a list; a model the
+    /// catalogue does not list is offered the harness's levels, `none` and
+    /// `type a level…`.
+    fn fill_effort(&mut self, loaded: Result<Catalog, String>) {
+        let Some(agent) = self.choice.as_ref().map(|choice| choice.agent) else {
+            return;
+        };
+        let Some((harness, model, effort)) = self.session().and_then(|config| {
+            let row = config.agents.get(agent)?;
+            Some((row.harness.clone(), row.model.clone(), row.effort.clone()))
+        }) else {
+            return;
+        };
+        let (entries, cursor, state) = match loaded {
+            Ok(catalog) => {
+                let levels = catalog.efforts_of(&model).map(<[String]>::to_vec);
+                // A model the catalogue does not list has no levels of its own:
+                // it is offered the harness's, then `none` and a typed level.
+                let offered = if model.is_empty() {
+                    Vec::new()
+                } else {
+                    levels.unwrap_or_else(|| catalog.unlisted_choices())
+                };
+                self.levels.insert(&harness, catalog);
+                if offered.is_empty() {
+                    (Vec::new(), 0, ChoiceState::Empty)
+                } else {
+                    let wanted = effort.as_deref().map(pick::effort_word);
+                    let cursor = offered
+                        .iter()
+                        .position(|level| Some(level.as_str()) == wanted)
+                        .unwrap_or(0);
+                    let entries = offered
+                        .iter()
+                        .map(|level| Entry::new(level, true))
+                        .collect();
+                    (entries, cursor, ChoiceState::Listed)
+                }
+            }
+            Err(error) => (Vec::new(), 0, ChoiceState::Failed(error)),
+        };
+        if let Some(choice) = self.choice.as_mut() {
+            choice.entries = entries;
             choice.cursor = cursor;
             choice.state = state;
         }
@@ -927,6 +1010,7 @@ impl App {
                 let Some(target) = harness::find(&name) else {
                     return;
                 };
+                self.levels.insert(target.name, catalog.clone());
                 self.change(move |config| {
                     if let Some(row) = config.agents.get_mut(agent) {
                         pick::switch_harness(row, target, &catalog);
@@ -1000,36 +1084,81 @@ impl App {
             self.set_state(ChoiceState::Typing(String::new()));
             return;
         }
-        let listed = self
+        let levels = self
             .choice
             .as_ref()
-            .is_some_and(|choice| choice.catalog.knows(&model));
-        if listed {
-            self.set_model(agent, model);
+            .and_then(|choice| choice.catalog.efforts_of(&model))
+            .map(<[String]>::to_vec);
+        if let Some(levels) = levels {
+            self.set_model(agent, model, &levels);
         }
         self.close_choice();
     }
 
-    /// Pick the effort under the cursor.
+    /// Pick the effort under the cursor. `type a level…` opens the level input
+    /// instead.
     fn pick_effort(&mut self) {
-        let Some((agent, level)) = self.entry_under_cursor() else {
+        let Some((agent, entry)) = self.entry_under_cursor() else {
             return;
         };
-        self.change(move |config| {
-            if let Some(row) = config.agents.get_mut(agent) {
-                row.effort = Some(level.clone());
-            }
-        });
+        if entry == pick::TYPE_A_LEVEL {
+            self.set_state(ChoiceState::Typing(String::new()));
+            return;
+        }
+        let listed = self.effort_listed(agent);
+        self.store_effort(agent, &entry, listed);
         self.close_choice();
     }
 
-    /// Save an agent's model.
-    fn set_model(&mut self, agent: usize, model: String) {
+    /// Save an agent's effort as a picked entry: `none` on a model the
+    /// catalogue does not list is stored as no effort (see
+    /// [`pick::stored_effort`]).
+    fn store_effort(&mut self, agent: usize, entry: &str, listed: bool) {
+        let effort = pick::stored_effort(entry, listed);
         self.change(move |config| {
             if let Some(row) = config.agents.get_mut(agent) {
+                row.effort = Some(effort);
+            }
+        });
+    }
+
+    /// Whether the catalogue lists the model an agent runs, so its levels are
+    /// known.
+    fn effort_listed(&self, agent: usize) -> bool {
+        self.session()
+            .and_then(|config| config.agents.get(agent))
+            .and_then(|row| self.levels.catalog(&row.harness)?.efforts_of(&row.model))
+            .is_some()
+    }
+
+    /// Save an agent's model. The effort stays only when the model takes it:
+    /// `levels` are the model's, and empty when they are not known.
+    fn set_model(&mut self, agent: usize, model: String, levels: &[String]) {
+        self.change(move |config| {
+            if let Some(row) = config.agents.get_mut(agent) {
+                if !pick::keeps_effort(row.effort.as_deref(), Some(levels)) {
+                    row.effort = None;
+                }
                 row.model = model.clone();
             }
         });
+    }
+
+    /// The levels an agent's model takes, as the reads so far have them: none
+    /// when the harness's catalogue has not listed the model.
+    fn levels_of(&self, agent: usize, model: &str) -> Vec<String> {
+        self.session()
+            .and_then(|config| config.agents.get(agent))
+            .and_then(|row| self.levels.catalog(&row.harness))
+            .and_then(|catalog| catalog.efforts_of(model))
+            .map(<[String]>::to_vec)
+            .unwrap_or_default()
+    }
+
+    /// The harness an agent runs in, when the table holds it.
+    fn harness_of(&self, agent: usize) -> Option<&'static str> {
+        let name = self.session()?.agents.get(agent)?.harness.clone();
+        harness::find(&name).map(|harness| harness.name)
     }
 
     /// Apply one pick to the session's crew. The file is not written: a pick
@@ -1059,7 +1188,9 @@ impl App {
 
     /// What the configuration lacks before the flow can start.
     fn gaps(&self) -> Vec<String> {
-        self.session().map(pick::gaps).unwrap_or_default()
+        self.session()
+            .map(|config| pick::gaps(config, &self.levels))
+            .unwrap_or_default()
     }
 
     /// Whether `s` can act: herdr hosts hugo, the queue has work, every agent
@@ -1824,10 +1955,17 @@ impl App {
                 (lead, entries)
             }
             ChoiceState::Typing(text) => {
-                let (hint, style) = if text.is_empty() || pick::is_typed_id(text) {
-                    (TYPE_HINT, self.theme.text.dim)
+                let level = choice.field == Field::Effort;
+                let shaped = if level {
+                    pick::is_typed_level(text)
                 } else {
-                    (NOT_A_MODEL_ID, self.theme.semantic.error)
+                    pick::is_typed_id(text)
+                };
+                let (hint, style) = match (level, text.is_empty() || shaped) {
+                    (true, true) => (TYPE_LEVEL_HINT, self.theme.text.dim),
+                    (true, false) => (NOT_A_LEVEL, self.theme.semantic.error),
+                    (false, true) => (TYPE_HINT, self.theme.text.dim),
+                    (false, false) => (NOT_A_MODEL_ID, self.theme.semantic.error),
                 };
                 let lead = vec![
                     row(&format!("> {text}_"), self.theme.text.normal),
@@ -1837,7 +1975,7 @@ impl App {
             }
             ChoiceState::Listed => (Vec::new(), self.entry_rows(choice)),
             ChoiceState::Empty => (
-                vec![row(NO_MODELS, self.theme.text.dim)],
+                vec![row(self.empty_lead(choice), self.theme.text.dim)],
                 self.entry_rows(choice),
             ),
         };
@@ -1898,6 +2036,22 @@ impl App {
 
     /// The choice's entries as the picker draws them: a harness the machine
     /// does not have is dim and says so.
+    /// The line an empty choice shows in place of its list. An effort choice
+    /// says why it has no levels: no model yet, or one that takes none. A model
+    /// the catalogue does not list is offered levels, so it is never empty.
+    fn empty_lead(&self, choice: &Choice) -> &'static str {
+        if choice.field == Field::Model {
+            return NO_MODELS;
+        }
+        match self
+            .session()
+            .and_then(|config| config.agents.get(choice.agent))
+        {
+            Some(row) if row.model.is_empty() => NO_MODEL_FIRST,
+            _ => NO_LEVELS,
+        }
+    }
+
     fn entry_rows(&self, choice: &Choice) -> Vec<picker::Row> {
         choice
             .entries
@@ -4111,13 +4265,18 @@ mod tests {
         );
         let choice = app.choice.as_ref().expect("the choice");
         assert_eq!(
-            choice.catalog.models(),
+            choice.catalog.ids(),
             ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
             "the list is not the catalogue's"
         );
         // The orchestrator runs glm-5.3#high: the cursor starts there.
         assert_eq!(choice.cursor, 1);
-        let models: Vec<String> = choice.catalog.models().to_vec();
+        let models: Vec<String> = choice
+            .catalog
+            .ids()
+            .iter()
+            .map(|id| id.to_string())
+            .collect();
 
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         let text = text_of(&rows);
@@ -4723,9 +4882,13 @@ mod tests {
             "the model pick did not land"
         );
 
-        // An effort pick: the orchestrator runs at medium, one level up.
+        // An effort pick: the orchestrator runs at medium, one level up. Its
+        // levels come from the table, not from the tool that stood in for the
+        // model list.
+        window.catalog_tool = None;
         window.cursor = sidebar::cursor_of(0, Field::Effort);
         window.on_key(press(KeyCode::Enter));
+        wait_for_catalog(&mut window);
         window.on_key(press(KeyCode::Down));
         window.on_key(press(KeyCode::Enter));
         let effort_of_orchestrator = window
@@ -5068,7 +5231,8 @@ mod tests {
             .expect("the builder");
         assert_eq!(builder.harness, "opencode");
         assert_eq!(builder.model, "");
-        assert_eq!(builder.effort.as_deref(), Some("high"));
+        // An effort is a level of a model: with the model cleared, it goes too.
+        assert_eq!(builder.effort, None);
         let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
         assert!(
             text_of(&rows).contains("pick a model"),
@@ -5084,7 +5248,7 @@ mod tests {
     }
 
     #[test]
-    fn a_harness_switch_keeps_a_model_the_new_harness_lists_and_resets_an_effort_it_does_not_take()
+    fn a_harness_switch_keeps_a_model_the_new_harness_lists_and_clears_an_effort_it_does_not_take()
     {
         // The builder runs at xhigh, which claude takes and opencode does not:
         // the switch resets the effort to opencode's default level and keeps
@@ -5119,7 +5283,8 @@ mod tests {
             .expect("the builder");
         assert_eq!(builder.harness, "opencode");
         assert_eq!(builder.model, "claude-haiku-5-5");
-        assert_eq!(builder.effort.as_deref(), Some("medium"));
+        // The listing gives the model no levels, so the effort does not carry.
+        assert_eq!(builder.effort, None);
         let _ = fs::remove_dir_all(&home);
         let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
     }
@@ -5283,23 +5448,63 @@ mod tests {
     }
 
     #[test]
-    fn the_effort_choice_lists_the_harnesses_levels_and_saves_the_one_picked() {
+    fn a_model_pick_clears_an_effort_the_new_model_does_not_take() {
+        // The builder runs high. A model that takes high keeps it; one that
+        // lists only low and medium, or none, clears it.
+        let home = scratch("model-pick-levels");
+        let mut window = on_builder(&home, Field::Model);
+        window.on_key(press(KeyCode::Enter));
+        let listed = Catalog::from_curated(&[
+            coding_crew_core::harness::CuratedModel {
+                id: "p/high",
+                efforts: &["low", "high"],
+            },
+            coding_crew_core::harness::CuratedModel {
+                id: "p/low",
+                efforts: &["low", "medium"],
+            },
+        ]);
+        answer_choice_for(&mut window, 1, Ok(listed.clone()));
+        window.on_key(press(KeyCode::Enter));
+        let builder = |window: &App| {
+            window
+                .session()
+                .and_then(|config| config.agents.get(1))
+                .map(|agent| (agent.model.clone(), agent.effort.clone()))
+                .expect("the builder")
+        };
+        assert_eq!(
+            builder(&window),
+            ("p/high".to_string(), Some("high".to_string()))
+        );
+
+        window.cursor = sidebar::cursor_of(1, Field::Model);
+        window.on_key(press(KeyCode::Enter));
+        answer_choice_for(&mut window, 1, Ok(listed));
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(builder(&window), ("p/low".to_string(), None));
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_effort_choice_lists_the_model_levels_and_saves_the_one_picked() {
+        // The builder runs haiku, which takes three levels, not five.
         let home = scratch("effort-choice");
         let mut window = on_builder(&home, Field::Effort);
         window.on_key(press(KeyCode::Enter));
+        wait_for_catalog(&mut window);
         assert_eq!(
             entries_of(&window),
             [
                 ("low".to_string(), true),
                 ("medium".to_string(), true),
                 ("high".to_string(), true),
-                ("xhigh".to_string(), true),
-                ("max".to_string(), true),
             ]
         );
         // The builder runs at high: the cursor starts there.
         assert_eq!(window.choice.as_ref().expect("the choice").cursor, 2);
-        window.on_key(press(KeyCode::Char('j')));
+        window.on_key(press(KeyCode::Char('k')));
         window.on_key(press(KeyCode::Enter));
         assert!(window.choice.is_none());
         assert_eq!(
@@ -5310,7 +5515,7 @@ mod tests {
                     .iter()
                     .find(|agent| agent.role == FlowRole::Builder))
                 .and_then(|agent| agent.effort.as_deref()),
-            Some("xhigh")
+            Some("medium")
         );
         assert!(
             !config::config_path(&home).exists(),
@@ -5383,6 +5588,113 @@ mod tests {
             text_of(&rows)
         );
         assert!(fake.requests.lock().expect("the requests").is_empty());
+    }
+
+    /// A window on the builder's effort, with the builder on a model the
+    /// catalogue does not list and no effort in force.
+    fn on_unlisted_builder_effort(home: &Path) -> App {
+        let mut config = Config::default();
+        config.agents[1].model = "claude-new-9".to_string();
+        config.agents[1].effort = None;
+        let mut window = on_builder(home, Field::Effort);
+        window.config = ConfigRead::of(ConfigState::Config(config.clone()));
+        window.session = Some(config);
+        window
+    }
+
+    #[test]
+    fn an_unlisted_model_is_offered_the_harness_levels_none_and_a_typed_level() {
+        // The builder's model is not in the catalogue, so its levels are not
+        // known: the list is the harness's levels, then `none`, then the input.
+        let home = scratch("effort-unlisted");
+        let mut window = on_unlisted_builder_effort(&home);
+        window.on_key(press(KeyCode::Enter));
+        wait_for_catalog(&mut window);
+        assert_eq!(
+            entries_of(&window),
+            [
+                ("low".to_string(), true),
+                ("medium".to_string(), true),
+                ("high".to_string(), true),
+                ("xhigh".to_string(), true),
+                ("max".to_string(), true),
+                ("none".to_string(), true),
+                (pick::TYPE_A_LEVEL.to_string(), true),
+            ]
+        );
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            !text_of(&rows).contains("does not list"),
+            "{}",
+            text_of(&rows)
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn none_on_an_unlisted_model_completes_its_effort_and_says_none() {
+        let home = scratch("effort-unlisted-none");
+        let mut window = on_unlisted_builder_effort(&home);
+        window.on_key(press(KeyCode::Enter));
+        wait_for_catalog(&mut window);
+        for _ in 0..5 {
+            window.on_key(press(KeyCode::Down));
+        }
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_none(), "enter did not pick none");
+        let builder = window
+            .session()
+            .and_then(|config| config.agents.get(1))
+            .expect("the builder");
+        assert_eq!(builder.effort.as_deref(), Some(""));
+        // The effort is set, so the flow has no gap on it.
+        assert!(pick::gaps(window.session().expect("the session"), &window.levels).is_empty());
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(
+            text_of(&rows).contains("effort  none"),
+            "{}",
+            text_of(&rows)
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn type_a_level_takes_a_typed_level_for_an_unlisted_model_and_keeps_its_shape() {
+        let home = scratch("effort-typed-level");
+        let mut window = on_unlisted_builder_effort(&home);
+        window.on_key(press(KeyCode::Enter));
+        wait_for_catalog(&mut window);
+        for _ in 0..6 {
+            window.on_key(press(KeyCode::Down));
+        }
+        window.on_key(press(KeyCode::Enter));
+        assert_eq!(
+            window.choice.as_ref().expect("the choice").state,
+            ChoiceState::Typing(String::new())
+        );
+        for letter in "very high".chars() {
+            window.on_key(press(KeyCode::Char(letter)));
+        }
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_some(), "a level of two words was taken");
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        assert!(text_of(&rows).contains(NOT_A_LEVEL), "{}", text_of(&rows));
+        for _ in 0.."very high".len() {
+            window.on_key(press(KeyCode::Backspace));
+        }
+        for letter in "ultra".chars() {
+            window.on_key(press(KeyCode::Char(letter)));
+        }
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_none(), "enter did not take the level");
+        assert_eq!(
+            window
+                .session()
+                .and_then(|config| config.agents.get(1))
+                .and_then(|agent| agent.effort.clone()),
+            Some("ultra".to_string())
+        );
+        let _ = fs::remove_dir_all(&home);
     }
 
     /// Open the choice of an agent's model as a catalogue read that answered

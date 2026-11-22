@@ -26,11 +26,15 @@ use crate::announce;
 use crate::tasks::{Key, Order};
 use crate::view::{self, BAR, View};
 use coding_crew_core::FlowRole;
+use coding_crew_core::catalog::{
+    Catalog, Levels, TYPE_A_LEVEL, TYPE_AN_ID, effort_word, is_typed_level, keeps_effort,
+    stored_effort, switch_harness,
+};
 use coding_crew_core::config::{
     Agent, Config, ConfigError, ConfigFile, config_path, gates_from_text, gates_text, home_at,
     quote,
 };
-use coding_crew_core::harness;
+use coding_crew_core::harness::{self, Harness};
 use coding_crew_theme::chrome;
 use coding_crew_theme::icons::ENV as ICONS_ENV;
 use coding_crew_theme::picker::{self, Row};
@@ -170,19 +174,42 @@ impl Field {
     }
 
     /// The words a choice or a boolean takes, in the order the picker lists
-    /// them. An effort takes the levels of the harness its agent runs in.
-    fn options(self, config: &Config) -> Vec<&'static str> {
+    /// them. A model is the harness's models with `type an id…` last; an effort
+    /// is the levels its model takes, or, for a model the catalogue does not
+    /// list, the harness's levels, `none` and `type a level…`.
+    fn options(self, config: &Config, levels: &Levels) -> Vec<String> {
+        let words = |words: &[&str]| words.iter().map(|word| word.to_string()).collect();
         match self {
-            Field::Theme => Preset::ALL.iter().map(|preset| preset.name()).collect(),
-            Field::Icons => IconSet::ALL.iter().map(|set| set.name()).collect(),
-            Field::Sort => Key::ALL.iter().map(|key| key.name()).collect(),
-            Field::StepRole(_) => ROLES.to_vec(),
-            Field::AgentHarness(_) => harness::names(),
+            Field::Theme => Preset::ALL
+                .iter()
+                .map(|preset| preset.name().to_string())
+                .collect(),
+            Field::Icons => IconSet::ALL
+                .iter()
+                .map(|set| set.name().to_string())
+                .collect(),
+            Field::Sort => Key::ALL.iter().map(|key| key.name().to_string()).collect(),
+            Field::StepRole(_) => words(&ROLES),
+            Field::AgentHarness(_) => words(&harness::names()),
+            Field::AgentModel(role) => {
+                let listed = agent_of(config, role)
+                    .and_then(|agent| levels.catalog(&agent.harness))
+                    .map(|catalog| catalog.ids().into_iter().map(str::to_string).collect());
+                let mut models: Vec<String> = listed.unwrap_or_default();
+                models.push(TYPE_AN_ID.to_string());
+                models
+            }
             Field::AgentEffort(role) => agent_of(config, role)
-                .and_then(|agent| harness::find(&agent.harness))
-                .map(|harness| harness.efforts.to_vec())
+                .and_then(|agent| {
+                    let catalog = levels.catalog(&agent.harness)?;
+                    Some(match catalog.efforts_of(&agent.model) {
+                        Some(levels) => levels.to_vec(),
+                        None if agent.model.is_empty() => Vec::new(),
+                        None => catalog.unlisted_choices(),
+                    })
+                })
                 .unwrap_or_default(),
-            Field::Reverse => BOOLEANS.to_vec(),
+            Field::Reverse => words(&BOOLEANS),
             _ => Vec::new(),
         }
     }
@@ -200,7 +227,11 @@ impl Field {
                 agent_of(config, role).map_or_else(String::new, |a| a.model.clone())
             }
             Field::AgentEffort(role) => agent_of(config, role)
-                .and_then(|a| a.effort.clone())
+                .and_then(|a| {
+                    a.effort
+                        .as_deref()
+                        .map(|effort| effort_word(effort).to_string())
+                })
                 .unwrap_or_default(),
             Field::StepName(index) => step(index).map_or_else(String::new, |s| s.step.clone()),
             Field::StepRole(index) => {
@@ -225,8 +256,9 @@ impl Field {
     }
 
     /// Check a text and write it into `config`. The error is the reason the
-    /// text is not a value the file can hold, in words.
-    fn apply(self, config: &mut Config, text: &str) -> Result<(), String> {
+    /// text is not a value the file can hold, in words. A model's effort is
+    /// kept only when the model takes it, as `levels` say.
+    fn apply(self, config: &mut Config, text: &str, levels: &Levels) -> Result<(), String> {
         let text = text.trim();
         match self {
             Field::Round => {
@@ -239,21 +271,47 @@ impl Field {
                 config.round_limit = value;
             }
             Field::AgentHarness(role) => {
-                let name = choice(text, &self.options(config))?;
+                let name = choice(text, &self.options(config, levels))?;
                 if let Some(agent) = agent_mut(config, role) {
-                    agent.harness = name.to_string();
+                    // A harness whose models are read switches as hugo's does:
+                    // the model and the effort stay only where it lists them.
+                    match (harness::find(&name), levels.catalog(&name)) {
+                        (Some(target), Some(catalog)) => switch_harness(agent, target, catalog),
+                        _ => agent.harness = name,
+                    }
                 }
             }
             Field::AgentModel(role) => {
                 let model = model_id(text)?;
                 if let Some(agent) = agent_mut(config, role) {
+                    let model_levels = levels
+                        .catalog(&agent.harness)
+                        .and_then(|catalog| catalog.efforts_of(&model))
+                        .map(<[String]>::to_vec);
+                    if !keeps_effort(agent.effort.as_deref(), model_levels.as_deref()) {
+                        agent.effort = None;
+                    }
                     agent.model = model;
                 }
             }
             Field::AgentEffort(role) => {
-                let effort = choice(text, &self.options(config))?;
+                // The levels are the model's, when they have been read. A model
+                // the catalogue does not list takes any one word as a level, and
+                // `none` on it is no effort at all.
+                let listed = agent_of(config, role)
+                    .and_then(|agent| levels.of(agent))
+                    .is_some();
+                let effort = if listed {
+                    choice(text, &self.options(config, levels))?
+                } else {
+                    let level = filled(text, "effort")?;
+                    if !is_typed_level(&level) {
+                        return Err("a level is one word, with no `#`".to_string());
+                    }
+                    level
+                };
                 if let Some(agent) = agent_mut(config, role) {
-                    agent.effort = Some(effort.to_string());
+                    agent.effort = Some(stored_effort(&effort, listed));
                 }
             }
             Field::StepName(index) => {
@@ -263,8 +321,8 @@ impl Field {
                 }
             }
             Field::StepRole(index) => {
-                let name = choice(text, &self.options(config))?;
-                if let (Some(step), Some(role)) = (config.order.get_mut(index), role_of(name)) {
+                let name = choice(text, &self.options(config, levels))?;
+                if let (Some(step), Some(role)) = (config.order.get_mut(index), role_of(&name)) {
                     step.role = role;
                 }
             }
@@ -275,13 +333,11 @@ impl Field {
                     step.gates = gates;
                 }
             }
-            Field::Theme => config.raul.theme = choice(text, &self.options(config))?.to_string(),
-            Field::Icons => config.raul.icons = choice(text, &self.options(config))?.to_string(),
-            Field::Sort => {
-                config.raul.tasks.sort = choice(text, &self.options(config))?.to_string()
-            }
+            Field::Theme => config.raul.theme = choice(text, &self.options(config, levels))?,
+            Field::Icons => config.raul.icons = choice(text, &self.options(config, levels))?,
+            Field::Sort => config.raul.tasks.sort = choice(text, &self.options(config, levels))?,
             Field::Reverse => {
-                config.raul.tasks.reverse = choice(text, &self.options(config))? == "true";
+                config.raul.tasks.reverse = choice(text, &self.options(config, levels))? == "true";
             }
         }
         Ok(())
@@ -298,11 +354,11 @@ fn filled(text: &str, name: &str) -> Result<String, String> {
 }
 
 /// The option the text names, or the reason it names none.
-fn choice(text: &str, options: &[&'static str]) -> Result<&'static str, String> {
+fn choice(text: &str, options: &[String]) -> Result<String, String> {
     options
         .iter()
-        .copied()
-        .find(|option| *option == text)
+        .find(|option| option.as_str() == text)
+        .cloned()
         .ok_or_else(|| format!("{text} is not one of {}", options.join(" · ")))
 }
 
@@ -362,7 +418,7 @@ struct Edit {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Pick {
     field: Field,
-    options: Vec<&'static str>,
+    options: Vec<String>,
     cursor: usize,
     before: Config,
 }
@@ -402,6 +458,11 @@ pub struct Panel {
     asking: bool,
     /// The values the command line and the environment name.
     overrides: Overrides,
+    /// The levels each harness's models take, as the reads so far have said.
+    levels: Levels,
+    /// How a harness's models are read. The window reads them with the
+    /// catalogue's bounded read; a test stands its own in.
+    reader: fn(&Harness) -> Result<Catalog, String>,
 }
 
 impl Panel {
@@ -426,6 +487,8 @@ impl Panel {
             stale: false,
             asking: false,
             overrides,
+            levels: Levels::new(),
+            reader: Catalog::read,
         };
         let Some(home) = home else {
             panel.problem =
@@ -549,37 +612,85 @@ impl Panel {
     }
 
     /// Start the value at `id`. A choice opens the picker, with the cursor on
-    /// the choice in force; a word or a number is typed in. Nothing starts for
-    /// a value that is neither, or for a choice with no words to list.
+    /// the choice in force; a model opens the picker too, and its last entry
+    /// types an id. A word or a number is typed in. Nothing starts for a value
+    /// that is none of these.
     pub fn begin(&mut self, id: &str) {
         let Some(field) = self.field_at(id) else {
             return;
         };
-        match field.kind() {
-            Kind::Choice | Kind::Bool => {
-                let options = field.options(&self.draft);
-                if options.is_empty() {
-                    return;
-                }
-                let current = field.text(&self.draft);
-                let cursor = options
-                    .iter()
-                    .position(|option| *option == current)
-                    .unwrap_or(0);
-                self.pick = Some(Pick {
-                    field,
-                    options,
-                    cursor,
-                    before: self.draft.clone(),
-                });
-            }
-            Kind::Text | Kind::Number | Kind::Gates => {
-                self.edit = Some(Edit {
-                    field,
-                    text: field.text(&self.draft),
-                });
-            }
+        if matches!(field, Field::AgentModel(_))
+            || matches!(field.kind(), Kind::Choice | Kind::Bool)
+        {
+            self.open_pick(field);
+            return;
         }
+        self.edit = Some(Edit {
+            field,
+            text: field.text(&self.draft),
+        });
+    }
+
+    /// Open the picker on a field's choices. The models and levels it lists
+    /// are read first, when they are not known yet; a read that fails says why
+    /// and leaves `type an id…` as the model's only entry.
+    fn open_pick(&mut self, field: Field) {
+        let mut read_error = None;
+        match field {
+            Field::AgentModel(role) | Field::AgentEffort(role) => {
+                let harness = agent_of(&self.draft, role).map(|agent| agent.harness.clone());
+                if let Some(harness) = harness
+                    && let Err(error) = self.load(&harness)
+                {
+                    read_error = Some(error);
+                }
+            }
+            _ => {}
+        }
+        if let Some(error) = &read_error
+            && matches!(field, Field::AgentModel(_))
+        {
+            self.notice = Some(format!("the model catalog cannot be read: {error}"));
+        }
+        let options = field.options(&self.draft, &self.levels);
+        if options.is_empty() {
+            self.notice = Some(match field {
+                Field::AgentEffort(role) => match agent_of(&self.draft, role) {
+                    Some(agent) if agent.model.is_empty() => "pick a model first".to_string(),
+                    Some(agent) => match (&read_error, self.levels.of(agent)) {
+                        (Some(error), _) => format!("the model catalog cannot be read: {error}"),
+                        (None, Some(_)) => format!("{} takes no effort level", agent.model),
+                        (None, None) => format!("{} is not listed", agent.model),
+                    },
+                    None => "no effort to pick".to_string(),
+                },
+                _ => "nothing to pick".to_string(),
+            });
+            return;
+        }
+        let current = field.text(&self.draft);
+        let cursor = options
+            .iter()
+            .position(|option| *option == current)
+            .unwrap_or(0);
+        self.pick = Some(Pick {
+            field,
+            options,
+            cursor,
+            before: self.draft.clone(),
+        });
+    }
+
+    /// Read a harness's models, unless they are known: the levels of its models
+    /// are then known for the rest of the session.
+    fn load(&mut self, name: &str) -> Result<(), String> {
+        if self.levels.catalog(name).is_some() {
+            return Ok(());
+        }
+        let target = harness::find(name).ok_or_else(|| format!("{name} is not a harness"))?;
+        let catalog = (self.reader)(target)?;
+        self.levels.insert(name, catalog);
+        Ok(())
     }
 
     /// Move the pick's cursor by `step`, clamped to its list, and preview the
@@ -590,12 +701,13 @@ impl Panel {
         };
         let last = pick.options.len().saturating_sub(1) as isize;
         pick.cursor = (pick.cursor as isize + step).clamp(0, last) as usize;
+        let option = &pick.options[pick.cursor];
+        // `type an id…` and `type a level…` are not values: they preview nothing.
+        if option == TYPE_AN_ID || option == TYPE_A_LEVEL {
+            return;
+        }
         let mut draft = pick.before.clone();
-        if pick
-            .field
-            .apply(&mut draft, pick.options[pick.cursor])
-            .is_ok()
-        {
+        if pick.field.apply(&mut draft, option, &self.levels).is_ok() {
             self.draft = draft;
         }
         self.notice = None;
@@ -608,12 +720,31 @@ impl Panel {
         let Some(pick) = self.pick.take() else {
             return;
         };
-        let mut draft = pick.before.clone();
-        if pick
-            .field
-            .apply(&mut draft, pick.options[pick.cursor])
-            .is_ok()
+        let option = pick.options[pick.cursor].clone();
+        if option == TYPE_AN_ID || option == TYPE_A_LEVEL {
+            // The model is typed in, from the model in force; a level is typed
+            // in from nothing.
+            self.draft = pick.before.clone();
+            let text = if option == TYPE_A_LEVEL {
+                String::new()
+            } else {
+                pick.field.text(&self.draft)
+            };
+            self.edit = Some(Edit {
+                field: pick.field,
+                text,
+            });
+            return;
+        }
+        if let Field::AgentHarness(_) = pick.field
+            && let Err(error) = self.load(&option)
         {
+            self.draft = pick.before;
+            self.notice = Some(format!("the model catalog cannot be read: {error}"));
+            return;
+        }
+        let mut draft = pick.before.clone();
+        if pick.field.apply(&mut draft, &option, &self.levels).is_ok() {
             self.draft = draft;
         }
     }
@@ -632,7 +763,11 @@ impl Panel {
             return;
         };
         let mut draft = self.draft.clone();
-        if edit.field.apply(&mut draft, &edit.text).is_ok() {
+        if edit
+            .field
+            .apply(&mut draft, &edit.text, &self.levels)
+            .is_ok()
+        {
             self.draft = draft;
             self.edit = None;
         }
@@ -696,7 +831,9 @@ impl Panel {
 
     /// Why a text is not a value the file can hold, when it is not.
     fn reason(&self, field: Field, text: &str) -> Option<String> {
-        field.apply(&mut self.draft.clone(), text).err()
+        field
+            .apply(&mut self.draft.clone(), text, &self.levels)
+            .err()
     }
 
     /// The first value of the draft the file cannot hold, and why.
@@ -965,13 +1102,17 @@ impl Panel {
             }
             None => {
                 // A value the user has not changed is drawn as the file wrote
-                // it; a changed one is drawn as it would be written.
-                let written = if field.text(&self.saved) == current {
+                // it; a changed one is drawn as it would be written. An effort
+                // on a model that takes none is `—`, as hugo draws it.
+                let none = current.is_empty() && self.takes_no_effort(field);
+                let written = if none {
+                    "—".to_string()
+                } else if field.text(&self.saved) == current {
                     shown.to_string()
                 } else {
-                    field.literal(&current)
+                    self.written(field, &current)
                 };
-                let painted = if absent { dim } else { strong };
+                let painted = if absent || none { dim } else { strong };
                 spans.push(Span::styled(written, painted));
                 current.clone()
             }
@@ -999,6 +1140,30 @@ impl Panel {
             ))
         });
         (line, reason)
+    }
+
+    /// The text a changed value is written as. An effort is written as it is
+    /// stored: `none` on a model the catalogue does not list is an empty one.
+    fn written(&self, field: Field, current: &str) -> String {
+        match field {
+            Field::AgentEffort(role) => {
+                let listed = agent_of(&self.draft, role)
+                    .is_some_and(|agent| self.levels.of(agent).is_some());
+                field.literal(&stored_effort(current, listed))
+            }
+            _ => field.literal(current),
+        }
+    }
+
+    /// Whether a field is an agent's effort on a model that takes no level, so
+    /// the effort needs none.
+    fn takes_no_effort(&self, field: Field) -> bool {
+        match field {
+            Field::AgentEffort(role) => {
+                agent_of(&self.draft, role).is_some_and(|agent| self.levels.takes_none(agent))
+            }
+            _ => false,
+        }
     }
 
     /// The flag or the environment that overrides a value on its line, when
@@ -1394,7 +1559,7 @@ pub fn render_pick(frame: &mut Frame, area: Rect, theme: &Theme, icons: IconSet,
         .options
         .iter()
         .map(|option| Row {
-            text: option.to_string(),
+            text: option.clone(),
             style: theme.text.normal,
         })
         .collect();
@@ -1418,6 +1583,7 @@ mod tests {
     use ratatui::style::Color;
 
     use super::*;
+    use coding_crew_core::harness::CuratedModel;
 
     fn theme() -> Theme {
         Theme::preset(Preset::Dark)
@@ -1433,6 +1599,33 @@ mod tests {
     }
 
     /// A panel over a fresh file of the defaults.
+    /// The levels a harness's listing gives in these tests: the builder's model,
+    /// and two more, one of which takes no level.
+    fn listing(_harness: &Harness) -> Result<Catalog, String> {
+        Ok(Catalog::from_curated(&[
+            CuratedModel {
+                id: "claude-haiku-5-5",
+                efforts: &["low", "medium", "high"],
+            },
+            CuratedModel {
+                id: "opencode-go/glm-5.3",
+                efforts: &["low", "medium", "high"],
+            },
+            CuratedModel {
+                id: "opencode-go/kimi-k3",
+                efforts: &[],
+            },
+        ]))
+    }
+
+    /// Open the builder's model picker and pick `type an id…`, which opens the
+    /// typed input on the model in force.
+    fn type_a_model(panel: &mut Panel) {
+        panel.begin("agents.builder.model");
+        panel.step_pick(99);
+        panel.keep_pick();
+    }
+
     fn panel(name: &str) -> (Panel, PathBuf) {
         let home = scratch(name);
         let panel = Panel::open(Some(&home), Overrides::default());
@@ -1798,17 +1991,18 @@ mod tests {
         assert!(panel.editing());
         assert!(!panel.picking());
         panel.drop_edit();
+        // A model is picked from its harness's list, and `type an id…` types it.
         panel.begin("agents.builder.model");
-        assert!(panel.editing());
-        assert!(!panel.picking());
-        panel.drop_edit();
+        assert!(panel.picking());
+        assert!(!panel.editing());
+        panel.drop_pick();
         assert!(!panel.unsaved());
     }
 
     #[test]
     fn a_word_is_typed_inline_and_kept_or_dropped() {
         let (mut panel, _) = panel("typed");
-        panel.begin("agents.builder.model");
+        type_a_model(&mut panel);
         assert!(panel.editing());
         panel.typing().expect("the text").push_str("-x");
         let rows = draw(&panel, 100, 60, Some("agents.builder.model"));
@@ -1826,12 +2020,14 @@ mod tests {
     #[test]
     fn a_harness_is_picked_from_the_table_and_its_efforts_follow_it() {
         let (mut panel, _) = panel("harness");
-        // The builder runs claude at high: opencode is next in the table, and
-        // its levels are low, medium and high, so the effort is still high.
+        panel.reader = listing;
+        // The builder runs haiku at high: opencode is next in the table, and
+        // lists haiku at low, medium and high, so the model and effort stay.
         panel.begin("agents.builder.harness");
         panel.step_pick(1);
         panel.keep_pick();
         assert_eq!(panel.draft.agents[1].harness, "opencode");
+        assert_eq!(panel.draft.agents[1].model, "claude-haiku-5-5");
         assert_eq!(panel.draft.agents[1].effort.as_deref(), Some("high"));
         // The effort is picked from opencode's levels; the cursor starts on high.
         panel.begin("agents.builder.effort");
@@ -1864,17 +2060,151 @@ mod tests {
     }
 
     #[test]
-    fn an_effort_the_harness_does_not_take_is_refused_on_save() {
-        let (mut panel, path) = panel("refused-effort");
-        // claude's xhigh is not one of cursor-agent's levels.
+    fn the_effort_list_is_the_levels_of_the_model_in_force() {
+        let (mut panel, _) = panel("levels-list");
+        // haiku takes three levels, so the list has no xhigh or max.
         panel.begin("agents.builder.effort");
+        assert!(panel.picking());
+        assert_eq!(
+            panel.pick.as_ref().map(|pick| pick.options.clone()),
+            Some(vec![
+                "low".to_string(),
+                "medium".to_string(),
+                "high".to_string()
+            ])
+        );
+        panel.drop_pick();
+        // A model that takes no level has no list: the pane says why.
+        panel.draft.agents[1].model = "opencode-go/kimi-k3".to_string();
+        panel.draft.agents[1].harness = "opencode".to_string();
+        panel.reader = listing;
+        panel.begin("agents.builder.effort");
+        assert!(!panel.picking());
+        assert_eq!(
+            panel.notice(),
+            Some("opencode-go/kimi-k3 takes no effort level")
+        );
+    }
+
+    /// A catalogue that cannot be read: its tool is not there.
+    fn unreadable(_harness: &Harness) -> Result<Catalog, String> {
+        Err("opencode api --standalone model.list: not found".to_string())
+    }
+
+    /// The effort list of a model the catalogue does not list: the harness's
+    /// levels, then `none`, then `type a level…`.
+    fn unlisted_effort(name: &str) -> (Panel, PathBuf) {
+        let (mut panel, path) = panel(name);
+        panel.reader = listing;
+        panel.draft.agents[1].harness = "opencode".to_string();
+        panel.draft.agents[1].model = "opencode-go/new-model".to_string();
+        panel.draft.agents[1].effort = None;
+        panel.begin("agents.builder.effort");
+        (panel, path)
+    }
+
+    #[test]
+    fn an_effort_of_a_model_the_list_does_not_name_is_picked_from_the_harness_levels() {
+        let (panel, _) = unlisted_effort("effort-unlisted");
+        assert!(panel.picking());
+        assert_eq!(
+            panel.pick.as_ref().map(|pick| pick.options.clone()),
+            Some(vec![
+                "low".to_string(),
+                "medium".to_string(),
+                "high".to_string(),
+                "none".to_string(),
+                TYPE_A_LEVEL.to_string(),
+            ])
+        );
+    }
+
+    #[test]
+    fn none_on_a_model_the_list_does_not_name_saves_an_empty_effort() {
+        let (mut panel, path) = unlisted_effort("effort-none");
+        panel.step_pick(3);
+        panel.keep_pick();
+        assert_eq!(panel.draft.agents[1].effort.as_deref(), Some(""));
+        assert!(panel.save(), "{:?}", panel.notice());
+        let text = fs::read_to_string(&path).expect("the file");
+        assert!(text.contains("effort = \"\""), "{text}");
+    }
+
+    #[test]
+    fn type_a_level_takes_one_word_for_a_model_the_list_does_not_name() {
+        let (mut panel, _) = unlisted_effort("effort-typed");
+        // `type a level…` opens the inline input, and previews nothing.
+        panel.step_pick(4);
+        panel.keep_pick();
+        assert!(panel.editing());
+        panel.typing().expect("the text").push_str("a b");
+        panel.keep();
+        assert!(panel.editing(), "a level of two words was kept");
+        assert_eq!(panel.draft.agents[1].effort, None);
+        panel.typing().expect("the text").replace_range(.., "ultra");
+        panel.keep();
+        assert!(!panel.editing());
+        assert_eq!(panel.draft.agents[1].effort.as_deref(), Some("ultra"));
+    }
+
+    #[test]
+    fn an_effort_whose_list_cannot_be_read_says_why() {
+        let (mut panel, _) = panel("effort-unreadable");
+        panel.reader = unreadable;
+        panel.draft.agents[1].harness = "opencode".to_string();
+        panel.draft.agents[1].model = "opencode-go/glm-5.3".to_string();
+        panel.begin("agents.builder.effort");
+        assert!(!panel.picking());
+        assert_eq!(
+            panel.notice(),
+            Some(
+                "the model catalog cannot be read: opencode api --standalone model.list: not found"
+            )
+        );
+    }
+
+    #[test]
+    fn an_effort_on_a_model_that_takes_none_is_a_dash() {
+        let (mut panel, _) = panel("effort-dash");
+        panel.reader = listing;
+        panel.draft.agents[1].harness = "opencode".to_string();
+        panel.draft.agents[1].model = "opencode-go/kimi-k3".to_string();
+        panel.draft.agents[1].effort = None;
+        panel.load("opencode").expect("the listing");
+        let rows = draw(&panel, 100, 60, None);
+        assert!(
+            row_with(&rows, "effort = —").contains('—'),
+            "{}",
+            rows.join("\n")
+        );
+    }
+
+    #[test]
+    fn a_model_pick_clears_an_effort_the_new_model_does_not_take() {
+        let (mut panel, _) = panel("model-levels");
+        panel.reader = listing;
+        panel.draft.agents[1].harness = "opencode".to_string();
+        panel.draft.agents[1].model = "opencode-go/glm-5.3".to_string();
+        panel.draft.agents[1].effort = Some("high".to_string());
+        // glm takes high: a pick of kimi, which takes none, clears it.
+        panel.begin("agents.builder.model");
         panel.step_pick(1);
         panel.keep_pick();
-        assert_eq!(panel.draft.agents[1].effort.as_deref(), Some("xhigh"));
-        panel.begin("agents.builder.harness");
-        panel.step_pick(2);
+        assert_eq!(panel.draft.agents[1].model, "opencode-go/kimi-k3");
+        assert_eq!(panel.draft.agents[1].effort, None);
+    }
+
+    #[test]
+    fn an_effort_the_model_does_not_take_is_refused_on_save() {
+        let (mut panel, path) = panel("refused-effort");
+        panel.reader = listing;
+        // cursor-agent lists haiku at three levels: a draft that names xhigh
+        // for it is one the file cannot hold.
+        panel.draft.agents[1].harness = "cursor-agent".to_string();
+        panel.begin("agents.builder.model");
         panel.keep_pick();
-        assert_eq!(panel.draft.agents[1].harness, "cursor-agent");
+        assert_eq!(panel.draft.agents[1].model, "claude-haiku-5-5");
+        panel.draft.agents[1].effort = Some("xhigh".to_string());
         assert!(
             !panel.save(),
             "an effort the harness does not take was saved"
@@ -1944,7 +2274,7 @@ mod tests {
             );
         }
         let (mut panel, _) = panel("model");
-        panel.begin("agents.builder.model");
+        type_a_model(&mut panel);
         panel.typing().expect("the text").replace_range(.., "a b");
         panel.keep();
         assert!(panel.editing());
@@ -1954,7 +2284,7 @@ mod tests {
     #[test]
     fn a_reason_is_drawn_under_the_value_it_names() {
         let (mut panel, _) = panel("reason");
-        panel.begin("agents.builder.model");
+        type_a_model(&mut panel);
         panel.typing().expect("the text").replace_range(.., "");
         let rows = draw(&panel, 100, 60, Some("agents.builder.model"));
         let at = rows

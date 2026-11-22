@@ -13,7 +13,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::Value;
 
-use crate::bounded::{self, Answer};
+use coding_crew_core::bounded::{self, Answer};
 
 /// The label of the orchestrator's tab, and the name of its agent in herdr.
 pub const ORCHESTRATOR: &str = "orchestrator";
