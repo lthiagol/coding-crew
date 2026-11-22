@@ -15,12 +15,15 @@
 //! says nothing about the review.
 
 use coding_crew_core::{FindingStatus, Severity, Task};
-use coding_crew_theme::Theme;
 use coding_crew_theme::text::text_width;
+use coding_crew_theme::{Icon, IconSet, Theme};
 use ratatui::text::Span;
 
 /// The severities, the most urgent first: the order a row names them in.
 const SEVERITIES: [Severity; 3] = [Severity::High, Severity::Medium, Severity::Low];
+
+/// The columns an icon takes with the space after it.
+const ICON_WIDTH: usize = 2;
 
 /// How a piece of the state is painted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +41,8 @@ enum Grade {
 /// state is made of are the units a cut works on.
 #[derive(Debug, Clone)]
 pub struct Part {
+    /// The icon that leads the part, drawn in the set in force.
+    icon: Option<Icon>,
     spans: Vec<(String, Grade)>,
 }
 
@@ -45,6 +50,7 @@ impl Part {
     /// A part that is a word alone.
     fn label(text: impl Into<String>) -> Self {
         Part {
+            icon: None,
             spans: vec![(text.into(), Grade::Label)],
         }
     }
@@ -52,6 +58,7 @@ impl Part {
     /// A part that starts with a count.
     fn count(text: impl Into<String>) -> Self {
         Part {
+            icon: None,
             spans: vec![(text.into(), Grade::Count)],
         }
     }
@@ -62,9 +69,17 @@ impl Part {
         self
     }
 
-    /// The columns the part takes.
+    /// The part led by an icon.
+    fn marked(mut self, icon: Icon) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    /// The columns the part takes, its icon and the space after it included.
     pub fn width(&self) -> usize {
-        self.spans
+        let icon = if self.icon.is_some() { ICON_WIDTH } else { 0 };
+        icon + self
+            .spans
             .iter()
             .map(|(text, _)| text_width(text))
             .sum::<usize>()
@@ -88,10 +103,14 @@ pub fn state(task: &Task) -> Option<Vec<Part>> {
     let mut parts = Vec::new();
     let open = task.open_findings();
     if open > 0 {
-        parts.push(Part::count(open.to_string()).then(
-            format!(" open {}", if open == 1 { "finding" } else { "findings" }),
-            Grade::Label,
-        ));
+        parts.push(
+            Part::count(open.to_string())
+                .then(
+                    format!(" open {}", if open == 1 { "finding" } else { "findings" }),
+                    Grade::Label,
+                )
+                .marked(Icon::Finding),
+        );
         parts.extend(severity_parts(task));
     }
     let rounds = task.external_rounds();
@@ -152,6 +171,17 @@ fn severity_word(severity: Severity) -> &'static str {
     }
 }
 
+/// The state without its icons: what a row keeps when the icons give way.
+pub fn unmarked(parts: &[Part]) -> Vec<Part> {
+    parts
+        .iter()
+        .map(|part| Part {
+            icon: None,
+            ..part.clone()
+        })
+        .collect()
+}
+
 /// The state, cut to `room` columns by whole parts.
 ///
 /// The longest whole prefix wins. A prefix that leaves a part out is marked
@@ -177,18 +207,22 @@ pub fn fit(parts: &[Part], room: usize) -> Option<Vec<Part>> {
     None
 }
 
-/// The state's spans, painted: words dim, counts strong.
-pub fn paint(parts: &[Part], theme: &Theme) -> Vec<Span<'static>> {
+/// The state's spans, painted: icons and words dim, counts strong.
+pub fn paint(parts: &[Part], theme: &Theme, icons: IconSet) -> Vec<Span<'static>> {
     parts
         .iter()
         .flat_map(|part| {
-            part.spans.iter().map(|(text, grade)| {
-                let style = match grade {
-                    Grade::Label => theme.text.dim,
-                    Grade::Count => theme.text.strong,
-                };
-                Span::styled(text.clone(), style)
-            })
+            let icon = part
+                .icon
+                .map(|icon| Span::styled(format!("{} ", icon.glyph(icons)), theme.text.dim));
+            icon.into_iter()
+                .chain(part.spans.iter().map(|(text, grade)| {
+                    let style = match grade {
+                        Grade::Label => theme.text.dim,
+                        Grade::Count => theme.text.strong,
+                    };
+                    Span::styled(text.clone(), style)
+                }))
         })
         .collect()
 }
@@ -380,9 +414,9 @@ mod tests {
         let parts = state(&task).expect("a state");
         assert!(fit(&parts, 0).is_none());
         assert!(fit(&parts, 2).is_none(), "the marker alone is not a state");
-        // The narrowest whole piece is the findings count.
-        assert!(fit(&parts, 14).is_none());
-        let shown = fit(&parts, 15).expect("the findings and the marker");
+        // The narrowest whole piece is the findings count, its icon included.
+        assert!(fit(&parts, 16).is_none());
+        let shown = fit(&parts, 17).expect("the findings and the marker");
         assert_eq!(text(&shown), "1 open finding…");
     }
 
@@ -391,11 +425,14 @@ mod tests {
         let theme = Theme::preset(coding_crew_theme::Preset::Dark);
         let task = task_with(2, &[(Severity::High, FindingStatus::Open)]);
         let parts = state(&task).expect("a state");
-        let spans = paint(&parts, &theme);
-        assert_eq!(spans[0].content.as_ref(), "1");
-        assert_eq!(spans[0].style, theme.text.strong, "a count is strong");
-        assert_eq!(spans[1].content.as_ref(), " open finding");
-        assert_eq!(spans[1].style, theme.text.dim, "a word is dim");
+        let spans = paint(&parts, &theme, IconSet::Nerd);
+        let finding = Icon::Finding.glyph(IconSet::Nerd);
+        assert_eq!(spans[0].content.as_ref(), format!("{finding} "));
+        assert_eq!(spans[0].style, theme.text.dim, "the icon is dim");
+        assert_eq!(spans[1].content.as_ref(), "1");
+        assert_eq!(spans[1].style, theme.text.strong, "a count is strong");
+        assert_eq!(spans[2].content.as_ref(), " open finding");
+        assert_eq!(spans[2].style, theme.text.dim, "a word is dim");
         let count = spans
             .iter()
             .find(|span| span.content.as_ref() == "1")

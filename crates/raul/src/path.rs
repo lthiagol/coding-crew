@@ -17,10 +17,10 @@ use coding_crew_core::{Status, Task};
 use crate::data::{Work, has_overlay, live_claim};
 use crate::review_state::{self, Part};
 use crate::tabs::Tab;
-use crate::view::View;
+use crate::view::{self, View};
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, first_grapheme, head_to, text_width};
-use coding_crew_theme::{Icon, IconSet, Theme, phase_style, selected_line};
+use coding_crew_theme::{Icon, IconSet, Theme, phase_style};
 
 /// The columns the border of the block takes.
 const BORDER: usize = 2;
@@ -400,7 +400,8 @@ pub fn render_view(
     let height = usize::from(area.height).saturating_sub(BORDER);
     let ids = tree.row_ids();
     let (rows, announced) = view.draw(&ids, selected, |first| {
-        let (lines, announced, shown, whole) = window(&tree, width, height, theme, selected, first);
+        let (lines, announced, shown, whole) =
+            window(&tree, width, height, theme, icons, selected, first);
         ((lines, announced), shown, whole)
     });
     frame.render_widget(
@@ -488,9 +489,10 @@ fn lines(
     width: usize,
     height: usize,
     theme: &Theme,
+    icons: IconSet,
     selected: Option<&str>,
 ) -> Vec<Line<'static>> {
-    window(tree, width, height, theme, selected, 0).0
+    window(tree, width, height, theme, icons, selected, 0).0
 }
 
 /// The lines of the tree, from the row at `first`, and the rows they show.
@@ -513,10 +515,11 @@ fn window(
     width: usize,
     height: usize,
     theme: &Theme,
+    icons: IconSet,
     selected: Option<&str>,
     first: usize,
 ) -> (Vec<Line<'static>>, bool, Vec<usize>, bool) {
-    let pieces = pieces(tree, width, theme, selected);
+    let pieces = pieces(tree, width, theme, icons, selected);
     let all = tree.row_ids();
     // The tree that is shown is the one that still leaves room to say what
     // is not shown. The announcement comes first: a name that is cut is a
@@ -915,7 +918,13 @@ fn mark_last(lines: &mut [Line<'static>], width: usize, theme: &Theme) {
 }
 
 /// The pieces of the tree: the head, then the branches.
-fn pieces(tree: &Tree, width: usize, theme: &Theme, selected: Option<&str>) -> Vec<Piece> {
+fn pieces(
+    tree: &Tree,
+    width: usize,
+    theme: &Theme,
+    icons: IconSet,
+    selected: Option<&str>,
+) -> Vec<Piece> {
     let mut pieces = Vec::new();
 
     // The head: what the spine is, and the spine itself.
@@ -930,7 +939,14 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme, selected: Option<&str>) -> V
                 " ├─ ".to_string()
             };
             Chunk {
-                lines: row(&prefix, entry, width, theme, is_selected(entry, selected)),
+                lines: row(
+                    &prefix,
+                    entry,
+                    width,
+                    theme,
+                    icons,
+                    is_selected(entry, selected),
+                ),
                 lead: 0,
                 row: index,
                 tasks: 1,
@@ -983,6 +999,7 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme, selected: Option<&str>) -> V
                         entry,
                         width,
                         theme,
+                        icons,
                         is_selected(entry, selected),
                     ));
                     blocks.push(Chunk {
@@ -1004,7 +1021,14 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme, selected: Option<&str>) -> V
                 for (row_at, entry) in group.rows.iter().enumerate() {
                     let prefix = format!("{branch_prefix}{}", connector(row_at == last_row));
                     blocks.push(Chunk {
-                        lines: row(&prefix, entry, width, theme, is_selected(entry, selected)),
+                        lines: row(
+                            &prefix,
+                            entry,
+                            width,
+                            theme,
+                            icons,
+                            is_selected(entry, selected),
+                        ),
                         lead: 0,
                         row: row_index,
                         tasks: 1,
@@ -1019,7 +1043,7 @@ fn pieces(tree: &Tree, width: usize, theme: &Theme, selected: Option<&str>) -> V
             .iter()
             .all(|block| block.lines.iter().all(|line| line.width() <= width));
         let header = if fits {
-            branch_header(view, is_last, width, theme)
+            branch_header(view, is_last, width, icons, theme)
         } else {
             None
         };
@@ -1098,19 +1122,33 @@ fn fork(out: &mut Vec<Line<'static>>, rows: usize, theme: &Theme) {
     out.push(fork_line(theme));
 }
 
-/// The header of a branch: its name and the number of tasks in it.
+/// The header of a branch: its status icon, its name, and the number of tasks
+/// in it as a badge.
+///
+/// The icon is the phase's, in the phase's slot. It is the first thing a
+/// narrow header gives up: the name and the count are what the header says.
 fn branch_header(
     view: &BranchView,
     is_last: bool,
     width: usize,
+    icons: IconSet,
     theme: &Theme,
 ) -> Option<Line<'static>> {
     let prefix = if is_last { " └─ " } else { " ├─ " };
     let label = view.branch.label();
     let count = view.count.to_string();
-    let separator = " · ";
+    let separator = "  ";
     let style = phase_style(theme, view.branch.phase());
-    let fixed = prefix.chars().count() + separator.chars().count() + count.chars().count();
+    let fixed = |mark: usize| {
+        prefix.chars().count() + mark + separator.chars().count() + count.chars().count()
+    };
+    // The icon gives way before the name is cut: a header with room for the
+    // whole name and not the icon too is drawn without the icon.
+    let mark = Icon::for_status(view.branch.phase().as_str())
+        .map(|icon| format!("{} ", icon.glyph(icons)))
+        .filter(|mark| fixed(mark.chars().count()) + label.chars().count() <= width)
+        .unwrap_or_default();
+    let fixed = fixed(mark.chars().count());
     if fixed > width {
         // Not even the count fits: the branch is not shown, and the
         // announcement says so.
@@ -1124,13 +1162,19 @@ fn branch_header(
     };
     Some(Line::from(vec![
         Span::styled(prefix.to_string(), theme.text.dim),
+        Span::styled(mark, style),
         Span::styled(label, style),
-        Span::styled(separator.to_string(), theme.text.dim),
-        Span::styled(count, theme.text.strong),
+        Span::raw(separator.to_string()),
+        chrome::badge(view.count, theme),
     ]))
 }
 
-/// A row of the tree: the prefix, the id, the title and what it waits on.
+/// A row of the tree: the prefix, the status icon, the id, the title and what
+/// it waits on.
+///
+/// The prefix opens with a blank column, and the row's bar takes it: the bar
+/// is in the same column on every row, so the tree's columns line up whether
+/// the row is selected or not.
 ///
 /// The title is never cut: when it does not fit on one row, it wraps under
 /// its own column. A selected row is painted whole: its wrapped lines and
@@ -1140,21 +1184,38 @@ fn row(
     entry: &Entry,
     width: usize,
     theme: &Theme,
+    icons: IconSet,
     selected: bool,
 ) -> Vec<Line<'static>> {
+    let rest = prefix.strip_prefix(' ').unwrap_or(prefix);
     let style = phase_style(theme, entry.status);
     let id = entry.id.as_str();
-    let content = prefix.chars().count();
+    // The status icon stands before the id, in the status's slot. A row too
+    // narrow for it gives the icon up first.
+    let mark = Icon::for_status(entry.status.as_str())
+        .map(|icon| format!("{} ", icon.glyph(icons)))
+        .filter(|mark| prefix.chars().count() + mark.chars().count() + id.chars().count() <= width)
+        .unwrap_or_default();
+    let content = prefix.chars().count() + mark.chars().count();
     let title_col = content + id.chars().count() + GAP;
     let available = width.saturating_sub(title_col);
     // The title is never lost: when the pane is too narrow for it beside
     // the id, it goes under it.
     let beside = available > 0;
-    let text_col = if beside { title_col } else { 0 };
-    let chunks = wrap(&entry.title, if beside { available } else { width });
+    let text_col = if beside { title_col } else { 1 };
+    let chunks = wrap(
+        &entry.title,
+        if beside {
+            available
+        } else {
+            width.saturating_sub(text_col).max(1)
+        },
+    );
     let mut lines: Vec<Line<'static>> = Vec::new();
     let mut head = vec![
-        Span::styled(prefix.to_string(), theme.text.dim),
+        view::bar(selected, theme),
+        Span::styled(rest.to_string(), theme.text.dim),
+        Span::styled(mark, style),
         Span::styled(id.to_string(), style),
     ];
     let mut used = content + id.chars().count();
@@ -1170,7 +1231,8 @@ fn row(
     // piece is drawn from the column.
     for chunk in first.filter(|_| !beside).into_iter().chain(chunks) {
         lines.push(Line::from(vec![
-            Span::raw(" ".repeat(text_col)),
+            view::bar(selected, theme),
+            Span::raw(" ".repeat(text_col - 1)),
             Span::styled(chunk.clone(), style),
         ]));
         used = text_col + chunk.chars().count();
@@ -1179,7 +1241,8 @@ fn row(
     // it when it is not only the dependencies.
     let mut note: Vec<String> = Vec::new();
     if !entry.waits_on.is_empty() {
-        note.push(format!("waits on {}", entry.waits_on.join(", ")));
+        let blocked = Icon::Blocked.glyph(icons);
+        note.push(format!("{blocked} waits on {}", entry.waits_on.join(", ")));
     }
     if let Some(hold) = entry.hold {
         note.push(hold.label().to_string());
@@ -1193,9 +1256,10 @@ fn row(
                 line.spans.push(Span::styled(note, theme.text.dim));
             }
         } else {
-            for chunk in wrap(&note, width.saturating_sub(text_col)) {
+            for chunk in wrap(&note, width.saturating_sub(text_col).max(1)) {
                 lines.push(Line::from(vec![
-                    Span::raw(" ".repeat(text_col)),
+                    view::bar(selected, theme),
+                    Span::raw(" ".repeat(text_col - 1)),
                     Span::styled(chunk, theme.text.dim),
                 ]));
             }
@@ -1213,16 +1277,13 @@ fn row(
             && let Some(last) = lines.last_mut()
         {
             last.spans.push(Span::raw("  "));
-            last.spans.extend(review_state::paint(&state, theme));
+            last.spans.extend(review_state::paint(&state, theme, icons));
         }
     }
-    if selected {
-        return lines
-            .into_iter()
-            .map(|line| selected_line(line, width, theme))
-            .collect();
-    }
     lines
+        .into_iter()
+        .map(|line| view::selected_row(line, width, selected, theme))
+        .collect()
 }
 
 /// Whether the row is the one the cursor is on.
@@ -1434,14 +1495,15 @@ mod tests {
         assert_eq!(row_ids(&work, free), vec!["TSK01".to_string()]);
         let mut view = View::default();
         let text = text_of(&draw_at(&work, 60, 12, free, &mut view));
-        assert!(text.contains(" ● TSK01"), "the spine is not drawn: {text}");
+        let spine = format!(" ● {} TSK01", phase_glyph("approved"));
+        assert!(text.contains(&spine), "the spine is not drawn: {text}");
         assert!(
             !text.contains("BLOCKED"),
             "a freed task is still blocked: {text}"
         );
         let text = text_of(&draw_at(&work, 60, 12, held, &mut view));
         assert!(
-            text.contains("BLOCKED · 1"),
+            text.contains("BLOCKED  1"),
             "the branch is not drawn: {text}"
         );
         assert!(
@@ -1473,7 +1535,8 @@ mod tests {
         for width in [40usize, 58, 100] {
             for first in 0..total {
                 for height in [4usize, 6, 10, 16] {
-                    let (rows, _, shown, _) = window(&tree, width, height, &theme(), None, first);
+                    let (rows, _, shown, _) =
+                        window(&tree, width, height, &theme(), IconSet::Nerd, None, first);
                     let text: Vec<String> = rows.iter().map(text_of_line).collect();
                     let text = text.join("\n");
                     let Some((_, summary)) = text.split_once("not shown:") else {
@@ -1524,13 +1587,13 @@ mod tests {
         // named with the count of what is hidden, and the count is the
         // rows not drawn, not the group's total.
         let tree = tree(&mock_work(), now());
-        let (rows, _, shown, _) = window(&tree, 58, 7, &theme(), None, 10);
+        let (rows, _, shown, _) = window(&tree, 58, 7, &theme(), IconSet::Nerd, None, 10);
         let text = rows
             .iter()
             .map(text_of_line)
             .collect::<Vec<String>>()
             .join("\n");
-        assert!(text.contains("RUNNING · 6"), "the header: {text}");
+        assert!(text.contains("RUNNING  6"), "the header: {text}");
         assert!(
             text.contains("RUNNING (4 hidden)"),
             "the hidden count: {text}"
@@ -1624,7 +1687,7 @@ mod tests {
             hold: None,
             review: None,
         };
-        let lines = row(" ● ", &entry, 100, &theme(), false);
+        let lines = row(" ● ", &entry, 100, &theme(), IconSet::Nerd, false);
         let text = lines
             .iter()
             .map(text_of_line)
@@ -1632,7 +1695,7 @@ mod tests {
             .join(" ");
         assert!(text.contains("waits on TSK04, TSK05"), "{text}");
         // Narrower than the note: it wraps, and no part of it is lost.
-        let lines = row(" ● ", &entry, 20, &theme(), false);
+        let lines = row(" ● ", &entry, 20, &theme(), IconSet::Nerd, false);
         let text = lines
             .iter()
             .map(text_of_line)
@@ -1703,13 +1766,14 @@ mod tests {
         let rows = draw(&mock_work(), 100, 40);
         let text = text_of(&rows);
         // The spine, with the marker of what happens next.
-        assert!(text.contains(" ● TSK29"), "{text}");
+        let spine = format!(" ● {} TSK29", phase_glyph("approved"));
+        assert!(text.contains(&spine), "{text}");
         // The branch headers, with the count of the group they count.
-        assert!(text.contains("AWAITING APPROVAL · 2"), "{text}");
-        assert!(text.contains("BLOCKED · 3"), "{text}");
-        assert!(text.contains("RUNNING · 6"), "{text}");
-        assert!(text.contains("REVIEW · 3"), "{text}");
-        assert!(text.contains("ESCALATED · 3"), "{text}");
+        assert!(text.contains("AWAITING APPROVAL  2"), "{text}");
+        assert!(text.contains("BLOCKED  3"), "{text}");
+        assert!(text.contains("RUNNING  6"), "{text}");
+        assert!(text.contains("REVIEW  3"), "{text}");
+        assert!(text.contains("ESCALATED  3"), "{text}");
         // The blocked tasks are forked under the dependency they wait on,
         // and a task held by an overlay or a claim has no fork parent.
         assert!(text.contains("blocked-by TSK04"), "{text}");
@@ -1725,21 +1789,25 @@ mod tests {
         // branches, and the branches hang off it.
         let rows = inner(&draw(&mock_work(), 100, 40));
         // The spine hangs on the trunk.
-        assert!(
-            rows.iter().any(|row| row.starts_with(" ● TSK29")),
-            "{rows:?}"
-        );
+        let spine = format!(" ● {} TSK29", phase_glyph("approved"));
+        assert!(rows.iter().any(|row| row.starts_with(&spine)), "{rows:?}");
         // The fork sits one column right of the trunk.
         assert!(rows.iter().any(|row| row.starts_with("  ╵")), "{rows:?}");
         // The branch headers hang on the trunk.
         assert!(
-            rows.iter()
-                .any(|row| row.starts_with(" ├─ AWAITING APPROVAL · 2")),
+            rows.iter().any(|row| {
+                row.starts_with(&format!(
+                    " ├─ {} AWAITING APPROVAL  2",
+                    phase_glyph("groomed")
+                ))
+            }),
             "{rows:?}"
         );
         // The rows of a branch hang under its header.
         assert!(
-            rows.iter().any(|row| row.starts_with(" │   ├─ TSK04")),
+            rows.iter().any(|row| {
+                row.starts_with(&format!(" │   ├─ {} TSK04", phase_glyph("groomed")))
+            }),
             "{rows:?}"
         );
         // The blocked group is forked under the dependency it waits on.
@@ -1749,17 +1817,23 @@ mod tests {
             "{rows:?}"
         );
         assert!(
-            rows.iter().any(|row| row.starts_with(" │       └─ TSK07")),
+            rows.iter().any(|row| {
+                row.starts_with(&format!(" │       └─ {} TSK07", phase_glyph("approved")))
+            }),
             "{rows:?}"
         );
         // A task held by an overlay or a claim has no fork parent: its row
         // hangs under the branch itself.
         assert!(
-            rows.iter().any(|row| row.starts_with(" │   │   ├─ TSK08")),
+            rows.iter().any(|row| {
+                row.starts_with(&format!(" │   │   ├─ {} TSK08", phase_glyph("approved")))
+            }),
             "{rows:?}"
         );
         assert!(
-            rows.iter().any(|row| row.starts_with(" │   │   └─ TSK09")),
+            rows.iter().any(|row| {
+                row.starts_with(&format!(" │   │   └─ {} TSK09", phase_glyph("approved")))
+            }),
             "{rows:?}"
         );
     }
@@ -1786,7 +1860,7 @@ mod tests {
                 }],
             }],
         };
-        let rows: Vec<String> = lines(&tree, 60, 20, &theme, None)
+        let rows: Vec<String> = lines(&tree, 60, 20, &theme, IconSet::Nerd, None)
             .iter()
             .map(text_of_line)
             .collect();
@@ -1842,7 +1916,7 @@ mod tests {
         let tree = tree(&work, now());
         for width in [40usize, 60, 100] {
             for height in [8usize, 12, 24, 40] {
-                let rows = lines(&tree, width, height, &theme(), None);
+                let rows = lines(&tree, width, height, &theme(), IconSet::Nerd, None);
                 assert!(
                     too_wide(&rows, width).is_empty(),
                     "{width}x{height}: {:?}",
@@ -1865,7 +1939,7 @@ mod tests {
         let tree = tree(&work, now());
         for width in 20..=120 {
             for height in 4..=40 {
-                let rows = lines(&tree, width, height, &theme(), None);
+                let rows = lines(&tree, width, height, &theme(), IconSet::Nerd, None);
                 assert!(
                     too_wide(&rows, width).is_empty(),
                     "{width}x{height}: {:?}",
@@ -1903,6 +1977,7 @@ mod tests {
                     usize::from(width) - BORDER,
                     usize::from(height) - BORDER,
                     &theme(),
+                    IconSet::Nerd,
                     None,
                 )
                 .iter()
@@ -2041,7 +2116,7 @@ mod tests {
             review: None,
         };
         for width in 1..=40 {
-            let text: String = row(" │ ├─ ", &entry, width, &theme(), false)
+            let text: String = row(" │ ├─ ", &entry, width, &theme(), IconSet::Nerd, false)
                 .iter()
                 .map(text_of_line)
                 .collect::<String>()
@@ -2175,13 +2250,13 @@ mod tests {
                 hold: None,
                 review: None,
             };
-            let lines = row(" ● ", &entry, 100, &theme, false);
+            let lines = row(" ● ", &entry, 100, &theme, IconSet::Nerd, false);
             let style = phase_style(&theme, status);
             // The id and the title of the row carry the colour of the
             // phase; the tree around them is dim.
-            assert_eq!(lines[0].spans[1].style, style, "{status:?}");
             assert_eq!(lines[0].spans[3].style, style, "{status:?}");
-            assert_eq!(lines[0].spans[0].style, theme.text.dim, "{status:?}");
+            assert_eq!(lines[0].spans[5].style, style, "{status:?}");
+            assert_eq!(lines[0].spans[1].style, theme.text.dim, "{status:?}");
         }
     }
 
@@ -2199,26 +2274,31 @@ mod tests {
             review: None,
         };
         // A row that is not the cursor's keeps the slot of its phase.
-        let plain = row(" ● ", &entry, 60, &theme, false);
-        assert_eq!(plain[0].spans[1].style, style, "the id");
-        assert_eq!(plain[0].spans[3].style, style, "the title");
+        let plain = row(" ● ", &entry, 60, &theme, IconSet::Nerd, false);
+        assert_eq!(plain[0].spans[3].style, style, "the id");
+        assert_eq!(plain[0].spans[5].style, style, "the title");
         // The cursor's row takes the selection's pair on every cell, and the
         // bar runs to the edge of the pane.
-        let selected = row(" ● ", &entry, 60, &theme, true);
+        let selected = row(" ● ", &entry, 60, &theme, IconSet::Nerd, true);
         assert_eq!(selected.len(), 1, "a short row is one line");
         assert_eq!(selected[0].width(), 60, "the selection bar stops short");
-        for span in &selected[0].spans {
+        assert_eq!(
+            selected[0].spans[0].style, theme.chrome.border_focus,
+            "the bar"
+        );
+        for span in &selected[0].spans[1..] {
             assert_eq!(span.style, selection, "{:?} is not the selection", span);
         }
         // A wrapped row is painted whole: every line of it, note included.
         let mut wrapped = entry.clone();
         wrapped.title = "a title that does not fit the pane at all, not at any width".to_string();
         wrapped.waits_on = vec!["TSK02".to_string()];
-        let selected = row(" ● ", &wrapped, 30, &theme, true);
+        let selected = row(" ● ", &wrapped, 30, &theme, IconSet::Nerd, true);
         assert!(selected.len() > 1, "the fixture wraps: {selected:?}");
         for line in &selected {
             assert_eq!(line.width(), 30, "a line of the bar stops short");
-            for span in &line.spans {
+            assert_eq!(line.spans[0].style, theme.chrome.border_focus, "the bar");
+            for span in &line.spans[1..] {
                 assert_eq!(span.style, selection, "{:?} is not the selection", span);
             }
         }
@@ -2239,15 +2319,104 @@ mod tests {
                 count,
                 groups: Vec::new(),
             };
-            let header = branch_header(&view, false, 100, &theme).expect("a header");
+            let header = branch_header(&view, false, 100, IconSet::Nerd, &theme).expect("a header");
             // The name of the branch takes the slot of the phase it names,
             // and the count beside it is a count.
             assert_eq!(
-                header.spans[1].style,
+                header.spans[2].style,
                 phase_style(&theme, phase),
                 "{branch:?}"
             );
-            assert_eq!(header.spans[3].style, theme.text.strong, "{branch:?}");
+            assert_eq!(header.spans[4].style, theme.text.strong, "{branch:?}");
+        }
+    }
+
+    #[test]
+    fn a_branch_header_leads_with_its_phase_icon() {
+        let theme = theme();
+        let view = BranchView {
+            branch: Branch::Running,
+            count: 6,
+            groups: Vec::new(),
+        };
+        let header = branch_header(&view, false, 100, IconSet::Nerd, &theme).expect("a header");
+        assert_eq!(
+            text_of_line(&header),
+            format!(" ├─ {} RUNNING  6", phase_glyph("executing"))
+        );
+    }
+
+    #[test]
+    fn a_branch_header_gives_its_icon_up_before_its_name_is_cut() {
+        // The name and the count take fourteen columns; the icon adds two.
+        let theme = theme();
+        let view = BranchView {
+            branch: Branch::Running,
+            count: 6,
+            groups: Vec::new(),
+        };
+        let narrow = branch_header(&view, false, 14, IconSet::Nerd, &theme).expect("a header");
+        assert_eq!(text_of_line(&narrow), " ├─ RUNNING  6");
+        let wide = branch_header(&view, false, 16, IconSet::Nerd, &theme).expect("a header");
+        assert!(text_of_line(&wide).contains(phase_glyph("executing")));
+    }
+
+    #[test]
+    fn a_row_leads_its_id_with_the_icon_of_its_phase() {
+        let theme = theme();
+        let entry = Entry {
+            id: "TSK01".to_string(),
+            title: "a task".to_string(),
+            status: Status::Approved,
+            waits_on: Vec::new(),
+            hold: None,
+            review: None,
+        };
+        // The blank column of the prefix is the bar's; the connector, the
+        // icon, then the id.
+        let lines = row(" ├─ ", &entry, 60, &theme, IconSet::Nerd, false);
+        assert_eq!(
+            text_of_line(&lines[0]),
+            format!(" ├─ {} TSK01   a task", phase_glyph("approved"))
+        );
+    }
+
+    #[test]
+    fn a_row_gives_its_icon_up_before_its_id() {
+        // The prefix and the id take eight columns; the icon would take two
+        // more, so at nine it is the icon that is left out.
+        let theme = theme();
+        let entry = Entry {
+            id: "TSK01".to_string(),
+            title: "a task".to_string(),
+            status: Status::Approved,
+            waits_on: Vec::new(),
+            hold: None,
+            review: None,
+        };
+        let lines = row(" ● ", &entry, 9, &theme, IconSet::Nerd, false);
+        let text = text_of_line(&lines[0]);
+        assert!(text.contains("TSK01"), "{text:?}");
+        assert!(!text.contains(phase_glyph("approved")), "{text:?}");
+    }
+
+    #[test]
+    fn a_selected_row_is_barred_and_painted_whole_at_every_width() {
+        let theme = theme();
+        let entry = Entry {
+            id: "TSK01".to_string(),
+            title: "a task that wraps when the pane is narrow".to_string(),
+            status: Status::Approved,
+            waits_on: vec!["TSK02".to_string()],
+            hold: None,
+            review: None,
+        };
+        for width in 20..=60 {
+            for line in row(" ● ", &entry, width, &theme, IconSet::Nerd, true) {
+                assert_eq!(line.width(), width, "{width}");
+                assert_eq!(line.spans[0].content, "▌", "{width}");
+                assert_eq!(line.spans[0].style, theme.chrome.border_focus, "{width}");
+            }
         }
     }
 
@@ -2257,8 +2426,15 @@ mod tests {
         // on the screen is.
         let theme = theme();
         let cells = draw_cells(&mock_work(), 100, 40);
-        let count = colour_at(&cells, "BLOCKED · 3", "BLOCKED · ".chars().count());
+        let count = colour_at(&cells, "BLOCKED  3", "BLOCKED  ".chars().count());
         assert_eq!(count, theme.text.strong.fg);
+    }
+
+    /// The glyph of a phase, in the nerd set.
+    fn phase_glyph(status: &str) -> &'static str {
+        Icon::for_status(status)
+            .expect("a phase")
+            .glyph(IconSet::Nerd)
     }
 
     /// Every entry of the tree, the spine and the branches.
@@ -2334,9 +2510,12 @@ mod tests {
                 .iter()
                 .find(|row| row.contains(id))
                 .unwrap_or_else(|| panic!("no row for {id}: {rows:?}"));
-            let mut expected = format!("{id}   {}", entry.title);
+            let mark = phase_glyph(entry.status.as_str());
+            let mut expected = format!("{mark} {id}   {}", entry.title);
             if !entry.waits_on.is_empty() {
-                expected.push_str(&format!("  waits on {}", entry.waits_on.join(", ")));
+                let blocked = Icon::Blocked.glyph(IconSet::Nerd);
+                let waits = entry.waits_on.join(", ");
+                expected.push_str(&format!("  {blocked} waits on {waits}"));
             }
             assert!(
                 row.ends_with(&expected),
@@ -2355,10 +2534,10 @@ mod tests {
         let tree = tree(&mock_work(), now());
         for width in [40usize, 60, 100] {
             for entry in entries(&tree) {
-                let with = row(" ● ", &entry, width, &theme(), false);
+                let with = row(" ● ", &entry, width, &theme(), IconSet::Nerd, false);
                 let mut plain = entry.clone();
                 plain.review = None;
-                let without = row(" ● ", &plain, width, &theme(), false);
+                let without = row(" ● ", &plain, width, &theme(), IconSet::Nerd, false);
                 assert_eq!(
                     with.len(),
                     without.len(),
@@ -2382,7 +2561,10 @@ mod tests {
             .find(|row| row.contains("TSK21"))
             .unwrap_or_else(|| panic!("no row for TSK21: {rows:?}"));
         let at = row.find(&entry.title).expect("the title") + entry.title.len();
+        // The state leads with the findings icon, which is not part of its text.
+        let icon = format!("{} ", Icon::Finding.glyph(IconSet::Nerd));
         let shown = row[at..].trim();
+        let shown = shown.strip_prefix(&icon).unwrap_or(shown);
         assert!(shown.ends_with('…'), "{row}");
         let head = shown.strip_suffix('…').expect("a cut");
         assert!(
@@ -2407,9 +2589,9 @@ mod tests {
         for width in [40usize, 60, 100] {
             // A one-word title, cut into lines that fill the pane: the last
             // line leaves no column for a state.
-            let available = width - (" ● ".chars().count() + 5 + GAP);
+            let available = width - (" ● ".chars().count() + 2 + 5 + GAP);
             entry.title = "x".repeat(available * 2);
-            let lines = row(" ● ", &entry, width, &theme(), false);
+            let lines = row(" ● ", &entry, width, &theme(), IconSet::Nerd, false);
             for line in &lines {
                 assert!(line.width() <= width, "{width}: {line:?}");
                 assert!(
@@ -2425,7 +2607,9 @@ mod tests {
         let theme = theme();
         let strong = theme.text.strong.fg.expect("the strong colour");
         let dim = theme.text.dim.fg.expect("the dim colour");
-        let cells = draw_cells(&mock_work(), 100, 40);
+        // A hundred and four columns leave the state its rounds: the finding
+        // icon takes the two columns the rounds gave up.
+        let cells = draw_cells(&mock_work(), 104, 40);
         // The count, then the word after it, on the same state.
         assert_eq!(colour_at(&cells, "1/5 rounds", 0), Some(strong), "a count");
         assert_eq!(colour_at(&cells, "1/5 rounds", 4), Some(dim), "a word");
@@ -2440,7 +2624,7 @@ mod tests {
         let mut entry = entry_of(&tree, "TSK07");
         entry.review = review_state::state(work.task("TSK21").expect("the task"));
         for width in [40usize, 60, 100] {
-            let lines = row(" ● ", &entry, width, &theme(), false);
+            let lines = row(" ● ", &entry, width, &theme(), IconSet::Nerd, false);
             for line in &lines {
                 assert!(
                     line.width() <= width,
@@ -2469,17 +2653,18 @@ mod tests {
         let tree = tree(&mock_work(), now());
         let entry = entry_of(&tree, "TSK21");
         let theme = theme();
-        let plain = row(" ● ", &entry, 100, &theme, false);
+        let plain = row(" ● ", &entry, 100, &theme, IconSet::Nerd, false);
         assert!(
             plain
                 .iter()
                 .any(|line| line.spans.iter().any(|span| span.content.contains("high"))),
             "the row carries no state: {plain:?}"
         );
-        let selected = row(" ● ", &entry, 100, &theme, true);
+        let selected = row(" ● ", &entry, 100, &theme, IconSet::Nerd, true);
         for line in &selected {
             assert_eq!(line.width(), 100, "the selection bar stops short");
-            for span in &line.spans {
+            assert_eq!(line.spans[0].style, theme.chrome.border_focus, "the bar");
+            for span in &line.spans[1..] {
                 assert_eq!(span.style, theme.text.selected, "{:?}", span);
             }
         }

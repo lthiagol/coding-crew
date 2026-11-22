@@ -10,6 +10,55 @@
 //! for that row: the row itself is taller than the pane, or the pane is one
 //! content row and no window can draw a row at all — then only the cut
 //! announcement shows.
+//!
+//! The rows of a tab share one left edge: the column of the selection bar. The
+//! cursor's row draws `▌` there in the focus slot and paints itself whole; every
+//! other row draws a space, so the columns line up whether a row is selected or
+//! not.
+
+use ratatui::text::{Line, Span};
+
+use coding_crew_theme::{Theme, selected_line};
+
+/// The columns the selection bar takes: the first column of every row.
+pub const BAR: usize = 1;
+
+/// The selection bar: `▌` in `chrome.border_focus` on the selected row, a
+/// space on the rest.
+pub fn bar(selected: bool, theme: &Theme) -> Span<'static> {
+    if selected {
+        Span::styled("▌", theme.chrome.border_focus)
+    } else {
+        Span::raw(" ")
+    }
+}
+
+/// A row whose first span is its bar, painted to `width` columns.
+///
+/// The selected row is painted whole in `text.selected` after its bar; the
+/// bar keeps its own paint. Any other row is returned as it is.
+pub fn selected_row(
+    line: Line<'static>,
+    width: usize,
+    selected: bool,
+    theme: &Theme,
+) -> Line<'static> {
+    if !selected {
+        return line;
+    }
+    let mut spans = line.spans;
+    let rest = spans.split_off(1.min(spans.len()));
+    spans.extend(selected_line(Line::from(rest), width.saturating_sub(BAR), theme).spans);
+    Line::from(spans)
+}
+
+/// A row with its selection bar at the left edge, drawn in the `width - BAR`
+/// columns after the bar's column.
+pub fn barred(line: Line<'static>, width: usize, selected: bool, theme: &Theme) -> Line<'static> {
+    let mut spans = vec![bar(selected, theme)];
+    spans.extend(line.spans);
+    selected_row(Line::from(spans), width, selected, theme)
+}
 
 /// The window over a tab's rows.
 ///
@@ -133,6 +182,8 @@ impl View {
 
 #[cfg(test)]
 mod tests {
+    use coding_crew_theme::Preset;
+
     use super::*;
 
     /// A list of `total` rows where a window at `first` shows three rows.
@@ -188,5 +239,28 @@ mod tests {
         assert_eq!(view.settle(10, 0, |_| ((0..10).collect(), true)), 0);
         assert_eq!(view.first, 0);
         assert_eq!(view.page, 10);
+    }
+
+    #[test]
+    fn a_selected_row_is_barred_and_painted_whole() {
+        let theme = Theme::preset(Preset::Dark);
+        let line = Line::from(Span::styled("ab", theme.text.strong));
+        let row = barred(line, 5, true, &theme);
+        assert_eq!(row.spans[0].content, "▌");
+        assert_eq!(row.spans[0].style, theme.chrome.border_focus);
+        assert_eq!(row.width(), 5);
+        for span in &row.spans[1..] {
+            assert_eq!(span.style, theme.text.selected, "{span:?}");
+        }
+    }
+
+    #[test]
+    fn an_unselected_row_keeps_its_paint_behind_a_space() {
+        let theme = Theme::preset(Preset::Dark);
+        let line = Line::from(Span::styled("ab", theme.text.strong));
+        let row = barred(line, 5, false, &theme);
+        assert_eq!(row.spans[0].content, " ");
+        assert_eq!(row.spans[1].content, "ab");
+        assert_eq!(row.spans[1].style, theme.text.strong);
     }
 }
