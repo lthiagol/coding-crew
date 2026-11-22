@@ -175,7 +175,11 @@ fn footnote_link_ranges_use_rendered_cell_widths() {
     // `ｶﾞ` is one grapheme that Ratatui renders as two cells.
     let marker_col =
         crate::markdown::width::rendered_span_width(&ratatui::text::Span::raw(&text[..start]));
-    assert_eq!((span.start_col, span.end_col), (marker_col, marker_col + 4));
+    let url = " (https://a.example)";
+    assert_eq!(
+        (span.start_col, span.end_col),
+        (marker_col, marker_col + 4 + url.len())
+    );
 }
 
 #[test]
@@ -201,5 +205,16 @@ fn footnote_link_rewrap_keeps_zero_width_clusters_in_the_label() {
         .iter()
         .map(|span| (span.line_idx, span.start_col, span.end_col))
         .collect();
-    assert_eq!(ranges, [(6, 2, 3), (7, 2, 10), (8, 2, 10), (9, 2, 4)]);
+    assert_eq!(
+        ranges,
+        [
+            (6, 2, 3),
+            (7, 2, 10),
+            (8, 2, 10),
+            (9, 2, 4),
+            (10, 2, 10),
+            (11, 2, 4),
+            (12, 2, 9)
+        ]
+    );
 }

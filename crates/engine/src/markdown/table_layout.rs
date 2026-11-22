@@ -345,6 +345,9 @@ pub(super) fn align_cell(
                 if inline.underline > 0 {
                     style = style.add_modifier(Modifier::UNDERLINED);
                 }
+                if inline.dim > 0 {
+                    style = style.add_modifier(Modifier::DIM);
+                }
                 if inline.link_id.is_some() {
                     style = style.fg(theme.link_text).add_modifier(Modifier::UNDERLINED);
                 }

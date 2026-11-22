@@ -23,6 +23,7 @@ pub(super) struct CellInlineStyle {
     pub(super) italic: u8,
     pub(super) strikethrough: u8,
     pub(super) underline: u8,
+    pub(super) dim: u8,
     pub(super) link_id: Option<LinkId>,
 }
 
@@ -40,6 +41,9 @@ impl CellInlineStyle {
         }
         if self.underline > 0 {
             m |= Modifier::UNDERLINED;
+        }
+        if self.dim > 0 {
+            m |= Modifier::DIM;
         }
         m
     }
@@ -197,6 +201,10 @@ pub(super) fn handle_table_event(
             true
         }
         MdEvent::End(TagEnd::Link) => {
+            if let Some(id) = tb.inline_style.link_id {
+                tb.flush_html_style_buffer();
+                tb.push_link_url(id, &link_urls[id.0]);
+            }
             tb.inline_style.link_id = None;
             true
         }
@@ -405,6 +413,32 @@ impl TableBuf {
         self.current_cell
             .push(CellFragment::LinkMarker(self.inline_style));
     }
+    // The URL follows the link's text, dim in parentheses, unless the text
+    // already is the URL. The text is the cell's fragments owned by the link,
+    // without the marker.
+    fn push_link_url(&mut self, id: LinkId, url: &str) {
+        let text: String = self
+            .current_cell
+            .iter()
+            .filter(|frag| {
+                frag.link_id() == Some(id) && !matches!(frag, CellFragment::LinkMarker(_))
+            })
+            .map(CellFragment::rendered_text)
+            .collect();
+        if text.trim() == url {
+            return;
+        }
+        let style = CellInlineStyle {
+            dim: 1,
+            ..CellInlineStyle::default()
+        };
+        self.current_cell.push(CellFragment::Text(
+            format!(" ({url})"),
+            style,
+            false,
+            Some(id),
+        ));
+    }
     fn update_link_marker_modifier(&mut self, f: impl Fn(&mut CellInlineStyle)) {
         if let Some(CellFragment::LinkMarker(style)) = self
             .current_cell
@@ -535,10 +569,10 @@ impl TableBuf {
         out.push(self.hline(
             ind,
             TableBorder {
-                left: "┌",
+                left: "╭",
                 fill: "─",
                 cross: "┬",
-                right: "┐",
+                right: "╮",
             },
             &col_widths,
             border,
@@ -580,19 +614,9 @@ impl TableBuf {
                 emit_linked_line(out, ranges, spans);
             }
 
+            // The header's rule is the only one: body rows are not
+            // separated by rules.
             if is_hdr && ri == self.header_count - 1 {
-                out.push(self.hline(
-                    ind,
-                    TableBorder {
-                        left: "╞",
-                        fill: "═",
-                        cross: "╪",
-                        right: "╡",
-                    },
-                    &col_widths,
-                    sep,
-                ));
-            } else if !is_hdr && ri < self.rows.len() - 1 {
                 out.push(self.hline(
                     ind,
                     TableBorder {
@@ -602,7 +626,7 @@ impl TableBuf {
                         right: "┤",
                     },
                     &col_widths,
-                    border,
+                    sep,
                 ));
             }
         }
@@ -610,10 +634,10 @@ impl TableBuf {
         out.push(self.hline(
             ind,
             TableBorder {
-                left: "└",
+                left: "╰",
                 fill: "─",
                 cross: "┴",
-                right: "┘",
+                right: "╯",
             },
             &col_widths,
             border,

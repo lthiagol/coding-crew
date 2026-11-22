@@ -169,7 +169,7 @@ fn display_latex_in_blockquote_has_quote_prefix() {
         .find(|line| line.contains("┌─ latex"))
         .expect("expected latex block header in blockquote");
     assert!(
-        header.starts_with('▏'),
+        header.starts_with('▎'),
         "latex block in blockquote should have quote prefix"
     );
 }
@@ -360,7 +360,7 @@ fn mermaid_block_in_blockquote_has_quote_prefix() {
         .find(|line| line.contains("┌─ mermaid"))
         .expect("expected mermaid block header in blockquote");
     assert!(
-        header.starts_with('▏'),
+        header.starts_with('▎'),
         "mermaid block in blockquote should have quote prefix"
     );
 }

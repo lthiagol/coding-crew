@@ -468,12 +468,21 @@ fn the_detail_render_matches_the_snapshot() {
     assert!(text.ends_with('\n'), "the render has no final newline");
 }
 
+/// A line's words, with a heading's lead glyph and its rule taken off.
+fn words(content: &str) -> &str {
+    content
+        .trim_start_matches(['▍', '▸'])
+        .trim()
+        .trim_end_matches('─')
+        .trim()
+}
+
 /// The lines of the Review section, borders and padding removed.
 fn rendered_review(text: &str) -> Vec<String> {
     let mut inside = false;
     let mut lines = Vec::new();
     for line in text.lines() {
-        let content = line.trim_matches('│').trim();
+        let content = words(line.trim_matches('│').trim());
         if content == "Review" {
             inside = true;
             continue;

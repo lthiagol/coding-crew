@@ -221,6 +221,7 @@ pub(super) fn handle_inline_style_event(
     theme: &MarkdownTheme,
     blockquote_depth: usize,
     link_urls: &mut Vec<String>,
+    html_style_buffer: &mut HtmlStyleBuffer,
 ) -> bool {
     match ev {
         MdEvent::Start(Tag::Strong) => {
@@ -262,6 +263,12 @@ pub(super) fn handle_inline_style_event(
             true
         }
         MdEvent::End(TagEnd::Link) => {
+            if let Some(id) = inline.link_id {
+                // A link inside `<mark>` or `<code>` has its text in the
+                // buffer; the buffer is the text before the URL.
+                super::flush_html_style_buffer(html_style_buffer, spans, theme);
+                push_link_url(spans, theme, id, &link_urls[id.0]);
+            }
             inline.link_id = None;
             true
         }
@@ -337,6 +344,34 @@ pub(super) fn push_link_marker(
             inline.link_id,
         ))
     });
+}
+
+// The URL follows the link's text, dim in parentheses, unless the text already
+// is the URL. The text is the link's owned spans; the first of them is the
+// marker, which is not text.
+fn push_link_url(spans: &mut Vec<LinkedSpan>, theme: &MarkdownTheme, id: LinkId, url: &str) {
+    let owned_start = spans
+        .iter()
+        .rposition(|span| span.link_id != Some(id))
+        .map_or(0, |index| index + 1);
+    let owned = &spans[owned_start..];
+    let marked = owned
+        .first()
+        .is_some_and(|span| with_link_marker(|marker| span.span.content == marker));
+    let text: String = owned[usize::from(marked)..]
+        .iter()
+        .map(|span| span.span.content.as_ref())
+        .collect();
+    if text.trim() == url {
+        return;
+    }
+    spans.push(LinkedSpan::new(
+        Span::styled(
+            format!(" ({url})"),
+            Style::default().fg(theme.text).add_modifier(Modifier::DIM),
+        ),
+        Some(id),
+    ));
 }
 
 pub(super) fn update_link_marker_modifier(spans: &mut [LinkedSpan], modifier: Modifier) {

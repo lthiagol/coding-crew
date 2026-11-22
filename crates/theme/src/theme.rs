@@ -314,6 +314,9 @@ impl Theme {
             // A footnote's reference ranks with a link; its note is prose.
             footnote_ref: at(DocRole::Link, DocSide::One),
             footnote_text: at(DocRole::Text, DocSide::One),
+            // The glyphs are not colours. The caller sets the task glyphs
+            // from its icon set; the engine's defaults stand until it does.
+            ..MarkdownTheme::default()
         }
     }
 }

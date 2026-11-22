@@ -1,6 +1,5 @@
 use super::{rendered_non_empty_lines, test_assets, test_md_theme};
-use crate::markdown::{TASK_CHECKED, TASK_CHECKED_ALT, TASK_UNCHECKED};
-use crate::markdown::{display_width, line_plain_text, parse_markdown, parse_markdown_with_width};
+use crate::markdown::{line_plain_text, parse_markdown, parse_markdown_with_width};
 
 #[test]
 fn loose_list_items_keep_their_markers() {
@@ -251,10 +250,15 @@ fn wrapped_list_inline_code_keeps_left_padding_in_rendered_line() {
 }
 
 #[test]
-fn task_markers_have_uniform_width() {
-    assert_eq!(display_width(TASK_UNCHECKED), 2);
-    assert_eq!(display_width(TASK_CHECKED_ALT), 2);
-    assert_eq!(display_width(TASK_CHECKED), 2);
+fn task_markers_draw_the_configured_glyphs() {
+    let (ss, theme) = test_assets();
+    let mut md_theme = test_md_theme();
+    md_theme.task_done_glyph = "✔";
+    md_theme.task_open_glyph = "◯";
+    let md = "- [x] done\n- [ ] open\n";
+    let (lines, _, _, _) = parse_markdown(md, &ss, &theme, &md_theme, false, true).into();
+    let rendered = rendered_non_empty_lines(&lines);
+    assert_eq!(rendered, ["✔ done", "◯ open"]);
 }
 
 #[test]

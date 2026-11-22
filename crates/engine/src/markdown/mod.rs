@@ -46,9 +46,7 @@ use blocks::{
 };
 use fences::normalize_code_fences;
 use links::{LinkedSpan, emit_linked_line};
-pub use lists::{
-    BULLET_DEEP, BULLET_L1, BULLET_L2, TASK_CHECKED, TASK_CHECKED_ALT, TASK_UNCHECKED,
-};
+pub use lists::{BULLET_DEEP, BULLET_L1, BULLET_L2};
 use lists::{
     ItemState, ListKind, end_item, end_list, flush_list_item_spans, list_item_prefix, start_item,
     start_list,
@@ -240,14 +238,12 @@ fn end_blockquote(
     }
 }
 
-pub(crate) const ALERT_ICONS: [&str; 4] = ["[i]", "[*]", "[!]", "[x]"];
-
-fn alert_icon_label(kind: BlockQuoteKind) -> (&'static str, &'static str) {
-    let [info, tip, warning, caution] = ALERT_ICONS;
+fn alert_glyph_label(kind: BlockQuoteKind, theme: &MarkdownTheme) -> (&'static str, &'static str) {
+    let [note, tip, important, warning, caution] = theme.alert_glyphs;
     match kind {
-        BlockQuoteKind::Note => (info, "Note"),
+        BlockQuoteKind::Note => (note, "Note"),
         BlockQuoteKind::Tip => (tip, "Tip"),
-        BlockQuoteKind::Important => (warning, "Important"),
+        BlockQuoteKind::Important => (important, "Important"),
         BlockQuoteKind::Warning => (warning, "Warning"),
         BlockQuoteKind::Caution => (caution, "Caution"),
     }
@@ -469,6 +465,7 @@ pub fn parse_markdown_with_width(
             theme_colors,
             blockquote_depth,
             &mut link_urls,
+            &mut html_style_buffer,
         ) {
             prev_event_end = range.end;
             continue;
@@ -658,7 +655,7 @@ pub fn parse_markdown_with_width(
                 if let Some(k) = kind {
                     let color = alert_color(k, theme_colors);
                     blockquote_color = Some(color);
-                    let (icon, label) = alert_icon_label(k);
+                    let (glyph, label) = alert_glyph_label(k, theme_colors);
                     let mut header = list_item_prefix(
                         blockquote_depth,
                         &list_stack,
@@ -667,7 +664,7 @@ pub fn parse_markdown_with_width(
                         blockquote_color,
                     );
                     header.push(Span::styled(
-                        format!("{icon} {label}"),
+                        format!("{glyph} {label}"),
                         Style::default().fg(color).add_modifier(Modifier::BOLD),
                     ));
                     lines.push(Line::from(header));
@@ -1032,7 +1029,7 @@ impl LineMapState {
         for line in lines.iter().take(to).skip(start) {
             let border = line.spans.iter().any(|s| {
                 let c = s.content.as_ref();
-                c.starts_with('┌') || c.starts_with('├') || c.starts_with('╞') || c.starts_with('└')
+                c.starts_with('╭') || c.starts_with('├') || c.starts_with('╰')
             });
             self.push(border || is_empty_line(line) || prev_border);
             prev_border = border;

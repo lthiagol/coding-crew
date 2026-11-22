@@ -12,9 +12,6 @@ use super::links::{LinkSpan, LinkedSpan};
 use super::width::display_width;
 use super::wrapping::push_wrapped_prefixed_lines;
 
-pub const TASK_CHECKED: &str = "☑ ";
-pub const TASK_CHECKED_ALT: &str = "☒ ";
-pub const TASK_UNCHECKED: &str = "☐ ";
 pub const BULLET_L1: &str = "• ";
 pub const BULLET_L2: &str = "◦ ";
 pub const BULLET_DEEP: &str = "▸ ";
@@ -63,10 +60,8 @@ pub(super) fn list_item_prefix(
         prefix.push(Span::raw("  ".repeat(depth.saturating_sub(1))));
 
         let marker: Cow<'static, str> = match item.checkbox {
-            // Avoids U+2611 emoji rendering on Windows.
-            Some(true) if cfg!(target_os = "windows") => TASK_CHECKED_ALT.into(),
-            Some(true) => TASK_CHECKED.into(),
-            Some(false) => TASK_UNCHECKED.into(),
+            Some(true) => format!("{} ", theme.task_done_glyph).into(),
+            Some(false) => format!("{} ", theme.task_open_glyph).into(),
             None => match list_stack.last().copied().unwrap_or(ListKind::Unordered) {
                 ListKind::Unordered => match depth {
                     1 => BULLET_L1.into(),

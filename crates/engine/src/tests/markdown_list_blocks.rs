@@ -11,7 +11,7 @@ fn code_block_after_blockquote_in_list_item_has_no_blank_gap_before() {
 
     let quote_idx = rendered
         .iter()
-        .position(|l| l == "  ▏ quote first")
+        .position(|l| l == "  ▎ quote first")
         .expect("missing blockquote line");
     let header_idx = rendered
         .iter()
@@ -37,7 +37,7 @@ fn blockquote_after_list_item_paragraph_has_no_blank_gap_before() {
         .expect("missing '1. first item'");
     let quote_idx = rendered
         .iter()
-        .position(|l| l == "   ▏ quote")
+        .position(|l| l == "   ▎ quote")
         .expect("missing blockquote line");
     assert_eq!(
         quote_idx,
@@ -161,7 +161,7 @@ fn list_items_inside_blockquote_render_bq_marker_before_list_marker() {
         .expect("missing 'Step one' line");
 
     let bar_idx = step_one
-        .find('▏')
+        .find('▎')
         .expect("expected blockquote marker in rendered line");
     let bullet_idx = step_one
         .find("• ")
@@ -184,8 +184,8 @@ fn list_inside_alert_places_bq_marker_before_list_marker() {
         .expect("missing 'Step one' line");
 
     assert!(
-        step_line.starts_with("▏ • "),
-        "list item inside alert should start with '▏ • ', got {step_line:?}"
+        step_line.starts_with("▎ • "),
+        "list item inside alert should start with '▎ • ', got {step_line:?}"
     );
 }
 
@@ -201,7 +201,7 @@ fn alert_header_in_list_item_is_indented_under_item_content() {
         .expect("missing alert header");
 
     assert!(
-        header.starts_with("  ▏"),
+        header.starts_with("  ▎"),
         "alert header should be indented under item content, got {header:?}"
     );
 }
@@ -218,7 +218,7 @@ fn blockquote_in_tight_list_item_is_indented_under_item_content() {
         .expect("missing blockquote line");
 
     assert!(
-        quote_line.starts_with("  ▏"),
+        quote_line.starts_with("  ▎"),
         "blockquote in list item should be indented under item content, got {quote_line:?}"
     );
 }
@@ -235,7 +235,7 @@ fn blockquote_after_continuation_in_tight_list_item_is_indented() {
         .expect("missing blockquote line");
 
     assert!(
-        quote_line.starts_with("  ▏"),
+        quote_line.starts_with("  ▎"),
         "blockquote after continuation should be indented, got {quote_line:?}"
     );
 }
@@ -252,7 +252,7 @@ fn loose_blockquote_in_list_item_is_indented_under_item_content() {
         .expect("missing blockquote line");
 
     assert!(
-        quote_line.starts_with("  ▏"),
+        quote_line.starts_with("  ▎"),
         "loose blockquote in list item should be indented, got {quote_line:?}"
     );
 }
@@ -273,11 +273,11 @@ fn blockquote_multiline_source_in_list_item_indents_all_lines() {
         .expect("missing line2");
 
     assert!(
-        line1.starts_with("  ▏"),
+        line1.starts_with("  ▎"),
         "line1 should be indented: {line1:?}"
     );
     assert!(
-        line2.starts_with("  ▏"),
+        line2.starts_with("  ▎"),
         "line2 should be indented: {line2:?}"
     );
 }
@@ -289,14 +289,14 @@ fn blockquote_long_line_in_list_item_wraps_with_correct_indent() {
     let (lines, _, _, _) =
         parse_markdown_with_width(md, &ss, &theme, 32, &test_md_theme(), false, true).into();
     let rendered = rendered_non_empty_lines(&lines);
-    let quoted: Vec<_> = rendered.iter().filter(|line| line.contains('▏')).collect();
+    let quoted: Vec<_> = rendered.iter().filter(|line| line.contains('▎')).collect();
 
     assert!(
         quoted.len() >= 2,
         "expected the blockquote to wrap into multiple lines, got {quoted:?}"
     );
     assert!(
-        quoted.iter().all(|line| line.starts_with("  ▏")),
+        quoted.iter().all(|line| line.starts_with("  ▎")),
         "all wrapped blockquote lines should share the list-indent prefix, got {quoted:?}"
     );
 }
@@ -316,13 +316,13 @@ fn nested_blockquote_in_list_item_uses_list_indent() {
         deep_line.contains("• "),
         "list marker should be present on the item opening: {deep_line:?}"
     );
-    let markers = deep_line.matches('▏').count();
+    let markers = deep_line.matches('▎').count();
     assert_eq!(
         markers, 2,
         "expected 2 blockquote markers for depth 2, got {deep_line:?}"
     );
     let bullet_idx = deep_line.find("• ").unwrap();
-    let bar_idx = deep_line.find('▏').unwrap();
+    let bar_idx = deep_line.find('▎').unwrap();
     assert!(
         bullet_idx < bar_idx,
         "list marker should come before blockquote markers: {deep_line:?}"
@@ -341,7 +341,7 @@ fn nested_blockquote_inside_list_item_uses_depth_markers() {
         .expect("missing deep line");
 
     assert!(
-        deep_line.contains("▏ ▏ "),
+        deep_line.contains("▎ ▎ "),
         "expected two blockquote markers in the prefix: {deep_line:?}"
     );
 }
@@ -358,7 +358,7 @@ fn ordered_list_item_with_blockquote_uses_correct_indent() {
         .expect("missing blockquote line");
 
     assert!(
-        quote_line.starts_with("   ▏"),
+        quote_line.starts_with("   ▎"),
         "ordered list item should indent blockquote by 3 columns (width of '1. '), got {quote_line:?}"
     );
 }
@@ -375,7 +375,7 @@ fn nested_list_with_blockquote_uses_deeper_indent() {
         .expect("missing deep quote line");
 
     assert!(
-        quote_line.starts_with("    ▏"),
+        quote_line.starts_with("    ▎"),
         "nested list item should indent blockquote by 4 columns (2 for outer + 2 for inner '◦ '), got {quote_line:?}"
     );
 }

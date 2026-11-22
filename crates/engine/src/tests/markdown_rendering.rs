@@ -55,13 +55,13 @@ fn table_render_right_border_stays_aligned() {
     let (lines, _, _, _) = parse_markdown(md, &ss, &theme, &test_md_theme(), false, true).into();
     let buffer = render_buffer(&lines);
 
-    let (right_x, start_y) = find_symbol(&buffer, "┐").unwrap();
-    let (_, end_y) = find_symbol(&buffer, "┘").unwrap();
+    let (right_x, start_y) = find_symbol(&buffer, "╮").unwrap();
+    let (_, end_y) = find_symbol(&buffer, "╯").unwrap();
 
     for y in start_y + 1..end_y {
         let symbol = buffer.cell((right_x, y)).unwrap().symbol();
         assert!(
-            matches!(symbol, "│" | "┤" | "╡"),
+            matches!(symbol, "│" | "┤"),
             "unexpected table edge symbol {symbol:?} at row {y}"
         );
     }
@@ -74,13 +74,13 @@ fn table_render_right_border_stays_aligned_with_emoji_cells() {
     let (lines, _, _, _) = parse_markdown(md, &ss, &theme, &test_md_theme(), false, true).into();
     let buffer = render_buffer(&lines);
 
-    let (right_x, start_y) = find_symbol(&buffer, "┐").unwrap();
-    let (_, end_y) = find_symbol(&buffer, "┘").unwrap();
+    let (right_x, start_y) = find_symbol(&buffer, "╮").unwrap();
+    let (_, end_y) = find_symbol(&buffer, "╯").unwrap();
 
     for y in start_y + 1..end_y {
         let symbol = buffer.cell((right_x, y)).unwrap().symbol();
         assert!(
-            matches!(symbol, "│" | "┤" | "╡"),
+            matches!(symbol, "│" | "┤"),
             "unexpected emoji-table edge symbol {symbol:?} at row {y}"
         );
     }

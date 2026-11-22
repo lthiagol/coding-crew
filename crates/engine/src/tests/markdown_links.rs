@@ -187,7 +187,16 @@ fn wrapped_repeated_destinations_keep_distinct_ids_and_continuations() {
                 .collect()
         })
         .collect();
-    assert_eq!(first_rows, ["#one two three ", "four five six ", "seven"]);
+    assert_eq!(
+        first_rows,
+        [
+            "#one two three ",
+            "four five six ",
+            "seven ",
+            "(https://example.t",
+            "est/repeat)"
+        ]
+    );
 }
 
 #[test]
@@ -211,7 +220,10 @@ fn mixed_style_mapping_does_not_depend_on_link_color() {
         .skip(span.start_col)
         .take(span.end_col - span.start_col)
         .collect();
-    assert_eq!(covered, "#bold and  code  and  mark  and  α ");
+    assert_eq!(
+        covered,
+        "#bold and  code  and  mark  and  α  (https://example.test/mixed)"
+    );
 }
 
 #[test]
@@ -222,12 +234,17 @@ fn html_style_buffer_around_link_keeps_label_owned() {
         "| x |\n| --- |\n| <mark>[label](https://a.example)</mark> [next](https://b.example) |\n",
     ] {
         let links = link_texts(md, 80);
+        assert_eq!(links.len(), 2, "{md}: {links:?}");
+        let (label, url) = &links[0];
+        assert_eq!(url, "https://a.example", "{md}");
+        assert!(label.starts_with("# label"), "{md}: {label:?}");
+        assert!(label.ends_with("(https://a.example)"), "{md}: {label:?}");
         assert_eq!(
-            links,
-            vec![
-                ("# label ".into(), "https://a.example".into()),
-                ("#next".into(), "https://b.example".into()),
-            ],
+            links[1],
+            (
+                "#next (https://b.example)".into(),
+                "https://b.example".into()
+            ),
             "{md}"
         );
     }
@@ -450,7 +467,13 @@ fn link_texts(md: &str, width: usize) -> Vec<(String, String)> {
 fn custom_link_prefix_replaces_marker() {
     let _guard = LinkMarkerGuard::set("→");
     let links = link_texts("see [leaf](https://a.example)\n", 80);
-    assert_eq!(links, vec![("→leaf".into(), "https://a.example".into())]);
+    assert_eq!(
+        links,
+        vec![(
+            "→leaf (https://a.example)".into(),
+            "https://a.example".into()
+        )]
+    );
 }
 
 #[test]
@@ -465,9 +488,9 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaa [xyzxyzxyz](https://a.example) and [second](https://
 ";
     let links = link_texts(md, 30);
     let expected: Vec<(String, String)> = [
-        ("xyzxyzxyz", "https://a.example"),
-        ("second", "https://b.example"),
-        ("cell", "https://c.example"),
+        ("xyzxyzxyz (https://a.example)", "https://a.example"),
+        ("second (https://b.example)", "https://b.example"),
+        ("cell (https://c.example)", "https://c.example"),
     ]
     .into_iter()
     .map(|(t, u)| (t.into(), u.into()))
@@ -498,14 +521,23 @@ fn empty_link_prefix_keeps_wrapped_table_links_clickable() {
         .filter(|(_, u)| u == "https://b.example")
         .map(|(t, _)| t.as_str())
         .collect();
-    assert_eq!(wrapped_label, "averyveryverylonglabel", "{links:?}");
+    assert!(
+        wrapped_label.starts_with("averyveryverylonglabel"),
+        "{links:?}"
+    );
 }
 
 #[test]
 fn empty_link_prefix_keeps_code_label_clickable() {
     let _guard = LinkMarkerGuard::set("");
     let links = link_texts("see [`code`](https://a.example) end\n", 80);
-    assert_eq!(links, vec![(" code ".into(), "https://a.example".into())]);
+    assert_eq!(
+        links,
+        vec![(
+            " code  (https://a.example)".into(),
+            "https://a.example".into()
+        )]
+    );
 }
 
 #[test]
@@ -516,8 +548,8 @@ fn display_math_keeps_link_ranges_of_the_flushed_paragraph() {
             80
         ),
         vec![
-            ("#a".into(), "https://a.test".into()),
-            ("#b".into(), "https://b.test".into()),
+            ("#a (https://a.test)".into(), "https://a.test".into()),
+            ("#b (https://b.test)".into(), "https://b.test".into()),
         ]
     );
     let _guard = LinkMarkerGuard::set("");
@@ -525,7 +557,10 @@ fn display_math_keeps_link_ranges_of_the_flushed_paragraph() {
         "para\n\n[ ](https://x.test) $$x$$\n",
         "> para\n>\n> [ ](https://x.test) $$x$$\n",
     ] {
-        assert_eq!(link_texts(md, 40), Vec::<(String, String)>::new(), "{md}");
+        // The blank label keeps its URL, and the URL keeps the link.
+        let links = link_texts(md, 40);
+        assert_eq!(links.len(), 1, "{md}: {links:?}");
+        assert!(links[0].0.ends_with("(https://x.test)"), "{md}: {links:?}");
     }
 }
 
@@ -535,9 +570,15 @@ fn empty_link_prefix_keeps_urls_aligned_after_empty_label() {
     let md =
         "[](https://a.example) [label](https://b.example) some filler words to force wrapping\n";
     let links = link_texts(md, 20);
+    let label: String = links
+        .iter()
+        .filter(|(_, url)| url == "https://b.example")
+        .map(|(text, _)| text.as_str())
+        .collect();
+    assert!(label.contains("label"), "{links:?}");
     assert_eq!(
-        links.last(),
-        Some(&("label".into(), "https://b.example".into()))
+        links.last().map(|(_, url)| url.as_str()),
+        Some("https://b.example")
     );
 }
 

@@ -26,7 +26,7 @@ use syntect::parsing::SyntaxSet;
 
 use coding_crew_core::escape_literal;
 use coding_crew_engine::{
-    ThemePreset, parse_markdown_with_width, syntax_set, syntect_theme, theme_set,
+    MarkdownTheme, ThemePreset, parse_markdown_with_width, syntax_set, syntect_theme, theme_set,
 };
 
 use crate::app::footer_line;
@@ -140,7 +140,7 @@ pub fn render(
         .border_type(BorderType::Rounded)
         .title(header_labels(detail, work, width, icons, theme))
         .border_style(theme.chrome.border_focus);
-    let lines = document_lines(work, detail, width, theme);
+    let lines = document_lines(work, detail, width, icons, theme);
     // The scroll is clamped to the document, and the page is what the pane
     // actually holds: the next pgup/pgdn moves by the rows on display.
     let visible = usize::from(rows[0].height).saturating_sub(2);
@@ -162,7 +162,13 @@ pub fn render(
 /// The record is looked up again on every redraw. A record that left the
 /// folder is said, not a blank screen; a smaller task is said to be one,
 /// not shown as the task it is not.
-fn document_lines(work: &Work, detail: &Detail, width: usize, theme: &Theme) -> Vec<Line<'static>> {
+fn document_lines(
+    work: &Work,
+    detail: &Detail,
+    width: usize,
+    icons: IconSet,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
     if width == 0 {
         return Vec::new();
     }
@@ -195,13 +201,23 @@ fn document_lines(work: &Work, detail: &Detail, width: usize, theme: &Theme) -> 
         syntax,
         paired,
         width,
-        &theme.markdown_theme(),
+        &markdown_theme(theme, icons),
         // The document is not a file view: no file-mode offsets, and no
         // line numbers on the fenced verification commands.
         false,
         false,
     )
     .lines
+}
+
+/// The engine's theme for the document: the theme's palette, with the task
+/// glyphs taken from the icon set the pane draws its statuses with.
+fn markdown_theme(theme: &Theme, icons: IconSet) -> MarkdownTheme {
+    MarkdownTheme {
+        task_done_glyph: Icon::StatusDone.glyph(icons),
+        task_open_glyph: Icon::StatusDraft.glyph(icons),
+        ..theme.markdown_theme()
+    }
 }
 
 /// The block's title: the id and the title of the record, both labels.
@@ -491,7 +507,7 @@ mod tests {
 
     /// The document the pane would show, at the pane's own width.
     fn document(work: &Work, detail: &Detail, width: usize, theme: &Theme) -> String {
-        document_lines(work, detail, width, theme)
+        document_lines(work, detail, width, IconSet::Nerd, theme)
             .iter()
             .map(|line| {
                 line.spans
@@ -718,7 +734,7 @@ mod tests {
             }
             // Nothing is wider than the pane: the document is rendered at
             // the pane's own width, inside the border.
-            for line in document_lines(&work, &pane("TSK13"), inner, &theme()) {
+            for line in document_lines(&work, &pane("TSK13"), inner, IconSet::Nerd, &theme()) {
                 assert!(line.width() <= inner, "{width}: {line:?}");
             }
         }
@@ -885,7 +901,7 @@ mod tests {
             &[KeyCode::Char('G'), KeyCode::Down, KeyCode::Down],
         );
         let detail = app.detail.as_ref().expect("open");
-        let lines = document_lines(&work, detail, 98, &theme());
+        let lines = document_lines(&work, detail, 98, IconSet::Nerd, &theme());
         let visible = 17usize;
         let max = lines.len().saturating_sub(visible);
         assert!(
@@ -918,7 +934,7 @@ mod tests {
         let selected = dark.text.selected;
         // The width keeps the wrapped note on one line, so the whole mark
         // is one span.
-        let lines = document_lines(&work, &detail, 138, &dark);
+        let lines = document_lines(&work, &detail, 138, IconSet::Nerd, &dark);
         let marked = lines
             .iter()
             .flat_map(|line| &line.spans)
@@ -945,7 +961,7 @@ mod tests {
         let terminal = Theme::preset(Preset::Terminal);
         // The width keeps the wrapped note on one line, so the whole mark
         // is one span.
-        let lines = document_lines(&work, &detail, 138, &terminal);
+        let lines = document_lines(&work, &detail, 138, IconSet::Nerd, &terminal);
         let marked = lines
             .iter()
             .flat_map(|line| &line.spans)
@@ -973,7 +989,7 @@ mod tests {
         let selection_fg = dark.text.selected.fg.expect("the selection foreground");
         let selection_bg = dark.text.selected.bg.expect("the selection background");
         let mut detail = pane("TSK13");
-        let lines = document_lines(&work, &detail, 138, &dark);
+        let lines = document_lines(&work, &detail, 138, IconSet::Nerd, &dark);
         let marked_at = lines
             .iter()
             .position(|line| {
@@ -1074,7 +1090,7 @@ mod tests {
         assert_eq!(injected.len(), 3, "{rendered}");
         for line in &injected {
             assert!(
-                line.starts_with('▏'),
+                line.starts_with('▎'),
                 "a quoted line left the quotation: {line:?}\n{rendered}"
             );
         }
@@ -1087,10 +1103,10 @@ mod tests {
         assert_ne!(lines[heading].trim(), "injected heading", "{rendered}");
         assert!(
             !lines[heading + 1]
-                .trim_start_matches('▏')
+                .trim_start_matches('▎')
                 .trim()
                 .chars()
-                .all(|ch| ch == '═'),
+                .all(|ch| ch == '─'),
             "the quotation opened a rule:\n{rendered}"
         );
     }
@@ -1118,7 +1134,7 @@ mod tests {
             ..Work::default()
         };
 
-        let lines = document_lines(&work, &pane("TSK01"), 120, &theme());
+        let lines = document_lines(&work, &pane("TSK01"), 120, IconSet::Nerd, &theme());
 
         // The engine's own parse: the link is one span with its destination,
         // and no second link is invented.
@@ -1188,13 +1204,13 @@ mod tests {
         );
         assert_eq!(
             child_text
-                .matches(coding_crew_engine::markdown::TASK_UNCHECKED)
+                .matches(Icon::StatusDraft.glyph(IconSet::Nerd))
                 .count(),
             1,
             "the child does not render one open box: {child_text}"
         );
         assert!(
-            !child_text.contains(coding_crew_engine::markdown::TASK_CHECKED),
+            !child_text.contains(Icon::StatusDone.glyph(IconSet::Nerd)),
             "the open child renders a done box: {child_text}"
         );
         assert!(!child_text.contains("[ ]"), "{child_text}");
@@ -1291,7 +1307,7 @@ mod tests {
         let work = mock_work();
         let detail = pane("TSK13");
         let dark = Theme::preset(Preset::Dark);
-        let lines = document_lines(&work, &detail, 138, &dark);
+        let lines = document_lines(&work, &detail, 138, IconSet::Nerd, &dark);
         let (header, row, tokens) = code_block(&lines);
         // The frame is the document's line and the label the document's
         // prose: the block around the tokens is ours.
@@ -1358,11 +1374,11 @@ mod tests {
             document(&work, &detail, 138, &dark),
             "the terminal preset says different words"
         );
-        let lines = document_lines(&work, &detail, 138, &terminal);
+        let lines = document_lines(&work, &detail, 138, IconSet::Nerd, &terminal);
         let (header, _, tokens) = code_block(&lines);
         assert_eq!(
             tokens,
-            code_block(&document_lines(&work, &detail, 138, &dark)).2,
+            code_block(&document_lines(&work, &detail, 138, IconSet::Nerd, &dark)).2,
             "the terminal preset changed the code tokens"
         );
         for span in &header.spans {

@@ -2,14 +2,18 @@ use super::{fence_wrap, rendered_non_empty_lines, test_assets, test_md_theme};
 use crate::markdown::{display_width, line_plain_text, parse_markdown, parse_markdown_with_width};
 
 #[test]
-fn h1_headings_render_double_rule_without_bottom_spacing() {
+fn h1_headings_lead_with_a_bar_and_close_with_a_rule() {
     let (ss, theme) = test_assets();
     let (lines, _, _, _) =
         parse_markdown("# 東京\n", &ss, &theme, &test_md_theme(), false, true).into();
     let rendered = rendered_non_empty_lines(&lines);
 
-    assert_eq!(rendered[0], "東京");
-    assert_eq!(rendered[1], "═".repeat(display_width("東京")));
+    assert_eq!(rendered.len(), 1, "{rendered:?}");
+    assert_eq!(
+        rendered[0],
+        format!("▍ 東京 {}", "─".repeat(80 - 2 - display_width("東京") - 1))
+    );
+    assert_eq!(display_width(&rendered[0]), 80);
 }
 
 #[test]
@@ -35,16 +39,16 @@ fn returning_from_nested_blockquote_inserts_outer_prefix_gap() {
 
     let nested_idx = rendered
         .iter()
-        .position(|l| l == "▏ ▏ nested")
+        .position(|l| l == "▎ ▎ nested")
         .expect("missing nested line");
     let back_idx = rendered
         .iter()
-        .position(|l| l == "▏ back")
+        .position(|l| l == "▎ back")
         .expect("missing back line");
     assert!(nested_idx < back_idx);
     let between = &rendered[nested_idx + 1..back_idx];
     assert!(
-        between.iter().any(|l| l == "▏ "),
+        between.iter().any(|l| l == "▎ "),
         "expected an outer-depth prefixed blank between nested and back, got {between:?}"
     );
 }
@@ -58,10 +62,10 @@ fn blockquote_last_paragraph_has_no_trailing_prefixed_blank_inside() {
 
     let last_bq_idx = rendered
         .iter()
-        .rposition(|l| l.starts_with('▏'))
+        .rposition(|l| l.starts_with('▎'))
         .expect("expected at least one blockquote line");
     assert_eq!(
-        rendered[last_bq_idx], "▏ b",
+        rendered[last_bq_idx], "▎ b",
         "last blockquote line should be the content, not a prefixed blank, got {rendered:?}"
     );
 }
@@ -75,7 +79,7 @@ fn consecutive_blockquotes_preserve_blank_line_between() {
 
     let note_content_idx = rendered
         .iter()
-        .position(|l| l == "▏ Note content.")
+        .position(|l| l == "▎ Note content.")
         .expect("missing Note content line");
     let tip_header_idx = rendered
         .iter()
@@ -102,8 +106,8 @@ fn top_level_paragraph_before_blockquote_preserves_blank_separator() {
         .expect("missing 'vs'");
     let bq_idx = rendered
         .iter()
-        .position(|l| l == "▏ a")
-        .expect("missing '▏ a'");
+        .position(|l| l == "▎ a")
+        .expect("missing '▎ a'");
     assert!(vs_idx < bq_idx);
     let between = &rendered[vs_idx + 1..bq_idx];
     assert!(
@@ -121,11 +125,11 @@ fn nested_blockquote_directly_after_paragraph_has_no_prefixed_gap_between() {
 
     let msg_idx = rendered
         .iter()
-        .position(|l| l == "▏ Warning message.")
+        .position(|l| l == "▎ Warning message.")
         .expect("missing warning message");
     let nested_idx = rendered
         .iter()
-        .position(|l| l == "▏ ▏ Nested inside warning.")
+        .position(|l| l == "▎ ▎ Nested inside warning.")
         .expect("missing nested line");
     assert_eq!(
         nested_idx,
@@ -143,16 +147,16 @@ fn explicit_bq_gap_before_nested_produces_prefixed_blank() {
 
     let outer_idx = rendered
         .iter()
-        .position(|l| l == "▏ outer paragraph")
+        .position(|l| l == "▎ outer paragraph")
         .expect("missing outer");
     let nested_idx = rendered
         .iter()
-        .position(|l| l == "▏ ▏ nested paragraph")
+        .position(|l| l == "▎ ▎ nested paragraph")
         .expect("missing nested");
     assert!(outer_idx < nested_idx);
     let between = &rendered[outer_idx + 1..nested_idx];
     assert!(
-        between.iter().any(|l| l == "▏ "),
+        between.iter().any(|l| l == "▎ "),
         "expected a prefixed blank between outer paragraph and nested (source has '>' empty), got {between:?}"
     );
 }
@@ -164,9 +168,9 @@ fn nested_blockquotes_keep_quote_prefix_after_inner_quote_ends() {
     let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let rendered = rendered_non_empty_lines(&lines);
 
-    assert!(rendered.iter().any(|line| line == "▏ outer"));
-    assert!(rendered.iter().any(|line| line == "▏ ▏ inner"));
-    assert!(rendered.iter().any(|line| line == "▏ outer again"));
+    assert!(rendered.iter().any(|line| line == "▎ outer"));
+    assert!(rendered.iter().any(|line| line == "▎ ▎ inner"));
+    assert!(rendered.iter().any(|line| line == "▎ outer again"));
 }
 
 #[test]
@@ -178,11 +182,11 @@ fn long_blockquotes_wrap_into_multiple_prefixed_lines() {
     let rendered = rendered_non_empty_lines(&lines);
     let quoted: Vec<_> = rendered
         .into_iter()
-        .filter(|line| line.starts_with('▏'))
+        .filter(|line| line.starts_with('▎'))
         .collect();
 
     assert!(quoted.len() >= 2);
-    assert!(quoted.iter().all(|line| line.starts_with("▏ ")));
+    assert!(quoted.iter().all(|line| line.starts_with("▎ ")));
 }
 
 #[test]
@@ -192,7 +196,7 @@ fn nested_blockquote_emits_depth_two_markers() {
     let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let rendered = rendered_non_empty_lines(&lines);
 
-    assert!(rendered.iter().any(|line| line == "▏ ▏ inner"));
+    assert!(rendered.iter().any(|line| line == "▎ ▎ inner"));
 }
 
 #[test]
@@ -202,7 +206,7 @@ fn triple_nested_blockquote_emits_depth_three_markers() {
     let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let rendered = rendered_non_empty_lines(&lines);
 
-    assert!(rendered.iter().any(|line| line == "▏ ▏ ▏ deepest"));
+    assert!(rendered.iter().any(|line| line == "▎ ▎ ▎ deepest"));
 }
 
 #[test]
@@ -212,12 +216,12 @@ fn nested_blockquote_returns_to_single_marker_after_close() {
     let (lines, _, _, _) = parse_markdown(src, &ss, &theme, &test_md_theme(), false, true).into();
     let rendered = rendered_non_empty_lines(&lines);
 
-    let outer_idx = rendered.iter().position(|l| l == "▏ outer").expect("outer");
+    let outer_idx = rendered.iter().position(|l| l == "▎ outer").expect("outer");
     let inner_idx = rendered
         .iter()
-        .position(|l| l == "▏ ▏ inner")
+        .position(|l| l == "▎ ▎ inner")
         .expect("inner");
-    let back_idx = rendered.iter().position(|l| l == "▏ back").expect("back");
+    let back_idx = rendered.iter().position(|l| l == "▎ back").expect("back");
     assert!(outer_idx < inner_idx && inner_idx < back_idx);
 }
 
@@ -230,16 +234,16 @@ fn blank_line_between_paragraphs_in_blockquote_is_prefixed() {
 
     let p1_idx = rendered
         .iter()
-        .position(|l| l == "▏ para 1")
+        .position(|l| l == "▎ para 1")
         .expect("para 1");
     let p2_idx = rendered
         .iter()
-        .position(|l| l == "▏ para 2")
+        .position(|l| l == "▎ para 2")
         .expect("para 2");
     assert!(p1_idx < p2_idx);
     let between = &rendered[p1_idx + 1..p2_idx];
     assert!(
-        between.iter().any(|l| l == "▏ "),
+        between.iter().any(|l| l == "▎ "),
         "expected a blockquote-prefixed blank line between paragraphs, got {between:?}"
     );
 }
@@ -256,7 +260,7 @@ fn alert_header_outer_color_only_applies_to_first_marker() {
     let markers: Vec<_> = nested_line
         .spans
         .iter()
-        .filter(|s| s.content.as_ref().contains('▏'))
+        .filter(|s| s.content.as_ref().contains('▎'))
         .collect();
 
     assert_eq!(
@@ -282,7 +286,7 @@ fn frontmatter_is_ignored_in_preview() {
 }
 
 #[test]
-fn h2_headings_are_underlined_and_compact() {
+fn h2_headings_lead_with_an_arrow_and_stay_compact() {
     let (ss, theme) = test_assets();
     let (lines, _, _, _) = parse_markdown_with_width(
         "Intro\n\n## Section\nBody\n",
@@ -296,8 +300,14 @@ fn h2_headings_are_underlined_and_compact() {
     .into();
     let rendered = rendered_non_empty_lines(&lines);
 
-    assert!(rendered.iter().any(|line| line.contains("Section")));
-    assert!(rendered.iter().any(|line| line.contains("────")));
+    assert!(
+        rendered.iter().any(|line| line == "▸ Section"),
+        "{rendered:?}"
+    );
+    assert!(
+        !rendered.iter().any(|line| line.contains('─')),
+        "{rendered:?}"
+    );
 }
 
 #[test]

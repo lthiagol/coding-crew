@@ -8,7 +8,7 @@ use unicode_width::UnicodeWidthStr;
 
 use super::LastBlock;
 use super::latex;
-use super::links::{LinkSpan, LinkedSpan, emit_linked_line};
+use super::links::{LinkSpan, LinkedSpan};
 use super::lists::{ItemState, ListKind, list_item_prefix};
 use super::mermaid;
 use super::syntax::highlight_code;
@@ -31,7 +31,7 @@ pub(super) struct BlockLayout {
     pub(super) code_rows: Vec<CodeRow>,
 }
 
-pub const BLOCKQUOTE_BAR: &str = "▏ ";
+pub const BLOCKQUOTE_BAR: &str = "▎ ";
 
 pub(super) fn block_prefix(
     blockquote_depth: usize,
@@ -54,7 +54,7 @@ pub(super) fn block_prefix(
 }
 
 fn is_blockquote_blank_text(plain: &str) -> bool {
-    !plain.is_empty() && plain.chars().all(|c| c == '▏' || c.is_whitespace())
+    !plain.is_empty() && plain.chars().all(|c| c == '▎' || c.is_whitespace())
 }
 
 pub(super) fn pop_trailing_blockquote_gap(lines: &mut Vec<Line<'static>>) {
@@ -171,25 +171,21 @@ pub(super) fn push_heading_lines(
         4 => theme.heading_4,
         _ => theme.heading_other,
     };
-    let modifier = match level {
-        1..=5 => Modifier::BOLD,
-        _ => Modifier::ITALIC,
-    };
-    let heading_style = Style::default().fg(color).add_modifier(modifier);
+    let heading_style = Style::default().fg(color).add_modifier(Modifier::BOLD);
     let title: String = spans.iter().map(|s| s.span.content.as_ref()).collect();
     toc.push(TocEntry {
         level,
         title: title.clone(),
         line: lines.len(),
     });
-    let styled_spans: Vec<LinkedSpan> = spans
+    let mut body: Vec<LinkedSpan> = spans
         .drain(..)
         .map(|LinkedSpan { span, link_id }| {
             let mut style = heading_style;
             if span.style.bg.is_some() {
                 style.fg = span.style.fg;
                 style.bg = span.style.bg;
-                style.sub_modifier = modifier;
+                style.sub_modifier = Modifier::BOLD;
             } else if span.style.fg == Some(theme.link_text)
                 || span.style.fg == Some(theme.link_icon)
             {
@@ -198,19 +194,41 @@ pub(super) fn push_heading_lines(
             LinkedSpan::new(Span::styled(span.content, style), link_id)
         })
         .collect();
-    emit_linked_line(lines, ranges, styled_spans);
 
-    match level {
-        1 => lines.push(Line::from(Span::styled(
-            "═".repeat(display_width(&title).min(super::rule_width(render_width, 0))),
-            Style::default().fg(theme.heading_underline),
-        ))),
-        2 => lines.push(Line::from(Span::styled(
-            "─".repeat(display_width(&title).min(super::rule_width(render_width, 0))),
-            Style::default().fg(theme.heading_underline),
-        ))),
-        _ => {}
+    // `#` leads with a bar and closes with a rule to the edge; `##` leads
+    // with an arrow; deeper levels are bold text alone.
+    let lead = match level {
+        1 => Some("▍ "),
+        2 => Some("▸ "),
+        _ => None,
+    };
+    let lead_width = lead.map_or(0, display_width);
+    let title_width = display_width(&title);
+    if level == 1 && lead_width + title_width + 2 <= render_width {
+        let rule = render_width - lead_width - title_width - 1;
+        body.push(LinkedSpan::new(Span::raw(" "), None));
+        body.push(LinkedSpan::new(
+            Span::styled(
+                "─".repeat(rule),
+                Style::default().fg(theme.heading_underline),
+            ),
+            None,
+        ));
     }
+    let first_prefix: Vec<Span<'static>> = lead
+        .map(|glyph| Span::styled(glyph, heading_style))
+        .into_iter()
+        .collect();
+    let continuation_prefix: Vec<Span<'static>> =
+        lead.map(|_| Span::raw("  ")).into_iter().collect();
+    push_wrapped_prefixed_lines(
+        lines,
+        ranges,
+        &mut body,
+        first_prefix,
+        continuation_prefix,
+        render_width,
+    );
 }
 
 pub(super) const CODE_BLOCK_GUTTER: &str = "│";

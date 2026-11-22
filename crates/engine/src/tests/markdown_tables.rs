@@ -107,7 +107,7 @@ fn table_inline_code_col_width_includes_padding() {
     let (lines, _, _, _) = parse_markdown(md, &ss, &theme, &test_md_theme(), false, true).into();
     let rendered = rendered_non_empty_lines(&lines);
 
-    let top_border = rendered.iter().find(|l| l.contains('┌')).unwrap();
+    let top_border = rendered.iter().find(|l| l.contains('╭')).unwrap();
     let cell_line = rendered.iter().find(|l| l.contains("longcode")).unwrap();
     let top_width = display_width(top_border);
     let cell_width = display_width(cell_line);
@@ -254,7 +254,10 @@ fn linked_table_inline_variants_retain_one_owner() {
         .skip(span.start_col)
         .take(span.end_col - span.start_col)
         .collect();
-    assert_eq!(covered, "#bold  code   α   mark ");
+    assert_eq!(
+        covered,
+        "#bold  code   α   mark  (https://example.test/table-mixed)"
+    );
 }
 
 #[test]
@@ -273,14 +276,23 @@ fn split_table_code_label_keeps_owner_on_every_row() {
                 .collect()
         })
         .collect();
-    assert_eq!(rows, ["#", " abcdefghijklmnopqr ", " stuvwxyz "]);
+    assert_eq!(
+        rows,
+        [
+            "#",
+            " abcdefghijklmnopqr ",
+            " stuvwxyz ",
+            "(https://example.tes",
+            "t/code)"
+        ]
+    );
     assert!(parsed.link_spans.iter().all(|span| span.link_id.0 == 0));
 }
 
 /// Display columns of the border glyphs on one rendered table line.
 fn border_columns(line: &str) -> Vec<usize> {
     line.char_indices()
-        .filter(|(_, c)| "┌┬┐│├┼┤└┴┘╞╪╡".contains(*c))
+        .filter(|(_, c)| "╭┬╮│├┼┤╰┴╯".contains(*c))
         .map(|(i, _)| display_width(&line[..i]))
         .collect()
 }

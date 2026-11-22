@@ -56,6 +56,14 @@ pub struct MarkdownTheme {
     pub alert_caution: Color,
     pub footnote_ref: Color,
     pub footnote_text: Color,
+    /// The glyph a done task item draws. A glyph, not a colour: the engine
+    /// stays icon-agnostic and the caller picks the set.
+    pub task_done_glyph: &'static str,
+    /// The glyph an open task item draws.
+    pub task_open_glyph: &'static str,
+    /// The glyphs of the five alerts, in GitHub's order: note, tip,
+    /// important, warning, caution.
+    pub alert_glyphs: [&'static str; 5],
 }
 
 impl Default for MarkdownTheme {
@@ -145,6 +153,9 @@ pub const ARCTIC: MarkdownTheme = MarkdownTheme {
     alert_caution: Color::Rgb(188, 74, 74),
     footnote_ref: Color::Rgb(62, 124, 188),
     footnote_text: Color::Rgb(58, 68, 78),
+    task_done_glyph: "✓",
+    task_open_glyph: "○",
+    alert_glyphs: ["ℹ", "✦", "!", "⚠", "✗"],
 };
 
 pub const FOREST: MarkdownTheme = MarkdownTheme {
@@ -195,6 +206,9 @@ pub const FOREST: MarkdownTheme = MarkdownTheme {
     alert_caution: Color::Rgb(224, 120, 120),
     footnote_ref: Color::Rgb(110, 182, 255),
     footnote_text: Color::Rgb(212, 218, 212),
+    task_done_glyph: "✓",
+    task_open_glyph: "○",
+    alert_glyphs: ["ℹ", "✦", "!", "⚠", "✗"],
 };
 
 pub const OCEAN_DARK: MarkdownTheme = MarkdownTheme {
@@ -245,6 +259,9 @@ pub const OCEAN_DARK: MarkdownTheme = MarkdownTheme {
     alert_caution: Color::Rgb(218, 95, 95),
     footnote_ref: Color::Rgb(88, 152, 238),
     footnote_text: Color::Rgb(208, 210, 218),
+    task_done_glyph: "✓",
+    task_open_glyph: "○",
+    alert_glyphs: ["ℹ", "✦", "!", "⚠", "✗"],
 };
 
 pub const SOLARIZED_DARK: MarkdownTheme = MarkdownTheme {
@@ -295,6 +312,9 @@ pub const SOLARIZED_DARK: MarkdownTheme = MarkdownTheme {
     alert_caution: Color::Rgb(220, 50, 47),
     footnote_ref: Color::Rgb(38, 139, 210),
     footnote_text: Color::Rgb(147, 161, 161),
+    task_done_glyph: "✓",
+    task_open_glyph: "○",
+    alert_glyphs: ["ℹ", "✦", "!", "⚠", "✗"],
 };
 
 /// Every built-in markdown preset, in leaf's order.

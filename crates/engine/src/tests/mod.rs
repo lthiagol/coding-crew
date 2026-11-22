@@ -15,6 +15,7 @@ mod markdown_html_tag;
 mod markdown_links;
 mod markdown_list_blocks;
 mod markdown_lists;
+mod markdown_page;
 mod markdown_rendering;
 mod markdown_tables;
 mod wrapping;
