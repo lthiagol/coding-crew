@@ -1337,6 +1337,18 @@ the old queue, budget and findings wording beside the new. Fixed to match the
 code and the pinned screens. Choices the builder made are open for the
 orchestrator to confirm (see THE FOLLOW-UPS). Commit `3ac76e5`.
 
+Unit closed: the mouse works in both TUIs (plan 73). Two review rounds; the
+second clean. The wheel scrolls what is under the pointer, three rows a notch,
+and each batch of queued events is applied before one draw. A click picks a
+tab, a row, a sidebar or queue row, or a picker entry, hit-tested against the
+regions the draw stored. Capture is on at start and off on exit and on panic.
+Round one found three: pointer motion forced a folder read and a redraw on
+every wake, Settings' clicks were untested though the test said they were, and
+hugo's queue lines were a guessed offset, not recorded from the draw. The fix
+round closed all three with tests. No ruling was made. One choice stays open:
+a click on a Settings table header selects the value below it, and the two
+reviews disagree on the answer (see THE FOLLOW-UPS). Commit `77cda41`.
+
 ---
 
 ## Lessons

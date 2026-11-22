@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 72.
+Updated 2026-11-22 by the orchestrator, after unit 73.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -56,10 +56,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 49–72, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–73, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- 73 · Mouse in both TUIs (M)
 - 74 · The review reads in layers (M)
 - 75 · Backlog items have documents (S)
 - 76 · Settings in colour (S)
@@ -445,6 +444,27 @@ None blocking. Carried from the closed units.
   `docs/hugo/tui-proposals/minimax/06-review-budget.html:73`. `design-record.md:100`
   and `task-model.md:613` say "unclaimed work"; the builder left them, unsure
   whether that is the model's term. Check and correct.
+- **A click on a Settings table header selects the value below it** (2026-11-22,
+  unit 73). `settings::blocks` puts a header's lines with the value under them.
+  The round-1 report recommends headers and comments inert, so only value lines
+  select; the round-2 review recommends keeping it, as the block model the keys
+  use does. The human decides.
+- **The wheel moves the cursor, not a free viewport** (2026-11-22, unit 73). The
+  window follows the cursor, so a list scrolls because the selection moves. A
+  pure viewport scroll would snap back on the next draw. The human confirms.
+- **Mouse choices to confirm** (2026-11-22, unit 73). A second click on the
+  selected row opens it, so on a fresh tab the first click on row 1 opens it.
+  In hugo, a second click on a queue row marks it, as `space` does; the brief
+  said only "selects". A wheel over hugo's sidebar or queue takes the focus, as
+  a click does. A second click in Settings edits, as `enter` does. At 40
+  columns raul's tab bar takes no clicks.
+- **The mouse wait and the panic restore are checked by reading** (2026-11-22,
+  unit 73). The wait in raul's and hugo's event loops needs a terminal, so it
+  has no test. The restore on panic was checked by reading `leave_terminal` in
+  `crates/core/src/screen.rs`; no harness forces a panic.
+- **hugo's queue picks are pinned, not proven** (2026-11-22, unit 73). The mock
+  gives the same lines under the old offset, so the test shows the behaviour
+  and not the fix.
 
 ## WHAT WAITS ON THE FLOW
 
