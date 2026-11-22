@@ -85,6 +85,23 @@ impl Key {
         matches!(self, Key::Status | Key::Priority | Key::Effort)
     }
 
+    /// The key's name, as the configuration file spells it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Key::Id => "id",
+            Key::Created => "created",
+            Key::Updated => "updated",
+            Key::Status => "status",
+            Key::Priority => "priority",
+            Key::Effort => "effort",
+        }
+    }
+
+    /// The key of a name, if there is one.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Key::ALL.into_iter().find(|key| key.name() == name)
+    }
+
     /// The key `o` moves to.
     fn next(self) -> Key {
         let index = Key::ALL

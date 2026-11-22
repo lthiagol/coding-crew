@@ -157,8 +157,8 @@ format may change when it does. Its shape is
 The configuration file is `~/.config/coding-crew/config.toml`, and its format
 is **TOML**: it is the one file a human edits, and a comment is how a
 configuration explains itself, so the defaults hugo writes carry a short note
-beside each part. When the file is absent, hugo writes the defaults — the
-project's own flow: the builder on
+beside each part. raul's Settings edits the same file. When the file is
+absent, hugo writes the defaults — the project's own flow: the builder on
 `opencode-go/deepseek-v4.1-flash#high` and the reviewer on
 `opencode-go/glm-5.3#high`, with the orchestrator beside them; the `opencode`
 harness, `--standalone` with each agent's role config; five build-and-fix

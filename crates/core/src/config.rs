@@ -16,12 +16,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use toml_edit::{DocumentMut, Item, Table, TableLike, TomlError};
 
 use crate::actor::Role;
 use crate::lifecycle::Status;
 
 /// The configuration's file name under the tool's home.
 pub const CONFIG_FILE: &str = "config.toml";
+/// The folder under the user's home that holds every tool's configuration.
+pub const CONFIG_DIR: &str = ".config";
+/// The folder's name under `~/.config/`.
+pub const APP_DIR: &str = "coding-crew";
 /// The file the configuration used before it was TOML. It is no longer read;
 /// hugo names it when it finds one, so a human knows why it is ignored.
 pub const LEGACY_CONFIG_FILE: &str = "config.json";
@@ -37,6 +42,9 @@ pub struct Config {
     pub round_limit: u32,
     /// The order the flow follows: the steps and their gates.
     pub order: Vec<OrderStep>,
+    /// raul's own settings. A file without the table has the defaults.
+    #[serde(default)]
+    pub raul: Raul,
 }
 
 impl Config {
@@ -69,7 +77,10 @@ impl Config {
         }
     }
 
-    /// Write a configuration, atomically, as the store writes a task.
+    /// Write the whole configuration, atomically, as the store writes a task.
+    ///
+    /// This replaces the file's text with the defaults' shape: a file a human
+    /// has edited is changed through [`ConfigFile::save`], which keeps it.
     pub fn write(&self, path: &Path) -> Result<(), ConfigError> {
         Self::write_text(path, &self.to_toml())
     }
@@ -92,54 +103,19 @@ impl Config {
         Ok(result?)
     }
 
-    /// The configuration's text with the orchestrator's model replaced.
-    ///
-    /// The configuration is the one file a human edits, so a pick is written
-    /// into the text they wrote: the orchestrator's table keeps every other
-    /// line, comments included. `None` when the text holds no orchestrator
-    /// table or no `model` line in it.
-    pub fn with_orchestrator_model(text: &str, model: &str) -> Option<String> {
-        let lines: Vec<&str> = text.split_inclusive('\n').collect();
-        // Each `[[agents]]` table runs from its header to the next table's
-        // header, or to the end of the file. The model line is searched for
-        // inside the orchestrator's own table only, never past it.
-        let mut tables: Vec<(usize, usize)> = Vec::new();
-        let mut open: Option<usize> = None;
-        for (index, line) in lines.iter().enumerate() {
-            if line.trim_start().starts_with('[') {
-                if let Some(start) = open.take() {
-                    tables.push((start, index));
-                }
-                open = line.trim_start().starts_with("[[agents]]").then_some(index);
+    /// Set the orchestrator's model. `false` when there is no orchestrator.
+    pub fn set_orchestrator_model(&mut self, model: &str) -> bool {
+        match self
+            .agents
+            .iter_mut()
+            .find(|agent| agent.role == Role::Orchestrator)
+        {
+            Some(agent) => {
+                agent.model = model.to_string();
+                true
             }
+            None => false,
         }
-        if let Some(start) = open {
-            tables.push((start, lines.len()));
-        }
-        let (start, end) = tables
-            .into_iter()
-            .find(|(start, end)| is_orchestrator(&lines[*start..*end]))?;
-        let at = model_line(&lines[start..end]).map(|line| start + line)?;
-        let line = lines[at];
-        let indent = &line[..line.len() - line.trim_start().len()];
-        let comment = comment_of(line);
-        let ending = if line.ends_with("\r\n") {
-            "\r\n"
-        } else if line.ends_with('\n') {
-            "\n"
-        } else {
-            ""
-        };
-        let mut out = String::with_capacity(text.len() + model.len());
-        for (index, line) in lines.iter().enumerate() {
-            if index == at {
-                out.push_str(indent);
-                out.push_str(&format!("model = {}{comment}{ending}", quote(model)));
-            } else {
-                out.push_str(line);
-            }
-        }
-        Some(out)
     }
 
     /// The configuration as TOML, with the comments the file carries.
@@ -213,11 +189,219 @@ impl Config {
                 .collect();
             out.push_str(&format!("gates = [{}]\n\n", gates.join(", ")));
         }
+        out.push_str(
+            "# raul's own settings: theme is dark, nord, catppuccin, dracula or\n\
+             # terminal; icons is nerd or unicode. raul reads them at startup.\n\
+             [raul]\n",
+        );
+        out.push_str(&format!("theme = {}\n", quote(&self.raul.theme)));
+        out.push_str(&format!("icons = {}\n\n", quote(&self.raul.icons)));
+        out.push_str(
+            "# The order the Tasks tab opens in: the key it sorts by, and whether it\n\
+             # runs backwards.\n\
+             [raul.tasks]\n",
+        );
+        out.push_str(&format!("sort = {}\n", quote(&self.raul.tasks.sort)));
+        out.push_str(&format!("reverse = {}\n", self.raul.tasks.reverse));
         while out.ends_with("\n\n") {
             out.pop();
         }
         out
     }
+}
+
+/// A configuration file as it is on disk.
+///
+/// The file is kept as a document, so a save writes only the values that
+/// changed: the comments, the order, the spacing and the keys this code does
+/// not know all stay as the human left them.
+#[derive(Debug)]
+pub struct ConfigFile {
+    path: PathBuf,
+    document: DocumentMut,
+    /// The configuration the document held when it was read or last saved.
+    loaded: Config,
+    /// The hash of the text read, checked before a save.
+    hash: u64,
+}
+
+impl ConfigFile {
+    /// Read the configuration at `path`, writing the defaults first when there
+    /// is no file. A dangling link is a file the human left: it is an error,
+    /// and the defaults are not written through it.
+    pub fn open(path: &Path) -> Result<Self, ConfigError> {
+        if path.symlink_metadata().is_err() {
+            Config::default().write(path)?;
+        }
+        Self::read(path)
+    }
+
+    /// Read the configuration at `path`.
+    pub fn read(path: &Path) -> Result<Self, ConfigError> {
+        let text = fs::read_to_string(path)?;
+        let loaded = Config::from_toml(&text)?;
+        let document: DocumentMut = text.parse().map_err(|error: TomlError| {
+            let at = error
+                .span()
+                .map(|span| location(&text, span.start))
+                .unwrap_or_default();
+            ConfigError::Syntax {
+                at,
+                message: error.message().to_string(),
+            }
+        })?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            document,
+            loaded,
+            hash: content_hash(&text),
+        })
+    }
+
+    /// The configuration as the file holds it.
+    pub fn config(&self) -> &Config {
+        &self.loaded
+    }
+
+    /// Save `config` into the file. Only the values that differ from the
+    /// configuration as loaded are written; every other part of the file is
+    /// kept. A list whose length changes is written whole. A file that changed
+    /// on disk since it was read is not written: the save is refused, and the
+    /// file stays as it is on disk.
+    pub fn save(&mut self, config: &Config) -> Result<(), ConfigError> {
+        match fs::read_to_string(&self.path) {
+            Ok(text) if content_hash(&text) == self.hash => {}
+            Ok(_) => return Err(self.changed()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(self.changed());
+            }
+            Err(error) => return Err(error.into()),
+        }
+        let before = document_of(&self.loaded)?;
+        let after = document_of(config)?;
+        // The edits go into a copy: a refused save must not leave them in the
+        // document, where the next save would write them.
+        let mut document = self.document.clone();
+        apply(document.as_table_mut(), before.as_table(), after.as_table());
+        let text = document.to_string();
+        // A value the text does not hold would be lost on the next read. The
+        // text is checked before it is written, so the file keeps what it had.
+        let saved = Config::from_toml(&text)?;
+        if saved != *config {
+            return Err(ConfigError::Lost {
+                file: self.path.display().to_string(),
+            });
+        }
+        Config::write_text(&self.path, &text)?;
+        self.document = document;
+        self.loaded = saved;
+        self.hash = content_hash(&text);
+        Ok(())
+    }
+
+    fn changed(&self) -> ConfigError {
+        ConfigError::Changed {
+            file: self.path.display().to_string(),
+        }
+    }
+}
+
+/// The configuration as a document, the way the writer writes it.
+fn document_of(config: &Config) -> Result<DocumentMut, ConfigError> {
+    config
+        .to_toml()
+        .parse()
+        .map_err(|error: TomlError| ConfigError::Shape {
+            at: String::new(),
+            message: error.message().to_string(),
+        })
+}
+
+/// Write into `document` the values that differ between `before` and `after`,
+/// and nothing else. A value that did not change keeps its place; a key the
+/// document does not have yet is added. A table the human wrote inline is
+/// written into in place, so it stays inline.
+fn apply(document: &mut dyn TableLike, before: &Table, after: &Table) {
+    for (key, now) in after.iter() {
+        let was = before.get(key);
+        if was.is_some_and(|was| same(was, now)) {
+            continue;
+        }
+        match (was, now) {
+            (Some(Item::Table(was)), Item::Table(now)) => {
+                let entry = document.entry(key).or_insert(Item::Table(Table::new()));
+                if let Some(table) = entry.as_table_like_mut() {
+                    apply(table, was, now);
+                }
+            }
+            (Some(Item::ArrayOfTables(was)), Item::ArrayOfTables(now))
+                if was.len() == now.len() =>
+            {
+                let entry = document
+                    .entry(key)
+                    .or_insert(Item::ArrayOfTables(Default::default()));
+                if let Some(tables) = entry.as_array_of_tables_mut() {
+                    for (index, (was, now)) in was.iter().zip(now.iter()).enumerate() {
+                        if let Some(table) = tables.get_mut(index) {
+                            apply(table, was, now);
+                        }
+                    }
+                }
+            }
+            _ => set(document, key, now),
+        }
+    }
+}
+
+/// Whether two items hold the same text. A table's own text leaves out its
+/// sub-tables, so tables are compared key by key.
+fn same(was: &Item, now: &Item) -> bool {
+    match (was.as_table_like(), now.as_table_like()) {
+        (Some(was), Some(now)) => {
+            was.len() == now.len()
+                && was
+                    .iter()
+                    .all(|(key, item)| now.get(key).is_some_and(|other| same(item, other)))
+        }
+        _ => was.to_string() == now.to_string(),
+    }
+}
+
+/// Set one key. A value keeps the decoration it had — its spacing and the
+/// comment beside it — and takes the new value. Any other item is replaced.
+fn set(table: &mut dyn TableLike, key: &str, now: &Item) {
+    if let Some(old) = table.get_mut(key).and_then(Item::as_value_mut)
+        && let Item::Value(new) = now
+    {
+        let mut new = new.clone();
+        *new.decor_mut() = old.decor().clone();
+        *old = new;
+        return;
+    }
+    table.insert(key, now.clone());
+}
+
+/// A hash of a file's text. FNV-1a, so every build of the tools computes the
+/// same hash for the same text.
+fn content_hash(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+/// The configuration home under a user's home folder.
+pub fn home_at(home: &Path) -> PathBuf {
+    home.join(CONFIG_DIR).join(APP_DIR)
+}
+
+/// The configuration file under a user's home folder.
+pub fn config_path(home: &Path) -> PathBuf {
+    home_at(home).join(CONFIG_FILE)
+}
+
+/// The running user's home folder, when there is one.
+pub fn user_home() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(PathBuf::from)
 }
 
 /// A temporary name beside `path`, unique to the write.
@@ -289,104 +473,6 @@ fn quote(value: &str) -> String {
     out
 }
 
-/// Whether an agent table's lines name the orchestrator.
-fn is_orchestrator(lines: &[&str]) -> bool {
-    lines.iter().any(|line| {
-        pair(line).is_some_and(|(key, value)| {
-            key == "role" && unquote(value) == Some(Role::Orchestrator.as_str())
-        })
-    })
-}
-
-/// A TOML string's contents, whether it is basic or literal.
-///
-/// A hand-edited file may use single quotes (`role = 'orchestrator'`); the
-/// value is the same value. A value that is not one quoted string is `None`.
-fn unquote(value: &str) -> Option<&str> {
-    let first = value.chars().next()?;
-    if first != '"' && first != '\'' {
-        return None;
-    }
-    let last = value.chars().last()?;
-    if value.len() < 2 || last != first {
-        return None;
-    }
-    value.get(1..value.len() - 1)
-}
-
-/// The line of an agent table that sets the model, when it has one.
-fn model_line(lines: &[&str]) -> Option<usize> {
-    lines
-        .iter()
-        .position(|line| pair(line).is_some_and(|(key, _)| key == "model"))
-}
-
-/// A line's key and value, the comment beside them taken away.
-///
-/// A `#` inside a string is not a comment: a model's variant is written
-/// `provider/model#high`.
-fn pair(line: &str) -> Option<(&str, &str)> {
-    let body = line.trim_end_matches(['\r', '\n']);
-    let body = match comment_start(body) {
-        Some(at) => &body[..at],
-        None => body,
-    };
-    let (key, value) = body.split_once('=')?;
-    // A quoted key is the same key: `"model" = ...` is valid TOML.
-    let key = key.trim();
-    Some((unquote(key).unwrap_or(key), value.trim()))
-}
-
-/// The comment beside a line, with the space before it, when it has one.
-fn comment_of(line: &str) -> &str {
-    let body = line.trim_end_matches(['\r', '\n']);
-    match comment_start(body) {
-        Some(at) => &body[body[..at].trim_end().len()..],
-        None => "",
-    }
-}
-
-/// Where a line's comment starts, when it has one.
-///
-/// A `#` inside a string is not a comment. Both TOML strings are read: the
-/// basic string (`"..."`), where a backslash escapes the next character, and
-/// the literal string (`'...'`), where nothing is escaped.
-fn comment_start(body: &str) -> Option<usize> {
-    #[derive(Clone, Copy)]
-    enum Quote {
-        None,
-        Basic,
-        Literal,
-    }
-    let mut quote = Quote::None;
-    let mut escaped = false;
-    for (index, character) in body.char_indices() {
-        match quote {
-            Quote::Basic => {
-                if escaped {
-                    escaped = false;
-                } else if character == '\\' {
-                    escaped = true;
-                } else if character == '"' {
-                    quote = Quote::None;
-                }
-            }
-            Quote::Literal => {
-                if character == '\'' {
-                    quote = Quote::None;
-                }
-            }
-            Quote::None => match character {
-                '"' => quote = Quote::Basic,
-                '\'' => quote = Quote::Literal,
-                '#' => return Some(index),
-                _ => {}
-            },
-        }
-    }
-    None
-}
-
 /// Where in a document a parse error sits, in words: ` at line 3, column 5`.
 fn location(text: &str, index: usize) -> String {
     let before = text.get(..index).unwrap_or(text);
@@ -402,7 +488,8 @@ fn location(text: &str, index: usize) -> String {
 
 impl Default for Config {
     /// The project's own flow: the pair it runs, the harness its panes run in,
-    /// the budget it works to, and the order `docs/roles/roles.md` records.
+    /// the budget it works to, the order `docs/roles/roles.md` records, and
+    /// raul's own defaults.
     fn default() -> Self {
         Self {
             agents: vec![
@@ -463,6 +550,7 @@ impl Default for Config {
                     gates: vec![gate(Status::CodeReview, Status::Done)],
                 },
             ],
+            raul: Raul::default(),
         }
     }
 }
@@ -487,6 +575,49 @@ pub struct Harness {
     pub tool: String,
     /// The way the tool is driven, in a short phrase.
     pub driven: String,
+}
+
+/// raul's own settings: the palette it paints with, the icons it draws, and the
+/// order the Tasks tab opens in.
+///
+/// The names are the words the file holds; raul checks them against its own
+/// presets and icon sets, which the core does not know.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Raul {
+    /// The palette: `dark`, `nord`, `catppuccin`, `dracula` or `terminal`.
+    pub theme: String,
+    /// The icon set: `nerd` or `unicode`.
+    pub icons: String,
+    pub tasks: RaulTasks,
+}
+
+impl Default for Raul {
+    fn default() -> Self {
+        Self {
+            theme: "dark".to_string(),
+            icons: "nerd".to_string(),
+            tasks: RaulTasks::default(),
+        }
+    }
+}
+
+/// The Tasks tab's order: the key it sorts by, and whether it runs backwards.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RaulTasks {
+    /// The key: `id`, `created`, `updated`, `status`, `priority` or `effort`.
+    pub sort: String,
+    pub reverse: bool,
+}
+
+impl Default for RaulTasks {
+    fn default() -> Self {
+        Self {
+            sort: "id".to_string(),
+            reverse: false,
+        }
+    }
 }
 
 /// One step of the order: its name, the role that does it, and the gates it
@@ -524,6 +655,13 @@ pub enum ConfigError {
     /// wrong type, or a field is missing.
     #[error("invalid configuration{at}: {message}")]
     Shape { at: String, message: String },
+    /// The file changed on disk since it was read: a save would overwrite it.
+    #[error("the file changed on disk since it was read: {file}")]
+    Changed { file: String },
+    /// The text a save would write does not hold the configuration it was
+    /// given: nothing is written.
+    #[error("the save would not keep every value in {file}: nothing was written")]
+    Lost { file: String },
 }
 
 #[cfg(test)]
@@ -649,7 +787,14 @@ mod tests {
             "the defaults carry no comments:\n{text}"
         );
         assert!(text.contains("provisional"), "{text}");
-        for part in ["round_limit", "[[agents]]", "[harness]", "[[order]]"] {
+        for part in [
+            "round_limit",
+            "[[agents]]",
+            "[harness]",
+            "[[order]]",
+            "[raul]",
+            "[raul.tasks]",
+        ] {
             assert!(text.contains(part), "{part} is not in the shape:\n{text}");
         }
         // The comments are not a second copy of the shape: they sit above it.
@@ -762,11 +907,247 @@ mod tests {
         assert!(text.contains("model in place"), "{text}");
     }
 
+    /// A scratch folder holding one configuration file. The folder is removed
+    /// when the test ends.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn path(&self) -> PathBuf {
+            self.0.join(CONFIG_FILE)
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// A scratch folder whose configuration file holds `text`.
+    fn scratch_file(name: &str, text: &str) -> Scratch {
+        let dir =
+            std::env::temp_dir().join(format!("coding-crew-config-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch folder");
+        fs::write(dir.join(CONFIG_FILE), text).expect("the file");
+        Scratch(dir)
+    }
+
+    /// Pick `model` for the orchestrator of the file holding `text`, and
+    /// return the file's text after the save.
+    fn pick(name: &str, text: &str, model: &str) -> String {
+        let scratch = scratch_file(name, text);
+        let path = scratch.path();
+        let mut file = ConfigFile::read(&path).expect("the configuration");
+        let mut config = file.config().clone();
+        assert!(config.set_orchestrator_model(model), "no orchestrator");
+        file.save(&config).expect("the save");
+        fs::read_to_string(&path).expect("the file")
+    }
+
+    /// A configuration written by hand: comments, a table out of the writer's
+    /// order, a key this code does not know, and spacing the writer would not
+    /// produce.
+    const HAND_WRITTEN: &str = "\
+# coding-crew's configuration, kept by hand.
+extra_root = \"kept\"
+
+# The build-and-fix cycles a task gets.
+round_limit = 5 # three is enough here, five is what it is
+
+# the harness
+[harness]
+driven = \"--standalone\"
+tool = \"opencode\"
+
+# One entry per agent.
+[[agents]]
+# the builder
+name = \"builder\"
+role = \"runner\"
+model = \"opencode-go/deepseek-v4.1-flash#high\"
+
+[[agents]]
+name = \"orchestrator\"
+role = \"orchestrator\"
+model = \"opencode-go/glm-5.3#high\" # the orchestrator's lens
+note = \"a key this code does not know\"
+
+[raul]
+theme = 'nord'
+icons = \"nerd\"
+
+[raul.tasks]
+sort = \"id\"
+reverse = false
+
+# the order
+[[order]]
+step = \"groom\"
+role = \"creator\"
+gates = [{ from = \"groomed\", to = \"approved\" }]
+";
+
     #[test]
-    fn a_pick_replaces_only_the_orchestrators_model_line() {
+    fn an_edit_changes_only_the_values_it_changes() {
+        let scratch = scratch_file("edit", HAND_WRITTEN);
+        let path = scratch.path();
+        let mut file = ConfigFile::read(&path).expect("the configuration");
+        let mut config = file.config().clone();
+        config.round_limit = 3;
+        config.raul.theme = "dracula".to_string();
+        config.raul.tasks.reverse = true;
+        file.save(&config).expect("the save");
+        let saved = fs::read_to_string(&path).expect("the file");
+        let expected = HAND_WRITTEN
+            .replacen("round_limit = 5 #", "round_limit = 3 #", 1)
+            .replacen("theme = 'nord'", "theme = \"dracula\"", 1)
+            .replacen("reverse = false", "reverse = true", 1);
+        assert_eq!(saved, expected);
+        assert_eq!(
+            Config::from_toml(&saved).expect("the saved file parses"),
+            config
+        );
+    }
+
+    #[test]
+    fn a_save_into_an_inline_table_keeps_the_inline_form() {
+        // `harness` and `[raul] tasks` written inline are valid TOML. A save
+        // changes a value in each, and the file keeps both inline.
+        let text = HAND_WRITTEN
+            .replacen(
+                "[harness]\ndriven = \"--standalone\"\ntool = \"opencode\"\n",
+                "harness = { tool = \"opencode\", driven = \"--standalone\" }\n",
+                1,
+            )
+            .replacen("[raul.tasks]\nsort = \"id\"\nreverse = false\n", "", 1)
+            .replacen(
+                "icons = \"nerd\"\n",
+                "icons = \"nerd\"\ntasks = { sort = \"id\", reverse = false }\n",
+                1,
+            );
+        let scratch = scratch_file("inline", &text);
+        let path = scratch.path();
+        let mut file = ConfigFile::read(&path).expect("the configuration");
+        let mut config = file.config().clone();
+        config.harness.driven = "--embedded".to_string();
+        config.raul.tasks.reverse = true;
+        file.save(&config).expect("the save");
+        let saved = fs::read_to_string(&path).expect("the file");
+        let expected = text
+            .replacen("driven = \"--standalone\"", "driven = \"--embedded\"", 1)
+            .replacen("reverse = false", "reverse = true", 1);
+        assert_eq!(saved, expected);
+        assert_eq!(
+            Config::from_toml(&saved).expect("the saved file parses"),
+            config
+        );
+    }
+
+    #[test]
+    fn a_save_of_an_unchanged_configuration_writes_the_same_text() {
+        // Comments, order, spacing and the unknown keys all survive a save
+        // that changes nothing.
+        let scratch = scratch_file("unchanged", HAND_WRITTEN);
+        let path = scratch.path();
+        let mut file = ConfigFile::read(&path).expect("the configuration");
+        let config = file.config().clone();
+        file.save(&config).expect("the save");
+        assert_eq!(fs::read_to_string(&path).expect("the file"), HAND_WRITTEN);
+    }
+
+    #[test]
+    fn an_old_file_without_raul_is_not_rewritten_to_add_its_keys() {
+        // The file predates the `[raul]` table: it loads with the defaults,
+        // and a save of another value does not add the table.
         let text = Config::default().to_toml();
-        let picked = Config::with_orchestrator_model(&text, "opencode-go/glm-5.3")
-            .expect("the orchestrator's model line");
+        let old = &text[..text.find("# raul's own settings").expect("the table")];
+        assert!(!old.contains("[raul]"), "{old}");
+        let loaded = Config::from_toml(old).expect("an old configuration");
+        assert_eq!(loaded.raul, Raul::default());
+        let scratch = scratch_file("old", old);
+        let path = scratch.path();
+        let mut file = ConfigFile::read(&path).expect("the configuration");
+        let mut config = file.config().clone();
+        file.save(&config).expect("the save");
+        assert_eq!(fs::read_to_string(&path).expect("the file"), old);
+        config.round_limit = 3;
+        file.save(&config).expect("the save");
+        let saved = fs::read_to_string(&path).expect("the file");
+        assert!(!saved.contains("[raul]"), "{saved}");
+        assert_eq!(saved, old.replacen("round_limit = 5", "round_limit = 3", 1));
+    }
+
+    #[test]
+    fn a_missing_file_is_created_with_the_defaults() {
+        let scratch = scratch_file("created", "");
+        let path = scratch.path();
+        fs::remove_file(&path).expect("no file yet");
+        let file = ConfigFile::open(&path).expect("the configuration");
+        assert_eq!(file.config(), &Config::default());
+        assert_eq!(
+            fs::read_to_string(&path).expect("the file"),
+            Config::default().to_toml()
+        );
+    }
+
+    #[test]
+    fn a_save_refuses_a_file_changed_on_disk() {
+        let scratch = scratch_file("changed", HAND_WRITTEN);
+        let path = scratch.path();
+        let mut file = ConfigFile::read(&path).expect("the configuration");
+        let mut config = file.config().clone();
+        config.round_limit = 3;
+        let theirs = Config::default().to_toml();
+        fs::write(&path, &theirs).expect("another writer");
+        let error = file.save(&config).expect_err("the file changed");
+        assert!(matches!(error, ConfigError::Changed { .. }), "{error:?}");
+        assert!(error.to_string().contains("changed on disk"), "{error}");
+        assert_eq!(fs::read_to_string(&path).expect("the file"), theirs);
+    }
+
+    #[test]
+    fn a_save_refuses_a_file_removed_from_disk() {
+        let scratch = scratch_file("removed", HAND_WRITTEN);
+        let path = scratch.path();
+        let mut file = ConfigFile::read(&path).expect("the configuration");
+        let config = file.config().clone();
+        fs::remove_file(&path).expect("removed");
+        let error = file.save(&config).expect_err("the file is gone");
+        assert!(matches!(error, ConfigError::Changed { .. }), "{error:?}");
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_refused_save_leaves_no_edit_in_the_document() {
+        // The document's tool is one the loaded configuration does not have,
+        // so the text a save writes would not hold the configuration: the save
+        // is refused. Its round-limit edit must not stay in the document.
+        let scratch = scratch_file("refused", HAND_WRITTEN);
+        let path = scratch.path();
+        let mut file = ConfigFile::read(&path).expect("the configuration");
+        file.document["harness"]["tool"] = toml_edit::value("elsewhere");
+        let mut config = file.config().clone();
+        config.round_limit = 3;
+        let error = file.save(&config).expect_err("the text would not hold it");
+        assert!(matches!(error, ConfigError::Lost { .. }), "{error:?}");
+        assert_eq!(file.document["round_limit"].as_integer(), Some(5));
+        assert_eq!(fs::read_to_string(&path).expect("the file"), HAND_WRITTEN);
+    }
+
+    #[test]
+    fn a_wrong_type_in_raul_is_a_shape_error() {
+        let text = Config::default()
+            .to_toml()
+            .replace("reverse = false", "reverse = \"yes\"");
+        let error = Config::from_toml(&text).expect_err("a string is not a flag");
+        assert!(matches!(&error, ConfigError::Shape { .. }), "{error:?}");
+    }
+
+    #[test]
+    fn the_pick_replaces_only_the_orchestrators_model_line() {
+        let text = Config::default().to_toml();
+        let picked = pick("pick", &text, "opencode-go/glm-5.3");
         let config = Config::from_toml(&picked).expect("the edited text still parses");
         let orchestrator = config
             .agents
@@ -803,45 +1184,18 @@ mod tests {
     fn a_pick_keeps_a_comment_beside_the_line_it_replaces() {
         // The comments are the human's: the pick changes the value, not the
         // notes beside it, and not the rest of the file.
-        let text = "\
-# the flow's configuration
-round_limit = 5
-
-# One entry per agent.
-[[agents]]
-# the builder
-name = \"builder\"
-role = \"runner\"
-model = \"opencode-go/deepseek-v4.1-flash#high\"
-
-[[agents]]
-name = \"orchestrator\"
-role = \"orchestrator\"
-model = \"opencode-go/glm-5.3#high\" # the orchestrator's lens
-
-# the harness
-[harness]
-tool = \"opencode\"
-driven = \"--standalone\"
-
-# the order
-[[order]]
-step = \"groom\"
-role = \"creator\"
-gates = [{ from = \"groomed\", to = \"approved\" }]
-";
-        assert!(text.contains("the orchestrator's lens"), "{text}");
-        let picked = Config::with_orchestrator_model(text, "opencode-go/kimi-k3")
-            .expect("the orchestrator's model line");
+        let picked = pick("comment", HAND_WRITTEN, "opencode-go/kimi-k3");
         assert!(
             picked.contains("model = \"opencode-go/kimi-k3\" # the orchestrator's lens"),
             "{picked}"
         );
         for kept in [
-            "# the flow's configuration",
+            "# coding-crew's configuration, kept by hand.",
             "# the builder",
             "# the harness",
             "# the order",
+            "extra_root = \"kept\"",
+            "note = \"a key this code does not know\"",
             "model = \"opencode-go/deepseek-v4.1-flash#high\"",
         ] {
             assert!(picked.contains(kept), "{kept}: {picked}");
@@ -861,25 +1215,11 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     fn a_single_quoted_toml_string_is_read_as_toml() {
         // A human may write the literal string form. The role is the same
         // role, and a `#` inside the string is not a comment.
-        let text = "\
-round_limit = 5
-[[agents]]
-name = 'builder'
-role = 'runner'
-model = 'opencode-go/deepseek-v4.1-flash#high'
-[[agents]]
-name = 'orchestrator'
-role = 'orchestrator'
-model = 'opencode-go/glm-5.3#high' # the orchestrator's lens
-[harness]
-tool = 'opencode'
-driven = '--standalone'
-[[order]]
-step = 'groom'
-role = 'creator'
-gates = [{ from = 'groomed', to = 'approved' }]
-";
-        let config = Config::from_toml(text).expect("single-quoted TOML");
+        let text = HAND_WRITTEN.replace(
+            "model = \"opencode-go/glm-5.3#high\" # the orchestrator's lens",
+            "model = 'opencode-go/glm-5.3#high' # the orchestrator's lens",
+        );
+        let config = Config::from_toml(&text).expect("single-quoted TOML");
         assert_eq!(
             config
                 .agents
@@ -888,9 +1228,7 @@ gates = [{ from = 'groomed', to = 'approved' }]
                 .map(|agent| agent.model.as_str()),
             Some("opencode-go/glm-5.3#high")
         );
-        assert_eq!(config.harness.tool, "opencode");
-        let picked = Config::with_orchestrator_model(text, "opencode-go/kimi-k3#low")
-            .expect("the orchestrator's model line");
+        let picked = pick("literal", &text, "opencode-go/kimi-k3#low");
         assert!(
             picked.contains("model = \"opencode-go/kimi-k3#low\" # the orchestrator's lens"),
             "{picked}"
@@ -898,10 +1236,78 @@ gates = [{ from = 'groomed', to = 'approved' }]
     }
 
     #[test]
-    fn a_hash_inside_a_literal_string_is_not_a_comment() {
-        assert_eq!(comment_start("name = 'a#b'"), None);
-        assert_eq!(comment_start("name = 'a#b' # note"), Some(13));
-        assert_eq!(pair("name = 'a#b'"), Some(("name", "'a#b'")));
+    fn a_hash_inside_a_model_is_part_of_the_value() {
+        // `#high` is the model's variant, not a comment.
+        let picked = pick(
+            "variant",
+            &Config::default().to_toml(),
+            "opencode-go/glm-5.3#low",
+        );
+        assert!(
+            picked.contains("model = \"opencode-go/glm-5.3#low\""),
+            "{picked}"
+        );
+    }
+
+    #[test]
+    fn a_configuration_without_an_orchestrator_has_no_pick_to_make() {
+        let mut config = Config::default();
+        config
+            .agents
+            .retain(|agent| agent.role != Role::Orchestrator);
+        assert!(!config.set_orchestrator_model("opencode-go/kimi-k3"));
+    }
+
+    #[test]
+    fn a_pick_reads_a_quoted_model_key_as_the_model_key() {
+        // `"model" = ...` is valid TOML. The orchestrator is first, so the
+        // reviewer's table follows it: the pick must change the orchestrator's
+        // line and no other.
+        let text = "\
+round_limit = 5
+
+[[agents]]
+name = \"orchestrator\"
+role = \"orchestrator\"
+\"model\" = \"opencode-go/glm-5.3#high\"
+
+[[agents]]
+name = \"reviewer\"
+role = \"reviewer\"
+model = \"opencode-go/glm-5.3#high\"
+
+[harness]
+tool = \"opencode\"
+driven = \"--standalone\"
+
+[[order]]
+step = \"groom\"
+role = \"creator\"
+gates = [{ from = \"groomed\", to = \"approved\" }]
+";
+        let picked = pick("quoted", text, "opencode-go/kimi-k3");
+        assert!(
+            picked.contains("\"model\" = \"opencode-go/kimi-k3\""),
+            "{picked}"
+        );
+        assert!(
+            picked.contains("model = \"opencode-go/glm-5.3#high\""),
+            "{picked}"
+        );
+        assert_eq!(picked.matches("kimi-k3").count(), 1, "{picked}");
+    }
+
+    #[test]
+    fn an_agent_without_a_model_is_unreadable() {
+        // A pick is no longer searched for in the text: a model is what an
+        // agent runs, and an agent that names none is not a configuration.
+        let text = Config::default().to_toml().replacen(
+            "role = \"orchestrator\"\nmodel = \"opencode-go/glm-5.3#high\"\n",
+            "role = \"orchestrator\"\n",
+            1,
+        );
+        let error = Config::from_toml(&text).expect_err("the orchestrator names no model");
+        assert!(matches!(&error, ConfigError::Shape { .. }), "{error:?}");
     }
 
     #[test]
@@ -939,87 +1345,6 @@ gates = [{ from = 'groomed', to = 'approved' }]
             .collect();
         assert!(leftovers.is_empty(), "{leftovers:?}");
         let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_pick_reads_a_hash_inside_a_model_as_part_of_the_value() {
-        // `#high` is the model's variant, not a comment: the line it is on
-        // is still the model line.
-        let text = Config::default().to_toml();
-        let picked = Config::with_orchestrator_model(&text, "opencode-go/glm-5.3#low")
-            .expect("the orchestrator's model line");
-        assert!(
-            picked.contains("model = \"opencode-go/glm-5.3#low\""),
-            "{picked}"
-        );
-    }
-
-    #[test]
-    fn text_without_an_orchestrator_has_no_pick_to_make() {
-        let text = Config::default().to_toml();
-        let without = text
-            .lines()
-            .filter(|line| !line.contains("orchestrator"))
-            .collect::<Vec<&str>>()
-            .join("\n");
-        // Drop the now-empty agent table: the text no longer parses as the
-        // same configuration, but the function only reads the model lines.
-        assert_eq!(
-            Config::with_orchestrator_model(&without, "opencode-go/kimi-k3"),
-            None
-        );
-        assert_eq!(
-            Config::with_orchestrator_model("round_limit = 5\n", "opencode-go/kimi-k3"),
-            None
-        );
-    }
-
-    #[test]
-    fn a_pick_reads_a_quoted_model_key_as_the_model_key() {
-        // `"model" = ...` is valid TOML. The orchestrator is first, so the
-        // reviewer's table follows it: the pick must change the orchestrator's
-        // line and no other.
-        let text = "\
-[[agents]]
-name = \"orchestrator\"
-role = \"orchestrator\"
-\"model\" = \"opencode-go/glm-5.3#high\"
-[[agents]]
-name = \"reviewer\"
-role = \"reviewer\"
-model = \"opencode-go/glm-5.3#high\"
-";
-        let picked = Config::with_orchestrator_model(text, "opencode-go/kimi-k3")
-            .expect("the orchestrator's model line");
-        assert!(
-            picked.contains("model = \"opencode-go/kimi-k3\""),
-            "{picked}"
-        );
-        assert!(
-            picked.ends_with(
-                "[[agents]]\nname = \"reviewer\"\nrole = \"reviewer\"\nmodel = \"opencode-go/glm-5.3#high\"\n"
-            ),
-            "{picked}"
-        );
-    }
-
-    #[test]
-    fn an_orchestrator_with_no_model_line_is_not_given_another_agents() {
-        // The orchestrator has no model line, and the reviewer after it does.
-        // The search stays in the orchestrator's table: no pick is made.
-        let text = "\
-[[agents]]
-name = \"orchestrator\"
-role = \"orchestrator\"
-[[agents]]
-name = \"reviewer\"
-role = \"reviewer\"
-model = \"opencode-go/glm-5.3#high\"
-";
-        assert_eq!(
-            Config::with_orchestrator_model(text, "opencode-go/kimi-k3"),
-            None
-        );
     }
 
     #[test]

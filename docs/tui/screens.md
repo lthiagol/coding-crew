@@ -48,7 +48,7 @@ row. The cursor is never on a row the pane does not show.
 | Path | what happens next, in order | claimable, in flight, blocked — with the reason |
 | Tasks | what tasks exist, in any state | every task file, searchable and sortable |
 | Backlog | what is not a task yet | smaller tasks and draft tasks |
-| Settings | how the tool behaves | the themes, the keys and the sorts |
+| Settings | how the tool behaves | the configuration file, as a file |
 
 The automation is not a raul tab. Its questions — the order, the queue, the
 crew, whether it runs — belong to hugo; the design record is in
@@ -193,8 +193,9 @@ own announcement of rows scrolled out of view is unchanged and separate. A
 filter that matches nothing is a named empty state — `no task matches` and the
 filter — never a blank pane.
 
-The order and the filter live for the session: they are not saved between
-runs (persisting them is under *Not defined yet*).
+The order and the filter live for the session. `o` and `O` change the order
+for the session only; the window starts in the order `[raul.tasks]` names in
+the configuration file. The filter is not saved between runs.
 
 ### Backlog
 
@@ -225,24 +226,58 @@ could be worked. The grouping is derived from the kind; it is never stored.
 
 ### Settings
 
-What the tool is doing, in one list — four groups, all derived, none stored,
-in this order.
+**The configuration file, as a file.** Settings shows
+`~/.config/coding-crew/config.toml` — the one configuration both tools read —
+drawn the way the file reads: its comments dim, its `[section]` headers
+strong, one `key = value` per line, in the file's own order. The pane's title
+names the path, and `● modified` while there are unsaved changes. Decided
+2026-11-22: the tab that "persists nothing" is overruled.
 
-| group | rows |
+**Everything in the file is editable** — raul's own `[raul]` table and the
+flow's sections (`round_limit`, each agent's `model` and `role`, the
+`[harness]`, the order's steps' values). Rows cannot be added or removed from
+raul; only values change. A comment line is not a row the cursor stops on.
+
+| value | how it changes |
 |---|---|
-| theme | one row per preset in the theme crate's `Preset::ALL`, so a new preset appears here without raul knowing it; the theme in use is marked, and exactly one row is; each row says what the theme is — a palette, or the terminal's own colours |
-| keys | one row per binding in raul's key table — the window's keys (quit, help, the tab keys), the row keys (the movement keys, opening a task) and the detail pane's keys (the scroll keys, and the key that returns) — so the list and the input handling are one table, and a key handled but not listed, or listed but not handled, fails the gate; the keys the tool no longer has are not listed |
-| sort | one row per tab, naming in words what comes first and the order the tab keeps; the order and the words come from the tab's own sort, so a tab sorted another way says so; the Overview has no sort and says so, and the detail pane is not a tab and has no row |
-| icons | one row per icon set, `nerd` and `unicode`; the set in force is marked, as the theme in force is, and exactly one row is; each row says what the set needs |
+| a choice (`theme`, `icons`, `role`, `sort`, a boolean) | `←` `→` cycle it in place; the line shows `◂ one · two · three ▸` while the cursor is on it |
+| text or a number (`model`, `driven`, `round_limit`) | `enter` edits it inline in the line; `enter` keeps, `esc` drops |
 
-The rows are a list with a cursor: the tab scrolls when its rows are taller
-than the pane, and the cursor is never on a row the pane does not draw — the
-same rule the row tabs keep, and the same announcement: what the pane does not
-show is named by group and count, so a count never appears without the set
-it counts. It reads: nothing here is changed from the tab, so
-`enter` opens nothing — the footer names the scroll keys and no open key, and
-the help names no open key either. A rebind and a persisted sort are a
-configuration file, and that is hugo's home.
+**A change previews at once** — pick `nord` and the screen repaints in Nord —
+and is written only by `w`. `u` undoes the unsaved changes; `r` reloads the
+file from disk. Quitting with unsaved changes asks first, in the footer: `w`
+save, `q` quit without saving, `esc` stay.
+
+**A value is checked before it is kept.** A choice can only be one of its
+choices; a number must be in its range (`round_limit` ≥ 1); a `model` must be
+a model id (`provider/name`, an optional `#variant`) — the catalogue is hugo's,
+so raul checks the shape only. A value that fails names its reason on its own
+line and is not kept.
+
+**Nothing on disk is lost.** The file is written format-preserving: the
+comments, the order, the spacing and the keys raul does not know survive a
+save. A file changed on disk since raul read it is not overwritten: `w` says
+`the file changed on disk` and offers `r` to reload. A file that does not
+parse is named with its error, left alone, and shown read-only with the
+defaults beside it — as hugo does.
+
+**The order of precedence**: a flag (`--theme`, `--icons`), then the
+environment (`CODING_CREW_ICONS`), then the file, then the defaults. A value
+the flag overrides says so on its line: `theme = "nord"  (overridden by
+--theme dark)`. raul writes the defaults — every value, with a comment above
+each part — when the file is absent, as hugo does; both tools write the same
+defaults from `crates/core`.
+
+The `[raul]` table:
+
+| key | values | default |
+|---|---|---|
+| `theme` | `Preset::ALL`'s names | `dark` |
+| `icons` | `nerd` · `unicode` | `nerd` |
+| `[raul.tasks] sort` | `id` · `created` · `updated` · `status` · `priority` · `effort` | `id` |
+| `[raul.tasks] reverse` | `true` · `false` | `false` |
+
+The key bindings are not configuration yet; the help overlay (`?`) lists them.
 
 ## The detail pane
 
@@ -333,8 +368,8 @@ runs it. The Overview is pinned byte for byte at 40, 60 and 100 columns in
   [docs/hugo/design-record.md](../hugo/design-record.md)
 - the journal — *Activity* is a block in the Overview, not a tab; the event
   kinds are provisional until the writer lands
-- persisted sort keys and keybinds — the Settings tab shows what is true today,
-  and changing it waits for the configuration file
+- persisted keybinds — the key bindings are not configuration yet; the help
+  overlay (`?`) lists them
 - the review's interaction: **raul reads**. A finding is shown, never acted on — acting on one
   needs a writer, a gate and talita's verbs, which are out of scope for now
 

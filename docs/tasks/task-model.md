@@ -623,8 +623,8 @@ edits, and a comment is how a configuration explains itself. The defaults hugo
 writes carry a short note beside each part. The records — the journal and the
 runtime record — are machine-written and stay JSON.
 
-The file is one TOML document. When it is absent, hugo writes the defaults into
-the home it creates on demand. A configuration that parses is used as it is. A
+The file is one TOML document. When it is absent, hugo or raul writes the
+defaults into the home it creates on demand. A configuration that parses is used as it is. A
 configuration that does not parse is named with its error, and the defaults are
 shown beside it, so the human sees both what is wrong and what the tool would
 use; the file is never replaced. The old `config.json` is not read: when one is
@@ -636,6 +636,8 @@ found beside the configuration, hugo says so and converts nothing.
 | `harness` | the `tool` the agents run in, and the way it is `driven` |
 | `round_limit` | the build-and-fix cycles a task gets: five |
 | `order` | the flow's steps, in the order they run |
+| `[raul]` | raul's own settings: the palette and the icons |
+| `[raul.tasks]` | the order the Tasks tab opens in |
 
 The TOML shape:
 
@@ -659,6 +661,18 @@ driven = "--standalone · role config"
 step = "groom"
 role = "creator"
 gates = [{ from = "groomed", to = "approved" }]
+
+# raul's own settings: theme is dark, nord, catppuccin, dracula or
+# terminal; icons is nerd or unicode. raul reads them at startup.
+[raul]
+theme = "dark"
+icons = "nerd"
+
+# The order the Tasks tab opens in: the key it sorts by, and whether it
+# runs backwards.
+[raul.tasks]
+sort = "id"
+reverse = false
 ```
 
 An agent entry:
@@ -676,6 +690,21 @@ An order step:
 | `step` | the step's name — `groom`, `build` |
 | `role` | the role that does it |
 | `gates` | the transitions it passes: each a `from` and a `to` status |
+
+raul's table:
+
+| table | field | rule |
+|---|---|---|
+| `[raul]` | `theme` | the palette: `dark` · `nord` · `catppuccin` · `dracula` · `terminal`; default `dark` |
+| `[raul]` | `icons` | the icon set: `nerd` · `unicode`; default `nerd` |
+| `[raul.tasks]` | `sort` | the key: `id` · `created` · `updated` · `status` · `priority` · `effort`; default `id` |
+| `[raul.tasks]` | `reverse` | `true` · `false`; default `false` |
+
+An absent key, or an absent table, means its default, so a file written before
+`[raul]` loads unchanged. A save writes only the values that changed: a file
+without `[raul]` is not rewritten to add it. For `theme` and `icons` the order
+is a flag, then the environment (`CODING_CREW_ICONS`, icons only), then the
+file, then the default.
 
 The defaults are the project's own flow: the builder on
 `opencode-go/deepseek-v4.1-flash#high` and the reviewer on

@@ -9,6 +9,8 @@ use std::env;
 
 /// The environment variable that chooses the set when no flag does.
 pub const ENV: &str = "CODING_CREW_ICONS";
+/// Where the configuration file names the set, for an error to say so.
+const FILE: &str = "config.toml [raul] icons";
 
 /// The two glyph sets.
 ///
@@ -37,21 +39,27 @@ impl IconSet {
         IconSet::ALL.into_iter().find(|set| set.name() == name)
     }
 
-    /// The set in force: the flag's, then the environment's, then `nerd`.
+    /// The set in force: the flag's, then the environment's, then the
+    /// configuration file's, then `nerd`.
     ///
     /// A name that is neither set is refused rather than replaced by the
     /// default: a typo would otherwise draw the wrong set without a word.
-    pub fn resolve(flag: Option<&str>) -> Result<Self, String> {
+    pub fn resolve(flag: Option<&str>, file: Option<&str>) -> Result<Self, String> {
         let env = env::var(ENV).ok();
-        Self::choose(flag, env.as_deref())
+        Self::choose(flag, env.as_deref(), file)
     }
 
-    /// The set the flag and the environment name, with the default last.
-    /// An empty environment variable is unset.
-    fn choose(flag: Option<&str>, env: Option<&str>) -> Result<Self, String> {
-        match (flag, env) {
-            (Some(name), _) => Self::named("--icons", name),
-            (None, Some(name)) if !name.is_empty() => Self::named(ENV, name),
+    /// The set the flag, the environment and the file name, with the default
+    /// last. An empty environment variable is unset.
+    pub fn choose(
+        flag: Option<&str>,
+        env: Option<&str>,
+        file: Option<&str>,
+    ) -> Result<Self, String> {
+        match (flag, env, file) {
+            (Some(name), _, _) => Self::named("--icons", name),
+            (None, Some(name), _) if !name.is_empty() => Self::named(ENV, name),
+            (None, _, Some(name)) => Self::named(FILE, name),
             _ => Ok(IconSet::Nerd),
         }
     }
@@ -424,29 +432,61 @@ mod tests {
     #[test]
     fn the_flag_chooses_the_set_over_the_environment() {
         assert_eq!(
-            IconSet::choose(Some("unicode"), Some("nerd")),
+            IconSet::choose(Some("unicode"), Some("nerd"), None),
             Ok(IconSet::Unicode)
         );
-        assert_eq!(IconSet::choose(Some("nerd"), None), Ok(IconSet::Nerd));
+        assert_eq!(IconSet::choose(Some("nerd"), None, None), Ok(IconSet::Nerd));
     }
 
     #[test]
     fn the_environment_chooses_the_set_without_a_flag() {
-        assert_eq!(IconSet::choose(None, Some("unicode")), Ok(IconSet::Unicode));
+        assert_eq!(
+            IconSet::choose(None, Some("unicode"), None),
+            Ok(IconSet::Unicode)
+        );
     }
 
     #[test]
     fn nerd_is_the_default() {
-        assert_eq!(IconSet::choose(None, None), Ok(IconSet::Nerd));
-        assert_eq!(IconSet::choose(None, Some("")), Ok(IconSet::Nerd));
+        assert_eq!(IconSet::choose(None, None, None), Ok(IconSet::Nerd));
+        assert_eq!(IconSet::choose(None, Some(""), None), Ok(IconSet::Nerd));
+    }
+
+    #[test]
+    fn the_file_chooses_the_set_below_the_flag_and_the_environment() {
+        assert_eq!(
+            IconSet::choose(None, None, Some("unicode")),
+            Ok(IconSet::Unicode)
+        );
+        assert_eq!(
+            IconSet::choose(None, Some("nerd"), Some("unicode")),
+            Ok(IconSet::Nerd)
+        );
+        assert_eq!(
+            IconSet::choose(Some("nerd"), None, Some("unicode")),
+            Ok(IconSet::Nerd)
+        );
+        assert_eq!(
+            IconSet::choose(None, Some(""), Some("unicode")),
+            Ok(IconSet::Unicode)
+        );
+    }
+
+    #[test]
+    fn an_unknown_set_in_the_file_is_refused_and_named() {
+        let file = IconSet::choose(None, None, Some("emoji")).expect_err("a file typo");
+        assert!(
+            file.contains("config.toml") && file.contains("emoji"),
+            "{file}"
+        );
     }
 
     #[test]
     fn an_unknown_set_is_refused_and_named() {
-        let flag = IconSet::choose(Some("emoji"), Some("nerd")).expect_err("a flag typo");
+        let flag = IconSet::choose(Some("emoji"), Some("nerd"), None).expect_err("a flag typo");
         assert!(flag.contains("--icons") && flag.contains("emoji"), "{flag}");
         assert!(flag.contains("nerd, unicode"), "{flag}");
-        let env = IconSet::choose(None, Some("emoji")).expect_err("an environment typo");
+        let env = IconSet::choose(None, Some("emoji"), None).expect_err("an environment typo");
         assert!(env.contains(ENV) && env.contains("emoji"), "{env}");
     }
 

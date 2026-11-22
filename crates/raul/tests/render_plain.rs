@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::OnceLock;
 
+use coding_crew_core::config::{CONFIG_FILE, Config, config_path, home_at};
 use coding_crew_theme::chrome::SPINNER;
 use coding_crew_theme::{Icon, IconSet};
 
@@ -75,9 +76,18 @@ fn run_in(dir: &Path, args: &[&str]) -> Output {
         // The variable names a set only when no flag does: a developer's own
         // choice must not change a snapshot that is recorded in nerd.
         .env_remove(ICONS_ENV)
+        .env("HOME", render_home())
         .args(args)
         .output()
         .expect("running raul")
+}
+
+/// The home folder the renders read their configuration from. A developer's
+/// own file must not change a snapshot, so the renders never read `$HOME`.
+fn render_home() -> PathBuf {
+    let home = std::env::temp_dir().join(format!("raul-render-home-{}", std::process::id()));
+    fs::create_dir_all(&home).expect("a scratch home");
+    home
 }
 
 /// Every ordering of the indices `0..count`.
@@ -608,12 +618,76 @@ fn assert_overview_at(width: u16, name: &str) {
 }
 
 #[test]
+fn the_file_names_the_icon_set_when_no_flag_or_variable_does() {
+    // The file's `[raul] icons` draws the set a flag or a variable does not
+    // name, and a flag still beats it.
+    let home = std::env::temp_dir().join(format!("raul-file-home-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&home);
+    fs::create_dir_all(home_at(&home)).expect("the home");
+    let text = Config::default()
+        .to_toml()
+        .replace("icons = \"nerd\"", "icons = \"unicode\"");
+    fs::write(config_path(&home), text).expect("the file");
+    let render = |flags: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_raul"))
+            .current_dir(repo_root())
+            .env_remove(ICONS_ENV)
+            .env("HOME", &home)
+            .args(["--render", "--plain", "--width", "100", "--height", "40"])
+            .args(flags)
+            .arg(WORK)
+            .output()
+            .expect("running raul");
+        assert!(output.status.success(), "raul failed: {output:?}");
+        String::from_utf8(output.stdout).expect("the plain render is UTF-8")
+    };
+    let unicode = render(&["--icons", "unicode"]);
+    assert_eq!(render(&[]), unicode, "the file names unicode");
+    let nerd = fs::read_to_string(snapshot_path("overview.txt")).expect("the overview snapshot");
+    assert_eq!(
+        render(&["--icons", "nerd"]),
+        nerd,
+        "the flag beats the file"
+    );
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_broken_file_renders_the_default_screen_and_names_the_problem() {
+    // A file raul cannot read does not stop it: the screen is the one the
+    // defaults draw, and the file and the error are named on stderr.
+    let home = std::env::temp_dir().join(format!("raul-broken-home-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&home);
+    fs::create_dir_all(home_at(&home)).expect("the home");
+    fs::write(config_path(&home), "round_limit = \n").expect("a broken file");
+    let output = Command::new(env!("CARGO_BIN_EXE_raul"))
+        .current_dir(repo_root())
+        .env_remove(ICONS_ENV)
+        .env("HOME", &home)
+        .args([
+            "--render", "--plain", "--width", "100", "--height", "40", WORK,
+        ])
+        .output()
+        .expect("running raul");
+    assert!(output.status.success(), "raul failed: {output:?}");
+    let text = String::from_utf8(output.stdout).expect("the plain render is UTF-8");
+    let snapshot =
+        fs::read_to_string(snapshot_path("overview.txt")).expect("the overview snapshot");
+    assert_eq!(text, snapshot, "a broken file draws the defaults");
+    let stderr = String::from_utf8(output.stderr).expect("stderr is UTF-8");
+    assert!(stderr.contains(CONFIG_FILE), "{stderr}");
+    assert!(stderr.contains("syntax error"), "{stderr}");
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
 fn a_flag_names_the_icon_set_over_the_environment() {
     // A developer who exports the unicode set still gets the nerd snapshot
     // when the command names nerd: the flag wins over the variable.
     let output = Command::new(env!("CARGO_BIN_EXE_raul"))
         .current_dir(repo_root())
         .env(ICONS_ENV, "unicode")
+        .env("HOME", render_home())
         .args([
             "--render", "--plain", "--icons", "nerd", "--width", "100", "--height", "40", WORK,
         ])

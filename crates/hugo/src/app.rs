@@ -3790,7 +3790,11 @@ mod tests {
         // The configuration keeps the model in force, and the sidebar says
         // the pick did not land.
         let home = scratch("pick-failure");
-        fs::write(home.join(crate::config::CONFIG_DIR), "not a folder").expect("a blocking file");
+        fs::write(
+            home.join(coding_crew_core::config::CONFIG_DIR),
+            "not a folder",
+        )
+        .expect("a blocking file");
         let mut app = on_orchestrator(Some(home.clone()));
         app.fill_choice(Ok(Catalog::from_lines(
             "opencode-go/kimi-k3\nopencode-go/glm-5.3\n",

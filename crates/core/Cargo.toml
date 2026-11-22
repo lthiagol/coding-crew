@@ -14,6 +14,7 @@ thiserror.workspace = true
 # The configuration is TOML, because a human edits it and JSON has nowhere to
 # put a comment. The records stay JSON.
 toml.workspace = true
+toml_edit.workspace = true
 # The screen both TUIs open and the plain render they print: one
 # implementation of the terminal plumbing, shared with raul and hugo.
 crossterm.workspace = true

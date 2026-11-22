@@ -1409,31 +1409,23 @@ mod tests {
     }
 
     #[test]
-    fn the_settings_section_of_the_screens_doc_names_the_groups_and_the_rule() {
+    fn the_settings_section_of_the_screens_doc_names_the_file_and_the_precedence() {
+        // The section is the configuration file, drawn as a file. The view
+        // that draws it is the next unit; the doc names the file and the order
+        // its values are read in.
         let doc = include_str!("../../../docs/tui/screens.md");
         let section = doc
             .split("### Settings")
             .nth(1)
             .and_then(|rest| rest.split("## The detail pane").next())
             .expect("the Settings section");
-        let positions: Vec<usize> = GroupKind::ALL
-            .iter()
-            .map(|kind| {
-                section
-                    .find(&format!("| {} |", kind.label()))
-                    .unwrap_or_else(|| panic!("the doc has no {} row", kind.label()))
-            })
-            .collect();
-        let mut sorted = positions.clone();
-        sorted.sort_unstable();
-        assert_eq!(positions, sorted, "the doc groups are out of order");
         assert!(
-            section.contains("`enter` opens nothing"),
-            "the doc does not say the tab reads"
+            section.contains("`~/.config/coding-crew/config.toml`"),
+            "the doc does not name the file"
         );
         assert!(
-            section.contains("no open key"),
-            "the doc does not say the footer names no open key"
+            section.contains("**The order of precedence**"),
+            "the doc does not say the order of precedence"
         );
     }
 

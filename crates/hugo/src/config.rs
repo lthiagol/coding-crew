@@ -16,24 +16,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use coding_crew_core::config::{CONFIG_FILE, Config, LEGACY_CONFIG_FILE};
+use coding_crew_core::config::{CONFIG_FILE, Config, ConfigError, ConfigFile, LEGACY_CONFIG_FILE};
+pub use coding_crew_core::config::{config_path, home_at, user_home};
 
 use crate::app::ReadError;
-
-/// The folder's name under `~/.config/`.
-pub const APP_DIR: &str = "coding-crew";
-/// The folder under the user's home that holds every tool's configuration.
-pub const CONFIG_DIR: &str = ".config";
-
-/// The configuration home under a user's home folder.
-pub fn home_at(home: &Path) -> PathBuf {
-    home.join(CONFIG_DIR).join(APP_DIR)
-}
-
-/// The running user's home folder, when there is one.
-pub fn user_home() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
-}
 
 /// Create the configuration home under `home`, and return it.
 ///
@@ -43,11 +29,6 @@ pub fn ensure_at(home: &Path) -> Result<PathBuf> {
     let dir = home_at(home);
     fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     Ok(dir)
-}
-
-/// The configuration file under a user's home folder.
-pub fn config_path(home: &Path) -> PathBuf {
-    home_at(home).join(CONFIG_FILE)
 }
 
 /// The state of the configuration itself.
@@ -137,35 +118,43 @@ pub fn load(home: Option<&Path>) -> ConfigRead {
 
 /// Save the orchestrator's model into the configuration under `home`.
 ///
-/// The pick goes into the text the human wrote: the orchestrator's `model`
-/// line is the one line replaced, so every comment and every other setting
-/// stays. When the file is gone, the configuration in hand is written whole.
-/// Returns the configuration as saved, so the sidebar shows what the file
-/// holds.
+/// The pick goes into the file the human wrote: the file is read again, the
+/// orchestrator's model is set, and only that value is written back, so every
+/// comment and every other setting stays. When the file is gone, the
+/// configuration in hand is written whole, with the pick. Returns the
+/// configuration as saved, so the sidebar shows what the file holds.
 pub fn save_pick_at(home: &Path, config: &Config, model: &str) -> Result<Config, ReadError> {
     let _ = ensure_at(home)
         .map_err(|error| unreadable(home_at(home).display().to_string(), error.to_string()))?;
     let path = config_path(home);
-    let text = match fs::read_to_string(&path) {
-        // The model goes into the line the human wrote; a file that no
-        // longer holds the orchestrator is not overwritten with one guess.
-        Ok(text) => Config::with_orchestrator_model(&text, model).ok_or_else(|| {
-            unreadable(
-                CONFIG_FILE.to_string(),
-                "the file has no orchestrator's model line".to_string(),
-            )
-        })?,
-        // The file is gone: the configuration in hand is written whole.
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => config.to_toml(),
-        Err(error) => {
-            return Err(unreadable(CONFIG_FILE.to_string(), error.to_string()));
+    let mut file = match ConfigFile::read(&path) {
+        Ok(file) => file,
+        Err(ConfigError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            let mut whole = config.clone();
+            if !whole.set_orchestrator_model(model) {
+                return Err(no_orchestrator());
+            }
+            whole
+                .write(&path)
+                .map_err(|error| unreadable(CONFIG_FILE.to_string(), error.to_string()))?;
+            return Ok(whole);
         }
+        Err(error) => return Err(unreadable(CONFIG_FILE.to_string(), error.to_string())),
     };
-    let saved = Config::from_toml(&text)
+    let mut picked = file.config().clone();
+    if !picked.set_orchestrator_model(model) {
+        return Err(no_orchestrator());
+    }
+    file.save(&picked)
         .map_err(|error| unreadable(CONFIG_FILE.to_string(), error.to_string()))?;
-    Config::write_text(&path, &text)
-        .map_err(|error| unreadable(CONFIG_FILE.to_string(), error.to_string()))?;
-    Ok(saved)
+    Ok(file.config().clone())
+}
+
+fn no_orchestrator() -> ReadError {
+    unreadable(
+        CONFIG_FILE.to_string(),
+        "the configuration has no orchestrator".to_string(),
+    )
 }
 
 /// The name of the old configuration beside the new one, when it is there.
@@ -187,7 +176,7 @@ mod tests {
     use std::fs;
 
     use super::*;
-    use coding_crew_core::config::LEGACY_CONFIG_FILE;
+    use coding_crew_core::config::{CONFIG_DIR, LEGACY_CONFIG_FILE};
 
     /// A scratch home folder for one test.
     fn scratch(name: &str) -> PathBuf {

@@ -57,6 +57,9 @@ pub struct App {
     pub filter: String,
     /// The filter line is open: the keys type into it.
     pub typing: bool,
+    /// A line the window shows under the rule, until the session ends: the
+    /// configuration problem raul started past.
+    pub notice: Option<String>,
 }
 
 impl App {
@@ -74,6 +77,7 @@ impl App {
             order: Order::default(),
             filter: String::new(),
             typing: false,
+            notice: None,
         }
     }
 
@@ -317,10 +321,13 @@ impl App {
     /// question all answer from one instant.
     pub fn draw(&mut self, frame: &mut Frame, work: &Work, now: &str) {
         let area = frame.area();
+        // The notice row is there only while a notice is: a window without one
+        // keeps the layout it always had.
         let rows = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Length(1),
+            Constraint::Length(u16::from(self.notice.is_some())),
             Constraint::Min(3),
             Constraint::Length(1),
         ])
@@ -330,7 +337,11 @@ impl App {
         frame.render_widget(self.title_line(rows[0].width, work, now), rows[0]);
         frame.render_widget(tabs, rows[1]);
         frame.render_widget(rule, rows[2]);
-        let body = rows[3];
+        if let Some(notice) = &self.notice {
+            let line = Span::styled(notice.clone(), self.theme.semantic.warn);
+            frame.render_widget(Line::from(line), rows[3]);
+        }
+        let body = rows[4];
         // The row the cursor is on is the row enter opens: the highlight
         // and the key agree, including before the first move.
         let selected = self.cursor(work, now);
@@ -398,7 +409,7 @@ impl App {
             detail::render(frame, area, work, detail, self.icons, &self.theme);
             return;
         }
-        frame.render_widget(self.footer(rows[4].width, work, now, hidden), rows[4]);
+        frame.render_widget(self.footer(rows[5].width, work, now, hidden), rows[5]);
 
         if self.help {
             let has_rows = rows_of(work, self.tab, now, self.order, &self.filter)
@@ -1280,6 +1291,19 @@ mod tests {
         assert!(!text.contains("Settings"), "{text}");
         assert!(text.contains("quit"), "{text}");
         assert!(text.contains("help"), "{text}");
+    }
+
+    #[test]
+    fn a_notice_is_drawn_under_the_rule_and_the_footer_stays_last() {
+        // The notice takes a row between the rule and the content. A window
+        // without one keeps its rows, and the footer is the last row either way.
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Overview, false);
+        let plain = render(&mut app, 100, 20).0;
+        app.notice = Some("config.toml [raul] theme: unknown theme light".to_string());
+        let noticed = render(&mut app, 100, 20).0;
+        assert!(noticed[3].contains("unknown theme light"), "{noticed:?}");
+        assert_eq!(noticed.len(), plain.len());
+        assert_eq!(noticed.last(), plain.last());
     }
 
     #[test]

@@ -208,8 +208,8 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Options> {
     if render != plain {
         bail!("--render and --plain go together\n{USAGE}");
     }
-    let icons =
-        IconSet::resolve(icons.as_deref()).map_err(|error| anyhow::anyhow!("{error}\n{USAGE}"))?;
+    let icons = IconSet::resolve(icons.as_deref(), None)
+        .map_err(|error| anyhow::anyhow!("{error}\n{USAGE}"))?;
     Ok(Options {
         theme: Theme::preset(preset),
         icons,

@@ -953,6 +953,7 @@ mod tests {
                     to: coding_crew_core::Status::Groomed,
                 }],
             }],
+            ..Config::default()
         };
         let rows = rendered(&ConfigRead::of(ConfigState::Config(config)), 30, 40);
         let text = rows.join("\n");

@@ -5,6 +5,7 @@
 mod announce;
 mod app;
 mod backlog;
+mod config;
 mod data;
 mod detail;
 mod filter;
@@ -28,10 +29,13 @@ use ratatui::Terminal;
 use ratatui::backend::{CrosstermBackend, TestBackend};
 
 use app::{Action, App};
+use coding_crew_core::config::user_home;
 use coding_crew_core::screen::{plain_text, restore, setup};
 use coding_crew_core::store::{DATA_DIR, WORK_DIR};
 use coding_crew_core::{Store, StoreError};
-use coding_crew_theme::{IconSet, Preset, Theme};
+use coding_crew_theme::icons::ENV as ICONS_ENV;
+use coding_crew_theme::{IconSet, Preset};
+use config::Look;
 use data::{Missing, Work};
 use detail::Detail;
 use tabs::Tab;
@@ -48,13 +52,21 @@ const MAX_DIMENSION: u16 = 1000;
 
 fn main() -> Result<()> {
     let options = parse_args(std::env::args().skip(1))?;
+    let loaded = config::load(user_home().as_deref());
+    let env = std::env::var(ICONS_ENV).ok();
+    let look = config::resolve(
+        options.theme,
+        options.icons.as_deref(),
+        env.as_deref(),
+        &loaded,
+    )?;
 
     if options.render {
-        return render_plain(options);
+        return render_plain(options, look);
     }
 
     let mut terminal = setup()?;
-    let result = run(&mut terminal, options);
+    let result = run(&mut terminal, options, look);
     restore(&mut terminal)?;
     result
 }
@@ -66,10 +78,11 @@ struct Options {
     root: PathBuf,
     /// Why the folder is not there, when it is not.
     reason: Missing,
-    /// The colours of the window.
-    theme: Theme,
-    /// The icon set the window draws with.
-    icons: IconSet,
+    /// The palette the flag names, when one does. The file's or the default
+    /// is used otherwise: see `config::resolve`.
+    theme: Option<Preset>,
+    /// The icon set the flag names, when one does, by its name.
+    icons: Option<String>,
     /// Print the screen as text and exit.
     render: bool,
     /// The columns of a plain render.
@@ -89,7 +102,7 @@ struct Options {
 /// with a flag.
 fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     let mut root: Option<PathBuf> = None;
-    let mut preset = Preset::Dark;
+    let mut preset: Option<Preset> = None;
     let mut icons: Option<String> = None;
     let mut render = false;
     let mut plain = false;
@@ -109,10 +122,10 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
                 let Some(name) = args.next() else {
                     bail!("--theme needs a name\n{USAGE}");
                 };
-                preset = preset_of(&name)?;
+                preset = Some(preset_of(&name)?);
             }
             other if other.starts_with("--theme=") => {
-                preset = preset_of(&other["--theme=".len()..])?;
+                preset = Some(preset_of(&other["--theme=".len()..])?);
             }
             "--icons" => {
                 let Some(name) = args.next() else {
@@ -200,8 +213,12 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     if tab.is_some() && detail.is_some() {
         bail!("--tab and --detail cannot be combined: the detail pane covers the tab\n{USAGE}");
     }
-    let icons =
-        IconSet::resolve(icons.as_deref()).map_err(|error| anyhow::anyhow!("{error}\n{USAGE}"))?;
+    // The flag's name is checked here; the environment and the file are
+    // checked when the look is resolved.
+    if let Some(name) = &icons {
+        IconSet::choose(Some(name), None, None)
+            .map_err(|error| anyhow::anyhow!("{error}\n{USAGE}"))?;
+    }
     let (root, reason) = match root {
         Some(root) => {
             let reason = reason_at(&root);
@@ -212,7 +229,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
     Ok(Options {
         root,
         reason,
-        theme: Theme::preset(preset),
+        theme: preset,
         icons,
         render,
         width,
@@ -292,9 +309,15 @@ fn reason_at(root: &Path) -> Missing {
 }
 
 /// The window loop. The folder is read again on every redraw.
-fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> Result<()> {
+fn run(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    options: Options,
+    look: Look,
+) -> Result<()> {
     let reason = options.reason;
-    let mut app = App::new(options.root, options.theme, options.icons);
+    let mut app = App::new(options.root, look.theme, look.icons);
+    app.order = look.order;
+    app.notice = look.problem;
     loop {
         let work = Work::load_missing(&app.root, reason);
         // One clock read per frame: the draw and the key that answers it
@@ -319,8 +342,15 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, options: Options) -> R
 ///
 /// With `--detail`, the screen is the detail pane over the whole window,
 /// bounded by the same dimensions.
-fn render_plain(options: Options) -> Result<()> {
-    let mut app = App::new(options.root, options.theme, options.icons);
+///
+/// A configuration problem is named on stderr: the screen on stdout is the
+/// one raul draws with the defaults.
+fn render_plain(options: Options, look: Look) -> Result<()> {
+    if let Some(problem) = &look.problem {
+        eprintln!("{problem}");
+    }
+    let mut app = App::new(options.root, look.theme, look.icons);
+    app.order = look.order;
     app.tab = options.tab;
     let work = Work::load_missing(&app.root, options.reason);
     if let Some(id) = &options.detail {
@@ -432,9 +462,10 @@ mod tests {
     }
 
     #[test]
-    fn the_theme_is_the_dark_one_by_default() {
+    fn the_theme_is_not_named_without_a_flag() {
+        // The file, then the default, decide the palette: see `config::resolve`.
         let options = parse_args(std::iter::empty()).expect("the options");
-        assert_eq!(options.theme, Theme::preset(Preset::Dark));
+        assert_eq!(options.theme, None);
     }
 
     #[test]
@@ -450,7 +481,7 @@ mod tests {
                 vec![format!("--theme={name}")],
             ] {
                 let options = parse_args(args.into_iter()).expect("the options");
-                assert_eq!(options.theme, Theme::preset(preset), "{name}");
+                assert_eq!(options.theme, Some(preset), "{name}");
             }
         }
     }
@@ -473,7 +504,7 @@ mod tests {
                 vec![format!("--icons={name}")],
             ] {
                 let options = parse_args(args.into_iter()).expect("the options");
-                assert_eq!(options.icons, set, "{name}");
+                assert_eq!(options.icons.as_deref(), Some(set.name()), "{name}");
             }
         }
     }
