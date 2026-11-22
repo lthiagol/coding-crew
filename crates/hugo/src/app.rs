@@ -75,8 +75,6 @@ pub const NO_MODELS: &str = "no models in the catalog";
 pub const SIDEBAR_TITLE: &str = "configuration";
 /// The main pane's block title.
 pub const FLOW_TITLE: &str = "flow";
-/// The main pane's icon: what is running.
-const FLOW_ICON: Icon = Icon::Running;
 /// The main pane's named empty state.
 pub const FLOW_EMPTY: &str = "nothing is running";
 /// The main pane's state when the record is there but cannot be read.
@@ -746,7 +744,8 @@ impl App {
             frame.render_widget(Paragraph::new(line), area);
             return;
         }
-        let block = chrome::pane(title, FLOW_ICON, self.icons, false, &self.theme);
+        // No record means nothing runs, so the pane wears the stopped icon.
+        let block = chrome::pane(title, Icon::Stopped, self.icons, false, &self.theme);
         // The inner width is the pane's own: a state that does not fit is
         // cut and marked, never drawn past the border.
         let inner = area.width.saturating_sub(2);
@@ -767,7 +766,8 @@ impl App {
             return;
         }
         let inner = if area.height >= 3 && area.width >= 4 {
-            let block = chrome::pane(FLOW_TITLE, FLOW_ICON, self.icons, false, &self.theme);
+            // Whether it runs is not known, so the pane keeps hugo's icon.
+            let block = chrome::pane(FLOW_TITLE, Icon::Config, self.icons, false, &self.theme);
             let inner = block.inner(area);
             frame.render_widget(block, area);
             inner
@@ -797,7 +797,13 @@ impl App {
             self.flow_body(frame, area, runtime, now, tick);
             return;
         }
-        let block = chrome::pane(FLOW_TITLE, FLOW_ICON, self.icons, false, &self.theme);
+        let block = chrome::pane(
+            FLOW_TITLE,
+            run_icon(runtime.stamp.runs),
+            self.icons,
+            false,
+            &self.theme,
+        );
         let inner = block.inner(area);
         frame.render_widget(block, area);
         self.flow_body(frame, inner, runtime, now, tick);
@@ -937,9 +943,9 @@ impl App {
     /// who reviews.
     ///
     /// The columns line up while the table fits the pane, under a dim header
-    /// that names them. Where it does not, each row is drawn alone, with its
-    /// task and hold in words, and a row too wide for one line takes two, then
-    /// three. No fact is dropped with the width.
+    /// that names them. Where it does not, every row is drawn alone, with its
+    /// task and hold in words, in one form for the whole crew. No fact is
+    /// dropped with the width.
     fn crew_lines(
         &self,
         runtime: &Runtime,
@@ -965,19 +971,11 @@ impl App {
         let mut lines = Vec::new();
         if aligned {
             lines.push(self.fit(row_spans(&header, &widths), width));
-        }
-        for (row, cells) in rows.iter().zip(&columns) {
-            if aligned {
+            for cells in &columns {
                 lines.push(self.fit(row_spans(cells, &widths), width));
-                continue;
             }
-            let alone = row.alone();
-            let own = alone.each_ref().map(|(text, _)| text_width(text));
-            if columns_width(&own) <= width {
-                lines.push(self.fit(row_spans(&alone, &own), width));
-            } else {
-                lines.extend(self.crew_wrapped(row, width));
-            }
+        } else {
+            lines.extend(self.crew_unaligned(&rows, width));
         }
         lines.push(self.fit(
             vec![(
@@ -1046,28 +1044,27 @@ impl App {
         }
     }
 
-    /// A row too wide for one line, on two lines, then three: the agent and
-    /// its state, then what it holds. Every line under the agent is indented
-    /// the same two columns.
-    fn crew_wrapped(&self, row: &CrewRow, width: usize) -> Vec<Line<'static>> {
-        let [role, model, phrase, state] = row.alone();
-        let gap = |text: &str| (text.to_string(), Style::default());
-        let two = vec![
-            role.clone(),
-            gap("  "),
-            model.clone(),
-            gap("  "),
-            state.clone(),
+    /// The crew without its header: one form for every row, the widest that
+    /// every row fits, so the rows share one shape and one separator. Each row
+    /// is one line if they all fit, else two, else three.
+    fn crew_unaligned(&self, rows: &[CrewRow], width: usize) -> Vec<Line<'static>> {
+        let forms: [CrewForm; 3] = [
+            CrewRow::on_one_line,
+            CrewRow::on_two_lines,
+            CrewRow::on_three_lines,
         ];
-        let tail = vec![gap("  "), phrase.clone()];
-        if spans_width(&two) <= width && spans_width(&tail) <= width {
-            return vec![self.fit(two, width), self.fit(tail, width)];
-        }
-        vec![
-            self.fit(vec![role, gap(" · "), state], width),
-            self.fit(vec![gap("  "), model], width),
-            self.fit(tail, width),
-        ]
+        let fits = |form: CrewForm| {
+            rows.iter()
+                .all(|row| form(row).iter().all(|line| spans_width(line) <= width))
+        };
+        let form = forms
+            .into_iter()
+            .find(|form| fits(*form))
+            .unwrap_or(CrewRow::on_three_lines);
+        rows.iter()
+            .flat_map(form)
+            .map(|spans| self.fit(spans, width))
+            .collect()
     }
 
     /// The queue: the unclaimed work, an id and a status, and the count with
@@ -1585,6 +1582,43 @@ impl CrewRow {
             self.state.clone(),
         ]
     }
+
+    /// The row on one line: the agent, its model, what it holds, its state.
+    fn on_one_line(&self) -> Vec<Vec<(String, Style)>> {
+        vec![joined(&self.alone())]
+    }
+
+    /// The row on two lines: the agent, its model and state, then what it
+    /// holds under them.
+    fn on_two_lines(&self) -> Vec<Vec<(String, Style)>> {
+        let [role, model, phrase, state] = self.alone();
+        vec![joined(&[role, model, state]), continuation(phrase)]
+    }
+
+    /// The row on three lines: the agent and its state, then its model and
+    /// what it holds under them.
+    fn on_three_lines(&self) -> Vec<Vec<(String, Style)>> {
+        let [role, model, phrase, state] = self.alone();
+        vec![
+            joined(&[role, state]),
+            continuation(model),
+            continuation(phrase),
+        ]
+    }
+}
+
+/// One way of drawing a crew row: the lines it takes, each a line of spans.
+type CrewForm = fn(&CrewRow) -> Vec<Vec<(String, Style)>>;
+
+/// A row's cells one gap apart, with no padding.
+fn joined(cells: &[(String, Style)]) -> Vec<(String, Style)> {
+    let widths: Vec<usize> = cells.iter().map(|(text, _)| text_width(text)).collect();
+    row_spans(cells, &widths)
+}
+
+/// A line under a crew row: one cell, indented the two columns under the agent.
+fn continuation(cell: (String, Style)) -> Vec<(String, Style)> {
+    vec![("  ".to_string(), Style::default()), cell]
 }
 
 /// A row's cells padded to the columns' widths. The last column is not
@@ -1614,6 +1648,11 @@ fn columns_width(widths: &[usize]) -> usize {
 /// The width of a line of spans.
 fn spans_width(spans: &[(String, Style)]) -> usize {
     spans.iter().map(|(text, _)| text_width(text)).sum()
+}
+
+/// The icon of a run: the automation runs, or it stopped.
+fn run_icon(runs: bool) -> Icon {
+    if runs { Icon::Running } else { Icon::Stopped }
 }
 
 /// The stage of a review, in words.
@@ -2405,6 +2444,36 @@ mod tests {
     }
 
     #[test]
+    fn the_flow_title_wears_the_icon_the_stamp_names() {
+        // A live record shows running; a stopped one and no record show
+        // stopped; an unreadable record shows hugo's own icon.
+        let running = format!("{} flow", Icon::Running.glyph(IconSet::Nerd));
+        let stopped = format!("{} flow", Icon::Stopped.glyph(IconSet::Nerd));
+        let mut runtime = runtime();
+        let (rows, _) = render_runtime(100, 40, &runtime);
+        assert!(rows.iter().any(|row| row.contains(&running)), "{rows:?}");
+
+        runtime.stamp = Stamp {
+            runs: false,
+            why: Some("the review budget is spent".to_string()),
+        };
+        let (rows, _) = render_runtime(100, 40, &runtime);
+        assert!(rows.iter().any(|row| row.contains(&stopped)), "{rows:?}");
+        assert!(!rows.iter().any(|row| row.contains(&running)), "{rows:?}");
+
+        let (rows, _) = render(100, 40);
+        assert!(rows.iter().any(|row| row.contains(&stopped)), "{rows:?}");
+
+        let read = RuntimeRead::Unreadable(ReadError {
+            file: "runtime.json".to_string(),
+            error: "expected value".to_string(),
+        });
+        let (rows, _) = render_with(100, 40, &read);
+        let config = format!("{} flow", Icon::Config.glyph(IconSet::Nerd));
+        assert!(rows.iter().any(|row| row.contains(&config)), "{rows:?}");
+    }
+
+    #[test]
     fn the_crew_is_a_table_whose_columns_line_up_while_they_fit() {
         // At 100 the five columns fit the pane, so every task and hold starts
         // in the same column whichever agent holds it.
@@ -2467,6 +2536,31 @@ mod tests {
             assert!(text.contains("holds nothing"), "{width}: {text}");
             assert!(!text.contains("model"), "{width}: {text}");
         }
+    }
+
+    #[test]
+    fn the_crew_takes_one_form_for_every_row_with_one_gap() {
+        // Where the table does not fit, every agent takes the same number of
+        // lines and its cells share one gap: two lines each at 60, three at 40.
+        let runtime = runtime();
+        let (rows, _) = render_runtime(60, 40, &runtime);
+        let orchestrator = row_of(&rows, "orchestrator");
+        let runner = row_of(&rows, "runner");
+        let reviewer = row_of(&rows, "reviewer");
+        assert_eq!(runner - orchestrator, 2, "{rows:?}");
+        assert_eq!(reviewer - runner, 2, "{rows:?}");
+        assert!(
+            rows[runner].contains("runner deepseek-v4.1-flash#high ⠋ executing"),
+            "{rows:?}"
+        );
+
+        let (rows, _) = render_runtime(40, 40, &runtime);
+        let orchestrator = row_of(&rows, "orchestrator");
+        let runner = row_of(&rows, "runner");
+        let reviewer = row_of(&rows, "reviewer");
+        assert_eq!(runner - orchestrator, 3, "{rows:?}");
+        assert_eq!(reviewer - runner, 3, "{rows:?}");
+        assert!(rows[runner].contains("runner ⠋ executing"), "{rows:?}");
     }
 
     #[test]
@@ -2664,11 +2758,11 @@ mod tests {
                 );
             }
         }
-        // The crew's five lines go with the crew, and the announcement says so:
-        // three agents, the runner on two lines, and the composition.
+        // The crew's seven lines go with the crew, and the announcement says so:
+        // three agents of two lines each, and the composition.
         let (rows, _) = render_runtime(60, 8, &runtime());
         let text = rows.join("\n");
-        assert!(text.contains("crew (5 hidden)"), "{text}");
+        assert!(text.contains("crew (7 hidden)"), "{text}");
         // The stamp survives the short pane: whether it runs is the last
         // fact to give way.
         let (rows, _) = render_runtime(60, 8, &runtime());

@@ -121,9 +121,10 @@ alike. The spinner turns on the loop's tick: every 120 milliseconds while an
 agent works, once a second otherwise. A render shows the first frame, so a
 pinned screen does not move. Where the table does not fit, the header goes and
 each row is drawn alone, with its task and hold in words: `holds TSK10 · held
-10d`, or `holds nothing`. A row too wide for one line takes two, then three,
-and every line under the agent is indented two columns. No fact is dropped
-with the width. The model is the model's own name; the provider belongs to the
+10d`, or `holds nothing`. The rows take one form, the widest every row fits:
+one line each, else two, else three; the cells are one space apart, and every
+line under the agent is indented two columns. No fact is dropped with the
+width. The model is the model's own name; the provider belongs to the
 configuration the sidebar shows.
 
 The hold is a length, not a clock reading: `󰥔 10d`, from the record's `since`

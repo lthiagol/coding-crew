@@ -2,12 +2,13 @@
  sidebar not shown: configuration
 ╭─ 󰑮 flow ─────────────────────────────╮
 │╭─ 󰚩 crew ───────────────────────────╮│
-││󰚩 orchestrator  glm-5.3#high  idle  ││
+││󰚩 orchestrator idle                 ││
+││  glm-5.3#high                      ││
 ││  holds nothing                     ││
-││󰖷 runner · ⠋ executing              ││
+││󰖷 runner ⠋ executing                ││
 ││  deepseek-v4.1-flash#high          ││
 ││  holds TSK10 · held 10d            ││
-││󰈈 reviewer · ⠋ reviewing            ││
+││󰈈 reviewer ⠋ reviewing              ││
 ││  glm-5.3#high                      ││
 ││  holds TSK13 · held 8d             ││
 ││one per role · the reviewer reviews ││
@@ -26,7 +27,6 @@
 ││17 open findings                    ││
 ││8 high · 8 medium · 1 low           ││
 │╰────────────────────────────────────╯│
-│                                      │
 │                                      │
 │                                      │
 │                                      │
