@@ -975,7 +975,13 @@ fn pieces(
             let last_group = view.groups.len().saturating_sub(1);
             for (group_index, group) in view.groups.iter().enumerate() {
                 let group_is_last = group_index == last_group;
-                let group_prefix = if group_is_last { "    " } else { "│   " };
+                // A group without a blocker has no header: its rows hang on
+                // the branch itself.
+                let group_prefix = match &group.blocker {
+                    None => "",
+                    Some(_) if group_is_last => "    ",
+                    Some(_) => "│   ",
+                };
                 let last_row = group.rows.len().saturating_sub(1);
                 for (row_at, entry) in group.rows.iter().enumerate() {
                     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -988,9 +994,15 @@ fn pieces(
                         lines.push(group_header(&prefix, blocker, width, theme));
                         lead = 1;
                     }
+                    // A group without a blocker is a sibling of the groups after
+                    // it: its last row ends the branch only when no group follows.
+                    let is_last_sibling = match &group.blocker {
+                        None => group_is_last && row_at == last_row,
+                        Some(_) => row_at == last_row,
+                    };
                     let prefix = format!(
                         "{branch_prefix}{group_prefix}{}",
-                        connector(row_at == last_row)
+                        connector(is_last_sibling)
                     );
                     lines.extend(row(
                         &prefix,
@@ -1060,6 +1072,23 @@ fn pieces(
 /// others on a `├─`.
 fn connector(is_last: bool) -> &'static str {
     if is_last { "└─ " } else { "├─ " }
+}
+
+/// The bars of a prefix, for the lines under a row: a `├─` goes on below the
+/// row, and so does the spine's marker, so both become a bar; every other mark
+/// is blank. The width is kept.
+fn bars_of(prefix: &str, icons: IconSet) -> String {
+    let next = Icon::Next.glyph(icons);
+    prefix
+        .chars()
+        .map(|mark| {
+            if mark == '│' || mark == '├' || next.starts_with(mark) {
+                '│'
+            } else {
+                ' '
+            }
+        })
+        .collect()
 }
 
 /// The name of the blocker, heading its group.
@@ -1200,7 +1229,18 @@ fn row(
     // The title is never lost: when the pane is too narrow for it beside
     // the id, it goes under it.
     let beside = available > 0;
-    let text_col = if beside { title_col } else { 1 };
+    // The lines under the first one keep the tree's bars, so the spine runs
+    // past a wrapped row. Under the id they are followed by blanks up to the
+    // title; under it they stand alone, when the pane has room for them.
+    let bars = bars_of(rest, icons);
+    let indent = if beside {
+        format!("{bars}{}", " ".repeat(title_col - 1 - bars.chars().count()))
+    } else if bars.chars().count() + 2 <= width {
+        bars
+    } else {
+        String::new()
+    };
+    let text_col = indent.chars().count() + 1;
     let chunks = wrap(
         &entry.title,
         if beside {
@@ -1230,7 +1270,7 @@ fn row(
     for chunk in first.filter(|_| !beside).into_iter().chain(chunks) {
         lines.push(Line::from(vec![
             view::bar(selected, icons, theme),
-            Span::raw(" ".repeat(text_col - 1)),
+            Span::raw(indent.clone()),
             Span::styled(chunk.clone(), style),
         ]));
         used = text_col + chunk.chars().count();
@@ -1243,7 +1283,8 @@ fn row(
         note.push(format!("{blocked} waits on {}", entry.waits_on.join(", ")));
     }
     if let Some(hold) = entry.hold {
-        note.push(hold.label().to_string());
+        let blocked = Icon::Blocked.glyph(icons);
+        note.push(format!("{blocked} {}", hold.label()));
     }
     if !note.is_empty() {
         let note = note.join(" · ");
@@ -1257,7 +1298,7 @@ fn row(
             for chunk in wrap(&note, width.saturating_sub(text_col).max(1)) {
                 lines.push(Line::from(vec![
                     view::bar(selected, icons, theme),
-                    Span::raw(" ".repeat(text_col - 1)),
+                    Span::raw(indent.clone()),
                     Span::styled(chunk, theme.text.dim),
                 ]));
             }
@@ -1833,19 +1874,94 @@ mod tests {
             "{rows:?}"
         );
         // A task held by an overlay or a claim has no fork parent: its row
-        // hangs under the branch itself.
+        // hangs under the branch itself, and the sibling after it is the
+        // blocked group's header.
         assert!(
             rows.iter().any(|row| {
-                row.starts_with(&format!(" │   │   ├─ {} TSK08", phase_glyph("approved")))
+                row.starts_with(&format!(" │   ├─ {} TSK08", phase_glyph("approved")))
             }),
             "{rows:?}"
         );
         assert!(
             rows.iter().any(|row| {
-                row.starts_with(&format!(" │   │   └─ {} TSK09", phase_glyph("approved")))
+                row.starts_with(&format!(" │   ├─ {} TSK09", phase_glyph("approved")))
             }),
             "{rows:?}"
         );
+    }
+
+    #[test]
+    fn a_hold_without_a_blocker_hangs_on_the_branch_with_its_icon() {
+        // The overlay and the claim fixtures have no fork parent, so they
+        // are not under a header: no bar may head nothing.
+        let rows = inner(&draw(&mock_work(), 100, 40));
+        let blocked = Icon::Blocked.glyph(IconSet::Nerd);
+        for (id, reason) in [("TSK08", "overlay"), ("TSK09", "claim held elsewhere")] {
+            let row = rows
+                .iter()
+                .find(|row| row.contains(id))
+                .unwrap_or_else(|| panic!("{id} is drawn: {rows:?}"));
+            assert!(row.starts_with(" │   ├─ "), "{row}");
+            assert!(row.contains(&format!("{blocked} {reason}")), "{row}");
+        }
+        assert!(
+            rows.iter().all(|row| !row.starts_with(" │   │")),
+            "a bar heads nothing: {rows:?}"
+        );
+    }
+
+    #[test]
+    fn a_wrapped_row_keeps_the_bars_of_its_branch() {
+        // A row under a `├─` is followed by a sibling, so its wrapped lines
+        // carry the bar of the branch, and the blank of the marks and id.
+        let entry = Entry {
+            id: "TSK07".to_string(),
+            title: "one two three four five six seven eight".to_string(),
+            status: Status::Approved,
+            waits_on: Vec::new(),
+            hold: None,
+            review: None,
+        };
+        let lines = row(" │   ├─ ● ", &entry, 24, &theme(), IconSet::Nerd, false);
+        let text: Vec<String> = lines.iter().map(text_of_line).collect();
+        assert!(text.len() > 2, "the row wraps: {text:?}");
+        for line in &text[1..] {
+            assert!(line.starts_with(" │   │  "), "{text:?}");
+        }
+        // The last sibling has no bar under it: its wrapped lines are blank.
+        let lines = row(" │   └─ ● ", &entry, 24, &theme(), IconSet::Nerd, false);
+        let text: Vec<String> = lines.iter().map(text_of_line).collect();
+        for line in &text[1..] {
+            assert!(line.starts_with(" │       "), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_wrapped_row_under_the_spine_keeps_the_trunk() {
+        // The spine's rows hang on the trunk: the lines under one keep it.
+        let entry = Entry {
+            id: "TSK04".to_string(),
+            title: "one two three four five six seven eight".to_string(),
+            status: Status::Groomed,
+            waits_on: Vec::new(),
+            hold: None,
+            review: None,
+        };
+        let lines = row(" ├─ ◔ ", &entry, 24, &theme(), IconSet::Nerd, false);
+        let text: Vec<String> = lines.iter().map(text_of_line).collect();
+        assert!(text.len() > 2, "the row wraps: {text:?}");
+        for line in &text[1..] {
+            assert!(line.starts_with(" │  "), "{text:?}");
+        }
+        // The first row of the spine carries the marker of what happens next
+        // on the trunk: a bar follows it, so its wrapped lines keep the trunk.
+        let next = format!(" {} ", Icon::Next.glyph(IconSet::Nerd));
+        let lines = row(&next, &entry, 24, &theme(), IconSet::Nerd, false);
+        let text: Vec<String> = lines.iter().map(text_of_line).collect();
+        assert!(text.len() > 2, "the row wraps: {text:?}");
+        for line in &text[1..] {
+            assert!(line.starts_with(" │ "), "{text:?}");
+        }
     }
 
     #[test]
@@ -2025,17 +2141,18 @@ mod tests {
             // A title that does not fit wraps under its own column: no
             // letter of it is lost. The pane is tall enough for the whole
             // tree, so every title is on the screen: at the narrowest of
-            // these widths a title wraps to a letter a line.
+            // these widths a title wraps to a letter a line. The bars of the
+            // tree run beside the wrapped lines, so they are not counted.
             let text: String = inner(&draw(&work, width, 2000))
                 .iter()
                 .flat_map(|row| row.chars())
-                .filter(|ch| !ch.is_whitespace())
+                .filter(|ch| !ch.is_whitespace() && *ch != '│')
                 .collect();
             for entry in &tree.spine {
                 let title: String = entry
                     .title
                     .chars()
-                    .filter(|ch| !ch.is_whitespace())
+                    .filter(|ch| !ch.is_whitespace() && *ch != '│')
                     .collect();
                 assert!(text.contains(&title), "{width}: {}", entry.title);
             }
@@ -2045,7 +2162,7 @@ mod tests {
                         let title: String = entry
                             .title
                             .chars()
-                            .filter(|ch| !ch.is_whitespace())
+                            .filter(|ch| !ch.is_whitespace() && *ch != '│')
                             .collect();
                         assert!(text.contains(&title), "{width}: {}", entry.title);
                     }
@@ -2141,12 +2258,12 @@ mod tests {
                 .map(text_of_line)
                 .collect::<String>()
                 .chars()
-                .filter(|ch| !ch.is_whitespace())
+                .filter(|ch| !ch.is_whitespace() && *ch != '│')
                 .collect();
             let title: String = entry
                 .title
                 .chars()
-                .filter(|ch| !ch.is_whitespace())
+                .filter(|ch| !ch.is_whitespace() && *ch != '│')
                 .collect();
             assert!(text.contains(&title), "{width}: {text}");
         }
