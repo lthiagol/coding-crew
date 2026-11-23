@@ -185,7 +185,7 @@ to the rows, `esc` clears it. The text is words and `key:value` tokens:
 |---|---|
 | a plain word | the id, the title or a tag, case-insensitive, as a substring |
 | `status:<s>` | the status, by name or prefix: `status:review`, `status:done` |
-| `priority:<p>` | `low` · `medium` · `high` (and the model's other values) |
+| `priority:<p>` | `urgent` · `high` · `normal` · `low`; `medium` is an alias for `normal` |
 | `effort:<e>` | the effort: `S`, `M`, `L`… |
 | `kind:<k>` | the task kind |
 | `tag:<t>` | a tag, exactly |
@@ -193,7 +193,8 @@ to the rows, `esc` clears it. The text is words and `key:value` tokens:
 | `parent:<id>` | the subtasks of a task |
 
 Different keys combine with AND; the same key repeated combines with OR —
-`status:review status:remediating priority:high`. A token with an unknown key
+`status:review status:remediating priority:high`. Plain words are AND'd too:
+each must match. The footer's `/ filter` chip opens the line. A token with an unknown key
 or value is named on that row (`unknown key: colour`) and matches nothing,
 rather than being ignored silently.
 
@@ -253,14 +254,15 @@ names the path, and `● modified` while there are unsaved changes. Decided
 flow's sections (`round_limit`, each agent's `harness`, `model` and `effort`,
 the order's steps' values). An agent's table is its role, so the file names no
 role or name for it to edit. Rows cannot be added or removed from
-raul; only values change. A comment line is not a row the cursor stops on.
+raul; only values change. A comment line is not a row the cursor stops on, and
+a click on a heading or a comment line selects nothing and edits nothing.
 A value written inline (`tasks = { … }`) or as a dotted key
 (`tasks.sort = …`) is shown as text, not a stop, until the follow-up in
 `TODO.md` makes each one editable.
 
 | value | how it changes |
 |---|---|
-| a choice (`theme`, `icons`, a step's `role`, `harness`, `model`, `effort`, `sort`, a boolean) | `enter` opens its list: the picker hugo's choices use, with the value in force under the cursor. `↑` `↓` (`j` `k`) move over the choices, `enter` keeps the one under the cursor, `esc` restores the value the list opened on. A `harness` lists the harness table; a `model` lists its harness's models, with `type an id…` last, which opens the inline input; an `effort` lists the levels of the agent's model, and says why it has none when it has none: `takes no effort level` for a model that takes none, the read's error when the read fails; a model the catalogue does not list has no levels of its own, so its list is the harness's levels, then `none` (start with no effort flag, stored as an empty `effort`), then `type a level…`, an inline input that takes one word, unchecked, and any of them completes the value. A model that takes no level shows its effort as a dim `—` |
+| a choice (`theme`, `icons`, a step's `role`, `harness`, `model`, `effort`, `sort`, a boolean) | `enter` opens its list: the picker hugo's choices use, with the value in force under the cursor. `↑` `↓` (`j` `k`) move over the choices, `enter` keeps the one under the cursor, `esc` restores the value the list opened on. A `harness` lists the harness table; a `model` lists its harness's models, with `type an id…` last, which opens the inline input; an `effort` lists the levels of the agent's model, and says why it has none when it has none: `takes no effort level` for a model that takes none, the read's error when the read fails, with `type a level…` as its only entry; a model the catalogue does not list has no levels of its own, so its list is the harness's levels, then `none` (start with no effort flag, stored as an empty `effort`), then `type a level…`, an inline input that takes one word, unchecked, and any of them completes the value. A model that takes no level shows its effort as a dim `—` |
 | text or a number (a step's `step`, `round_limit`) | `enter` edits it inline in the line; `enter` keeps, `esc` drops |
 
 The arrows and `h` `l` switch tabs on Settings as on every other tab: they
@@ -270,7 +272,8 @@ change no value.
 repaints in Nord; `esc` puts the old choice back — and is written only by `w`.
 `u` undoes the unsaved changes; `r` reloads the file from disk. Quitting with
 unsaved changes asks first, in the footer: `w` save, `q` quit without saving,
-`esc` stay.
+`esc` stay. `r` asks the same way, with `r` reload in place of `q`; `ctrl-c`
+quits at once.
 
 **A warning is a line, not a refusal.** A file that reads but holds what the
 flow does not run shows each warning on its own line above the file's lines, on
@@ -286,7 +289,8 @@ written. A value that fails names its reason on its own line and is not kept.
 
 **Nothing on disk is lost.** The file is written format-preserving: the
 comments, the order, the spacing and the keys raul does not know survive a
-save. A file changed on disk since raul read it is not overwritten: `w` says
+save. A list whose length changes, such as the order's steps or a step's
+gates, is written whole. A file changed on disk since raul read it is not overwritten: `w` says
 `the file changed on disk` and offers `r` to reload. A file that does not
 parse is named with its error, left alone, and shown read-only with the
 defaults beside it — as hugo does.

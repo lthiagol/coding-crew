@@ -17,7 +17,7 @@ use crate::keys::{self, Act, Scope};
 use crate::needs;
 use crate::overview;
 use crate::path;
-use crate::settings;
+use crate::settings::{self, Ask};
 use crate::tabs::Tab;
 use crate::tasks::{self, Order};
 use crate::view::View;
@@ -68,6 +68,8 @@ pub struct App {
     pub detail: Option<Detail>,
     /// The help overlay is open.
     pub help: bool,
+    /// The help overlay's scroll, measured at each draw.
+    help_scroll: HelpScroll,
     /// The colours of the window.
     pub theme: Theme,
     /// The icon set in force.
@@ -98,6 +100,7 @@ impl App {
             view: View::default(),
             detail: None,
             help: false,
+            help_scroll: HelpScroll::default(),
             theme,
             icons,
             order: Order::default(),
@@ -121,14 +124,28 @@ impl App {
         if key.kind != KeyEventKind::Press {
             return Action::Redraw;
         }
-        if self.settings.asking() {
-            // Quit waits for an answer: the keys that answer it are the only
-            // ones that do something.
+        if let Some(asked) = self.settings.asked() {
+            // The question about unsaved changes waits for an answer: the keys
+            // that answer it are the only ones that do something. `ctrl-c`
+            // quits at once, whichever question it is.
             return match keys::binding(Scope::Asking, &key).map(|binding| binding.act) {
-                Some(Act::Quit | Act::Exit) => Action::Quit,
+                Some(Act::Exit) => Action::Quit,
+                Some(Act::Quit) if asked == Ask::Quit => Action::Quit,
+                Some(Act::Reload) if asked == Ask::Reload => {
+                    self.settings.reload();
+                    self.apply_look();
+                    Action::Redraw
+                }
                 Some(Act::Save) => {
                     if self.settings.save() {
-                        Action::Quit
+                        match asked {
+                            Ask::Quit => Action::Quit,
+                            Ask::Reload => {
+                                self.settings.reload();
+                                self.apply_look();
+                                Action::Redraw
+                            }
+                        }
                     } else {
                         // The refusal is said in the Settings footer, so the
                         // window goes there: asked from another tab, the
@@ -150,10 +167,41 @@ impl App {
         }
         if self.help {
             // The help is a dismissal: any key closes it, over the window or
-            // over the detail pane. The key that returns from the pane closes
-            // the help and stays in the pane, and the keys that quit still
-            // leave raul.
+            // over the detail pane. A help taller than the window scrolls with
+            // its movement keys instead. The key that returns from the pane
+            // closes the help and stays in the pane, and the keys that quit
+            // still leave raul.
+            if self.help_scroll.scrolls() {
+                let scope = if self.detail.is_some() {
+                    Scope::Detail
+                } else {
+                    Scope::Rows
+                };
+                let scrolled = match keys::binding(scope, &key).map(|binding| binding.act) {
+                    Some(Act::Move(rows)) => {
+                        self.help_scroll.move_rows(rows);
+                        true
+                    }
+                    Some(Act::Page(pages)) => {
+                        self.help_scroll.move_pages(pages);
+                        true
+                    }
+                    Some(Act::Top) => {
+                        self.help_scroll.jump(false);
+                        true
+                    }
+                    Some(Act::Bottom) => {
+                        self.help_scroll.jump(true);
+                        true
+                    }
+                    _ => false,
+                };
+                if scrolled {
+                    return Action::Redraw;
+                }
+            }
             self.help = false;
+            self.help_scroll.reset();
             let overlay = keys::leaves_overlay(&key);
             return match keys::binding(Scope::Window, &key).map(|binding| binding.act) {
                 Some(Act::Quit) if !overlay => self.quit(),
@@ -370,8 +418,13 @@ impl App {
                 Action::Redraw
             }
             Some(Act::Reload) => {
-                self.settings.reload();
-                self.apply_look();
+                // Unsaved changes are asked about first, as quit asks.
+                if self.settings.unsaved() {
+                    self.settings.ask(Ask::Reload);
+                } else {
+                    self.settings.reload();
+                    self.apply_look();
+                }
                 Action::Redraw
             }
             // The keys of a pick, a value being typed and the question answer
@@ -489,7 +542,7 @@ impl App {
     /// the next key answers.
     fn quit(&mut self) -> Action {
         if self.settings.unsaved() {
-            self.settings.ask();
+            self.settings.ask(Ask::Quit);
             Action::Redraw
         } else {
             Action::Quit
@@ -729,7 +782,8 @@ impl App {
                 self.help,
             );
             if self.help {
-                render_help(frame, area, &self.theme, detail_help_lines(&self.theme));
+                let lines = detail_help_lines(&self.theme);
+                render_help(frame, area, &self.theme, lines, &mut self.help_scroll);
             }
             // A question about unsaved changes is asked over the pane's footer.
             if self.settings.asking() {
@@ -752,7 +806,7 @@ impl App {
             let tasks = self.tab == Tab::Tasks;
             let settings = self.tab == Tab::Settings;
             let lines = help_lines(&self.theme, has_rows, opens, tasks, settings);
-            render_help(frame, area, &self.theme, lines);
+            render_help(frame, area, &self.theme, lines, &mut self.help_scroll);
         }
     }
 
@@ -1012,9 +1066,13 @@ impl App {
         hidden: Option<usize>,
     ) -> (Vec<Vec<Span<'static>>>, Vec<Vec<Span<'static>>>) {
         let chip = |key: &str, action: &str| chrome::key_chip(key, action, &self.theme);
-        if self.settings.asking() {
-            // Quit is waiting for an answer: the footer is the question.
-            let actions = vec![chip("w", "save"), chip("q", "quit"), chip("esc", "stay")];
+        if let Some(asked) = self.settings.asked() {
+            // The question is waiting for an answer: the footer is the question.
+            let drop = match asked {
+                Ask::Quit => chip("q", "quit"),
+                Ask::Reload => chip("r", "reload"),
+            };
+            let actions = vec![chip("w", "save"), drop, chip("esc", "stay")];
             return (actions, Vec::new());
         }
         if self.typing {
@@ -1257,10 +1315,28 @@ fn rows_of(work: &Work, tab: Tab, now: &str, order: Order, filter: &str) -> Opti
     }
 }
 
-/// Where the help popup sits: three fifths of the window, centred.
-fn help_popup(area: Rect) -> Rect {
-    let width = area.width.saturating_mul(3) / 5;
-    let height = area.height.saturating_mul(3) / 5;
+/// The width of the help popup: three fifths of the window.
+fn help_width(area: Rect) -> u16 {
+    area.width.saturating_mul(3) / 5
+}
+
+/// The rows the help's lines take in the popup's inner width.
+fn help_height(lines: &[Line<'_>], area: Rect) -> usize {
+    let inner = usize::from(help_width(area)).saturating_sub(2);
+    if inner == 0 {
+        return 0;
+    }
+    lines.iter().map(|line| help_rows(line, inner)).sum()
+}
+
+/// Where the help popup sits: three fifths of the window wide, as tall as its
+/// `rows` and the window allow, centred.
+fn help_popup(area: Rect, rows: usize) -> Rect {
+    let width = help_width(area);
+    // The border takes one row at the top and one at the bottom.
+    let height = u16::try_from(rows.saturating_add(2))
+        .unwrap_or(u16::MAX)
+        .min(area.height);
     Rect {
         x: area.x + (area.width.saturating_sub(width)) / 2,
         y: area.y + (area.height.saturating_sub(height)) / 2,
@@ -1269,67 +1345,102 @@ fn help_popup(area: Rect) -> Rect {
     }
 }
 
-/// The help lines, with the rank that decides which one is dropped first.
-///
-/// A popup three fifths of a short window cannot hold every line, so the
-/// lines give way from the least to the most useful: `shift-tab`, then
-/// `h l`, then `tab`, then `← →` (each has a twin that remains), then
-/// `g/G`, `o O` and the filter's keys, then `pgup`/`pgdn` (the arrows still
-/// move) and `enter` open, then `↑↓`/`j`/`k`, then `1-6`. `q` and `?` are
-/// dropped last: a human who is stuck needs to leave and to ask what the
-/// keys are.
+/// The help overlay's scroll. A draw measures how far the help can scroll and
+/// how many lines a page key moves; the keys move the first line shown within
+/// that. The help scrolls only when `last` is above zero.
+#[derive(Debug, Clone, Default)]
+pub struct HelpScroll {
+    /// The first line the popup shows.
+    first: usize,
+    /// The furthest first line: zero when the help fits the popup.
+    last: usize,
+    /// The lines a page key moves by: the popup's inner height.
+    page: usize,
+}
+
+impl HelpScroll {
+    /// Whether the help is taller than the popup, so its keys scroll it.
+    fn scrolls(&self) -> bool {
+        self.last > 0
+    }
+
+    /// Move the first line shown by `rows`, down on a positive count, within
+    /// the help.
+    fn move_rows(&mut self, rows: isize) {
+        self.first = (self.first as isize)
+            .saturating_add(rows)
+            .clamp(0, self.last as isize) as usize;
+    }
+
+    /// Move by pages, down on a positive count.
+    fn move_pages(&mut self, pages: isize) {
+        self.move_rows(pages.saturating_mul(self.page.max(1) as isize));
+    }
+
+    /// Jump to the top or the bottom of the help.
+    fn jump(&mut self, bottom: bool) {
+        self.first = if bottom { self.last } else { 0 };
+    }
+
+    /// Back to the top, for the next time the help opens.
+    fn reset(&mut self) {
+        self.first = 0;
+    }
+}
+
+/// The help lines of the window. Every line is kept: a help taller than the
+/// window scrolls rather than dropping any.
 fn help_lines(
     theme: &Theme,
     has_rows: bool,
     opens: bool,
     tasks: bool,
     settings: bool,
-) -> Vec<(u8, Line<'static>)> {
+) -> Vec<Line<'static>> {
     let line = |key: &str, says: &str| help_line(key, says, theme);
-    let mut lines = vec![(7, line("1-6", "jump to a tab"))];
-    lines.push((3, line("← →", "switch tab")));
-    lines.push((1, line("h l", "switch tab")));
+    let mut lines = vec![line("1-6", "jump to a tab")];
+    lines.push(line("← →", "switch tab"));
+    lines.push(line("h l", "switch tab"));
     if settings {
-        lines.push((4, line("enter", "edit or pick")));
-        lines.push((5, line("w", "save")));
-        lines.push((5, line("u", "undo")));
-        lines.push((5, line("r", "reload")));
+        lines.push(line("enter", "edit or pick"));
+        lines.push(line("w", "save"));
+        lines.push(line("u", "undo"));
+        lines.push(line("r", "reload"));
     }
-    lines.push((2, line("tab", "next tab")));
-    lines.push((0, line("shift-tab", "previous tab")));
+    lines.push(line("tab", "next tab"));
+    lines.push(line("shift-tab", "previous tab"));
     if has_rows {
         // The movement keys work on a tab with rows: the help names the
         // same keys as the footer, and never one that does nothing.
-        lines.push((6, line("↑↓ j/k", "move")));
-        lines.push((5, line("pgup/pgdn", "page")));
-        lines.push((4, line("g/G", "top/bottom")));
+        lines.push(line("↑↓ j/k", "move"));
+        lines.push(line("pgup/pgdn", "page"));
+        lines.push(line("g/G", "top/bottom"));
         if opens {
-            lines.push((5, line("enter", "open")));
+            lines.push(line("enter", "open"));
         }
     }
     if tasks {
-        lines.push((4, line("o O", "sort")));
-        lines.push((4, line("/", "filter")));
-        lines.push((4, line("enter", "keep the filter")));
-        lines.push((4, line("esc", "clear the filter")));
+        lines.push(line("o O", "sort"));
+        lines.push(line("/", "filter"));
+        lines.push(line("enter", "keep the filter"));
+        lines.push(line("esc", "clear the filter"));
     }
-    lines.push((u8::MAX, line("q", "quit")));
-    lines.push((u8::MAX, line("?", "this help")));
+    lines.push(line("q", "quit"));
+    lines.push(line("?", "this help"));
     lines
 }
 
-/// The help lines of the detail pane: every key the pane answers, with the
-/// rank that decides which one is dropped first. The footer names `esc` and
-/// `? help · q quit`; the scroll keys are named here alone.
-fn detail_help_lines(theme: &Theme) -> Vec<(u8, Line<'static>)> {
+/// The help lines of the detail pane: every key the pane answers. The footer
+/// names `esc` and `? help · q quit`; the scroll keys are named here alone.
+fn detail_help_lines(theme: &Theme) -> Vec<Line<'static>> {
     let line = |key: &str, says: &str| help_line(key, says, theme);
     vec![
-        (7, line("esc", "close")),
-        (6, line("↑↓ j/k", "scroll")),
-        (5, line("pgup/pgdn", "page")),
-        (4, line("g/G", "top/bottom")),
-        (u8::MAX, line("q", "quit")),
-        (u8::MAX, line("?", "this help")),
+        line("esc", "close"),
+        line("↑↓ j/k", "scroll"),
+        line("pgup/pgdn", "page"),
+        line("g/G", "top/bottom"),
+        line("q", "quit"),
+        line("?", "this help"),
     ]
 }
 
@@ -1358,51 +1469,38 @@ fn help_rows(line: &Line<'_>, inner: usize) -> usize {
         .max(1)
 }
 
-/// The help overlay, of the lines the window or the detail pane names.
-fn render_help(frame: &mut Frame, area: Rect, theme: &Theme, lines: Vec<(u8, Line<'static>)>) {
-    let popup = help_popup(area);
+/// The help overlay, of the lines the window or the detail pane names. The
+/// popup is as tall as its lines, or as the window is; a taller help scrolls,
+/// and the draw measures how far, for the keys.
+fn render_help(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    lines: Vec<Line<'static>>,
+    scroll: &mut HelpScroll,
+) {
+    let rows = help_height(&lines, area);
+    let popup = help_popup(area, rows);
     // The border takes one row at the top and one at the bottom.
-    let inner_width = usize::from(popup.width).saturating_sub(2);
     let room = usize::from(popup.height).saturating_sub(2);
-    let lines: Vec<Line<'static>> = if inner_width == 0 {
-        Vec::new()
-    } else {
-        let rows = |line: &Line<'_>| help_rows(line, inner_width);
-        let mut used = lines
-            .iter()
-            .fold(0usize, |used, (_, line)| used.saturating_add(rows(line)));
-        if used <= room {
-            lines.into_iter().map(|(_, line)| line).collect()
-        } else {
-            let mut order: Vec<usize> = (0..lines.len()).collect();
-            order.sort_by_key(|index| lines[*index].0);
-            let mut dropped = vec![false; lines.len()];
-            for index in order {
-                if used <= room {
-                    break;
-                }
-                used = used.saturating_sub(rows(&lines[index].1));
-                dropped[index] = true;
-            }
-            lines
-                .into_iter()
-                .enumerate()
-                .filter(|(index, _)| !dropped[*index])
-                .map(|(_, (_, line))| line)
-                .collect()
-        }
-    };
+    scroll.last = rows.saturating_sub(room);
+    scroll.page = room;
+    scroll.first = scroll.first.min(scroll.last);
+    let first = u16::try_from(scroll.first).unwrap_or(u16::MAX);
     frame.render_widget(Clear, popup);
     frame.render_widget(
-        Paragraph::new(lines).wrap(Wrap { trim: true }).block(
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .title(Line::from(vec![
-                    Span::styled("─", theme.chrome.border_focus),
-                    Span::styled(" keys ", block_title_style(theme)),
-                ]))
-                .border_style(theme.chrome.border_focus),
-        ),
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: true })
+            .scroll((first, 0))
+            .block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .title(Line::from(vec![
+                        Span::styled("─", theme.chrome.border_focus),
+                        Span::styled(" keys ", block_title_style(theme)),
+                    ]))
+                    .border_style(theme.chrome.border_focus),
+            ),
         popup,
     );
 }
@@ -2055,10 +2153,86 @@ mod tests {
             "{}",
             footer_of(&mut app)
         );
-        // The reload takes the file, and the notice goes with the refusal.
+        // r asks before it drops the unsaved draft, and the question's r takes
+        // the file; the notice goes with the refusal.
+        app.on_key(key(KeyCode::Char('r')), &work, now());
+        assert!(app.settings.asking(), "r did not ask about the draft");
         app.on_key(key(KeyCode::Char('r')), &work, now());
         assert!(!app.settings.unsaved());
         assert!(!note_of(&mut app).contains("the file changed on disk"));
+    }
+
+    #[test]
+    fn r_asks_before_it_drops_unsaved_edits_and_ctrl_c_quits_at_once() {
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+        app.settings = settings_panel("reload-asks");
+        app.selection = Some("raul.theme".to_string());
+        pick_next(&mut app, &work);
+        assert!(app.settings.unsaved());
+        app.on_key(key(KeyCode::Char('r')), &work, now());
+        assert_eq!(app.settings.asked(), Some(Ask::Reload));
+        assert!(app.settings.unsaved(), "r dropped the edits without asking");
+        let footer = footer_of(&mut app);
+        for chip in ["w save", "r reload", "esc stay"] {
+            assert!(footer.contains(chip), "{chip} is missing: {footer}");
+        }
+        // q is not an answer to this question: it waits.
+        assert_eq!(
+            app.on_key(key(KeyCode::Char('q')), &work, now()),
+            Action::Redraw
+        );
+        assert!(app.settings.asking() && app.settings.unsaved());
+        // esc keeps the edits.
+        app.on_key(key(KeyCode::Esc), &work, now());
+        assert!(!app.settings.asking(), "esc did not stay");
+        assert!(app.settings.unsaved(), "esc dropped the edits");
+        // r asks again, and its answer drops the edits and reads the file.
+        app.on_key(key(KeyCode::Char('r')), &work, now());
+        app.on_key(key(KeyCode::Char('r')), &work, now());
+        assert!(!app.settings.asking());
+        assert!(!app.settings.unsaved(), "the answer did not reload");
+        // ctrl-c quits at once, asked or not.
+        pick_next(&mut app, &work);
+        app.on_key(key(KeyCode::Char('r')), &work, now());
+        let mut control = key(KeyCode::Char('c'));
+        control.modifiers = crossterm::event::KeyModifiers::CONTROL;
+        assert_eq!(app.on_key(control, &work, now()), Action::Quit);
+    }
+
+    #[test]
+    fn a_click_on_a_settings_heading_or_comment_selects_and_edits_nothing() {
+        // The headings and comments of the file are lines, not values: a click
+        // on one answers to no row, however often it is clicked (D11).
+        let work = mock_work();
+        for width in [40u16, 100] {
+            // The window starts at the top of the file, so both lines are drawn
+            // with no value selected: the selection is what a click may change.
+            for needle in [
+                "[agents.orchestrator]",
+                "# coding-crew's flow configuration.",
+            ] {
+                let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, false);
+                app.settings = settings_panel("inert-lines");
+                let rows = render_work(&mut app, &work, width, 40, now()).0;
+                let (row, column) =
+                    cell_of(&rows, needle).unwrap_or_else(|| panic!("{needle} at {width}"));
+                click_at(&mut app, &work, column as u16, row as u16);
+                click_at(&mut app, &work, column as u16, row as u16);
+                assert_eq!(
+                    app.selection, None,
+                    "{width}: a click on {needle} selected a value"
+                );
+                assert!(
+                    !app.settings.editing() && !app.settings.picking(),
+                    "{width}: a click on {needle} edited a value"
+                );
+                assert!(
+                    !app.settings.unsaved(),
+                    "{width}: a click on {needle} changed the draft"
+                );
+            }
+        }
     }
 
     #[test]
@@ -2096,7 +2270,10 @@ mod tests {
         let mut app = window(&Theme::preset(Preset::Dark), Tab::Settings, true);
         app.settings = settings_panel("help");
         let rows = render(&mut app, 100, 40).0;
-        let help = help_text(&rows, 100, 40);
+        let help = help_popup_rows(&rows).join(
+            "
+",
+        );
         for word in ["pick", "edit", "save", "undo", "reload", "switch tab"] {
             assert!(help.contains(word), "{help}: {word} is missing");
         }
@@ -2266,7 +2443,12 @@ mod tests {
                         Scope::Value => app.settings.begin("round_limit"),
                         Scope::Asking => {
                             theme_changed(&mut app);
-                            app.settings.ask();
+                            let ask = if binding.act == Act::Reload {
+                                Ask::Reload
+                            } else {
+                                Ask::Quit
+                            };
+                            app.settings.ask(ask);
                         }
                         _ => {}
                     }
@@ -2363,9 +2545,19 @@ mod tests {
                         );
                         assert_eq!(app.theme.preset, Preset::Dark, "{}", named(binding));
                     }
-                    Act::Reload => {
-                        assert!(!app.settings.unsaved(), "{} kept the draft", named(binding));
-                    }
+                    Act::Reload => match scope {
+                        // The question's own key drops the draft; r in the
+                        // Settings tab asks first, as q does.
+                        Scope::Asking => {
+                            assert!(!app.settings.unsaved(), "{} kept the draft", named(binding));
+                        }
+                        _ => assert_eq!(
+                            app.settings.asked(),
+                            Some(Ask::Reload),
+                            "{} did not ask",
+                            named(binding)
+                        ),
+                    },
                     Act::Keep | Act::Drop => {
                         assert!(
                             !app.settings.editing(),
@@ -2533,7 +2725,10 @@ mod tests {
         app.on_key(key(KeyCode::Char('?')), &work, now());
         assert!(app.help, "? did not open the help over the pane");
         assert!(app.detail.is_some(), "? closed the pane");
-        let help = help_text(&render(&mut app, 100, 24).0, 100, 24);
+        let help = help_popup_rows(&render(&mut app, 100, 24).0).join(
+            "
+",
+        );
         for named in [
             "esc  close",
             "↑↓ j/k",
@@ -2563,7 +2758,10 @@ mod tests {
         }
         let mut app = window(&theme, Tab::Path, true);
         app.detail = Some(Detail::opened("TSK13".to_string(), Tab::Path, None));
-        let help = help_text(&render(&mut app, 100, 24).0, 100, 24);
+        let help = help_popup_rows(&render(&mut app, 100, 24).0).join(
+            "
+",
+        );
         for binding in keys::BINDINGS
             .iter()
             .filter(|b| b.applies_to(Scope::Detail))
@@ -2936,46 +3134,77 @@ mod tests {
         // The check can fail: the old title reads `╭keys`, not `╭─ keys`.
         let theme = Theme::preset(Preset::Dark);
         let rows = render(&mut window(&theme, Tab::NeedsYou, true), 100, 20).0;
-        let popup = help_popup(Rect::new(0, 0, 100, 20));
-        let top: String = rows[usize::from(popup.y)]
-            .chars()
-            .skip(usize::from(popup.x))
-            .take(usize::from(popup.width))
-            .collect();
+        let top = help_popup_rows(&rows)[0].clone();
         assert!(top.starts_with("╭─ keys "), "{top:?}");
     }
 
     #[test]
-    fn the_help_popup_keeps_q_and_help_on_a_short_window() {
+    fn the_help_grows_to_its_lines_when_the_window_is_tall() {
+        // Every line is drawn, the popup is exactly as tall as they are, and no
+        // key scrolls the help: a key closes it, as it always did.
+        let work = mock_work();
         let theme = Theme::preset(Preset::Dark);
-        for height in [14u16, 10] {
-            let rows = render(&mut window(&theme, Tab::NeedsYou, true), 100, height).0;
-            let text = help_text(&rows, 100, height);
-            assert!(
-                text.contains("q  quit"),
-                "{height}: q is not in the popup: {text}"
-            );
-            assert!(
-                text.contains("?  this help"),
-                "{height}: ? is not in the popup: {text}"
-            );
+        let mut app = window(&theme, Tab::Tasks, true);
+        let lines = help_lines(&theme, true, true, true, false).len();
+        let rows = render(&mut app, 100, 60).0;
+        let popup = help_popup_rows(&rows);
+        assert_eq!(popup.len(), lines + 2, "{}", popup.join("\n"));
+        let text = popup.join("\n");
+        for line in [
+            "g/G  top/bottom",
+            "o O  sort",
+            "esc  clear the filter",
+            "q  quit",
+        ] {
+            assert!(text.contains(line), "{line} is missing: {text}");
         }
-        // The drop order the comment states: at 14 the primary action stays
-        // and g/G goes first; at 10 the ends are gone before q and ?.
-        let at_14 = help_text(
-            &render(&mut window(&theme, Tab::NeedsYou, true), 100, 14).0,
-            100,
-            14,
-        );
-        assert!(at_14.contains("enter  open"), "{at_14}");
-        assert!(!at_14.contains("g/G"), "{at_14}");
-        let at_10 = help_text(
-            &render(&mut window(&theme, Tab::NeedsYou, true), 100, 10).0,
-            100,
-            10,
-        );
-        assert!(!at_10.contains("g/G"), "{at_10}");
-        assert!(!at_10.contains("pgup/pgdn"), "{at_10}");
+        app.on_key(key(KeyCode::Down), &work, now());
+        assert!(!app.help, "a key did not close a help that fits");
+    }
+
+    #[test]
+    fn a_help_taller_than_the_window_scrolls_and_keeps_every_line() {
+        // At 14 rows the Tasks help cannot fit: its movement keys scroll it,
+        // and the lines the scrolling shows are all of them, g/G included.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        for (width, height) in [(100u16, 14u16), (40, 10), (30, 10), (24, 8)] {
+            let mut app = window(&theme, Tab::Tasks, true);
+            let mut seen = String::new();
+            for _ in 0..40 {
+                let rows = render(&mut app, width, height).0;
+                assert_eq!(
+                    help_popup_rows(&rows).len(),
+                    usize::from(height),
+                    "{width}x{height}: the popup is not the window's height"
+                );
+                seen.push_str(&help_popup_rows(&rows).join("\n"));
+                app.on_key(key(KeyCode::Down), &work, now());
+                assert!(app.help, "{width}x{height}: a movement key closed the help");
+            }
+            // A narrow popup wraps a line's words, so the keys are searched for.
+            for key in ["1-6", "g/G", "this help", "quit"] {
+                assert!(seen.contains(key), "{width}x{height}: {key} never shown");
+            }
+        }
+    }
+
+    #[test]
+    fn the_help_jumps_to_its_ends_and_other_keys_still_close_it() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        for (width, height) in [(100u16, 14u16), (24, 8)] {
+            let mut app = window(&theme, Tab::Tasks, true);
+            render(&mut app, width, height);
+            app.on_key(key(KeyCode::Char('G')), &work, now());
+            let text = help_popup_rows(&render(&mut app, width, height).0).join("\n");
+            assert!(text.contains("?  this help"), "{width}x{height}: G: {text}");
+            app.on_key(key(KeyCode::Char('g')), &work, now());
+            let text = help_popup_rows(&render(&mut app, width, height).0).join("\n");
+            assert!(text.contains("1-6  jump"), "{width}x{height}: g: {text}");
+            assert_eq!(app.on_key(key(KeyCode::Esc), &work, now()), Action::Redraw);
+            assert!(!app.help, "{width}x{height}: esc did not close the help");
+        }
     }
 
     #[test]
@@ -2993,34 +3222,28 @@ mod tests {
         assert_eq!(help_rows(&line, 10), 3);
     }
 
-    #[test]
-    fn the_help_popup_keeps_q_and_help_in_a_narrow_short_window() {
-        // A narrow popup wraps its lines, so a column count undercounts the
-        // rows: at 24x8 it would stop dropping too early and cut q. The last
-        // two lines are the ones a stuck human needs.
-        let theme = Theme::preset(Preset::Dark);
-        for (width, height) in [(40u16, 10u16), (30, 10), (24, 8)] {
-            let rows = render(&mut window(&theme, Tab::NeedsYou, true), width, height).0;
-            let text = help_text(&rows, width, height);
-            assert!(text.contains("q  quit"), "{width}x{height}: {text}");
-            assert!(text.contains("?  this help"), "{width}x{height}: {text}");
-        }
-    }
-
-    /// The text inside the help popup, without the window beneath it.
-    fn help_text(rows: &[String], width: u16, height: u16) -> String {
-        let popup = help_popup(Rect::new(0, 0, width, height));
-        rows.iter()
-            .skip(usize::from(popup.y))
-            .take(usize::from(popup.height))
-            .map(|row| {
-                row.chars()
-                    .skip(usize::from(popup.x))
-                    .take(usize::from(popup.width))
-                    .collect::<String>()
-            })
-            .collect::<Vec<String>>()
-            .join("\n")
+    /// The help popup as drawn, from its top border to its bottom one, in the
+    /// columns between its corners.
+    fn help_popup_rows(rows: &[String]) -> Vec<String> {
+        let top = rows
+            .iter()
+            .position(|row| row.contains("╭─ keys "))
+            .expect("the help popup");
+        let at = rows[top].find("╭─ keys ").expect("its title");
+        let left = rows[top][..at].chars().count();
+        let width = rows[top]
+            .chars()
+            .skip(left)
+            .position(|c| c == '╮')
+            .expect("its other corner")
+            + 1;
+        let bottom = (top..rows.len())
+            .find(|row| rows[*row].chars().nth(left) == Some('╰'))
+            .expect("its bottom corner");
+        rows[top..=bottom]
+            .iter()
+            .map(|row| row.chars().skip(left).take(width).collect())
+            .collect()
     }
 
     #[test]

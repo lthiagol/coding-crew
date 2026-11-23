@@ -264,8 +264,9 @@ defaults, and raul's Settings edits them. The file is read at launch and by
 - **A session tag marks the difference from the file**: the agent that differs
   carries it, and the agents group does when its roles differ.
 
-Not ruled: whether `r` keeps the session's picks. The build drops them, so the
-file is what the session starts over from. The human confirms or reverses this.
+~~Not ruled: whether `r` keeps the session's picks.~~ Ruled 2026-11-22: kept as
+built. `r` drops the session's picks, and the file is what the session starts
+over from.
 
 ## Not decided here
 

@@ -30,7 +30,7 @@ pub enum Scope {
     /// A value of the Settings tab, while it is typed in: its keys type, and no
     /// other key answers.
     Value,
-    /// The question quit asks with unsaved changes: save, quit or stay.
+    /// The question about unsaved changes: save, then quit or reload, or stay.
     Asking,
 }
 
@@ -161,7 +161,7 @@ impl Binding {
 
 /// The keys of the window, in the order the groups read them: the window
 /// first, then the rows, then the filter line, then the detail pane.
-pub const BINDINGS: [Binding; 50] = [
+pub const BINDINGS: [Binding; 51] = [
     Binding {
         scopes: &[Scope::Window, Scope::Detail],
         chords: &[Chord::Key(KeyCode::Char('q'), false)],
@@ -429,6 +429,11 @@ pub const BINDINGS: [Binding; 50] = [
         scopes: &[Scope::Asking],
         chords: &[Chord::Key(KeyCode::Char('q'), false)],
         act: Act::Quit,
+    },
+    Binding {
+        scopes: &[Scope::Asking],
+        chords: &[Chord::Key(KeyCode::Char('r'), false)],
+        act: Act::Reload,
     },
     Binding {
         scopes: &[Scope::Asking],

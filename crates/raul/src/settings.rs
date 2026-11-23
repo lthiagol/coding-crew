@@ -176,7 +176,8 @@ impl Field {
     /// The words a choice or a boolean takes, in the order the picker lists
     /// them. A model is the harness's models with `type an id…` last; an effort
     /// is the levels its model takes, or, for a model the catalogue does not
-    /// list, the harness's levels, `none` and `type a level…`.
+    /// list, the harness's levels, `none` and `type a level…`; when the levels
+    /// cannot be read, `type a level…` alone.
     fn options(self, config: &Config, levels: &Levels) -> Vec<String> {
         let words = |words: &[&str]| words.iter().map(|word| word.to_string()).collect();
         match self {
@@ -199,16 +200,18 @@ impl Field {
                 models.push(TYPE_AN_ID.to_string());
                 models
             }
-            Field::AgentEffort(role) => agent_of(config, role)
-                .and_then(|agent| {
-                    let catalog = levels.catalog(&agent.harness)?;
-                    Some(match catalog.efforts_of(&agent.model) {
+            Field::AgentEffort(role) => match agent_of(config, role) {
+                Some(agent) if agent.model.is_empty() => Vec::new(),
+                Some(agent) => match levels.catalog(&agent.harness) {
+                    Some(catalog) => match catalog.efforts_of(&agent.model) {
                         Some(levels) => levels.to_vec(),
-                        None if agent.model.is_empty() => Vec::new(),
                         None => catalog.unlisted_choices(),
-                    })
-                })
-                .unwrap_or_default(),
+                    },
+                    // The levels are not read: a typed one is all that is offered.
+                    None => vec![TYPE_A_LEVEL.to_string()],
+                },
+                None => Vec::new(),
+            },
             Field::Reverse => words(&BOOLEANS),
             _ => Vec::new(),
         }
@@ -423,6 +426,14 @@ struct Pick {
     before: Config,
 }
 
+/// What a question about unsaved changes asks: whether to quit, or to reload
+/// the file and drop the draft.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ask {
+    Quit,
+    Reload,
+}
+
 /// The Settings tab's state: the file as it reads, the draft being edited, and
 /// what the pane says about them.
 #[derive(Debug)]
@@ -454,8 +465,8 @@ pub struct Panel {
     notice: Option<String>,
     /// The file changed on disk since it was read: a reload is offered.
     stale: bool,
-    /// Quit was asked with unsaved changes: the footer asks.
-    asking: bool,
+    /// A question about unsaved changes is open: the footer asks it.
+    asking: Option<Ask>,
     /// The values the command line and the environment name.
     overrides: Overrides,
     /// The levels each harness's models take, as the reads so far have said.
@@ -485,7 +496,7 @@ impl Panel {
             pick: None,
             notice: None,
             stale: false,
-            asking: false,
+            asking: None,
             overrides,
             levels: Levels::new(),
             reader: Catalog::read,
@@ -553,19 +564,25 @@ impl Panel {
         self.edit.as_mut().map(|edit| &mut edit.text)
     }
 
-    /// Whether quit is waiting for an answer.
+    /// Whether a question about unsaved changes is waiting for an answer.
     pub fn asking(&self) -> bool {
+        self.asking.is_some()
+    }
+
+    /// The question waiting for an answer, when one is.
+    pub fn asked(&self) -> Option<Ask> {
         self.asking
     }
 
-    /// Ask whether to quit: the footer offers to save, to quit or to stay.
-    pub fn ask(&mut self) {
-        self.asking = true;
+    /// Ask before dropping the unsaved changes: the footer offers to save, then
+    /// to drop them by quitting or reloading, or to stay.
+    pub fn ask(&mut self, ask: Ask) {
+        self.asking = Some(ask);
     }
 
-    /// Stay, after a question about quitting.
+    /// Stay, after a question about unsaved changes.
     pub fn stay(&mut self) {
-        self.asking = false;
+        self.asking = None;
     }
 
     /// The line the last refused save or change says, when there is one.
@@ -638,7 +655,7 @@ impl Panel {
 
     /// Open the picker on a field's choices. The models and levels it lists
     /// are read first, when they are not known yet; a read that fails says why
-    /// and leaves `type an id…` as the model's only entry.
+    /// and leaves `type an id…` or `type a level…` as the only entry.
     fn open_pick(&mut self, field: Field) {
         let mut read_error = None;
         match field {
@@ -652,9 +669,7 @@ impl Panel {
             }
             _ => {}
         }
-        if let Some(error) = &read_error
-            && matches!(field, Field::AgentModel(_))
-        {
+        if let Some(error) = &read_error {
             self.notice = Some(format!("the model catalog cannot be read: {error}"));
         }
         let options = field.options(&self.draft, &self.levels);
@@ -662,11 +677,7 @@ impl Panel {
             self.notice = Some(match field {
                 Field::AgentEffort(role) => match agent_of(&self.draft, role) {
                     Some(agent) if agent.model.is_empty() => "pick a model first".to_string(),
-                    Some(agent) => match (&read_error, self.levels.of(agent)) {
-                        (Some(error), _) => format!("the model catalog cannot be read: {error}"),
-                        (None, Some(_)) => format!("{} takes no effort level", agent.model),
-                        (None, None) => format!("{} is not listed", agent.model),
-                    },
+                    Some(agent) => format!("{} takes no effort level", agent.model),
                     None => "no effort to pick".to_string(),
                 },
                 _ => "nothing to pick".to_string(),
@@ -788,7 +799,7 @@ impl Panel {
         self.draft = self.saved.clone();
         self.edit = None;
         self.notice = None;
-        self.asking = false;
+        self.asking = None;
     }
 
     /// Write the draft into the file. Returns whether it was written.
@@ -1049,11 +1060,13 @@ impl Panel {
             match part.stop {
                 Some(stop) => {
                     let mut all = std::mem::take(&mut pending);
+                    let own = all.len()..all.len() + lines.len();
                     all.extend(lines);
                     blocks.push(Block {
                         lines: all,
                         stop: Some(stop),
                         section: part.section,
+                        own,
                     });
                 }
                 None => pending.extend(lines),
@@ -1067,6 +1080,7 @@ impl Panel {
                     lines: pending,
                     stop: None,
                     section: String::new(),
+                    own: 0..0,
                 }),
             }
         }
@@ -1284,6 +1298,23 @@ struct Block {
     lines: Vec<Line<'static>>,
     stop: Option<String>,
     section: String,
+    /// The lines that are the stop's own: its value line and the reason under
+    /// it. The lines above and below are headings and comments, and a click on
+    /// them answers to no row.
+    own: std::ops::Range<usize>,
+}
+
+impl Block {
+    /// The block's lines from `from` on, each with the stop's row when it is the
+    /// stop's own line.
+    fn drawn(&self, from: usize, stop: usize) -> Lines {
+        let mut drawn = Lines::default();
+        for (index, line) in self.lines.iter().enumerate().skip(from) {
+            let owner = self.own.contains(&index).then_some(stop);
+            drawn.push(line.clone(), owner);
+        }
+        drawn
+    }
 }
 
 /// The lines a window draws, the stops it shows, whether it may stop there
@@ -1620,18 +1651,18 @@ fn layout(blocks: &[Block], first: usize, capacity: usize) -> (Lines, Vec<usize>
     let mut shown = Vec::new();
     let mut stop = first;
     for block in &blocks[start..] {
-        // A block with a stop is the row the stop names: its lines belong to
-        // that row. A block without one is a heading, and belongs to none.
-        let owner = block.stop.as_ref().map(|_| stop);
+        // A block with a stop is the row the stop names: its own lines belong to
+        // that row, and the lines above and below it to none. A block without a
+        // stop is a heading, and belongs to none.
         if lines.len() + block.lines.len() > capacity {
             if lines.is_empty() && block.stop.is_some() && capacity > 0 {
                 let skip = block.lines.len() - capacity;
-                lines.extend(block.lines[skip..].to_vec(), owner);
+                lines.append(block.drawn(skip, stop));
                 shown.push(stop);
             }
             break;
         }
-        lines.extend(block.lines.clone(), owner);
+        lines.append(block.drawn(0, stop));
         if block.stop.is_some() {
             shown.push(stop);
             stop += 1;
@@ -2558,18 +2589,60 @@ mod tests {
     }
 
     #[test]
-    fn an_effort_whose_list_cannot_be_read_says_why() {
+    fn an_effort_whose_list_cannot_be_read_says_why_and_offers_a_typed_level() {
+        // The read's error is the notice, and the picker still lists the one
+        // way to an effort: `type a level…`, as a model's read offers `type an id…`.
         let (mut panel, _) = panel("effort-unreadable");
         panel.reader = unreadable;
         panel.draft.agents[1].harness = "opencode".to_string();
         panel.draft.agents[1].model = "opencode-go/glm-5.3".to_string();
         panel.begin("agents.builder.effort");
-        assert!(!panel.picking());
+        assert!(panel.picking());
+        assert_eq!(
+            panel.pick.as_ref().map(|pick| pick.options.clone()),
+            Some(vec![TYPE_A_LEVEL.to_string()])
+        );
         assert_eq!(
             panel.notice(),
             Some(
                 "the model catalog cannot be read: opencode api --standalone model.list: not found"
             )
+        );
+    }
+
+    #[test]
+    fn a_typed_level_is_kept_when_the_effort_list_cannot_be_read() {
+        let (mut panel, path) = panel("effort-unreadable-typed");
+        panel.reader = unreadable;
+        panel.draft.agents[1].harness = "opencode".to_string();
+        panel.draft.agents[1].model = "opencode-go/glm-5.3".to_string();
+        panel.begin("agents.builder.effort");
+        panel.step_pick(1);
+        panel.keep_pick();
+        assert!(panel.editing(), "type a level… did not open the input");
+        panel.typing().expect("the text").push_str("ultra");
+        panel.keep();
+        assert!(!panel.editing());
+        assert_eq!(panel.draft.agents[1].effort.as_deref(), Some("ultra"));
+        assert!(panel.save(), "{:?}", panel.notice());
+        let text = fs::read_to_string(&path).expect("the file");
+        assert!(text.contains("effort = \"ultra\""), "{text}");
+    }
+
+    #[test]
+    fn a_model_whose_list_cannot_be_read_offers_a_typed_id() {
+        let (mut panel, _) = panel("model-unreadable");
+        panel.reader = unreadable;
+        panel.draft.agents[1].harness = "opencode".to_string();
+        panel.begin("agents.builder.model");
+        assert_eq!(
+            panel.pick.as_ref().map(|pick| pick.options.clone()),
+            Some(vec![TYPE_AN_ID.to_string()])
+        );
+        assert!(
+            panel
+                .notice()
+                .is_some_and(|notice| notice.starts_with("the model catalog cannot be read"))
         );
     }
 
@@ -2847,8 +2920,9 @@ mod tests {
         let (mut panel, _) = panel("asks");
         assert!(!panel.asking());
         choose(&mut panel, "raul.theme", 1);
-        panel.ask();
+        panel.ask(Ask::Quit);
         assert!(panel.asking());
+        assert_eq!(panel.asked(), Some(Ask::Quit));
         panel.stay();
         assert!(!panel.asking());
     }

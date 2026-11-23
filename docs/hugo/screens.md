@@ -359,6 +359,11 @@ order. The tab's environment carries the session's crew, in `HUGO_SESSION`, so
 the skill prints the crew the session runs. The loop is the orchestrator's:
 hugo starts it and does not run it.
 
+`HUGO_SESSION` is one line of JSON: an object with `agents` (the crew's agents,
+in order), `round_limit`, `order` (the steps, in order) and `raul`, each as the
+configuration holds it. Text that is not a configuration is no
+session, and the skill reads the file instead.
+
 The queue `s` starts is the claimable waiting work, in queue order.
 When some of it is marked, `s` hands over the marked tasks alone, still in queue
 order; otherwise the whole queue. A task an agent holds is that agent's, so no
