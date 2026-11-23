@@ -204,7 +204,14 @@ themes and a theme file on disk (`docs/plan.md` § Deferred).
 
 ## THE FOLLOW-UPS
 
-None open. Grooming on 2026-11-23 placed every follow-up: the buildable ones
+- 2026-11-23 · talita `task show` `derived.review_state`, `derived.lane`
+  and `task list --lane`, `--needs-you` are not built (T6 review D2). The
+  rules live in raul (`crates/raul/src/data.rs` `needs_you`) or nowhere
+  (review state: TM § 12 names `pending-review` · `open-findings` · `clean`
+  without a mapping). Move them into `crates/core`, have raul call them,
+  then build them in talita.
+
+Grooming on 2026-11-23 placed every earlier follow-up: the buildable ones
 are in units 96–99 of `docs/plan.md`, the talita-bound ones in the units of
 `docs/talita/roadmap.md` they belong to, the live checks in `docs/plan.md`
 § Live checks, and the rest are archived in `DONE.md` § Follow-ups closed by

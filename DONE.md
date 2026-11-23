@@ -1798,6 +1798,18 @@ every write); a `--role builder` session is minted as `ses-runner-…`;
 `--expect-revision` waits for the first unit that writes tasks. One round,
 clean. Commit `2ec464f`.
 
+### 2026-11-23 · talita T6, task content
+
+`task create|show|list|retitle|describe|prioritize|estimate|tag|depend|undepend`,
+`scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`
+(ask by any role, answer by the creator — core's ownership and task-model
+§ 2.5 changed), `note`. A frozen section returns `section.frozen` with the
+child-task remedy. Review 1: `task depend` checked cycles outside the lock
+(D1, fixed); `show`/`list` lacked parts of § task Read (D2) — the derived
+review state, lane and `--lane`/`--needs-you` are a follow-up, since their
+rules live in raul or nowhere; Conventions still made questions creator-owned
+(D3, fixed). Two rounds. Commit `1279624`.
+
 ---
 
 ## Lessons
