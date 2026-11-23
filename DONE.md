@@ -1597,6 +1597,18 @@ follows the doc): the terminal preset's footer keys are bold and reversed, as
 says it writes nothing; no regenerate target was added, no test. Limits are in
 THE FOLLOW-UPS. Commit `024ea01`.
 
+Unit closed: Review G · docs (plan 94). One build round, one fix round and two
+reviews; the second clean. Six findings of the full review's batch G. F10:
+TODO's WHAT WAITS ON THE FLOW says the orchestrator's start is built and driving
+the loop is not; AGENTS.md was already updated by the orchestrator and not
+touched. F27: the task model's `claim` has its own row, § 4.4 moves after § 4.3,
+and the § 15 link resolves. F28: "eighteen slots" is twenty-three in theme.md,
+palettes.md and a theme.rs comment. Round one's review found one more in
+theme.rs's test comment (D1), fixed in round two. F29 and F30: hugo's and raul's
+screens match the code. F31: Settings names the order the window starts in.
+Doc and comment changes only; no test owed, no ruling. Limits are in
+THE FOLLOW-UPS. Commit `f29fec8`.
+
 ---
 
 ## Lessons

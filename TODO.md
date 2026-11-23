@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after unit 93.
+Updated 2026-11-23 by the orchestrator, after unit 94.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,8 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–93, 63b and 70b are closed; their record is in
-`DONE.md`. Open, in order:
-
-- 94 · Review G · docs — S
+Queued in `docs/plan.md`, in order. Units 0–94, 63b and 70b are closed; their record is in
+`DONE.md`. Open, in order: none. Every Ready row in `docs/plan.md` has ✓.
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
@@ -170,6 +168,10 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
+- **2026-11-23, unit 94:** five comments in `crates/theme/src/theme.rs` (lines
+  1035, 1080, 1250, 1425, 1594) still say a family palette's "eighteen values".
+  They count raw palette values, not slots. The builder did not verify the
+  count, so they were left. Recorded, not ruled.
 - **2026-11-23, unit 93:** `mock-data/generate.py:2779` (the TSK22 note) still says
   the gate regenerates the column table. Fixing it needs a generator change and a
   regenerate. Recorded, not ruled.

@@ -113,7 +113,7 @@ A unit without one is not ready, and belongs under **Grooming** instead.
 | 91 | **Review D · hugo** ✓ | done | quoted start; no unprompted orchestrator; effort back to none; crew selector; timeout bound; config error detail |
 | 92 | **Review E · fixtures** ✓ | done | TSK13 and TSK15 follow ADR 0017 (the human, 2026-11-23); the mock README is true |
 | 93 | **Review F · engine, theme, tooling** ✓ | done | heading link URLs dim; terminal footer keys reversed (the human, 2026-11-23); sweep test covers --tab; make columns |
-| 94 | **Review G · docs** | S | task-model drift, slot count, hugo and raul screens, what waits on the flow |
+| 94 | **Review G · docs** ✓ | done | the task model's claim row, section order and links; the chrome's twenty-three slots; hugo's and raul's screens match the code; TODO names the orchestrator's start as built |
 
 ## Grooming
 
