@@ -1492,6 +1492,20 @@ generator. Ruling: the Overview's activity block changes, because the new
 `round_filed` event displaces an older one; the review accepted the snapshot
 change. Limits are in THE FOLLOW-UPS. Commit `200eea9`.
 
+Unit closed: T2 · Core gates (plan 85). One build round and one review, clean.
+`check()` collects every failing gate as a `GateFailure` with its TM § 3.3
+name (ADR 0014), and `transition()` refuses with the whole list. Three gates are
+new: `review.round_current` (the latest external round is at or after
+`status_since`), `review.round_owner` (the acting session filed that round),
+and `task.claimed` on finish (the claim's holder and session, not the lease, per
+ADR 0020). The executing session is refused as an external reviewer on
+pass_review, request_changes and escalate (ADR 0017). Each gate has a lifecycle
+test, and one test shows `check()` returns every failing gate. The generator and
+the fixtures are unchanged; the fixture replay in `mock_data.rs` now replays
+review moves as the filing reviewer. `TransitionError::Gate` became `Gates`, and
+`Cancelled` is new; no crate outside core matches on it. No ruling was made.
+Limits are in THE FOLLOW-UPS. Commit `5c19a5d`.
+
 ---
 
 ## Lessons

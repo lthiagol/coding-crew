@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 84.
+Updated 2026-11-22 by the orchestrator, after unit 85.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–84, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–85, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- 85 · **T2 · Core gates** (M): collect-all `check()`; `review.round_current`, `review.round_owner`, `task.claimed` on finish, external round refused from the claim's session.
 - 86 · **T3 · Core operations** (M): claim take/renew/release with takeover; the section ownership table; the stored criterion-status mirror.
 - 87 · **T4 · Core store** (S): project lock, atomic journal and runtime writes, numeric id sort, `save_item` removes an old file.
 
@@ -171,6 +170,17 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 ## THE FOLLOW-UPS
 
 None blocking. Carried from the closed units.
+
+- **2026-11-22, unit 85:** the round-filing session check (ADR 0017) is not in
+  core. Core has no round-filing operation, so a round filed by the claim's own
+  session is refused only at the reviewer transitions. talita's T10 should call
+  the same check.
+- **2026-11-22, unit 85:** `start` checks the holder and the live lease only.
+  ADR 0020 asks for no session check there. Recorded, not ruled.
+- **2026-11-22, unit 85:** the fixture replay in `crates/core/tests/mock_data.rs`
+  replays review moves as the filer of the latest external round, and dates a
+  replayed code-review phase at that round's `at`. The fixtures are unchanged.
+  Recorded, not ruled.
 
 - **talita's design is accepted** (2026-11-22, the human). `docs/talita/` and
   ADRs 0012–0020; `docs/talita/roadmap.md` holds the build order, units
