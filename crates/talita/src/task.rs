@@ -162,7 +162,7 @@ pub fn show(project: &Project, id: &str) -> Result<Done, Failure> {
         "derived": {
             "criteria": criteria,
             "claimable": claim_failures(&task, Some(&done), &now).is_empty(),
-            "start_readiness": start_readiness(&task, &done),
+            "start_readiness": start_readiness(&task, &done, &now),
             "children_progress": { "done": children_done, "total": task.children.len() },
         },
     })))
@@ -170,7 +170,7 @@ pub fn show(project: &Project, id: &str) -> Result<Done, Failure> {
 
 /// Would `start` be accepted now, and if not, which gates refuse it. Judged
 /// for the claim's holder; with no claim, `task.claimed` fails.
-fn start_readiness(task: &Task, done: &dyn Fn(&str) -> bool) -> Value {
+fn start_readiness(task: &Task, done: &dyn Fn(&str) -> bool, now: &str) -> Value {
     let mut gates: Vec<Value> = Vec::new();
     if task.status != Status::Approved {
         gates.push(json!({
@@ -189,7 +189,7 @@ fn start_readiness(task: &Task, done: &dyn Fn(&str) -> bool) -> Value {
         dependency_done: Some(done),
         reason: None,
     };
-    for failure in check(task, Event::Start, &holder, &ctx) {
+    for failure in check(task, Event::Start, &holder, &ctx, now) {
         gates.push(json!({ "gate": failure.gate, "detail": failure.message }));
     }
     json!({ "ok": gates.is_empty(), "gates": gates })

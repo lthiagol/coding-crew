@@ -6,6 +6,7 @@ mod cli;
 mod envelope;
 mod error;
 mod identity;
+mod lifecycle;
 mod parts;
 mod project;
 mod session;

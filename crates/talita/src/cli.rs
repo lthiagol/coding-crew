@@ -13,7 +13,7 @@ use crate::identity::{Flags, Resolved};
 use crate::parts::{self, StepFields};
 use crate::project::{self, Project};
 use crate::write::Call;
-use crate::{session, task};
+use crate::{lifecycle, session, task};
 
 /// Task Administration, Lifecycle & Interaction Terminal Application — the CLI
 /// tool of coding-crew. Every call prints one JSON object on stdout.
@@ -56,7 +56,7 @@ enum Noun {
         #[command(subcommand)]
         verb: ProjectVerb,
     },
-    /// A task: create it, read it, and write its title, intent and meta.
+    /// A task: create it, read it, change its content, and move its lifecycle.
     Task {
         #[command(subcommand)]
         verb: TaskVerb,
@@ -158,6 +158,67 @@ enum TaskVerb {
         id: String,
         #[arg(long, num_args = 1.., value_name = "TSK")]
         on: Vec<String>,
+    },
+    /// draft → groomed, when the outcome, a criterion and the out-of-scope are written.
+    Groom { id: String },
+    /// groomed → approved; sets planned_by and freezes intent, scope and criteria.
+    Approve {
+        id: String,
+        #[arg(long, value_name = "HUMAN")]
+        instructed_by: Option<String>,
+    },
+    /// approved → executing, for the claim's holder.
+    Start { id: String },
+    /// executing → code-review, for the claim's holder.
+    Finish { id: String },
+    /// code-review → done.
+    PassReview { id: String },
+    /// code-review → remediating.
+    RequestChanges { id: String },
+    /// remediating → code-review.
+    ReReview { id: String },
+    /// code-review → needs-human, when the review budget is spent.
+    Escalate { id: String },
+    /// needs-human → executing, on a human's instruction.
+    Resume {
+        id: String,
+        #[arg(long, value_name = "HUMAN")]
+        instructed_by: Option<String>,
+        #[arg(long)]
+        reason: String,
+        /// Raise review.max_rounds by N.
+        #[arg(long, value_name = "N")]
+        grant_rounds: Option<u32>,
+    },
+    /// done → executing, on a human's instruction.
+    Reopen {
+        id: String,
+        #[arg(long, value_name = "HUMAN")]
+        instructed_by: Option<String>,
+        #[arg(long)]
+        reason: String,
+    },
+    /// Hold the task; the reason is required.
+    Block {
+        id: String,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Clear the blocked overlay.
+    Unblock { id: String },
+    /// Park the task; the reason is required.
+    Defer {
+        id: String,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Clear the deferred overlay.
+    Undefer { id: String },
+    /// Cancel the task for good; the reason is required.
+    Cancel {
+        id: String,
+        #[arg(long)]
+        reason: Option<String>,
     },
 }
 
@@ -547,6 +608,53 @@ fn task_verb(
         TaskVerb::Tag { id, add, remove } => ("task tag", run(&|c| task::tag(c, id, add, remove))),
         TaskVerb::Depend { id, on } => ("task depend", run(&|c| task::depend(c, id, on))),
         TaskVerb::Undepend { id, on } => ("task undepend", run(&|c| task::undepend(c, id, on))),
+        TaskVerb::Groom { id } => ("task groom", run(&|c| lifecycle::groom(c, id))),
+        TaskVerb::Approve { id, instructed_by } => (
+            "task approve",
+            run(&|c| lifecycle::approve(c, id, instructed_by.as_deref())),
+        ),
+        TaskVerb::Start { id } => ("task start", run(&|c| lifecycle::start(c, id))),
+        TaskVerb::Finish { id } => ("task finish", run(&|c| lifecycle::finish(c, id))),
+        TaskVerb::PassReview { id } => {
+            ("task pass-review", run(&|c| lifecycle::pass_review(c, id)))
+        }
+        TaskVerb::RequestChanges { id } => (
+            "task request-changes",
+            run(&|c| lifecycle::request_changes(c, id)),
+        ),
+        TaskVerb::ReReview { id } => ("task re-review", run(&|c| lifecycle::re_review(c, id))),
+        TaskVerb::Escalate { id } => ("task escalate", run(&|c| lifecycle::escalate(c, id))),
+        TaskVerb::Resume {
+            id,
+            instructed_by,
+            reason,
+            grant_rounds,
+        } => (
+            "task resume",
+            run(&|c| lifecycle::resume(c, id, instructed_by.as_deref(), reason, *grant_rounds)),
+        ),
+        TaskVerb::Reopen {
+            id,
+            instructed_by,
+            reason,
+        } => (
+            "task reopen",
+            run(&|c| lifecycle::reopen(c, id, instructed_by.as_deref(), reason)),
+        ),
+        TaskVerb::Block { id, reason } => (
+            "task block",
+            run(&|c| lifecycle::block(c, id, reason.as_deref())),
+        ),
+        TaskVerb::Unblock { id } => ("task unblock", run(&|c| lifecycle::unblock(c, id))),
+        TaskVerb::Defer { id, reason } => (
+            "task defer",
+            run(&|c| lifecycle::defer(c, id, reason.as_deref())),
+        ),
+        TaskVerb::Undefer { id } => ("task undefer", run(&|c| lifecycle::undefer(c, id))),
+        TaskVerb::Cancel { id, reason } => (
+            "task cancel",
+            run(&|c| lifecycle::cancel(c, id, reason.as_deref())),
+        ),
     }
 }
 

@@ -172,11 +172,16 @@ fn gate_messages(failures: &[GateFailure]) -> String {
 ///
 /// The role, the cancellation and the status are checked first. Then every
 /// gate runs, and a refusal carries all the failing ones (see [`check`]).
+///
+/// `now` is the instant the move happens and everything it records, as the
+/// claim operations take it: the caller names the clock, so a test reads the
+/// one it chose and a verb's records share one instant.
 pub fn transition(
     task: &mut Task,
     event: Event,
     actor: &Actor,
     ctx: &TransitionContext<'_>,
+    now: &str,
 ) -> Result<(), TransitionError> {
     if let Some(role) = event.required_role() {
         if actor.kind != ActorKind::Agent {
@@ -195,11 +200,11 @@ pub fn transition(
 
     let Some((from, to)) = edge(event) else {
         // An overlay holds or releases the task and moves no status.
-        let failures = check(task, event, actor, ctx);
+        let failures = check(task, event, actor, ctx, now);
         if !failures.is_empty() {
             return Err(TransitionError::Gates(failures));
         }
-        apply_overlay(task, event, actor, ctx);
+        apply_overlay(task, event, actor, ctx, now);
         return Ok(());
     };
 
@@ -209,18 +214,17 @@ pub fn transition(
             status: task.status,
         });
     }
-    let failures = check(task, event, actor, ctx);
+    let failures = check(task, event, actor, ctx, now);
     if !failures.is_empty() {
         return Err(TransitionError::Gates(failures));
     }
 
     // The task enters its new status now: the wait in it begins now. The
     // records the move owes are written with it, under the same instant.
-    let now = crate::now_rfc3339();
     match event {
         Event::Approve => task.planned_by = actor.session.clone(),
         Event::ReReview => task.review.re_reviews.push(ReReview {
-            at: now.clone(),
+            at: now.to_string(),
             after_round: latest_external(task).map_or(0, |round| round.n),
             by: actor.id.clone(),
             session: actor.session.clone(),
@@ -228,8 +232,8 @@ pub fn transition(
         _ => {}
     }
     task.status = to;
-    task.status_since = now.clone();
-    task.updated = now;
+    task.status_since = now.to_string();
+    task.updated = now.to_string();
     Ok(())
 }
 
@@ -237,12 +241,14 @@ pub fn transition(
 /// (§ 3.3). An empty list passes.
 ///
 /// The role, the cancellation and the status are `transition`'s to check: this
-/// assumes the task is in the status the event leaves.
+/// assumes the task is in the status the event leaves. `now` is the instant
+/// the gates are checked against, as it is for [`transition`].
 pub fn check(
     task: &Task,
     event: Event,
     actor: &Actor,
     ctx: &TransitionContext<'_>,
+    now: &str,
 ) -> Vec<GateFailure> {
     let mut failures = Vec::new();
     match event {
@@ -290,7 +296,6 @@ pub fn check(
             }
         }
         Event::Start => {
-            let now = crate::now_rfc3339();
             gate(
                 &mut failures,
                 "task.claimed",
@@ -307,7 +312,7 @@ pub fn check(
                 gate(
                     &mut failures,
                     "task.claimed",
-                    !claim.lease_expired(&now),
+                    !claim.lease_expired(now),
                     "the claim's lease has expired",
                 );
             }
@@ -434,12 +439,17 @@ fn edge(event: Event) -> Option<(Status, Status)> {
     })
 }
 
-fn apply_overlay(task: &mut Task, event: Event, actor: &Actor, ctx: &TransitionContext<'_>) {
-    let now = crate::now_rfc3339();
+fn apply_overlay(
+    task: &mut Task,
+    event: Event,
+    actor: &Actor,
+    ctx: &TransitionContext<'_>,
+    now: &str,
+) {
     let overlay = Overlay {
         reason: ctx.reason.unwrap_or_default().to_string(),
         by: actor.id.clone(),
-        at: now.clone(),
+        at: now.to_string(),
     };
     match event {
         Event::Block => task.overlays.blocked = Some(overlay),
@@ -449,7 +459,7 @@ fn apply_overlay(task: &mut Task, event: Event, actor: &Actor, ctx: &TransitionC
         Event::Cancel => task.overlays.cancelled = Some(overlay),
         _ => unreachable!("only overlay events hold a task without a status"),
     }
-    task.updated = now;
+    task.updated = now.to_string();
 }
 
 /// A criterion at finish: parked on purpose, or proven by its evidence.

@@ -12,6 +12,9 @@ fn mock_store() -> Store {
     Store::new(root)
 }
 
+/// The clock a replayed transition is read with: after every fixture's dates.
+const NOW: &str = "2026-11-19T08:00:00Z";
+
 /// The committed journal: the moments the tasks' moves happened.
 fn journal() -> Activity {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -534,7 +537,7 @@ fn must_pass(task: &Task, from: Status, event: Event, actor: &Actor, done: &Hash
         dependency_done: Some(&is_done),
         reason: None,
     };
-    if let Err(error) = transition(&mut replayed, event, actor, &ctx) {
+    if let Err(error) = transition(&mut replayed, event, actor, &ctx, NOW) {
         panic!("{} does not pass {event:?} from {from:?}: {error}", task.id);
     }
 }

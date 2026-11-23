@@ -148,13 +148,25 @@ fn start_refuses_an_expired_lease_until_its_holder_renews() {
     .unwrap();
 
     let me = runner("runner-1", "s-1");
-    let refused = transition(&mut task, Event::Start, &me, &TransitionContext::default());
+    let refused = transition(
+        &mut task,
+        Event::Start,
+        &me,
+        &TransitionContext::default(),
+        &now_rfc3339(),
+    );
     assert!(refused.is_err(), "an expired lease must not start the task");
     assert_eq!(task.status, Status::Approved);
 
     claim::renew(&mut task, &me, DEFAULT_LEASE, &now_rfc3339()).unwrap();
-    transition(&mut task, Event::Start, &me, &TransitionContext::default())
-        .expect("a renewed lease starts the task");
+    transition(
+        &mut task,
+        Event::Start,
+        &me,
+        &TransitionContext::default(),
+        &now_rfc3339(),
+    )
+    .expect("a renewed lease starts the task");
     assert_eq!(task.status, Status::Executing);
 }
 
@@ -169,6 +181,7 @@ fn a_takeover_in_executing_moves_the_execution_session() {
         Event::Start,
         &first,
         &TransitionContext::default(),
+        &now_rfc3339(),
     )
     .unwrap();
 
@@ -184,8 +197,8 @@ fn a_takeover_in_executing_moves_the_execution_session() {
     // first may, since it did not finish the work.
     task.status = Status::Remediating;
     let ctx = TransitionContext::default();
-    assert!(!check(&task, Event::ReReview, &second, &ctx).is_empty());
-    assert!(check(&task, Event::ReReview, &first, &ctx).is_empty());
+    assert!(!check(&task, Event::ReReview, &second, &ctx, FIXTURE_NOW).is_empty());
+    assert!(check(&task, Event::ReReview, &first, &ctx, FIXTURE_NOW).is_empty());
 }
 
 #[test]

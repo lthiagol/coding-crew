@@ -398,8 +398,9 @@ fn a_task_is_groomed_end_to_end_through_talita() {
     let task = store.load("TSK01").unwrap();
     let creator = Actor::agent("creator-1", Role::Creator).in_session("ses-creator");
     let ctx = TransitionContext::default();
-    assert!(check(&task, Event::Groom, &creator, &ctx).is_empty());
-    assert!(check(&task, Event::Approve, &creator, &ctx).is_empty());
+    let now = coding_crew_core::now_rfc3339();
+    assert!(check(&task, Event::Groom, &creator, &ctx, &now).is_empty());
+    assert!(check(&task, Event::Approve, &creator, &ctx, &now).is_empty());
     assert!(task.revision > 10, "each write moved the revision");
 }
 

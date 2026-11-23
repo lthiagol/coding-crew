@@ -8,6 +8,9 @@ use coding_crew_core::task::{
 };
 use coding_crew_core::{Actor, CriterionStatus, Role, Step, StepStatus, Store, Task};
 
+/// The clock the transitions of these tests are read with.
+const NOW: &str = "2026-11-20T00:00:00Z";
+
 fn creator() -> Actor {
     Actor::agent("creator-1", Role::Creator).in_session("s-creator")
 }
@@ -49,7 +52,8 @@ fn draft_needs_outcome_criteria_and_scope() {
             &mut task,
             Event::Groom,
             &creator(),
-            &TransitionContext::default()
+            &TransitionContext::default(),
+            NOW
         )
         .is_err()
     );
@@ -60,7 +64,8 @@ fn draft_needs_outcome_criteria_and_scope() {
             &mut task,
             Event::Groom,
             &creator(),
-            &TransitionContext::default()
+            &TransitionContext::default(),
+            NOW
         )
         .is_err()
     );
@@ -74,7 +79,8 @@ fn draft_needs_outcome_criteria_and_scope() {
             &mut task,
             Event::Groom,
             &creator(),
-            &TransitionContext::default()
+            &TransitionContext::default(),
+            NOW
         )
         .is_err()
     );
@@ -85,6 +91,7 @@ fn draft_needs_outcome_criteria_and_scope() {
         Event::Groom,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Groomed);
@@ -98,6 +105,7 @@ fn only_the_creator_grooms() {
         Event::Groom,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("runner cannot groom");
     assert!(matches!(error, TransitionError::WrongRole { .. }));
@@ -111,6 +119,7 @@ fn approval_needs_coverage_and_done_when() {
         Event::Groom,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     task.steps[0].done_when = String::new();
@@ -119,7 +128,8 @@ fn approval_needs_coverage_and_done_when() {
             &mut task,
             Event::Approve,
             &creator(),
-            &TransitionContext::default()
+            &TransitionContext::default(),
+            NOW
         )
         .is_err()
     );
@@ -134,6 +144,7 @@ fn approval_needs_coverage_and_done_when() {
         Event::Approve,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("ACCEPT-02 has no covering step");
     assert!(error.to_string().contains("covering step"), "{error}");
@@ -144,6 +155,7 @@ fn approval_needs_coverage_and_done_when() {
         Event::Approve,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Approved);
@@ -157,6 +169,7 @@ fn start_needs_a_claim() {
         Event::Groom,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     transition(
@@ -164,6 +177,7 @@ fn start_needs_a_claim() {
         Event::Approve,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
 
@@ -172,7 +186,8 @@ fn start_needs_a_claim() {
             &mut task,
             Event::Start,
             &runner(),
-            &TransitionContext::default()
+            &TransitionContext::default(),
+            NOW
         )
         .is_err()
     );
@@ -188,6 +203,7 @@ fn start_needs_a_claim() {
         Event::Start,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Executing);
@@ -201,6 +217,7 @@ fn finish_needs_evidence_and_a_self_round() {
         Event::Groom,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     transition(
@@ -208,6 +225,7 @@ fn finish_needs_evidence_and_a_self_round() {
         Event::Approve,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     task.claim = Some(coding_crew_core::Claim {
@@ -221,6 +239,7 @@ fn finish_needs_evidence_and_a_self_round() {
         Event::Start,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
 
@@ -230,7 +249,8 @@ fn finish_needs_evidence_and_a_self_round() {
             &mut task,
             Event::Finish,
             &runner(),
-            &TransitionContext::default()
+            &TransitionContext::default(),
+            NOW
         )
         .is_err()
     );
@@ -249,7 +269,8 @@ fn finish_needs_evidence_and_a_self_round() {
             &mut task,
             Event::Finish,
             &runner(),
-            &TransitionContext::default()
+            &TransitionContext::default(),
+            NOW
         )
         .is_err()
     );
@@ -270,6 +291,7 @@ fn finish_needs_evidence_and_a_self_round() {
         Event::Finish,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::CodeReview);
@@ -308,6 +330,7 @@ fn five_external_rounds_escalate_to_a_human() {
         Event::Escalate,
         &reviewer(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::NeedsHuman);
@@ -322,6 +345,7 @@ fn a_transition_stamps_the_moment_the_status_began() {
         Event::Groom,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Groomed);
@@ -338,6 +362,7 @@ fn an_overlay_does_not_move_the_status_stamp() {
         Event::Groom,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     task.status_since = "2020-01-01T00:00:00Z".to_string();
@@ -350,6 +375,7 @@ fn an_overlay_does_not_move_the_status_stamp() {
             reason: Some("waiting for the plan"),
             ..TransitionContext::default()
         },
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status_since, "2020-01-01T00:00:00Z");
@@ -405,6 +431,7 @@ fn a_small_task_skips_the_step_rules() {
         Event::Groom,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     // No steps, no coverage, no done_when: a small task approves anyway.
@@ -413,6 +440,7 @@ fn a_small_task_skips_the_step_rules() {
         Event::Approve,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Approved);
@@ -426,6 +454,7 @@ fn a_full_task_still_needs_its_steps() {
         Event::Groom,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     task.steps[0].done_when = String::new();
@@ -434,7 +463,8 @@ fn a_full_task_still_needs_its_steps() {
             &mut task,
             Event::Approve,
             &creator(),
-            &TransitionContext::default()
+            &TransitionContext::default(),
+            NOW
         )
         .is_err()
     );
@@ -448,6 +478,7 @@ fn an_expired_lease_cannot_start() {
         Event::Groom,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     transition(
@@ -455,6 +486,7 @@ fn an_expired_lease_cannot_start() {
         Event::Approve,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
 
@@ -469,6 +501,7 @@ fn an_expired_lease_cannot_start() {
         Event::Start,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("the lease expired");
     assert!(error.to_string().contains("lease"));
@@ -482,6 +515,7 @@ fn a_live_lease_starts_the_task() {
         Event::Groom,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     transition(
@@ -489,6 +523,7 @@ fn a_live_lease_starts_the_task() {
         Event::Approve,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
 
@@ -503,6 +538,7 @@ fn a_live_lease_starts_the_task() {
         Event::Start,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Executing);
@@ -621,6 +657,7 @@ fn a_deferred_criterion_finishes_without_evidence() {
         Event::Finish,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::CodeReview);
@@ -654,6 +691,7 @@ fn a_deferred_status_needs_its_deferral() {
         Event::Finish,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("a deferred status without a deferral");
     assert!(error.to_string().contains("without a deferral"), "{error}");
@@ -668,6 +706,7 @@ fn pass_review_needs_the_reviewer_session_apart_from_the_planner() {
         Event::PassReview,
         &reviewer(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Done);
@@ -679,6 +718,7 @@ fn pass_review_needs_the_reviewer_session_apart_from_the_planner() {
         Event::PassReview,
         &unrecorded(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("a reviewer with no session");
     assert!(error.to_string().contains("not recorded"), "{error}");
@@ -691,6 +731,7 @@ fn pass_review_needs_the_reviewer_session_apart_from_the_planner() {
         Event::PassReview,
         &planner,
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("the planning session reviews its own task");
     assert!(error.to_string().contains("cannot review"), "{error}");
@@ -706,6 +747,7 @@ fn a_planner_left_unrecorded_cannot_be_checked() {
         Event::PassReview,
         &reviewer(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("no planning session to check against");
     assert!(error.to_string().contains("not recorded"), "{error}");
@@ -720,6 +762,7 @@ fn request_changes_needs_the_reviewer_session_apart_from_the_planner() {
         Event::RequestChanges,
         &reviewer(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Remediating);
@@ -731,6 +774,7 @@ fn request_changes_needs_the_reviewer_session_apart_from_the_planner() {
         Event::RequestChanges,
         &unrecorded(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("a reviewer with no session");
     assert!(error.to_string().contains("not recorded"), "{error}");
@@ -743,6 +787,7 @@ fn request_changes_needs_the_reviewer_session_apart_from_the_planner() {
         Event::RequestChanges,
         &planner,
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("the planning session reviews its own task");
     assert!(error.to_string().contains("cannot review"), "{error}");
@@ -766,6 +811,7 @@ fn escalate_needs_the_reviewer_session_apart_from_the_planner() {
         Event::Escalate,
         &unrecorded(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("a reviewer with no session");
     assert!(error.to_string().contains("not recorded"), "{error}");
@@ -778,6 +824,7 @@ fn escalate_needs_the_reviewer_session_apart_from_the_planner() {
         Event::Escalate,
         &planner,
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("the planning session escalates its own task");
     assert!(error.to_string().contains("cannot review"), "{error}");
@@ -805,6 +852,7 @@ fn re_review_needs_a_remediating_session_apart_from_the_executor() {
         Event::ReReview,
         &fixer,
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::CodeReview);
@@ -815,6 +863,7 @@ fn re_review_needs_a_remediating_session_apart_from_the_executor() {
         Event::ReReview,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("the executing session remediates its own findings");
     assert!(error.to_string().contains("cannot remediate"), "{error}");
@@ -825,6 +874,7 @@ fn re_review_needs_a_remediating_session_apart_from_the_executor() {
         Event::ReReview,
         &Actor::agent("runner-2", Role::Runner),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("a remediating session that is not recorded");
     assert!(error.to_string().contains("not recorded"), "{error}");
@@ -836,6 +886,7 @@ fn re_review_needs_a_remediating_session_apart_from_the_executor() {
         Event::ReReview,
         &fixer,
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("an executing session that is not recorded");
     assert!(error.to_string().contains("not recorded"), "{error}");
@@ -860,6 +911,7 @@ fn re_review_records_the_hand_back_in_the_same_move() {
         Event::ReReview,
         &fixer,
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
 
@@ -885,6 +937,7 @@ fn approve_records_the_planning_session() {
         Event::Approve,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Approved);
@@ -899,6 +952,7 @@ fn a_cancellation_keeps_its_first_reason() {
         Event::Cancel,
         &creator(),
         &cancel_reason("out of scope"),
+        NOW,
     )
     .unwrap();
     let first = task.overlays.cancelled.clone();
@@ -908,6 +962,7 @@ fn a_cancellation_keeps_its_first_reason() {
         Event::Cancel,
         &creator(),
         &cancel_reason("second thoughts"),
+        NOW,
     )
     .expect_err("a cancelled task is not cancelled again");
     assert!(error.to_string().contains("cancelled"), "{error}");
@@ -922,11 +977,12 @@ fn a_cancelled_task_refuses_every_event() {
         Event::Cancel,
         &creator(),
         &cancel_reason("out of scope"),
+        NOW,
     )
     .unwrap();
 
     for event in [Event::Block, Event::Unblock, Event::Defer, Event::Undefer] {
-        let error = transition(&mut task, event, &creator(), &cancel_reason("later"))
+        let error = transition(&mut task, event, &creator(), &cancel_reason("later"), NOW)
             .expect_err("a cancelled task takes no overlay");
         assert!(error.to_string().contains("cancelled"), "{error:?}");
     }
@@ -942,6 +998,7 @@ fn cancel_needs_a_reason() {
         Event::Cancel,
         &creator(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("a cancellation without a reason");
     assert!(error.to_string().contains("reason"), "{error}");
@@ -966,6 +1023,7 @@ fn a_verdict_from_before_review_cannot_move_the_task() {
         Event::PassReview,
         &reviewer(),
         &TransitionContext::default(),
+        NOW,
     );
     assert_eq!(gate_names(&failures), vec!["review.round_current"]);
     assert!(
@@ -973,7 +1031,8 @@ fn a_verdict_from_before_review_cannot_move_the_task() {
             &mut task,
             Event::PassReview,
             &reviewer(),
-            &TransitionContext::default()
+            &TransitionContext::default(),
+            NOW
         )
         .is_err()
     );
@@ -985,6 +1044,7 @@ fn a_verdict_from_before_review_cannot_move_the_task() {
         Event::PassReview,
         &reviewer(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Done);
@@ -998,6 +1058,7 @@ fn a_review_move_needs_an_external_round_behind_it() {
         Event::PassReview,
         &reviewer(),
         &TransitionContext::default(),
+        NOW,
     );
     assert_eq!(
         gate_names(&failures),
@@ -1017,6 +1078,7 @@ fn only_the_session_that_filed_the_round_moves_it() {
         Event::PassReview,
         &reviewer(),
         &TransitionContext::default(),
+        NOW,
     );
     assert_eq!(gate_names(&failures), vec!["review.round_owner"]);
     let error = transition(
@@ -1024,6 +1086,7 @@ fn only_the_session_that_filed_the_round_moves_it() {
         Event::PassReview,
         &reviewer(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("a session that did not file the round");
     assert!(
@@ -1038,6 +1101,7 @@ fn only_the_session_that_filed_the_round_moves_it() {
         Event::PassReview,
         &filer,
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::Done);
@@ -1058,6 +1122,7 @@ fn the_executing_session_never_reviews_its_task() {
         Event::PassReview,
         &executor,
         &TransitionContext::default(),
+        NOW,
     );
     assert_eq!(gate_names(&failures), vec!["review.independent"]);
     assert!(failures[0].message.contains("executed"), "{failures:?}");
@@ -1084,6 +1149,7 @@ fn only_the_claim_holder_hands_the_work_to_review() {
         Event::Finish,
         &other_actor,
         &TransitionContext::default(),
+        NOW,
     );
     assert_eq!(gate_names(&failures), vec!["task.claimed"]);
 
@@ -1093,6 +1159,7 @@ fn only_the_claim_holder_hands_the_work_to_review() {
         Event::Finish,
         &other_session,
         &TransitionContext::default(),
+        NOW,
     );
     assert_eq!(gate_names(&failures), vec!["task.claimed"]);
     assert_eq!(task.status, coding_crew_core::Status::Executing);
@@ -1102,6 +1169,7 @@ fn only_the_claim_holder_hands_the_work_to_review() {
         Event::Finish,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::CodeReview);
@@ -1116,6 +1184,7 @@ fn an_expired_lease_still_belongs_to_its_holder_at_finish() {
         Event::Finish,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     )
     .unwrap();
     assert_eq!(task.status, coding_crew_core::Status::CodeReview);
@@ -1147,6 +1216,7 @@ fn check_reports_every_failing_gate() {
         Event::PassReview,
         &unrecorded(),
         &TransitionContext::default(),
+        NOW,
     );
     assert_eq!(gate_names(&failures), expected);
 
@@ -1155,6 +1225,7 @@ fn check_reports_every_failing_gate() {
         Event::PassReview,
         &unrecorded(),
         &TransitionContext::default(),
+        NOW,
     )
     .expect_err("every gate fails")
     {
@@ -1176,6 +1247,7 @@ fn check_reports_every_failing_gate() {
         Event::Finish,
         &runner(),
         &TransitionContext::default(),
+        NOW,
     );
     assert_eq!(
         gate_names(&failures),

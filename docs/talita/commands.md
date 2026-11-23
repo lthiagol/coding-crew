@@ -1,6 +1,6 @@
 # talita — command reference
 
-Accepted 2026-11-22. Built: `session`, `project` (T5); `task` create and content, `show` and `list` without `review_state`, `lane`, `--lane` and `--needs-you`, `scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`, `note` (T6). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
+Accepted 2026-11-22. Built: `session`, `project` (T5); `task` create and content, `show` and `list` without `review_state`, `lane`, `--lane` and `--needs-you`, `scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`, `note` (T6); the `task` lifecycle verbs and overlays (T7). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
 the output and errors [ADR 0014](../decisions/0014-output-and-errors.md);
 identity [ADR 0015](../decisions/0015-identity.md). Gate names are task-model
 § 3.3's. "TM" is `docs/tasks/task-model.md`, "LC" `crates/core/src/lifecycle.rs`.
@@ -136,7 +136,7 @@ session.
 TM § 3.2 but not in LC; talita checks it as "the flag names a human".
 
 Errors: `status.wrong` (4), `gate.refused` (4, `gates[]` lists each failing
-gate), `claim.not_holder` (5).
+gate), `role.wrong` (5).
 
 ### Overlays
 
