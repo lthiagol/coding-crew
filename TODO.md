@@ -1,7 +1,7 @@
 # coding-crew — orchestration state
 
 Updated 2026-11-23 by the orchestrator, after grooming.
-Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
+Branch `main`, remote `https://github.com/lthiagol/coding-crew.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
 `bash scripts/test-pty-sweep.sh`.
@@ -57,7 +57,7 @@ build (2026-11-23).
 | phase | units | needs |
 |---|---|---|
 | 1 · cleanup | 95 hugo on PATH · 96 docs drift · 97 consistency · 98 test hardening · 99 rulings in the UI | nothing; ready |
-| 2 · distribution | 100 version and releases · 101 Homebrew tap | 95; 101 needs 100 and a tap repo the human creates |
+| 2 · distribution | 100 version and releases · 101 Homebrew formulae | 95; 101 needs 100 and a first tag. The taps exist: `lthiagol/homebrew-tap`, `lthiagol/homebrew-dev`; the `homebrew` project skill publishes to them |
 | 3 · talita | T5–T12 in `docs/talita/roadmap.md` | the human's word to build talita |
 | 3 · the orchestrator | O1 its job, designed · O2 its job, built | O1 any time (docs only); O2 needs T12 |
 | 3 · dogfooding | DF this repository on its own `coding-crew/` | T12 and O2 |
@@ -87,7 +87,7 @@ themes and a theme file on disk (`docs/plan.md` § Deferred).
   indicator; raul's Settings shows a missing `harness` or `effort` as an empty
   row that can be set; an odd crew paints no size; the journal keeps refusing
   writes over unreadable events; raul's event icons, `orchestrator-01` and
-  `needs.rs:338` stand. Distribution is GitHub releases plus a Homebrew tap.
+  `needs.rs:338` stand. Distribution is a tagged release plus Homebrew formulae built from source: `coding-crew` in `lthiagol/homebrew-tap`, `coding-crew-dev` in `lthiagol/homebrew-dev`, published by `.claude/skills/homebrew`.
 
 - **hugo is found on PATH** (2026-11-23, the human). Agents run `hugo
   --skill <role>`, so `hugo` must be on PATH; Homebrew is the install that
