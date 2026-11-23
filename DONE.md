@@ -1437,6 +1437,21 @@ open findings), as `docs/hugo/screens.md` § counts does. The Makefile drops
 suites. No ruling was made; the rule is the one of units 65 and 71. Commit
 `a73b873`.
 
+Unit closed: the triage's hugo and config rulings (plan 81). Five build rounds
+and five reviews. Config: an unknown `[agents.<name>]` table and a crew the
+flow does not run load, each named by a warning on hugo's sidebar and raul's
+Settings; a missing orchestrator and an unknown harness stay unreadable. The
+flow files name the agent only, and hugo's model defaults are pinned in core's
+own test. An agent can be `blocked` (`AgentState::Blocked`, drawn on the warning
+slot under its own icon). The queue offers only claimable tasks; an unclaimable
+waiting task is drawn dim with `not claimable`. Round one's review found the
+queue help still said `a` marks every waiting task; fixed in round two.
+Ruling: the done-when's "the mock gains one claimable waiting task" waited in
+rounds two to five. The orchestrator ruled after round five, option (a): TSK29
+is the claimable waiting task and TSK07 the one that is not, the mock already
+shows both, and no fixture was added. The done-when was amended in the job
+file, with no code change. Limits are in THE FOLLOW-UPS. Commit `876dd58`.
+
 ---
 
 ## Lessons

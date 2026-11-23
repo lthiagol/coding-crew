@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 80.
+Updated 2026-11-22 by the orchestrator, after unit 81.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–80, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–81, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- **81** The triage's hugo and config rulings (M)
 - **82** The triage's raul changes (S)
 - **83** TOML in colour, and one story for TSK14 (S)
 
@@ -172,7 +171,15 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
-- Loose ends from the triage: units 81–83 in `docs/plan.md`.
+- Loose ends from the triage: units 82–83 in `docs/plan.md`.
+- **2026-11-22, unit 81:** none of unit 81's tests was run against the code
+  before its fix, so none is shown to fail without it.
+- **2026-11-22, unit 81:** the sidebar's config warning is cut at the pane
+  width with `…`. At 100 columns the table name stays visible; the full text
+  is shown only in the test.
+- **2026-11-22, unit 81:** AGENTS.md's `flow/` bullet still says the role
+  configs name the model they run on. The orchestrator updates it; the unit
+  did not edit AGENTS.md.
 - **2026-11-22, unit 78:** `needs.rs:338` is unchanged. The done-when named
   it; the review found Needs rows are one line, so "Only a pane of one line
   shows the row alone" is accurate. Confirm it, or reopen to name the case.
@@ -233,9 +240,10 @@ None blocking. Carried from the closed units.
 `coding-crew/flow/` when the project is managed, `.orchestration.json` stays at
 the repository root because the global skill reads it there, the findings live
 inside the task rather than in `/tmp`, and the task folder replaces this file as
-the orchestrator's memory. The move waits for the writers. The third copy of
-the model pair, in `mock-data/generate.py`, is still unpinned against the role
-configs.
+the orchestrator's memory. The move waits for the writers. The role configs
+name no model since unit 81; the model defaults live in `crates/core/src/config.rs`
+(pinned by core's own test) and in the constants of `mock-data/generate.py`,
+which no test pins.
 
 **Deferred by the human:** the light themes — our `light` preset and the light
 variants of the families (Catppuccin Latte, Dracula Alucard, Nord Light).
