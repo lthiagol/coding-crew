@@ -19,8 +19,10 @@ for configuration and one main pane for what is running, with no tabs. Its
 configuration is centralized under `~/.config/coding-crew/`, and that folder is
 created on demand when it does not exist.
 
-**talita is not being built.** Do not write talita code, do not extend its
-commands, do not wire raul to it, until that is said explicitly.
+**talita is being built in part** (the human, 2026-11-23): T5, T6, T7, T10,
+T11 and T13 of `docs/talita/roadmap.md`. T8, T9, T12 and T14 still wait for
+the word. Then agents dogfood it into a sandbox project under `examples/`,
+which replaces random fixtures in `mock-data/`.
 
 `crates/core` is shared and stays editable.
 
