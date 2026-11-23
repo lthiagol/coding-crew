@@ -344,12 +344,13 @@ None blocking. Carried from the closed units.
   writes `activity.json`.
 - **The runtime record's writer:** nothing writes `runtime.json`, so the crew
   hugo shows is the mock's.
-- **The orchestrator's job:** the orchestrator role has no job yet. hugo picks
-  the model for the agent it will start; opening the herdr tab and starting it
-  is its own unit, and it is the first step towards hugo driving the loop
-  rather than only showing it. The crew is the roles present: three agents
-  means one per role, two means the orchestrator reviews, one means the
-  orchestrator builds and reviews.
+- **The orchestrator's job:** the start is built. hugo opens the herdr tab,
+  starts the orchestrator with the model it picked, prompts it, and refuses a
+  second one. Driving the loop is not: the orchestrator role has no job yet,
+  and that job is the next step towards hugo driving the loop rather than only
+  starting it. The crew is the roles present: three agents means one per role,
+  two means the orchestrator reviews, one means the orchestrator builds and
+  reviews.
 
 **Waits on a live run:**
 

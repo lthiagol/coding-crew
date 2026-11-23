@@ -2594,7 +2594,7 @@ mod tests {
 
     #[test]
     fn every_family_table_names_every_slot() {
-        // The mapping table promises every theme the same eighteen slots,
+        // The mapping table promises every theme the same twenty-three slots,
         // and a family that leaves one of them out has no value for it.
         for heading in FAMILIES {
             let section = section(PALETTES, heading);
@@ -5240,7 +5240,7 @@ mod tests {
     #[test]
     fn every_colour_preset_keeps_the_document_inside_its_slots() {
         // Every colour a document role paints is a colour one of the
-        // preset's eighteen slots already paints with: no leaf or family
+        // preset's twenty-three slots already paints with: no leaf or family
         // palette leaks in, and the document and the chrome are one palette.
         let mut painted_in_all = 0;
         for preset in Preset::ALL {

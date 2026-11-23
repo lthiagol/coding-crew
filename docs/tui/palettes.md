@@ -134,7 +134,7 @@ background of its own beyond the derived ones.** Every figure below is
 measured against `#0d1117`, the background the palette is measured against.
 The surface and the tint are the only backgrounds the palette paints.
 
-The eighteen slots, with the role each value plays and the attributes it
+The twenty-three slots, with the role each value plays and the attributes it
 carries. The doc is the source of truth: the code is checked against this
 table by a test.
 
@@ -642,7 +642,7 @@ for ours.
 ## The document palette
 
 The document — the markdown pane — has a palette of its own: **twenty-seven
-roles**, which are not the chrome's eighteen slots. A role is a job the
+roles**, which are not the chrome's twenty-three slots. A role is a job the
 document has, and each preset paints it from the same family palette the
 chrome draws from, so the document and the chrome are one palette and not
 two. The chrome keeps its own slots; nothing here changes them. The roles are

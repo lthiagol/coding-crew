@@ -160,7 +160,8 @@ not plain numbers and are skipped by the scan.
 | `acceptance_criteria[].evidence` | Append-only | runner |
 | `acceptance_criteria[].status` | Derived from the latest evidence; the stored value mirrors it | runner (mirrors), domain (derives) |
 | `steps` | Mutable, always. A different path is recorded, not hidden | runner |
-| `claim`, `status`, `status_since` | Written by transitions only | domain |
+| `status`, `status_since` | Written by transitions only | domain |
+| `claim` | Written by the claim operations: `take`, `renew`, `release` (§ 3.6) | runner |
 | `review` | Append-only for rounds and findings; `verdict` moves | reviewer; the runner files its self round in `executing` and `remediating` ([ADR 0017](../decisions/0017-review-record.md)) |
 | `notes`, `questions` | Append-only | any role |
 | `meta` | Mutable, pre-approval | creator |
@@ -385,25 +386,6 @@ different lenses instead of repeating the same check.
 
 `review.verdict` is the **latest** round's verdict. It is what the gates read.
 
-### 4.4 Hand-backs
-
-`review.re_reviews[]` is the dated record of each return to review. `task
-re-review` appends one entry in the same write as the move, so a `code-review`
-task after an external round shows whether it was remediated, and when.
-
-```json
-{ "at": "2026-11-11T17:30Z", "after_round": 1, "by": "runner-02", "session": "session-runner-02-remediation-1" }
-```
-
-| field | rule |
-|---|---|
-| `at` | when the task went back to `code-review` |
-| `after_round` | the external round whose findings were worked |
-| `by`, `session` | the remediating actor and session. The session is the one `remediation.session_distinct` checks: it differs from `claim.session` |
-
-Append-only: one entry per hand-back, oldest first. Each entry's `at` is the
-latest move into `code-review`.
-
 ### 4.2 Findings
 
 | field | values |
@@ -431,6 +413,25 @@ pre-screen and does not consume it.
 Five external rounds with work still outstanding and the task is `needs-human`.
 The loop is bounded so that a task cannot be approved by the same kind of
 agent indefinitely.
+
+### 4.4 Hand-backs
+
+`review.re_reviews[]` is the dated record of each return to review. `task
+re-review` appends one entry in the same write as the move, so a `code-review`
+task after an external round shows whether it was remediated, and when.
+
+```json
+{ "at": "2026-11-11T17:30Z", "after_round": 1, "by": "runner-02", "session": "session-runner-02-remediation-1" }
+```
+
+| field | rule |
+|---|---|
+| `at` | when the task went back to `code-review` |
+| `after_round` | the external round whose findings were worked |
+| `by`, `session` | the remediating actor and session. The session is the one `remediation.session_distinct` checks: it differs from `claim.session` |
+
+Append-only: one entry per hand-back, oldest first. Each entry's `at` is the
+latest move into `code-review`.
 
 ## 5. Evidence
 
@@ -946,6 +947,6 @@ work is in `TODO.md`.
 | the rename cleanup | `ProjectLock::save` and `save_item` remove the file the id had under an older name |
 | the project lock | `crates/core/src/store.rs` — `Store::lock` returns a `ProjectLock`, which holds the writes. Only it writes a caller's record; `Store::create`, `create_item` and `promote_item` take the lock themselves. A journal read with unreadable events is not rewritten (`StoreError::JournalUnreadable`) |
 | the journal and runtime writers | `crates/core/src/store.rs` — `ProjectLock::write_activity`, `write_runtime`; atomic, under the lock |
-| the work folder path | the store reads `coding-crew/work/`, as [ADR 0002](../../decisions/0002-work-folder.md) decides; [ADR 0010](../../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-crew/` folder |
+| the work folder path | the store reads `coding-crew/work/`, as [ADR 0002](../decisions/0002-work-folder.md) decides; [ADR 0010](../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-crew/` folder |
 | smaller tasks (`ITM*`) | `crates/core/src/item.rs` — shaping, dismissal, promotion; `Store::promote_item` writes the item first |
 | the schema additions: `revision`, `review.re_reviews[]`, `Round.session`, `Evidence.manual`, crew `actor`, the journal kinds | `crates/core/src/task.rs`, `runtime.rs`, `activity.rs`. Optional on read; the fixtures carry them; no verb writes them yet |

@@ -101,7 +101,7 @@ span is.
 The detail pane draws with the vendored leaf engine. Its `MarkdownTheme` has
 47 colour fields and its own four palettes; raul uses none of them. Instead
 `Theme::markdown_theme()` paints every field from the **document's own
-palette**: twenty-seven roles, which are not the chrome's eighteen slots. The
+palette**: twenty-seven roles, which are not the chrome's twenty-three slots. The
 roles are recorded in [palettes.md](palettes.md), role by role, with the
 value each preset gives them and the figures the tests recompute.
 

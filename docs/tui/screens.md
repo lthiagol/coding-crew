@@ -174,8 +174,9 @@ nested: nesting breaks under any sort but the id and under a filter.
 reverses it. Ties break by id, so the order is stable. The default is `id`
 ascending. Sorted by a category (`status`, `priority`, `effort`), the rows sit
 under group headers in the Backlog's style, the count a badge: `DONE  5`; a
-sort by id or a date is flat. The Settings tab's sort group names the order in
-force on its Tasks row.
+sort by id or a date is flat. The Settings tab's sort group names the order the
+window starts in: the file's `[raul.tasks] sort`. `o` and `O` change the
+session's order, not that row.
 
 **The filter** is one line of text, not a form. `/` opens it on the row above
 the footer and every key narrows the rows as it is typed; `enter` keeps it and returns
@@ -412,7 +413,7 @@ Every view above is computed from the task files.
 | no project | "no coding-crew folder found" with the path it looked in |
 | no work folder | "this project has no work folder" with the path it looked in |
 | unreadable file | the file name and the error; the rest of the list still renders |
-| smaller task | "the smaller task \<id\> has no document yet" in the detail pane, not the task it is not |
+| missing record | "the record \<id\> is not in the work folder" in the detail pane |
 | stale | the list is read from disk on every redraw; a changed file shows up on the next redraw |
 
 ## Rendering a screen as text

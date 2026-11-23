@@ -63,7 +63,7 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 | sidebar | the configuration, on the left: each agent with its harness, model and effort, the review-round limit and the order, in that order. The agents group has a cursor on each agent's harness, model and effort: `↑ k` and `↓ j` move it, and `enter` on one of those rows opens its choice. An agent is named by its role, its table's name: a name or role is read-only, and nothing in the sidebar edits it. The sidebar shows the session's crew, and marks what the session changed from the file — see [the configuration](#the-configuration). `r` reads the file again and starts the session over from it |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
 | footer | the keys that work, centred under a thin rule — never a key that does nothing. The window's keys are `enter choose` (on an agent's row), `r reload`, `c crew size`, `tab queue` (when a claimable task waits) and `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)), then `? help · q quit`; `ctrl-c quit` works too, unnamed. While the queue has the keys its keys are `space mark`, `a mark all`, `s start` (when it can act) and `tab configuration`, then `? help · q quit`. [Picking the queue](#picking-the-queue) says what they do. While a choice is open its keys are `esc close`, `enter pick` (when the cursor's row can be picked), then `? help · q quit`; while the id input is open its keys are `esc back`, `enter pick` and `ctrl-c quit`, and every other key types; while the crew-size selector is open its keys are `esc close`, `enter pick`, then `? help · q quit`. The movement keys are in the help, not the footer |
-| choice | the choice of the row under the cursor, titled with the agent and the field (`builder model`): a small list with a cursor of its own. A harness lists the table's three; a model lists the harness's models, with `type an id…` last; an effort lists the harness's levels. `enter` picks it for the session, `esc` closes without picking |
+| choice | the choice of the row under the cursor, titled with the agent and the field (`builder model`): a small list with a cursor of its own. A harness lists the table's three; a model lists the harness's models, with `type an id…` last; an effort lists the levels of the agent's model. `enter` picks it for the session, `esc` closes without picking |
 | crew-size selector | `c` opens the three crew sizes, over the window. See [the crew size](#the-configuration) |
 | help | `?` opens the keys, in the sidebar, over the choice and over the selector; any key closes it and gives the choice back |
 | tab bar | none: the flow has one screen, not a set of tabs |
@@ -111,7 +111,7 @@ count:
 | block | caption |
 |---|---|
 | `crew` | the session's crew, and what each agent holds |
-| `queue` | tasks waiting, in order; the claimable ones are picked |
+| `queue` | tasks waiting, in order |
 | `round` | where the task in flight is in its build/review loop |
 | `budget` | build/review rounds used of the limit |
 | `findings` | the task in flight's open findings, by severity |
