@@ -125,11 +125,14 @@ ledger_title() {
     ' "$VENDORED"
 }
 
-declare -A ledger_seen=()
+# Sets are newline-delimited strings: bash 3.2 (macOS) has no `declare -A`.
+set_has() { [[ "$1" == *$'\n'"$2"$'\n'* ]]; }
+
+ledger_seen=$'\n'
 while IFS= read -r number; do
-    [[ -n "$number" ]] && ledger_seen[$number]=1
+    [[ -n "$number" ]] && ledger_seen+="$number"$'\n'
 done < <(ledger_numbers)
-(( ${#ledger_seen[@]} > 0 )) || die "VENDORED.md has no numbered deviation headings"
+[[ "$ledger_seen" != $'\n' ]] || die "VENDORED.md has no numbered deviation headings"
 
 tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/leaf-sync.XXXXXX")"
 trap 'rm -rf "$tmpdir"' EXIT
@@ -151,7 +154,7 @@ upstream="$tmpdir/repo/$UPSTREAM_DIR"
 [[ -d "$upstream" ]] || die "upstream $UPSTREAM_DIR is missing"
 
 declare -a manifest_problems=()
-declare -A manifest_seen=()
+manifest_seen=$'\n'
 manifest_count=0
 while IFS=$'\t' read -r upstream_path vendor_path deviations; do
     manifest_count=$((manifest_count + 1))
@@ -159,10 +162,10 @@ while IFS=$'\t' read -r upstream_path vendor_path deviations; do
     vendor_name="$(basename "$vendor_path")"
     if [[ -z "$vendor_path" ]]; then
         manifest_problems+=("row $manifest_count has no vendored path")
-    elif [[ -n "${manifest_seen[$vendor_path]:-}" ]]; then
+    elif set_has "$manifest_seen" "$vendor_path"; then
         manifest_problems+=("duplicate manifest row for $vendor_path")
     else
-        manifest_seen[$vendor_path]=1
+        manifest_seen+="$vendor_path"$'\n'
     fi
     if [[ "$upstream_path" != "$UPSTREAM_DIR/$upstream_name" ]]; then
         manifest_problems+=(
@@ -192,7 +195,7 @@ while IFS=$'\t' read -r upstream_path vendor_path deviations; do
                 manifest_problems+=(
                     "row $manifest_count has invalid deviation number '$raw_number'"
                 )
-            elif [[ -z "${ledger_seen[$number]:-}" ]]; then
+            elif ! set_has "$ledger_seen" "$number"; then
                 manifest_problems+=(
                     "row $manifest_count references deviation $number, which has no numbered heading"
                 )
@@ -322,7 +325,7 @@ fi
 # the vendored copy. The deviations to erase are the ones the manifest records
 # for those files, so the warning below names what the copy will remove.
 copy_names=()
-declare -A erased_numbers=()
+erased_numbers=$'\n'
 for source in "$upstream"/*.rs; do
     name="$(basename "$source")"
     target="$ROOT/$LOCAL_DIR/$name"
@@ -334,17 +337,19 @@ for source in "$upstream"/*.rs; do
     if [[ -n "$deviations" && "$deviations" != "identical" ]]; then
         IFS=',' read -ra deviation_numbers <<<"$deviations"
         for raw_number in "${deviation_numbers[@]}"; do
-            erased_numbers["${raw_number//[[:space:]]/}"]=1
+            number="${raw_number//[[:space:]]/}"
+            set_has "$erased_numbers" "$number" ||
+                erased_numbers+="$number"$'\n'
         done
     fi
 done
 
 describe_erased() {
     local number
-    (( ${#erased_numbers[@]} )) || return 0
+    [[ "$erased_numbers" != $'\n' ]] || return 0
     while IFS= read -r number; do
         printf '  %s. %s\n' "$number" "$(ledger_title "$number")"
-    done < <(printf '%s\n' "${!erased_numbers[@]}" | sort -n)
+    done < <(printf '%s' "${erased_numbers#$'\n'}" | sort -n)
 }
 
 if (( ! assume_yes )); then
@@ -376,7 +381,7 @@ fi
 
 echo
 echo "update: --force is replacing ${copy_names[*]}"
-if (( ${#erased_numbers[@]} )); then
+if [[ "$erased_numbers" != $'\n' ]]; then
     echo "update: this removes these deviations from the copied files:"
     describe_erased
     echo "They have to be re-applied, then the gate rerun."
