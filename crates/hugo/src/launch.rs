@@ -116,7 +116,7 @@ impl Launcher for Herdr {
         if answer.status.success() {
             return Ok(true);
         }
-        if not_found(&answer.stdout) {
+        if not_found(&answer.stdout, &answer.stderr) {
             return Ok(false);
         }
         Err(refused(&args, &answer))
@@ -256,11 +256,14 @@ fn refused(args: &[String], answer: &Answer) -> anyhow::Error {
     anyhow!("herdr {}: {why}", command(args))
 }
 
-/// Whether herdr's answer is its "no such agent" error. herdr writes its
-/// errors as JSON on stdout, with a code.
-fn not_found(stdout: &[u8]) -> bool {
-    serde_json::from_slice::<Value>(stdout)
-        .is_ok_and(|answer| answer["error"]["code"] == AGENT_NOT_FOUND)
+/// Whether a failed herdr answer is its "no such agent" error. herdr writes
+/// its errors as JSON with a code, on stdout or on stderr by version: both
+/// are read.
+fn not_found(stdout: &[u8], stderr: &[u8]) -> bool {
+    [stderr, stdout].into_iter().any(|stream| {
+        serde_json::from_slice::<Value>(stream)
+            .is_ok_and(|answer| answer["error"]["code"] == AGENT_NOT_FOUND)
+    })
 }
 
 /// The first two words of a herdr command, for an error to name.
@@ -492,11 +495,19 @@ mod tests {
     #[test]
     fn only_herdrs_agent_not_found_answer_means_not_named() {
         let missing = br#"{"error":{"code":"agent_not_found","message":"agent target orchestrator not found"},"id":"cli:agent:get"}"#;
-        assert!(not_found(missing));
+        assert!(not_found(missing, b""));
         let other = br#"{"error":{"code":"agent_blocked","message":"busy"},"id":"cli:agent:get"}"#;
-        assert!(!not_found(other));
-        assert!(!not_found(b"herdr: socket refused"));
-        assert!(!not_found(b""));
+        assert!(!not_found(other, b""));
+        assert!(!not_found(b"herdr: socket refused", b""));
+        assert!(!not_found(b"", b""));
+    }
+
+    #[test]
+    fn herdrs_agent_not_found_on_stderr_means_not_named() {
+        // This machine's herdr writes its errors as JSON on stderr, exit 1,
+        // with stdout empty: that is "not named", not a failed check.
+        let missing = br#"{"error":{"code":"agent_not_found","message":"agent target orchestrator not found"},"id":"cli:agent:get"}"#;
+        assert!(not_found(b"", missing));
     }
 
     #[test]
