@@ -54,6 +54,8 @@ Queued in `docs/plan.md`, in order. Units 0–94, 63b and 70b are closed; their 
 `DONE.md`. Open, in order: 95 (hugo on PATH).
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
+`docs/plan.md` § Deferred holds what is put off (the light themes, a theme
+file on disk); talita's build order, T5–T14, is `docs/talita/roadmap.md`.
 
 ---
 
@@ -364,13 +366,11 @@ None blocking. Carried from the closed units.
 
 **Waits on a live run:**
 
-- **The opencode live check is not run** (2026-11-22, unit 64). An opencode role
-  started through herdr should show its configured free model in its pane. It
-  was optional and was not done.
-- **The live runs are not done** (2026-11-22, unit 71). The parsers are pinned
-  by captured `cursor-agent` and `opencode` output. The bounded reads and a
-  live start through hugo or raul were not run. The cursor start form
-  `--model <id>-<effort>` comes from the reviewer's live runs.
+- **The cursor-agent live run is not done** (2026-11-22, unit 71). opencode's
+  was done on 2026-11-23: raul's Settings listed its live models and efforts,
+  and hugo's `s` started an opencode orchestrator with its model, effort and
+  `HUGO_CREW`. cursor-agent's parser is pinned by captured output only; its
+  start form `--model <id>-<effort>` comes from the reviewer's live runs.
 - **The freeze is not reproduced live** (2026-11-22, unit 69). The fix was
   measured on the mock data and pinned by a test that counts engine runs, not
   in a terminal. The folder read and the projection still run on every redraw,
