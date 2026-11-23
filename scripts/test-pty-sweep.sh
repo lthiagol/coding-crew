@@ -14,7 +14,9 @@ set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SWEEP="$HERE/pty-sweep.py"
-TMP=$(mktemp -d "${TMPDIR:-/tmp}/pty-sweep-test.XXXXXX")
+# macOS ends TMPDIR with a slash; the sweep reports paths without the double one.
+BASE=${TMPDIR:-/tmp}
+TMP=$(mktemp -d "${BASE%/}/pty-sweep-test.XXXXXX")
 CASE_TIMEOUT=${CASE_TIMEOUT:-60}
 if ! [[ "$CASE_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
   CASE_TIMEOUT=60
