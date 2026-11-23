@@ -1717,6 +1717,17 @@ recorded; a ruled item carries its ruling.
   no test recomputes, and thirteen contrast-ratio phrases that are exempt
   without a check that any test reads them.
 
+### 2026-11-23 · Unit 95, hugo on PATH
+
+`s` refuses to start unless `hugo` on PATH is the running hugo
+(`crates/hugo/src/on_path.rs`), and names the folder to add; a hugo replaced
+on disk while running (`<path> (deleted)`) still counts as itself. `make
+install` installs hugo and raul and prints the folder. README has a build from
+source section; `docs/hugo/screens.md` lists the two refusals. Two rounds:
+review 1 found the replaced-binary case, review 2 clean. The builder sat on a
+permission prompt for a dry run (`make -n install`) until it timed out; the
+loop was resumed from review 1. Commit `f816d24`.
+
 ---
 
 ## Lessons
