@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after unit 89.
+Updated 2026-11-23 by the orchestrator, after unit 90.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–89, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–90, 63b and 70b are closed; their record is in
 `DONE.md`. Open, in order:
 
-- 90 · Review C · raul — M
 - 91 · Review D · hugo — M
 - 92 · Review E · fixtures — S
 - 93 · Review F · engine, theme, tooling — S
@@ -174,6 +173,13 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
+- **2026-11-23, unit 90:** F2's option to drop only the offending row, not the
+  branch, was not taken. The builder read it as optional. Recorded, not ruled.
+- **2026-11-23, unit 90:** F6's test was not run against the pre-fix code, so it
+  is not shown to fail without the fix. Recorded, not ruled.
+- **2026-11-23, unit 90:** the `evidence.command` fixture check (D1) has no
+  reverse test: no fixture holds a non-manual entry with an empty command. The
+  reviewer accepted it. Recorded, not ruled.
 - **2026-11-23, unit 89:** `ProjectLock::save` takes `&mut Task`, so the caller's
   copy follows the file's revision. The alternative `&Task` leaves a stale copy
   that the next save of the same object refuses. Open for the human to rule.

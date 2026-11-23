@@ -1553,6 +1553,19 @@ talita check that calls it waits for talita. The signature became `save(&mut
 Task)`, a choice the orchestrator is asked to rule on. No other ruling. Limits
 are in THE FOLLOW-UPS. Commit `6717714`.
 
+Unit closed: Review C · raul (plan 90). One build round, one fix round and two
+reviews; the second clean. Six findings of the full review's batch C, each with
+a test. Path measures a wide title by its display width, so the title keeps its
+branches (F2). A groomed task with an overlay waits in AWAITING APPROVAL with its
+hold (F6); the pinned AWAITING APPROVAL count moves from 2 to 3. The Needs you
+id column widens past TSK99 (F11). The filter line shows on the Tasks tab alone
+(F12). The Overview's next line names what holds the approved tasks (F13).
+Manual evidence reads "— manual override", and TSK10 carries an override through
+the generator; the regenerated tree changed that one file (F14). Round one's
+review found the `evidence.command` fixture check loosened to pass a non-manual
+empty command (D1); the fix keeps it for non-manual entries. No ruling. Limits
+are in THE FOLLOW-UPS. Commit `457c87d`.
+
 ---
 
 ## Lessons
