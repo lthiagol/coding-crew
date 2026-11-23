@@ -481,17 +481,24 @@ mod tests {
     /// A scratch folder holding an executable tool that answers with the
     /// script's own words. The caller removes the folder.
     fn scratch_tool(name: &str, script: &str) -> std::path::PathBuf {
-        #[cfg(unix)]
-        use std::os::unix::fs::PermissionsExt;
-
         let dir = std::env::temp_dir().join(format!("core-catalog-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a scratch folder");
         let path = dir.join("a-tool");
-        std::fs::write(&path, script).expect("the tool");
-        #[cfg(unix)]
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
-            .expect("an executable tool");
+        // A short-lived `sh` writes the tool, so this process never holds it open
+        // for writing: a test thread forking meanwhile would carry that handle into
+        // its child, and running the tool would fail with "Text file busy".
+        let status = std::process::Command::new("sh")
+            .args([
+                "-c",
+                "printf '%s' \"$1\" > \"$2\" && chmod 755 \"$2\"",
+                "sh",
+            ])
+            .arg(script)
+            .arg(&path)
+            .status()
+            .expect("sh writes the tool");
+        assert!(status.success(), "the tool is written");
         path
     }
 
