@@ -37,7 +37,7 @@ pub use runtime::{
     AgentState, Budget, Composition, CrewMember, QueueItem, Runtime, RuntimeError, RuntimeRound,
     Severities, Stamp,
 };
-pub use store::{Store, StoreError};
+pub use store::{ProjectLock, Store, StoreError};
 pub use task::{
     AcceptanceCriterion, Claim, Comment, CriterionStatus, Deferral, Evidence, Finding,
     FindingStatus, Focus, Intent, Meta, Note, Question, QuestionStatus, ReReview, Review, Round,

@@ -1,10 +1,19 @@
+use std::cmp::Ordering;
 use std::fs;
 use std::io::Write;
+use std::iter::Peekable;
+use std::ops::Deref;
 use std::path::{Component, Path, PathBuf};
+use std::str::Chars;
+use std::thread;
+use std::time::{Duration, Instant};
 
+use serde::Serialize;
 use thiserror::Error;
 
+use crate::activity::Activity;
 use crate::item::Item;
+use crate::runtime::Runtime;
 use crate::task::{Task, slugify};
 
 /// Name of the data folder inside a managed project.
@@ -18,6 +27,15 @@ pub const ACTIVITY_FILE: &str = "activity.json";
 
 /// Name of the flow's runtime record, beside the journal.
 pub const RUNTIME_FILE: &str = "runtime.json";
+
+/// Name of the project's write lock, beside the work folder (ADR 0016).
+pub const LOCK_FILE: &str = ".talita.lock";
+
+/// How long a writer waits for the project lock before it gives up.
+pub const LOCK_WAIT: Duration = Duration::from_secs(10);
+
+/// How often a waiting writer retries the lock.
+const LOCK_POLL: Duration = Duration::from_millis(10);
 
 /// The journal of a project, from its work folder.
 ///
@@ -51,6 +69,10 @@ pub enum StoreError {
     InvalidStart(PathBuf),
     #[error("{0}")]
     Item(String),
+    #[error("another writer holds the project's lock; try again")]
+    Locked,
+    #[error("the journal holds {0} event(s) this reader cannot read; it is not rewritten")]
+    JournalUnreadable(usize),
 }
 
 /// The work files of one project.
@@ -122,6 +144,11 @@ impl Store {
         runtime_path(&self.root)
     }
 
+    /// Path of the project's write lock: beside the work folder.
+    pub fn lock_path(&self) -> PathBuf {
+        self.root.parent().unwrap_or(&self.root).join(LOCK_FILE)
+    }
+
     /// Path of a task file.
     pub fn task_path(&self, task: &Task) -> PathBuf {
         self.root.join(format!("{}-{}.json", task.id, task.slug))
@@ -148,7 +175,7 @@ impl Store {
                 Err(_) => continue,
             }
         }
-        tasks.sort_by(|a, b| a.id.cmp(&b.id));
+        tasks.sort_by(|a, b| by_number(&a.id, &b.id));
         Ok(tasks)
     }
 
@@ -173,26 +200,27 @@ impl Store {
         Err(StoreError::NotFound(id.to_string()))
     }
 
-    /// Write a task file, atomically. A file the same task had under another
-    /// name is removed, so one task is one file.
-    pub fn save(&self, task: &Task) -> Result<(), StoreError> {
+    /// Take the project's write lock, waiting up to [`LOCK_WAIT`].
+    ///
+    /// Every write takes it for its whole read–check–write (ADR 0016). Reads
+    /// take none. The lock is released when the guard drops.
+    pub fn lock(&self) -> Result<ProjectLock<'_>, StoreError> {
         fs::create_dir_all(&self.root)?;
-        let path = self.task_path(task);
-        let json = serde_json::to_string_pretty(task)?;
-        let tmp = path.with_extension("json.tmp");
-        {
-            let mut file = fs::File::create(&tmp)?;
-            file.write_all(json.as_bytes())?;
-            file.write_all(b"\n")?;
-            file.sync_all()?;
-        }
-        fs::rename(&tmp, &path)?;
-        self.remove_other_copies(task, &path)?;
-        Ok(())
+        let file = acquire(&self.lock_path(), LOCK_WAIT)?;
+        Ok(ProjectLock {
+            store: self,
+            _file: file,
+        })
     }
 
-    /// Remove files of the same task left under an older name.
-    fn remove_other_copies(&self, task: &Task, keep: &Path) -> Result<(), StoreError> {
+    /// Write a task file under the lock. A file the same task had under
+    /// another name is removed, so one task is one file.
+    pub fn save(&self, task: &Task) -> Result<(), StoreError> {
+        self.lock()?.save(task)
+    }
+
+    /// Remove files of the same id left under an older name.
+    fn remove_other_copies(&self, id: &str, keep: &Path) -> Result<(), StoreError> {
         for entry in fs::read_dir(&self.root)? {
             let path = entry?.path();
             if path == keep {
@@ -201,18 +229,29 @@ impl Store {
             let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
                 continue;
             };
-            if file_id(&path) == Some(task.id.as_str()) && name.ends_with(".json") {
+            if file_id(&path) == Some(id) && name.ends_with(".json") {
                 fs::remove_file(&path)?;
             }
         }
         Ok(())
     }
 
-    /// Create a task in `draft`.
+    /// Create a task in `draft`, under the lock: the id scan and the write
+    /// are one step, so two creators cannot take the same id.
     pub fn create(&self, title: &str) -> Result<Task, StoreError> {
-        let task = Task::new(self.next_id()?, title);
-        self.save(&task)?;
-        Ok(task)
+        self.lock()?.create(title)
+    }
+
+    /// Write the journal under the lock, atomically. See
+    /// [`ProjectLock::write_activity`].
+    pub fn write_activity(&self, activity: &Activity) -> Result<(), StoreError> {
+        self.lock()?.write_activity(activity)
+    }
+
+    /// Write the runtime record under the lock, atomically. See
+    /// [`ProjectLock::write_runtime`].
+    pub fn write_runtime(&self, runtime: &Runtime) -> Result<(), StoreError> {
+        self.lock()?.write_runtime(runtime)
     }
 
     /// All smaller tasks, ordered by id.
@@ -235,7 +274,7 @@ impl Store {
                 Err(_) => continue,
             }
         }
-        items.sort_by(|a, b| a.id.cmp(&b.id));
+        items.sort_by(|a, b| by_number(&a.id, &b.id));
         Ok(items)
     }
 
@@ -260,27 +299,15 @@ impl Store {
         Err(StoreError::NotFound(id.to_string()))
     }
 
-    /// Write a smaller task file, atomically.
+    /// Write a smaller task file under the lock. A file the same item had
+    /// under another name is removed, so one item is one file.
     pub fn save_item(&self, item: &Item) -> Result<(), StoreError> {
-        fs::create_dir_all(&self.root)?;
-        let path = self.root.join(format!("{}-{}.json", item.id, item.slug));
-        let json = serde_json::to_string_pretty(item)?;
-        let tmp = path.with_extension("json.tmp");
-        {
-            let mut file = fs::File::create(&tmp)?;
-            file.write_all(json.as_bytes())?;
-            file.write_all(b"\n")?;
-            file.sync_all()?;
-        }
-        fs::rename(&tmp, &path)?;
-        Ok(())
+        self.lock()?.save_item(item)
     }
 
     /// Create a smaller task. The kind starts as an idea.
     pub fn create_item(&self, title: &str) -> Result<Item, StoreError> {
-        let item = Item::new(self.next_item_id()?, title);
-        self.save_item(&item)?;
-        Ok(item)
+        self.lock()?.create_item(title)
     }
 
     /// Next free smaller-task id, scanning what exists.
@@ -288,19 +315,9 @@ impl Store {
         Ok(format!("ITM{:02}", self.highest_number("ITM")? + 1))
     }
 
-    /// Promote a smaller task into a task.
-    ///
-    /// The item is written first, so a crash cannot produce two tasks from
-    /// one item.
+    /// Promote a smaller task into a task, under the lock.
     pub fn promote_item(&self, id: &str) -> Result<Task, StoreError> {
-        let mut item = self.load_item(id)?;
-        let task_id = self.next_id()?;
-        let task = item
-            .promote(task_id)
-            .map_err(|error| StoreError::Item(error.to_string()))?;
-        self.save_item(&item)?;
-        self.save(&task)?;
-        Ok(task)
+        self.lock()?.promote_item(id)
     }
 
     /// Next free task id, scanning what exists.
@@ -332,6 +349,168 @@ impl Store {
         }
         Ok(highest)
     }
+}
+
+/// The project's write lock, held for one read–check–write.
+///
+/// The writes here do not take the lock again: they are the writes a held
+/// lock covers. [`Store`]'s own writes take it, then call these. Reads go
+/// through `Deref` to the store and take no lock. The `flock` is released when
+/// the guard drops.
+pub struct ProjectLock<'a> {
+    store: &'a Store,
+    _file: fs::File,
+}
+
+impl Deref for ProjectLock<'_> {
+    type Target = Store;
+
+    fn deref(&self) -> &Store {
+        self.store
+    }
+}
+
+impl ProjectLock<'_> {
+    /// Write a task file, atomically. See [`Store::save`].
+    pub fn save(&self, task: &Task) -> Result<(), StoreError> {
+        fs::create_dir_all(&self.root)?;
+        let path = self.task_path(task);
+        write_atomic(&path, &json_text(task)?)?;
+        self.remove_other_copies(&task.id, &path)
+    }
+
+    /// Create a task in `draft`: the id scan and the write, under this lock.
+    pub fn create(&self, title: &str) -> Result<Task, StoreError> {
+        let task = Task::new(self.next_id()?, title);
+        self.save(&task)?;
+        Ok(task)
+    }
+
+    /// Write a smaller task file, atomically. See [`Store::save_item`].
+    pub fn save_item(&self, item: &Item) -> Result<(), StoreError> {
+        fs::create_dir_all(&self.root)?;
+        let path = self.root.join(format!("{}-{}.json", item.id, item.slug));
+        write_atomic(&path, &json_text(item)?)?;
+        self.remove_other_copies(&item.id, &path)
+    }
+
+    /// Create a smaller task. The kind starts as an idea.
+    pub fn create_item(&self, title: &str) -> Result<Item, StoreError> {
+        let item = Item::new(self.next_item_id()?, title);
+        self.save_item(&item)?;
+        Ok(item)
+    }
+
+    /// Promote a smaller task into a task.
+    ///
+    /// The item is written first, so a crash cannot produce two tasks from
+    /// one item.
+    pub fn promote_item(&self, id: &str) -> Result<Task, StoreError> {
+        let mut item = self.load_item(id)?;
+        let task_id = self.next_id()?;
+        let task = item
+            .promote(task_id)
+            .map_err(|error| StoreError::Item(error.to_string()))?;
+        self.save_item(&item)?;
+        self.save(&task)?;
+        Ok(task)
+    }
+
+    /// Write the journal, atomically.
+    ///
+    /// A journal read with events this reader cannot read would lose them on
+    /// rewrite, so the write is refused: the file stays as it is.
+    pub fn write_activity(&self, activity: &Activity) -> Result<(), StoreError> {
+        if activity.unreadable > 0 {
+            return Err(StoreError::JournalUnreadable(activity.unreadable));
+        }
+        fs::create_dir_all(&self.root)?;
+        write_atomic(&self.activity_path(), &json_text(activity)?)
+    }
+
+    /// Write the runtime record, atomically.
+    pub fn write_runtime(&self, runtime: &Runtime) -> Result<(), StoreError> {
+        fs::create_dir_all(&self.root)?;
+        write_atomic(&self.runtime_path(), &json_text(runtime)?)
+    }
+}
+
+/// Take the exclusive `flock` on the lock file, polling until `wait` runs out.
+///
+/// The lock belongs to the open file, so a second writer in this process waits
+/// on the first as another process would. Dropping the file frees it, and a
+/// crashed writer frees it too: no stale lock file to clean.
+fn acquire(path: &Path, wait: Duration) -> Result<fs::File, StoreError> {
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(path)?;
+    let deadline = Instant::now() + wait;
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(file),
+            Err(fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
+                thread::sleep(LOCK_POLL);
+            }
+            Err(fs::TryLockError::WouldBlock) => return Err(StoreError::Locked),
+            Err(fs::TryLockError::Error(error)) => return Err(error.into()),
+        }
+    }
+}
+
+/// A value as the file holds it: pretty JSON with one trailing newline.
+fn json_text<T: Serialize>(value: &T) -> Result<String, StoreError> {
+    Ok(format!("{}\n", serde_json::to_string_pretty(value)?))
+}
+
+/// Write `text` to `path` atomically: a `.json.tmp` beside it is synced and
+/// renamed over the target, so a reader sees the old file or the new one.
+fn write_atomic(path: &Path, text: &str) -> Result<(), StoreError> {
+    let tmp = path.with_extension("json.tmp");
+    {
+        let mut file = fs::File::create(&tmp)?;
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
+    }
+    fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// Orders ids by their numbers, not their text: `TSK99` before `TSK100`,
+/// and `TSK03` before its child `TSK03.1`.
+fn by_number(a: &str, b: &str) -> Ordering {
+    let (mut a, mut b) = (a.chars().peekable(), b.chars().peekable());
+    loop {
+        match (a.peek().copied(), b.peek().copied()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(x), Some(y)) if x.is_ascii_digit() && y.is_ascii_digit() => {
+                let (x, y) = (digits(&mut a), digits(&mut b));
+                let order = x.len().cmp(&y.len()).then_with(|| x.cmp(&y));
+                if order != Ordering::Equal {
+                    return order;
+                }
+            }
+            (Some(x), Some(y)) => {
+                if x != y {
+                    return x.cmp(&y);
+                }
+                a.next();
+                b.next();
+            }
+        }
+    }
+}
+
+/// The run of digits at the front of `chars`, without its leading zeros.
+fn digits(chars: &mut Peekable<Chars<'_>>) -> String {
+    let mut run = String::new();
+    while let Some(c) = chars.next_if(char::is_ascii_digit) {
+        run.push(c);
+    }
+    run.trim_start_matches('0').to_string()
 }
 
 /// The nearest project's data folder at or above `start`.
@@ -509,6 +688,32 @@ mod tests {
         assert_eq!(runtime_path(&work).parent(), activity_path(&work).parent());
         let store = Store::new(&work);
         assert_eq!(store.runtime_path(), project.join(RUNTIME_FILE));
+    }
+
+    #[test]
+    fn a_held_lock_refuses_a_second_writer_once_its_wait_runs_out() {
+        // Two open files conflict even in one process, as two writers would.
+        let root = scratch("held-lock");
+        fs::create_dir_all(&root).expect("a folder");
+        let path = root.join(LOCK_FILE);
+
+        let held = acquire(&path, Duration::ZERO).expect("the first writer");
+        assert!(matches!(
+            acquire(&path, Duration::from_millis(50)),
+            Err(StoreError::Locked)
+        ));
+        drop(held);
+        acquire(&path, Duration::ZERO).expect("the lock is free again");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn ids_compare_by_their_numbers() {
+        assert_eq!(by_number("TSK9", "TSK10"), Ordering::Less);
+        assert_eq!(by_number("TSK100", "TSK99"), Ordering::Greater);
+        assert_eq!(by_number("TSK03", "TSK03.1"), Ordering::Less);
+        assert_eq!(by_number("TSK03.2", "TSK03.10"), Ordering::Less);
+        assert_eq!(by_number("TSK007", "TSK7"), Ordering::Equal);
     }
 
     #[test]

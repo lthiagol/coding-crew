@@ -3,13 +3,24 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 use coding_crew_core::store::{DATA_DIR, WORK_DIR};
-use coding_crew_core::{Store, StoreError, Task};
+use coding_crew_core::{
+    Activity, ActivityEvent, EventKind, Item, Runtime, Store, StoreError, Task,
+};
 
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("coding-crew-store-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("a scratch folder");
     dir
+}
+
+/// A work folder inside a scratch project. The store's lock sits beside
+/// `work/`, so a store rooted at the bare scratch folder would lock a file in
+/// the shared temp dir.
+fn work_scratch(name: &str) -> PathBuf {
+    let work = scratch(name).join(DATA_DIR).join(WORK_DIR);
+    fs::create_dir_all(&work).expect("a work folder");
+    work
 }
 
 /// Changing the process cwd is global, so cwd-owning tests take this lock and
@@ -211,7 +222,7 @@ fn dots_and_a_missing_tail_still_find_the_project() {
 #[test]
 fn saving_a_task_keeps_tasks_whose_ids_only_start_with_its_id() {
     // TSK03.1 and TSK030 start with TSK03 but are other tasks.
-    let store = Store::new(scratch("prefix-save"));
+    let store = Store::new(work_scratch("prefix-save"));
     store
         .save(&Task::new("TSK03.1", "child"))
         .expect("the child");
@@ -233,7 +244,7 @@ fn saving_a_task_keeps_tasks_whose_ids_only_start_with_its_id() {
 
 #[test]
 fn load_returns_only_the_task_it_names() {
-    let store = Store::new(scratch("prefix-load"));
+    let store = Store::new(work_scratch("prefix-load"));
     store
         .save(&Task::new("TSK03.1", "child"))
         .expect("the child");
@@ -245,7 +256,7 @@ fn load_returns_only_the_task_it_names() {
 #[test]
 fn load_checks_the_id_inside_the_file() {
     // A file named for TSK03 whose record says TSK03.1 is not TSK03.
-    let store = Store::new(scratch("load-content"));
+    let store = Store::new(work_scratch("load-content"));
     let child = Task::new("TSK03.1", "child");
     store.save(&child).expect("the child");
     fs::rename(
@@ -259,7 +270,7 @@ fn load_checks_the_id_inside_the_file() {
 
 #[test]
 fn load_item_returns_only_the_item_it_names() {
-    let store = Store::new(scratch("item-prefix"));
+    let store = Store::new(work_scratch("item-prefix"));
     let item = store.create_item("first").expect("an item");
 
     assert!(matches!(
@@ -273,7 +284,7 @@ fn load_item_returns_only_the_item_it_names() {
 fn a_file_that_does_not_parse_still_holds_its_id() {
     // A corrupt record keeps its id: the next id must not reuse it, and the
     // save must not delete it.
-    let root = scratch("corrupt-id");
+    let root = work_scratch("corrupt-id");
     fs::write(root.join("TSK05-broken.json"), "{ not json").expect("a corrupt task");
     fs::write(root.join("ITM05-broken.json"), "{ not json").expect("a corrupt item");
     let store = Store::new(&root);
@@ -291,4 +302,172 @@ fn a_file_that_does_not_parse_still_holds_its_id() {
         root.join("ITM05-broken.json").is_file(),
         "the corrupt item survives"
     );
+}
+
+#[test]
+fn two_writers_creating_at_once_take_no_duplicate_id() {
+    // Each create scans the folder for the next id, then writes. Unlocked,
+    // two writers can scan the same folder and take the same id.
+    let project = scratch("two-creators");
+    let store = Store::new(project.join(DATA_DIR).join(WORK_DIR));
+
+    std::thread::scope(|scope| {
+        for _ in 0..2 {
+            let store = store.clone();
+            scope.spawn(move || {
+                for n in 0..25 {
+                    store.create(&format!("task {n}")).expect("a task");
+                }
+            });
+        }
+    });
+
+    let mut ids: Vec<String> = store
+        .list()
+        .expect("the tasks")
+        .into_iter()
+        .map(|task| task.id)
+        .collect();
+    assert_eq!(ids.len(), 50, "a task was lost or written twice");
+    ids.dedup();
+    assert_eq!(ids.len(), 50, "two tasks share an id");
+
+    let _ = fs::remove_dir_all(&project);
+}
+
+#[test]
+fn two_writers_appending_to_the_journal_lose_no_event() {
+    // Each append reads the journal, adds an event and rewrites it. Without
+    // the lock held across the read, two appends read the same journal and
+    // one event is lost.
+    let project = scratch("two-journal");
+    let store = Store::new(project.join(DATA_DIR).join(WORK_DIR));
+    let path = store.activity_path();
+
+    std::thread::scope(|scope| {
+        for writer in 0..2 {
+            let store = store.clone();
+            let path = path.clone();
+            scope.spawn(move || {
+                for n in 0..25 {
+                    let lock = store.lock().expect("the project lock");
+                    let mut journal = if path.is_file() {
+                        Activity::read(&path).expect("the journal")
+                    } else {
+                        Activity::default()
+                    };
+                    journal.events.push(ActivityEvent {
+                        at: "2026-11-23T10:00:00Z".to_string(),
+                        kind: EventKind::Commented,
+                        task: "TSK01".to_string(),
+                        by: format!("writer-{writer}"),
+                        note: Some(n.to_string()),
+                    });
+                    lock.write_activity(&journal).expect("the journal");
+                }
+            });
+        }
+    });
+
+    let journal = Activity::read(&path).expect("the journal");
+    assert_eq!(journal.events.len(), 50, "an event was lost");
+    let _ = fs::remove_dir_all(&project);
+}
+
+#[test]
+fn ids_sort_by_number_not_by_text() {
+    // TSK100 is after TSK99, and TSK03.1 after TSK03; text order says otherwise.
+    let store = Store::new(work_scratch("numeric-order"));
+    for id in ["TSK100", "TSK99", "TSK03.1", "TSK03"] {
+        store.save(&Task::new(id, id)).expect("a task");
+    }
+    for id in ["ITM100", "ITM99"] {
+        store.save_item(&item(id)).expect("an item");
+    }
+
+    let tasks: Vec<String> = store
+        .list()
+        .expect("the tasks")
+        .into_iter()
+        .map(|task| task.id)
+        .collect();
+    assert_eq!(tasks, ["TSK03", "TSK03.1", "TSK99", "TSK100"]);
+
+    let items: Vec<String> = store
+        .list_items()
+        .expect("the items")
+        .into_iter()
+        .map(|item| item.id)
+        .collect();
+    assert_eq!(items, ["ITM99", "ITM100"]);
+}
+
+#[test]
+fn saving_a_renamed_item_removes_its_old_file() {
+    // An item renamed by its slug leaves no second file for the same id.
+    let store = Store::new(work_scratch("item-rename"));
+    let mut item = store.create_item("first").expect("an item");
+    item.slug = "second".to_string();
+    store.save_item(&item).expect("the renamed item");
+
+    let files: Vec<String> = fs::read_dir(store.root())
+        .expect("the work folder")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .into_string()
+                .expect("a name")
+        })
+        .collect();
+    assert_eq!(files, [format!("{}-second.json", item.id)]);
+}
+
+#[test]
+fn the_journal_and_the_runtime_record_round_trip_through_their_writers() {
+    // The committed fixtures, written through the writers, read back equal.
+    let mock = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew");
+    let journal = Activity::read(&mock.join("activity.json")).expect("the journal");
+    let runtime = Runtime::read(&mock.join("runtime.json")).expect("the record");
+
+    let project = scratch("round-trip");
+    let store = Store::new(project.join(DATA_DIR).join(WORK_DIR));
+    store.write_activity(&journal).expect("the journal");
+    store.write_runtime(&runtime).expect("the record");
+
+    assert_eq!(
+        Activity::read(&store.activity_path()).expect("the journal"),
+        journal
+    );
+    assert_eq!(
+        Runtime::read(&store.runtime_path()).expect("the record"),
+        runtime
+    );
+    assert!(!store.activity_path().with_extension("json.tmp").exists());
+    let _ = fs::remove_dir_all(&project);
+}
+
+#[test]
+fn a_journal_with_events_it_cannot_read_is_not_rewritten() {
+    // Rewriting would drop the unreadable events, so the write is refused and
+    // the file stays as it was.
+    let project = scratch("unreadable-journal");
+    let store = Store::new(project.join(DATA_DIR).join(WORK_DIR));
+    let path = store.activity_path();
+    let text = r#"{"events": [{"at": "2026-11-23T10:00:00Z", "kind": "from_the_future", "task": "TSK01", "by": "runner"}]}"#;
+    fs::create_dir_all(store.root()).expect("a work folder");
+    fs::write(&path, text).expect("a journal");
+
+    let journal = Activity::read(&path).expect("the journal");
+    assert_eq!(journal.unreadable, 1);
+    assert!(matches!(
+        store.write_activity(&journal),
+        Err(StoreError::JournalUnreadable(1))
+    ));
+    assert_eq!(fs::read_to_string(&path).expect("the journal"), text);
+    let _ = fs::remove_dir_all(&project);
+}
+
+fn item(id: &str) -> Item {
+    Item::new(id, id)
 }

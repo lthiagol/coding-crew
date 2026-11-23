@@ -1,10 +1,16 @@
+use coding_crew_core::store::{DATA_DIR, WORK_DIR};
 use coding_crew_core::{Item, ItemError, ItemKind, ItemStatus, Store, TaskKind};
 use std::path::PathBuf;
 
+/// A store inside a scratch project. The store's lock sits beside `work/`, so
+/// the work folder must not be the bare scratch folder: that would lock a file
+/// in the shared temp dir. Returns the project folder, for cleanup.
 fn temp_store(name: &str) -> (Store, PathBuf) {
     let dir = std::env::temp_dir().join(format!("coding-crew-items-{name}"));
     let _ = std::fs::remove_dir_all(&dir);
-    (Store::new(&dir), dir)
+    let work = dir.join(DATA_DIR).join(WORK_DIR);
+    std::fs::create_dir_all(&work).expect("a work folder");
+    (Store::new(work), dir)
 }
 
 #[test]

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use coding_crew_core::lifecycle::{Event, TransitionContext, TransitionError, check, transition};
+use coding_crew_core::store::{DATA_DIR, WORK_DIR};
 use coding_crew_core::task::{
     AcceptanceCriterion, Deferral, Evidence, Finding, FindingStatus, Focus, Round, RoundKind,
     Verdict,
@@ -359,7 +360,11 @@ fn an_overlay_does_not_move_the_status_stamp() {
 fn store_round_trips_tasks() {
     let dir = std::env::temp_dir().join(format!("coding-crew-store-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let store = Store::new(&dir);
+    // The store's lock sits beside `work/`: keep the work folder inside the
+    // scratch project, not the shared temp dir.
+    let work = dir.join(DATA_DIR).join(WORK_DIR);
+    std::fs::create_dir_all(&work).unwrap();
+    let store = Store::new(&work);
 
     let mut task = store.create("Add lane filtering").unwrap();
     assert_eq!(task.id, "TSK01");
