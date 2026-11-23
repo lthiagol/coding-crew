@@ -18,7 +18,10 @@ pub enum Section {
     Criteria,
     Meta,
     DependsOn,
-    Questions,
+    /// Raising a question: any actor (ruling 2026-11-23).
+    QuestionAsk,
+    /// Answering one: the creator.
+    QuestionAnswer,
     Steps,
     Claim,
     Evidence,
@@ -41,7 +44,8 @@ impl Section {
             Section::Criteria => "acceptance_criteria",
             Section::Meta => "meta",
             Section::DependsOn => "depends_on",
-            Section::Questions => "questions",
+            Section::QuestionAsk => "questions",
+            Section::QuestionAnswer => "question answers",
             Section::Steps => "steps",
             Section::Claim => "claim",
             Section::Evidence => "evidence",
@@ -92,7 +96,7 @@ pub fn owner(section: Section, status: Status) -> Option<Owner> {
         | Section::Criteria
         | Section::Meta
         | Section::DependsOn
-        | Section::Questions => Some(Owner::Creator),
+        | Section::QuestionAnswer => Some(Owner::Creator),
         Section::Steps => Some(match status {
             Status::Draft | Status::Groomed => Owner::Creator,
             _ => Owner::Runner,
@@ -103,7 +107,7 @@ pub fn owner(section: Section, status: Status) -> Option<Owner> {
             _ => Owner::Reviewer,
         }),
         Section::FindingOutcome => Some(Owner::Runner),
-        Section::Notes | Section::Overlays => Some(Owner::Any),
+        Section::Notes | Section::Overlays | Section::QuestionAsk => Some(Owner::Any),
         Section::Status => None,
     }
 }
@@ -216,6 +220,28 @@ mod tests {
                 section: Section::Review,
                 role: Role::Runner,
             })
+        );
+    }
+
+    #[test]
+    fn any_actor_asks_a_question_and_the_creator_answers_it() {
+        let runner = Actor::agent("runner-1", Role::Runner).in_session("s");
+        let human = Actor::human("luiz");
+        let creator = Actor::agent("creator-1", Role::Creator).in_session("s");
+        for actor in [&runner, &human, &creator] {
+            assert!(authorize(Section::QuestionAsk, actor, Status::Executing).is_ok());
+        }
+        assert!(authorize(Section::QuestionAnswer, &creator, Status::Groomed).is_ok());
+        assert_eq!(
+            authorize(Section::QuestionAnswer, &runner, Status::Groomed),
+            Err(OwnershipError::NotOwned {
+                section: Section::QuestionAnswer,
+                role: Role::Creator,
+            })
+        );
+        assert_eq!(
+            authorize(Section::QuestionAnswer, &human, Status::Groomed),
+            Err(OwnershipError::NotAnAgent(Section::QuestionAnswer))
         );
     }
 

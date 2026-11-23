@@ -163,7 +163,8 @@ not plain numbers and are skipped by the scan.
 | `status`, `status_since` | Written by transitions only | domain |
 | `claim` | Written by the claim operations: `take`, `renew`, `release` (§ 3.6) | runner |
 | `review` | Append-only for rounds and findings; `verdict` moves | reviewer; the runner files its self round in `executing` and `remediating` ([ADR 0017](../decisions/0017-review-record.md)) |
-| `notes`, `questions` | Append-only | any role |
+| `notes` | Append-only | any role |
+| `questions` | Append-only. Asked by any role; answered by the creator (ruling 2026-11-23) | any role asks; creator answers |
 | `meta` | Mutable, pre-approval | creator |
 | `overlays` | Mutable, each with a reason, a `by` and an `at` | any actor |
 

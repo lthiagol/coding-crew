@@ -6,8 +6,11 @@ mod cli;
 mod envelope;
 mod error;
 mod identity;
+mod parts;
 mod project;
 mod session;
+mod task;
+mod write;
 
 fn main() {
     let args: Vec<std::ffi::OsString> = std::env::args_os().collect();

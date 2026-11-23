@@ -1,6 +1,6 @@
 # talita — command reference
 
-Accepted 2026-11-22. Built: `session`, `project` (T5). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
+Accepted 2026-11-22. Built: `session`, `project` (T5); `task` create and content, `show` and `list` without `review_state`, `lane`, `--lane` and `--needs-you`, `scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`, `note` (T6). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
 the output and errors [ADR 0014](../decisions/0014-output-and-errors.md);
 identity [ADR 0015](../decisions/0015-identity.md). Gate names are task-model
 § 3.3's. "TM" is `docs/tasks/task-model.md`, "LC" `crates/core/src/lifecycle.rs`.
@@ -35,9 +35,9 @@ talita [global flags] <noun> <verb> <ids…> [flags]
   refreshes its derived fields (ADR 0018).
 - **Who.** `creator`, `runner`, `reviewer`, `orchestrator` are agent roles;
   `any` includes humans. Role-gated verbs refuse a human (`actor.not_agent`).
-- **Ownership** (roles.md): intent, scope, criteria, questions, meta =
-  creator; steps = creator before approval, runner after; claim, evidence =
-  runner; review = reviewer, except a finding's outcome = runner; notes =
+- **Ownership** (roles.md): intent, scope, criteria, meta = creator;
+  questions: any role asks, the creator answers; steps = creator before
+  approval, runner after; claim, evidence = runner; review = reviewer, except a finding's outcome = runner; notes =
   any; status = transitions only. A write outside the role's section is
   `section.not_owned`.
 - **Working runner.** In `executing`: the runner holding the claim (same

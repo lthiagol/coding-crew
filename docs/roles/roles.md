@@ -55,7 +55,8 @@ sequenceDiagram
 
 | task section | owner |
 |---|---|
-| `intent`, `scope`, `acceptance_criteria`, `questions`, `meta` | creator |
+| `intent`, `scope`, `acceptance_criteria`, `meta` | creator |
+| `questions` | any role asks; the creator answers |
 | `steps` | creator while grooming, runner while executing |
 | `claim`, evidence | runner |
 | `review` | reviewer; the runner for its self round, in `executing` and `remediating` |
