@@ -34,6 +34,8 @@ pub enum Code {
     OverlayAbsent,
     ItemNotOpen,
     ItemIsIdea,
+    ItemAlreadyShaped,
+    ItemNotFound,
     EvidenceTimeout,
     ProjectExists,
     RunActive,
@@ -50,7 +52,7 @@ pub enum Code {
 
 impl Code {
     #[cfg(test)]
-    pub const ALL: [Code; 37] = [
+    pub const ALL: [Code; 39] = [
         Code::Internal,
         Code::UsageInvalid,
         Code::InputInvalid,
@@ -76,6 +78,8 @@ impl Code {
         Code::OverlayAbsent,
         Code::ItemNotOpen,
         Code::ItemIsIdea,
+        Code::ItemAlreadyShaped,
+        Code::ItemNotFound,
         Code::EvidenceTimeout,
         Code::ProjectExists,
         Code::RunActive,
@@ -117,6 +121,8 @@ impl Code {
             Code::OverlayAbsent => "overlay.absent",
             Code::ItemNotOpen => "item.not_open",
             Code::ItemIsIdea => "item.is_idea",
+            Code::ItemAlreadyShaped => "item.already_shaped",
+            Code::ItemNotFound => "item.not_found",
             Code::EvidenceTimeout => "evidence.timeout",
             Code::ProjectExists => "project.exists",
             Code::RunActive => "run.active",
@@ -140,6 +146,7 @@ impl Code {
             Code::ProjectNotFound
             | Code::TaskNotFound
             | Code::PartNotFound
+            | Code::ItemNotFound
             | Code::RunAbsent
             | Code::CrewUnknown => 3,
             Code::StatusWrong
@@ -159,6 +166,7 @@ impl Code {
             | Code::OverlayAbsent
             | Code::ItemNotOpen
             | Code::ItemIsIdea
+            | Code::ItemAlreadyShaped
             | Code::EvidenceTimeout
             | Code::ProjectExists
             | Code::RunActive

@@ -13,7 +13,7 @@ use crate::identity::{Flags, Resolved};
 use crate::parts::{self, StepFields};
 use crate::project::{self, Project};
 use crate::write::Call;
-use crate::{lifecycle, session, task};
+use crate::{item, lifecycle, session, task};
 
 /// Task Administration, Lifecycle & Interaction Terminal Application — the CLI
 /// tool of coding-crew. Every call prints one JSON object on stdout.
@@ -85,6 +85,11 @@ enum Noun {
     Note {
         #[command(subcommand)]
         verb: NoteVerb,
+    },
+    /// A smaller task: an idea, a bug or a small feature (ITM*).
+    Item {
+        #[command(subcommand)]
+        verb: ItemVerb,
     },
 }
 
@@ -348,6 +353,49 @@ enum NoteVerb {
 }
 
 #[derive(Debug, Subcommand)]
+enum ItemVerb {
+    /// A new ITMnn, open.
+    Create {
+        /// idea, feature or bug.
+        #[arg(long)]
+        kind: String,
+        #[arg(long)]
+        title: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "scope", num_args = 1.., value_name = "TEXT")]
+        scope: Vec<String>,
+        #[arg(long = "tag", num_args = 1.., value_name = "TAG")]
+        tags: Vec<String>,
+    },
+    /// The item as stored, and whether it may be promoted.
+    Show { id: String },
+    /// Item summaries, in id order.
+    List {
+        #[arg(long = "status")]
+        statuses: Vec<String>,
+        #[arg(long)]
+        kind: Option<String>,
+    },
+    /// idea → feature or bug. The id does not change.
+    Shape {
+        id: String,
+        #[arg(long)]
+        kind: String,
+        #[arg(long = "scope", num_args = 1.., value_name = "TEXT")]
+        scope: Vec<String>,
+    },
+    /// Dismiss it, keeping the reason.
+    Dismiss {
+        id: String,
+        #[arg(long)]
+        reason: String,
+    },
+    /// Turn it into a task in draft.
+    Promote { id: String },
+}
+
+#[derive(Debug, Subcommand)]
 enum SessionVerb {
     /// Mint a session id for --as and --role. Writes nothing.
     New,
@@ -519,6 +567,7 @@ fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
                 NoteVerb::Add { id, body } => ("note add", run(&|c| parts::note(c, id, body))),
             }
         }
+        Noun::Item { verb } => item_verb(verb, project_flag, identity),
     }
 }
 
@@ -655,6 +704,41 @@ fn task_verb(
             "task cancel",
             run(&|c| lifecycle::cancel(c, id, reason.as_deref())),
         ),
+    }
+}
+
+fn item_verb(
+    verb: &ItemVerb,
+    project_flag: Option<&std::path::Path>,
+    identity: Result<Resolved, Failure>,
+) -> (&'static str, Result<Done, Failure>) {
+    let read = |f: &dyn Fn(&Project) -> Result<Done, Failure>| {
+        project::locate(project_flag).and_then(|p| f(&p))
+    };
+    let run = writer(project_flag, identity, None);
+    match verb {
+        ItemVerb::Create {
+            kind,
+            title,
+            body,
+            scope,
+            tags,
+        } => (
+            "item create",
+            run(&|c| item::create(c, kind, title, body.as_deref(), scope, tags)),
+        ),
+        ItemVerb::Show { id } => ("item show", read(&|p| item::show(p, id))),
+        ItemVerb::List { statuses, kind } => (
+            "item list",
+            read(&|p| item::list(p, statuses, kind.as_deref())),
+        ),
+        ItemVerb::Shape { id, kind, scope } => {
+            ("item shape", run(&|c| item::shape(c, id, kind, scope)))
+        }
+        ItemVerb::Dismiss { id, reason } => {
+            ("item dismiss", run(&|c| item::dismiss(c, id, reason)))
+        }
+        ItemVerb::Promote { id } => ("item promote", run(&|c| item::promote(c, id))),
     }
 }
 

@@ -1,6 +1,6 @@
 # talita — command reference
 
-Accepted 2026-11-22. Built: `session`, `project` (T5); `task` create and content, `show` and `list` without `review_state`, `lane`, `--lane` and `--needs-you`, `scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`, `note` (T6); the `task` lifecycle verbs and overlays (T7). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
+Accepted 2026-11-22. Built: `session`, `project` (T5); `task` create and content, `show` and `list` without `review_state`, `lane`, `--lane` and `--needs-you`, `scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`, `note` (T6); the `task` lifecycle verbs and overlays (T7); the `item` verbs (T13). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
 the output and errors [ADR 0014](../decisions/0014-output-and-errors.md);
 identity [ADR 0015](../decisions/0015-identity.md). Gate names are task-model
 § 3.3's. "TM" is `docs/tasks/task-model.md`, "LC" `crates/core/src/lifecycle.rs`.
@@ -56,8 +56,8 @@ Pinned to talita's code enum by a test:
 |---:|---|---|
 | 1 | internal | `internal` |
 | 2 | usage or input | `usage.invalid`, `input.invalid` |
-| 3 | not found | `project.not_found`, `task.not_found`, `part.not_found`, `run.absent`, `crew.unknown` |
-| 4 | refused by a rule | `status.wrong`, `gate.refused`, `section.frozen`, `task.cancelled`, `review.verdict_mismatch`, `review.budget_spent`, `finding.closed`, `question.resolved`, `claim.held`, `claim.not_claimable`, `criterion.covered`, `criterion.not_failed`, `criterion.deferred`, `depends.cycle`, `overlay.absent`, `item.not_open`, `item.is_idea`, `evidence.timeout`, `project.exists`, `run.active`, `crew.exists` |
+| 3 | not found | `project.not_found`, `task.not_found`, `part.not_found`, `item.not_found`, `run.absent`, `crew.unknown` |
+| 4 | refused by a rule | `status.wrong`, `gate.refused`, `section.frozen`, `task.cancelled`, `review.verdict_mismatch`, `review.budget_spent`, `finding.closed`, `question.resolved`, `claim.held`, `claim.not_claimable`, `criterion.covered`, `criterion.not_failed`, `criterion.deferred`, `depends.cycle`, `overlay.absent`, `item.not_open`, `item.is_idea`, `item.already_shaped`, `evidence.timeout`, `project.exists`, `run.active`, `crew.exists` |
 | 5 | identity | `identity.missing`, `role.wrong`, `actor.not_agent`, `section.not_owned`, `claim.not_holder` |
 | 6 | conflict | `conflict.lock`, `conflict.revision` |
 | 7 | damaged store | `store.unreadable` |
@@ -319,7 +319,8 @@ journaled: a journal event needs a task id (later).
 | `dismiss` | `item dismiss <ITM> --reason <t>` | open | `dismissed`, `dismissed_reason` |
 | `promote` | `item promote <ITM>` | open, kind feature or bug | item `promoted`, `promoted_to`; new task in `draft` with one criterion (item first, then task). J on the new task: `created`, note `from ITM<nn>` |
 
-Errors: `item.not_open`, `item.is_idea` (remedy: shape it first).
+Errors: `item.not_open` (4), `item.is_idea` (4, remedy: shape it first),
+`item.already_shaped` (4), `item.not_found` (3).
 
 ## session
 
