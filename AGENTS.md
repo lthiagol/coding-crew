@@ -141,11 +141,12 @@ The gate is `make check`; `make ci` is an alias for it.
 - Work order: raul's screens and data flow first, then hugo's — the
   directives, then dropping the Autopilot tab from raul, then the shared
   theme crate, then hugo itself. **That order is done**: both TUIs are
-  built. What is left, in order: the orchestrator's job — hugo opens the
-  herdr tab and starts the agent it will run, the first step towards hugo
-  driving the loop rather than only showing it; the writers, which wait for
-  the flow — nothing writes the journal or the runtime record yet; and the
-  recorded follow-ups in `TODO.md`.
+  built, and hugo opens the herdr tab and starts the orchestrator. What is
+  left, in order: the orchestrator's job — driving the loop rather than only
+  starting it; talita, designed in `docs/talita/` with its core built
+  (roadmap T1–T4), the CLI from T5 on waiting for the word; the writers of
+  the journal and the runtime record, which talita is; and the recorded
+  follow-ups in `TODO.md`.
 - talita is written only when explicitly instructed — never automatically
   because raul looks finished or mature enough.
 - `crates/core` stays editable; it is shared with raul and hugo.
