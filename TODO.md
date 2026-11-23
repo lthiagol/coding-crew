@@ -51,13 +51,19 @@ defects the review found are in the known-issues block of
 ## THE OPEN UNITS
 
 Queued in `docs/plan.md`, in order. Units 0–94, 63b and 70b are closed; their record is in
-`DONE.md`. Open, in order: none. Every Ready row in `docs/plan.md` has ✓.
+`DONE.md`. Open, in order: 95 (hugo on PATH).
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 ---
 
 ## DECISIONS OF RECORD
+
+- **hugo is found on PATH** (2026-11-23, the human). Agents run `hugo
+  --skill <role>`, so `hugo` must be on PATH; Homebrew is the install that
+  gives it. A source build is told which folder to add, and `s` refuses to
+  start without it. Unit 95. It replaces the live test's follow-up, which asked
+  for hugo's own path in the prompt.
 
 - **The crew is the roles present** (2026-11-22, unit 70). Three agents are one
   per role; two are the orchestrator and the builder, and the orchestrator
@@ -168,11 +174,6 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
-- **2026-11-23, live test:** hugo's start prompt says "Run `hugo --skill
-  orchestrator`", but a dev machine has no `hugo` on PATH. The opencode
-  orchestrator spent 39 commands looking for it and was stopped. hugo should
-  name its own path (`std::env::current_exe`) in the prompt. Recorded, not
-  ruled.
 - **2026-11-23, live test:** raul's Settings cannot set an agent's `harness`
   or `effort` when its table lacks the line (an old-shape
   `model = "…#high"` entry). Rows are never added, by design, so the value is

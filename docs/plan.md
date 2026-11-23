@@ -114,6 +114,7 @@ A unit without one is not ready, and belongs under **Grooming** instead.
 | 92 | **Review E · fixtures** ✓ | done | TSK13 and TSK15 follow ADR 0017 (the human, 2026-11-23); the mock README is true |
 | 93 | **Review F · engine, theme, tooling** ✓ | done | heading link URLs dim; terminal footer keys reversed (the human, 2026-11-23); sweep test covers --tab; make columns |
 | 94 | **Review G · docs** ✓ | done | the task model's claim row, section order and links; the chrome's twenty-three slots; hugo's and raul's screens match the code; TODO names the orchestrator's start as built |
+| 95 | **hugo on PATH** | ready | `s` refuses to start when `hugo` is not on PATH, or a different `hugo` is, and names the folder to add (from hugo's own path); `make install` installs hugo and raul with `cargo install --path` and prints the same hint; the README's build-from-source section says it. Homebrew is the goal, where PATH is given |
 
 ## Grooming
 
