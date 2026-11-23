@@ -1901,6 +1901,24 @@ and another runner takes over. The crew-row side effects are T12's. By the
 opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug `mm`),
 review 1 clean, one round. Commit `6e2e6f9`.
 
+### 2026-11-23 · talita T9, the steps at work and the evidence
+
+`step begin|done|skip|fail`, `criterion defer|undefer|explain` and
+`evidence run|override`: the working runner writes the step's status and the
+criterion's deferral, and the stored status is core's mirror, so a cleared
+deferral cannot stick. `evidence run` runs the frozen verification with
+`sh -c` from the project root, under a timeout and with the lock released
+while it runs: the real exit code and the summary are recorded, a timeout
+records the entry with no exit code so the criterion reads `unproven` and the
+call refuses with `evidence.timeout`, and an override on a deferred criterion
+is refused too — a parked criterion has nothing to prove. `evidence override`
+is the marked bypass, and core's projection draws it as manual. The steps,
+the criteria and the evidence are not journaled. Round 1 found two lows: the
+override on a deferred criterion, masked by the deferral, and a stale
+`--expect-revision` checked only after the command had run; both are fixed
+and pinned. By the opencode crew (deepseek-v4.1-flash builder, glm-5.3
+reviewer, slug `mm`), two rounds. Commit `3c3339d`.
+
 ---
 
 ## Lessons
