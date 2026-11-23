@@ -1623,6 +1623,100 @@ the old code. Built by the opencode crew, clean in one round. Retested live:
 `s` opened the orchestrator tab on opencode, and the model, effort and
 `HUGO_CREW` reached it. Commit `4eb8914`.
 
+
+### 2026-11-23 · Follow-ups closed by grooming
+
+The human ruled on 2026-11-23: every recommendation taken, and follow-ups
+that need no work are archived here rather than kept open. Each is as it was
+recorded; a ruled item carries its ruling.
+
+- **2026-11-23, unit 92:** TSK13 and TSK15 record `changes_requested` at their
+  external round, while the status stays `code-review` until the reviewer calls
+  `request-changes`. TSK14 already does this, so it was left as is. Recorded, not
+  ruled.
+- **2026-11-23, unit 91:** the tests for F7, F8, F18, F20 and F21 were not run
+  against the pre-fix code (round 0's report). The reviewer read each as failing
+  without its fix. Recorded, not ruled.
+- **2026-11-23, unit 91:** F8 and F20's failure paths are covered by unit tests
+  of the pure helpers only. Neither runs end to end: F8 needs herdr, F20 needs a
+  slow child. Recorded, not ruled.
+- **2026-11-23, unit 91:** round 1's `cargo fmt --all` may have reflowed lines in
+  `crates/hugo/src/app.rs` that were already in the tree. Nobody diffed them out.
+  Recorded, not ruled.
+- **2026-11-23, unit 91:** an odd crew opens with no size painted (F19). That is
+  the reviewer's recommendation, taken in round 1 with no human ruling. The
+  alternative was the nearest size. Recorded, not ruled. Ruled: confirmed — no size painted.
+- **2026-11-23, unit 90:** F2's option to drop only the offending row, not the
+  branch, was not taken. The builder read it as optional. Recorded, not ruled.
+- **2026-11-23, unit 90:** F6's test was not run against the pre-fix code, so it
+  is not shown to fail without the fix. Recorded, not ruled.
+- **2026-11-23, unit 90:** the `evidence.command` fixture check (D1) has no
+  reverse test: no fixture holds a non-manual entry with an empty command. The
+  reviewer accepted it. Recorded, not ruled.
+- **2026-11-23, unit 89:** `ProjectLock::save` takes `&mut Task`, so the caller's
+  copy follows the file's revision. The alternative `&Task` leaves a stale copy
+  that the next save of the same object refuses. Open for the human to rule. Ruled: keep `&mut Task`.
+- **2026-11-23, unit 89:** F3 and F4 have no fail-before run. F3's test uses the
+  new signature and `StoreError::Revision`, so it cannot compile on the old code.
+  F4 removed the unlocked writers, so no runtime test can fail on the old API.
+  Recorded, not ruled.
+- **2026-11-23, unit 89:** an unparseable existing file for an id makes a save
+  fail, not overwrite. This is a choice the reviewer accepted. Recorded, not
+  ruled.
+- **2026-11-23, unit 88:** the new tests were not run against the pre-fix code.
+  The reviewer checked each by reading, not by running it, so none is shown to
+  fail without its fix. Recorded, not ruled.
+- **2026-11-23, unit 88:** `Section::Review` keeps one owner name, phase-dependent,
+  and is not split into two sections. The reviewer accepted it. Recorded, not
+  ruled.
+- **2026-11-23, unit 87:** the journal refuses a write while it holds events it
+  cannot read (`StoreError::JournalUnreadable`), because `Activity` drops them
+  on read and a rewrite would delete them. Follows decision 17. Keeping unknown
+  events instead is open. Recorded, not ruled. Ruled: keep the refusal.
+- **2026-11-23, unit 86:** `status` has no owner in `ownership.rs` or task-model
+  § 2.5, and `roles.md:60` and `commands.md:38-42` now say transitions alone
+  write it. Round two applied the reviewer's recommendation; no human ruling.
+  Confirm, or revert both docs and make `Section::Status` runner-owned in
+  `ownership.rs` with the TM line at 942. Ruled: confirmed — transitions alone write `status`.
+- **2026-11-23, unit 86:** the optional `NotHolder` hint (a holder's `take`
+  points to `renew`) was not taken. `take` returns `Held` alone. Recorded, not
+  ruled.
+- **2026-11-22, unit 85:** `start` checks the holder and the live lease only.
+  ADR 0020 asks for no session check there. Recorded, not ruled.
+- **2026-11-22, unit 85:** the fixture replay in `crates/core/tests/mock_data.rs`
+  replays review moves as the filer of the latest external round, and dates a
+  replayed code-review phase at that round's `at`. The fixtures are unchanged.
+  Recorded, not ruled.
+- **2026-11-22, unit 84:** the `assert_ne!` added to
+  `tsk14_is_handed_back_after_its_findings_are_fixed` was not run against the
+  old fixture value, so it is not shown to fail without the fix.
+- **2026-11-22, unit 84:** raul's icons for the thirteen new kinds
+  (`crates/raul/src/overview.rs`, `event_icon`) are the builder's guess. No
+  ruling. Ruled: confirmed as built.
+- **2026-11-22, unit 84:** `orchestrator-01` is the builder's choice for the
+  orchestrator's `crew[].actor`. No fixture names one. Ruled: confirmed as built.
+- **2026-11-22, unit 83:** the TOML render test was not run against the old
+  code, so it is not shown to fail without the grammar. The resolve assertion
+  was probed against the YAML fallback.
+- **2026-11-22, unit 81:** none of unit 81's tests was run against the code
+  before its fix, so none is shown to fail without it.
+- **2026-11-22, unit 81:** the sidebar's config warning is cut at the pane
+  width with `…`. At 100 columns the table name stays visible; the full text
+  is shown only in the test.
+- **2026-11-22, unit 78:** `needs.rs:338` is unchanged. The done-when named
+  it; the review found Needs rows are one line, so "Only a pane of one line
+  shows the row alone" is accurate. Confirm it, or reopen to name the case. Ruled: confirmed accurate.
+- **2026-11-22, unit 78:** the atomicity pin
+  (`a_two_line_row_is_drawn_whole_from_any_first_row`) pins current behaviour.
+  It was not run against the code before the fix, so it is not shown to fail
+  without it.
+- **2026-11-22, unit 79:** the width sweep's row check fires only when a glyph
+  measures wider than ratatui draws it, because the buffer clips overflow. No
+  mutation has shown it fail.
+- **2026-11-22, unit 79:** `NOT_COUNTS` exempts five channel-gap phrases that
+  no test recomputes, and thirteen contrast-ratio phrases that are exempt
+  without a check that any test reads them.
+
 ---
 
 ## Lessons

@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after the opencode live tests.
+Updated 2026-11-23 by the orchestrator, after grooming.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,16 +50,44 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–94, 63b and 70b are closed; their record is in
-`DONE.md`. Open, in order: 95 (hugo on PATH).
+Queued in `docs/plan.md`, in order. Units 0–94, 63b and 70b are closed; their
+record is in `DONE.md`. Nothing is in flight: the human said to prepare, not
+build (2026-11-23).
 
-Grooming (G1–G4) and question Q5 wait on decisions or the flow.
-`docs/plan.md` § Deferred holds what is put off (the light themes, a theme
-file on disk); talita's build order, T5–T14, is `docs/talita/roadmap.md`.
+| phase | units | needs |
+|---|---|---|
+| 1 · cleanup | 95 hugo on PATH · 96 docs drift · 97 consistency · 98 test hardening · 99 rulings in the UI | nothing; ready |
+| 2 · distribution | 100 version and releases · 101 Homebrew tap | 95; 101 needs 100 and a tap repo the human creates |
+| 3 · talita | T5–T12 in `docs/talita/roadmap.md` | the human's word to build talita |
+| 3 · the orchestrator | O1 its job, designed · O2 its job, built | O1 any time (docs only); O2 needs T12 |
+| 3 · dogfooding | DF this repository on its own `coding-crew/` | T12 and O2 |
+| 4 · live checks | L1–L4 in `docs/plan.md` § Live checks | a human, a machine or a font |
+
+Units in one phase that touch different crates can run in parallel worktrees:
+96 (docs, theme comments, generator note) and 97 (core, raul, engine) do not
+overlap; 98 and 99 both touch raul and run after them. Deferred: the light
+themes and a theme file on disk (`docs/plan.md` § Deferred).
 
 ---
 
 ## DECISIONS OF RECORD
+
+- **talita's design is accepted** (2026-11-22, the human). `docs/talita/` and
+  ADRs 0012–0020; `docs/talita/roadmap.md` holds the build order, units
+  T1–T14. T1–T4 are built in core (units 84–87), with no talita code. T5
+  onward waits on the human's word.
+- **Grooming of 2026-11-23** (the human). The order is cleanup (95–99), then
+  distribution (100–101), then talita (T5–T12) and the orchestrator's job (O1,
+  O2), then dogfooding (DF). Every recommended ruling was taken:
+  `ProjectLock::save` keeps `&mut Task`; transitions alone write `status`;
+  `questions` splits into ask (any role) and answer (the creator) at T6; a
+  takeover is refused while an `executing` task is blocked; ADR 0018 is
+  followed (`approved` and `remediated` as it words them); the footer marks
+  dropped chips `+N keys`; the `?` overlay is specified and shows a scroll
+  indicator; raul's Settings shows a missing `harness` or `effort` as an empty
+  row that can be set; an odd crew paints no size; the journal keeps refusing
+  writes over unreadable events; raul's event icons, `orchestrator-01` and
+  `needs.rs:338` stand. Distribution is GitHub releases plus a Homebrew tap.
 
 - **hugo is found on PATH** (2026-11-23, the human). Agents run `hugo
   --skill <role>`, so `hugo` must be on PATH; Homebrew is the install that
@@ -174,181 +202,13 @@ file on disk); talita's build order, T5–T14, is `docs/talita/roadmap.md`.
 
 ## THE FOLLOW-UPS
 
-None blocking. Carried from the closed units.
+None open. Grooming on 2026-11-23 placed every follow-up: the buildable ones
+are in units 96–99 of `docs/plan.md`, the talita-bound ones in the units of
+`docs/talita/roadmap.md` they belong to, the live checks in `docs/plan.md`
+§ Live checks, and the rest are archived in `DONE.md` § Follow-ups closed by
+grooming. A new follow-up goes here, dated, until it is placed.
 
-- **2026-11-23, live test:** raul's Settings cannot set an agent's `harness`
-  or `effort` when its table lacks the line (an old-shape
-  `model = "…#high"` entry). Rows are never added, by design, so the value is
-  reachable only by hand. Recorded, not ruled.
-- **2026-11-23, unit 94:** five comments in `crates/theme/src/theme.rs` (lines
-  1035, 1080, 1250, 1425, 1594) still say a family palette's "eighteen values".
-  They count raw palette values, not slots. The builder did not verify the
-  count, so they were left. Recorded, not ruled.
-- **2026-11-23, unit 93:** `mock-data/generate.py:2779` (the TSK22 note) still says
-  the gate regenerates the column table. Fixing it needs a generator change and a
-  regenerate. Recorded, not ruled.
-- **2026-11-23, unit 93:** `make columns` writes nothing and has no regenerate
-  target. The finding's fix line was the help text alone; a `columns-write`
-  target was not added. Recorded, not ruled.
-- **2026-11-23, unit 93:** `TocEntry.title` in the engine still carries a heading
-  link's URL. Only the paint changed (F23). Recorded, not ruled.
-- **2026-11-23, unit 92:** the fixtures hold no code-review task before its first
-  external round, since the one-review-round shape is gone. A fixture would be
-  needed if raul or hugo must read that state. Not done: it changes the fixture
-  count and the pins. Recorded, not ruled.
-- **2026-11-23, unit 92:** TSK13 and TSK15 record `changes_requested` at their
-  external round, while the status stays `code-review` until the reviewer calls
-  `request-changes`. TSK14 already does this, so it was left as is. Recorded, not
-  ruled.
-- **2026-11-23, unit 91:** the tests for F7, F8, F18, F20 and F21 were not run
-  against the pre-fix code (round 0's report). The reviewer read each as failing
-  without its fix. Recorded, not ruled.
-- **2026-11-23, unit 91:** F8 and F20's failure paths are covered by unit tests
-  of the pure helpers only. Neither runs end to end: F8 needs herdr, F20 needs a
-  slow child. Recorded, not ruled.
-- **2026-11-23, unit 91:** round 1's `cargo fmt --all` may have reflowed lines in
-  `crates/hugo/src/app.rs` that were already in the tree. Nobody diffed them out.
-  Recorded, not ruled.
-- **2026-11-23, unit 91:** an odd crew opens with no size painted (F19). That is
-  the reviewer's recommendation, taken in round 1 with no human ruling. The
-  alternative was the nearest size. Recorded, not ruled.
-- **2026-11-23, unit 90:** F2's option to drop only the offending row, not the
-  branch, was not taken. The builder read it as optional. Recorded, not ruled.
-- **2026-11-23, unit 90:** F6's test was not run against the pre-fix code, so it
-  is not shown to fail without the fix. Recorded, not ruled.
-- **2026-11-23, unit 90:** the `evidence.command` fixture check (D1) has no
-  reverse test: no fixture holds a non-manual entry with an empty command. The
-  reviewer accepted it. Recorded, not ruled.
-- **2026-11-23, unit 89:** `ProjectLock::save` takes `&mut Task`, so the caller's
-  copy follows the file's revision. The alternative `&Task` leaves a stale copy
-  that the next save of the same object refuses. Open for the human to rule.
-- **2026-11-23, unit 89:** F3 and F4 have no fail-before run. F3's test uses the
-  new signature and `StoreError::Revision`, so it cannot compile on the old code.
-  F4 removed the unlocked writers, so no runtime test can fail on the old API.
-  Recorded, not ruled.
-- **2026-11-23, unit 89:** `Store::duplicate_ids()` is in core, but nothing calls
-  it. `project check` is a talita verb and waits until talita is opened.
-- **2026-11-23, unit 89:** an unparseable existing file for an id makes a save
-  fail, not overwrite. This is a choice the reviewer accepted. Recorded, not
-  ruled.
-
-- **2026-11-23, unit 88:** the new tests were not run against the pre-fix code.
-  The reviewer checked each by reading, not by running it, so none is shown to
-  fail without its fix. Recorded, not ruled.
-- **2026-11-23, unit 88:** `Section::Review` keeps one owner name, phase-dependent,
-  and is not split into two sections. The reviewer accepted it. Recorded, not
-  ruled.
-
-- **2026-11-23, unit 87:** the journal refuses a write while it holds events it
-  cannot read (`StoreError::JournalUnreadable`), because `Activity` drops them
-  on read and a rewrite would delete them. Follows decision 17. Keeping unknown
-  events instead is open. Recorded, not ruled.
-- **2026-11-23, unit 87:** the creating-writers test
-  (`two_writers_creating_at_once_take_no_duplicate_id`) fails unlocked in 5 of 6
-  runs. It is sensitive, not deterministic. Recorded, not ruled.
-- **2026-11-23, unit 87:** `config.rs` has its own `write_beside`, which takes no
-  lock and is not atomic. Left alone. Recorded, not ruled.
-- **2026-11-23, unit 87:** raul's id sort (`crates/raul/src/data.rs:122`) is not
-  the core's numeric order yet. It is raul's follow-up, not core's.
-- **2026-11-23, unit 87:** the Windows lock (std `File::try_lock`) is untested.
-- **2026-11-23, unit 87:** the journal and runtime fixtures' byte-for-byte
-  regeneration is not checked; only the struct round-trip is.
-- **2026-11-23, unit 86:** `status` has no owner in `ownership.rs` or task-model
-  § 2.5, and `roles.md:60` and `commands.md:38-42` now say transitions alone
-  write it. Round two applied the reviewer's recommendation; no human ruling.
-  Confirm, or revert both docs and make `Section::Status` runner-owned in
-  `ownership.rs` with the TM line at 942.
-- **2026-11-23, unit 86:** who owns `questions` is unsettled. `roles.md` says
-  the creator, task-model § 2.5 says any role (append-only), and `commands.md`
-  says `ask` is any and `answer` is the creator. `ownership.rs` follows
-  roles.md. Recommended: split ask (any) from answer (creator) when T6 writes
-  the question verbs; that needs a `Section` split and a § 2.5 change. Nothing
-  calls `authorize` yet. Needs a ruling.
-- **2026-11-23, unit 86:** a takeover in `executing` ignores overlays. ADR 0020
-  is silent, so a blocked executing task can be taken over once its lease
-  expires. Needs a ruling: refuse, or allow.
-- **2026-11-23, unit 86:** `task cancel` does not release a live claim yet
-  (ADR 0020). It belongs with the overlay verbs in T7.
-- **2026-11-23, unit 86:** `release` requires a reason and stores none. The
-  journal writer (T11) carries it.
-- **2026-11-23, unit 86:** a mirror with neither evidence nor deferral writes
-  `pending`, so a cleared deferral cannot stick. Recorded, not ruled.
-- **2026-11-23, unit 86:** the claim operations take `now` as an RFC 3339
-  stamp, but `transition()` still reads the clock itself. Recorded, not ruled.
-- **2026-11-23, unit 86:** the optional `NotHolder` hint (a holder's `take`
-  points to `renew`) was not taken. `take` returns `Held` alone. Recorded, not
-  ruled.
-- **2026-11-22, unit 85:** the round-filing session check (ADR 0017) is not in
-  core. Core has no round-filing operation, so a round filed by the claim's own
-  session is refused only at the reviewer transitions. talita's T10 should call
-  the same check.
-- **2026-11-22, unit 85:** `start` checks the holder and the live lease only.
-  ADR 0020 asks for no session check there. Recorded, not ruled.
-- **2026-11-22, unit 85:** the fixture replay in `crates/core/tests/mock_data.rs`
-  replays review moves as the filer of the latest external round, and dates a
-  replayed code-review phase at that round's `at`. The fixtures are unchanged.
-  Recorded, not ruled.
-
-- **talita's design is accepted** (2026-11-22, the human). `docs/talita/` and
-  ADRs 0012–0020; `docs/talita/roadmap.md` holds the build order, units
-  T1–T14. T1–T4 are built in core (units 84–87), with no talita code. T5
-  onward waits on the human's word.
-- **2026-11-22, unit 84:** `mock-data/README.md:115` still says TSK14's
-  re-review cannot be stamped. It can now, through `review.re_reviews[]`.
-- **2026-11-22, unit 84:** the `assert_ne!` added to
-  `tsk14_is_handed_back_after_its_findings_are_fixed` was not run against the
-  old fixture value, so it is not shown to fail without the fix.
-- **2026-11-22, unit 84:** six of the twenty-two journal kinds have no fixture
-  history: `started`, `released`, `resumed`, `reopened`, `unblocked` and
-  `undeferred`. Every fixture's `Evidence.manual` is `false`, so no override is
-  exercised. Recorded, not ruled.
-- **2026-11-22, unit 84:** two ADR 0018 deviations stand. `approved` is still
-  read from the `Approved by` note, and `remediated` keeps "answered the
-  findings" where ADR 0018 says `after round <n>`. Both change the Overview's
-  render, so they wait for a ruling.
-- **2026-11-22, unit 84:** raul's icons for the thirteen new kinds
-  (`crates/raul/src/overview.rs`, `event_icon`) are the builder's guess. No
-  ruling.
-- **2026-11-22, unit 84:** `orchestrator-01` is the builder's choice for the
-  orchestrator's `crew[].actor`. No fixture names one.
-- **2026-11-22, unit 83:** the TOML render test was not run against the old
-  code, so it is not shown to fail without the grammar. The resolve assertion
-  was probed against the YAML fallback.
-- **2026-11-22, unit 83:** raul's Settings TOML painter
-  (`crates/raul/src/settings.rs:1535`, `toml_spans`) is hand-written and does
-  not use the engine grammar. It can take it later.
-- **2026-11-22, unit 82:** `docs/tui/screens.md` has no section for the `?`
-  overlay, so its sizing and scroll keys are unspecified. The builder and the
-  reviewer both recommend a line under § Mouse or a new overlay section. The
-  mouse wheel does nothing while the overlay is open; that is the builder's
-  choice and is not specified either.
-- **2026-11-22, unit 82:** the `?` overlay draws no scroll indicator when it
-  overflows. Not in the brief; the orchestrator may want one.
-- **2026-11-22, unit 81:** none of unit 81's tests was run against the code
-  before its fix, so none is shown to fail without it.
-- **2026-11-22, unit 81:** the sidebar's config warning is cut at the pane
-  width with `…`. At 100 columns the table name stays visible; the full text
-  is shown only in the test.
-- **2026-11-22, unit 78:** `needs.rs:338` is unchanged. The done-when named
-  it; the review found Needs rows are one line, so "Only a pane of one line
-  shows the row alone" is accurate. Confirm it, or reopen to name the case.
-- **2026-11-22, unit 78:** the atomicity pin
-  (`a_two_line_row_is_drawn_whole_from_any_first_row`) pins current behaviour.
-  It was not run against the code before the fix, so it is not shown to fail
-  without it.
-- **2026-11-22, unit 79:** the queue-pick proof is partial. `captioned_picks`
-  fails on a fixed offset, but `queue_lines` still draws at `2 + index` for
-  every runtime, so restoring the old offset there is not caught. No runtime
-  shows it today.
-- **2026-11-22, unit 79:** the footer drops whole chips with no mark: at 40 and
-  60 columns `enter choose` goes. Recommended: a short `+N keys` marker, as
-  TSK02 does for rows. Waits on a ruling.
-- **2026-11-22, unit 79:** the width sweep's row check fires only when a glyph
-  measures wider than ratatui draws it, because the buffer clips overflow. No
-  mutation has shown it fail.
-- **2026-11-22, unit 79:** `NOT_COUNTS` exempts five channel-gap phrases that
-  no test recomputes, and thirteen contrast-ratio phrases that are exempt
-  without a check that any test reads them.
+---
 
 ## WHAT WAITS ON THE FLOW
 
@@ -364,24 +224,7 @@ None blocking. Carried from the closed units.
   two means the orchestrator reviews, one means the orchestrator builds and
   reviews.
 
-**Waits on a live run:**
-
-- **The cursor-agent live run is not done** (2026-11-22, unit 71). opencode's
-  was done on 2026-11-23: raul's Settings listed its live models and efforts,
-  and hugo's `s` started an opencode orchestrator with its model, effort and
-  `HUGO_CREW`. cursor-agent's parser is pinned by captured output only; its
-  start form `--model <id>-<effort>` comes from the reviewer's live runs.
-- **The freeze is not reproduced live** (2026-11-22, unit 69). The fix was
-  measured on the mock data and pinned by a test that counts engine runs, not
-  in a terminal. The folder read and the projection still run on every redraw,
-  and on a large work folder they may still cost. The key drain in
-  `crates/raul/src/main.rs` has no test: it lives in the interactive loop.
-- **The journal:** every fixture's approved stamp is thirty minutes before its
-  claim, and no fixture holds an approved task that has waited long; the kinds
-  are provisional.
-- **The Tasks nerd glyph is unchecked** (2026-11-22, unit 60). The unicode set
-  draws the tab as `☑`, because `☰` measures two columns. The nerd glyph
-  (U+F0AE7) was not checked against a font; no nerd font is installed here.
+**Waits on a live run:** L1–L4 in `docs/plan.md` § Live checks.
 
 **Where the flow's files live** is settled, decided 2026-11-21 and recorded in
 `docs/decisions/0011-flow-files.md`: the project's role configs move to

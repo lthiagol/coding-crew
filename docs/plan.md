@@ -114,7 +114,34 @@ A unit without one is not ready, and belongs under **Grooming** instead.
 | 92 | **Review E · fixtures** ✓ | done | TSK13 and TSK15 follow ADR 0017 (the human, 2026-11-23); the mock README is true |
 | 93 | **Review F · engine, theme, tooling** ✓ | done | heading link URLs dim; terminal footer keys reversed (the human, 2026-11-23); sweep test covers --tab; make columns |
 | 94 | **Review G · docs** ✓ | done | the task model's claim row, section order and links; the chrome's twenty-three slots; hugo's and raul's screens match the code; TODO names the orchestrator's start as built |
-| 95 | **hugo on PATH** | ready | `s` refuses to start when `hugo` is not on PATH, or a different `hugo` is, and names the folder to add (from hugo's own path); `make install` installs hugo and raul with `cargo install --path` and prints the same hint; the README's build-from-source section says it. Homebrew is the goal, where PATH is given |
+| 95 | **hugo on PATH** | S | `s` refuses to start when `hugo` is not on PATH, or a different `hugo` is, and names the folder to add (from hugo's own path); `make install` installs hugo and raul with `cargo install --path` and prints the same hint; the README's build-from-source section says it. Homebrew is the goal, where PATH is given |
+| 96 | **Docs drift** | S | `crates/theme/src/theme.rs`'s five "eighteen values" comments (1035, 1080, 1250, 1425, 1594) give the count they mean, checked against the palettes; `mock-data/README.md:115` says TSK14's re-review is stamped in `review.re_reviews[]`; the TSK22 note at `mock-data/generate.py:2779` no longer says the gate regenerates the column table, and the fixtures regenerate byte-identical |
+| 97 | **Consistency** | M | raul sorts ids in core's numeric order (`crates/raul/src/data.rs:122`); `config.rs`'s `write_beside` writes atomically under a lock, as the store does; the engine's `TocEntry.title` holds a heading's text without its link URL; raul's Settings paints TOML with the engine grammar, not the hand-written `toml_spans`; `make columns-write` regenerates `scripts/terminal-columns.txt`; core refuses a takeover while an `executing` task is blocked (ruling, 2026-11-23); each change has a test that fails without it |
+| 98 | **Test hardening** | M | `queue_lines` is pinned so a restored fixed offset fails a test; the two-writers-creating test is deterministic (no timing luck); the journal and runtime fixtures are checked byte for byte against the generator; the fixtures hold a history for `started`, `released`, `resumed`, `reopened`, `unblocked` and `undeferred`, one `Evidence.manual` override, and one approved task that has waited long, all through `mock-data/generate.py`, with raul and hugo rendering them |
+| 99 | **Rulings in the UI** | M | ADR 0018 is followed: `approved` comes from the journal, not the `Approved by` note, and `remediated` reads `after round <n>`; the footer marks dropped chips `+N keys` at narrow widths; `docs/tui/screens.md` specifies the `?` overlay (size, scroll keys, the wheel) and it draws a scroll indicator when it overflows; raul's Settings shows a missing `harness` or `effort` as an empty row that can be set and saved (rulings, 2026-11-23); screens docs updated |
+| 100 | **Version and releases** ⬚ | M | every binary answers `--version` with the workspace version; CI runs `make ci` on macOS as well as Linux; pushing a `v*` tag builds raul and hugo for macOS arm64, macOS x86_64 and Linux x86_64/arm64 and attaches the archives and their SHA-256 sums to a GitHub release; the release steps are in `docs/release.md` |
+| 101 | **Homebrew tap** ⬚ | S | a tap repository (the human creates it on GitHub) holds formulae for raul and hugo that install a release's archives; the release workflow updates them on each tag; README's install section says `brew install <tap>/raul <tap>/hugo`, and the build-from-source section keeps unit 95's PATH note. Needs 100 |
+
+## After talita
+
+The dogfooding path. Each waits as marked; none starts without the human's word.
+
+| # | unit | size | done when |
+|---|---|---|---|
+| O1 | **The orchestrator's job, designed** | M | docs only, as talita's design was: `docs/hugo/orchestrator.md` says what `hugo --skill orchestrator` tells the agent to do — pick the queue's next task, start builders and the reviewer, run rounds to the limit, stop for the human — which talita verbs it calls, and how herdr-crew's scripts map onto it; the human accepts it. Can start any time |
+| O2 | **The orchestrator's job, built** ⬚ | L | hugo's orchestrator skill drives one task of a talita-managed project from `approved` to `done` with a builder and a reviewer, and hugo shows the crew, round, budget and findings from the real `runtime.json`. Needs O1 and T12 |
+| DF | **Dogfooding** ⬚ | M | this repository has its own `coding-crew/`: `talita project init`, the open plan rows become tasks, the role configs move to `coding-crew/flow/` (ADR 0011), and `TODO.md` stops being the memory; raul shows the project's own work and hugo runs a unit of it. Needs O2 |
+
+## Live checks
+
+Each needs a human, a machine or a font this one lacks.
+
+| # | check | done when |
+|---|---|---|
+| L1 | **cursor-agent live run** (unit 71) | raul's Settings lists cursor-agent's live models and efforts, and hugo's `s` starts a cursor-agent orchestrator with `--model <id>-<effort>`; opencode's run was done 2026-11-23 |
+| L2 | **raul's freeze, live** (unit 69) | raul on a large work folder in a real terminal takes key bursts without lag; the key drain in `crates/raul/src/main.rs` is watched working |
+| L3 | **The Tasks nerd glyph** (unit 60) | U+F0AE7 is seen in a nerd font at one column, or replaced |
+| L4 | **The Windows lock** (unit 87) | the store's `File::try_lock` is run on Windows by two writers |
 
 ## Grooming
 
@@ -123,9 +150,9 @@ Scope is not settled. These need design before they can be tasks with a
 
 | # | what | what has to be decided first |
 |---|---|---|
-| G1 | **hugo: the automation itself** | what the automation *is*, and whether it runs at all. The interface is settled — one sidebar for configuration, one main pane for the running state, no tabs — and the build loop this repository runs is the first implementation of its runtime. The configuration's format is settled for now: `~/.config/coding-crew/config.toml`, provisional, with the defaults written on demand. **Where the flow's files live is settled too**: the role configs move to `coding-crew/flow/` when the project is managed, `.orchestration.json` stays at the repository root, the findings live inside the task, and the task folder replaces `TODO.md` as the memory — `docs/decisions/0011-flow-files.md`. **Settled 2026-11-22: hugo starts the orchestrator** — `s` opens the herdr tab and starts the agent; the loop itself stays the orchestrator's (`docs/hugo/design-record.md`) |
-| G2 | **The journal's writer** | the event kinds are defined provisionally in row 36 and the file's home is settled for the mock, but nothing writes `activity.json` — the writer waits for the flow, and the kinds are provisional until it lands. The same holds for the runtime record: nothing writes `runtime.json`, so the crew hugo shows is the mock's |
-| G3 | **talita's operation surface** | the verbs, the gates each one enforces, and the output shape. Out of scope until it is asked for explicitly |
+| G1 | **hugo: the automation itself** → O1 | what the automation *is*, and whether it runs at all. The interface is settled — one sidebar for configuration, one main pane for the running state, no tabs — and the build loop this repository runs is the first implementation of its runtime. The configuration's format is settled for now: `~/.config/coding-crew/config.toml`, provisional, with the defaults written on demand. **Where the flow's files live is settled too**: the role configs move to `coding-crew/flow/` when the project is managed, `.orchestration.json` stays at the repository root, the findings live inside the task, and the task folder replaces `TODO.md` as the memory — `docs/decisions/0011-flow-files.md`. **Settled 2026-11-22: hugo starts the orchestrator** — `s` opens the herdr tab and starts the agent; the loop itself stays the orchestrator's (`docs/hugo/design-record.md`) |
+| G2 | ✓ **The journal's writer** | placed: talita writes it, T11 (journal) and T12 (runtime), in `docs/talita/roadmap.md` |
+| G3 | ✓ **talita's operation surface** | answered: designed in `docs/talita/` and ADRs 0012–0020, accepted 2026-11-22 |
 | G4 | **The review's interaction** | settled for v1: raul reads. It shows a finding; it does nothing about one. Acting on a finding needs a writer, a gate and talita's verbs, and those are out of scope until they are asked for |
 
 ## Questions
@@ -138,7 +165,7 @@ Marked so we can verify them later.
 | Q2 | ✓ **answered** — keep the bold foreground: the showing tab is the main foreground in bold against the dim second foreground, the palette tables and the tests already say so, and no screen changes | the inversion was a TUI idiom, not a rule of this one |
 | Q3 | ✓ **answered for the mock** — the journal sits next to the tasks, `coding-crew/activity.json`, written only through `mock-data/generate.py`. Nothing writes it yet, so the question of the real writer stays open | it decides where the file lives, and therefore what the work folder contains |
 | Q4 | ✓ **answered** — our slots map onto `MarkdownTheme`, one palette for the document; the promise stops at syntect's code tokens, a third palette the detail-pane unit must avoid or handle | the theme rule says a theme changes the paint and never the words, and the same fact is never painted two ways on one screen |
-| Q5 | **hugo's visual** — the human wanted to see the interface drawn before it is built, and thirty sketches now exist: three families under `docs/hugo/tui-proposals/`, with the combined index grouping them into the eight readings the set contains. The shape is settled: one sidebar for the configuration, one main pane for the running state, no tabs, the configuration under `~/.config/coding-crew/`. What is open is the pick, and what the main pane reads first — the live build loop's crew, or the project's automation | the unit waits on a decision, so the question is marked rather than the row |
+| Q5 | ✓ **answered** — hugo is built to the settled shape: one sidebar, one main pane reading the runtime record's crew; the sketches in `docs/hugo/tui-proposals/` are history | it decided what hugo draws first |
 
 ## Deferred
 

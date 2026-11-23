@@ -25,5 +25,16 @@ The nouns then come in the order the flow uses them. Each unit ends with
 | T13 | **Items**: `item create|show|list|shape|dismiss|promote` | S | an idea is shaped, promoted, and the new task is in `draft` with `promoted_from` |
 | T14 | **Docs and skills**: skill docs' CLI tables, TM § 3.3/§ 4/§ 11, roles.md env table, the drift fixes in [decisions.md](decisions.md); the flow skills call talita | S | no doc names a flat verb; the drift table's "doc fix" rows are closed |
 
+### Carried into the units (grooming, 2026-11-23)
+
+Follow-ups from the core units, placed where they are built:
+
+- **T5:** `project check` calls `Store::duplicate_ids()`, which core has and nothing calls.
+- **T6:** `questions` splits into ask (any role) and answer (the creator): a `Section` split and a task-model § 2.5 change (ruling, 2026-11-23).
+- **T7:** `task cancel` releases a live claim (ADR 0020); `transition()` takes `now` as the claim operations do.
+- **T9:** a mirror with neither evidence nor deferral writes `pending`, so a cleared deferral cannot stick; settle it with the criterion verbs.
+- **T10:** `round file` refuses a round filed by the claim's own session (ADR 0017), calling core's check; a fixture holds a code-review task before its first external round.
+- **T11:** `release` stores its required reason in the journal.
+
 T6–T10 can each ship alone once T5 is in. T11 and T12 can start after T7,
 since every later verb then gains its side effects as it lands.
