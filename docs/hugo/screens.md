@@ -62,7 +62,7 @@ The screen below is the mock's 100-by-40 render: the pinned screen in
 | title line | the tool's icon and name, `hugo`, then a dim `·` and the project's folder when one is found; a window too narrow for the name shows no title rather than a cut of the name |
 | sidebar | the configuration, on the left: each agent with its harness, model and effort, the review-round limit and the order, in that order. The agents group has a cursor on each agent's harness, model and effort: `↑ k` and `↓ j` move it, and `enter` on one of those rows opens its choice. An agent is named by its role, its table's name: a name or role is read-only, and nothing in the sidebar edits it. The sidebar shows the session's crew, and marks what the session changed from the file — see [the configuration](#the-configuration). `r` reads the file again and starts the session over from it |
 | main pane | what is running: the crew, the queue, the round, the budget and the findings, with the stamp at its foot |
-| footer | the keys that work, centred under a thin rule — never a key that does nothing. The window's keys are `enter choose` (on an agent's row), `r reload`, `c crew size`, `tab queue` (when a task waits) and `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)), then `? help · q quit`; `ctrl-c quit` works too, unnamed. While the queue has the keys its keys are `space mark`, `a mark all`, `s start` (when it can act) and `tab configuration`, then `? help · q quit`. [Picking the queue](#picking-the-queue) says what they do. While a choice is open its keys are `esc close`, `enter pick` (when the cursor's row can be picked), then `? help · q quit`; while the id input is open its keys are `esc back`, `enter pick` and `ctrl-c quit`, and every other key types; while the crew-size selector is open its keys are `esc close`, `enter pick`, then `? help · q quit`. The movement keys are in the help, not the footer |
+| footer | the keys that work, centred under a thin rule — never a key that does nothing. The window's keys are `enter choose` (on an agent's row), `r reload`, `c crew size`, `tab queue` (when a claimable task waits) and `s start` (when it can act: [starting the orchestrator](#starting-the-orchestrator)), then `? help · q quit`; `ctrl-c quit` works too, unnamed. While the queue has the keys its keys are `space mark`, `a mark all`, `s start` (when it can act) and `tab configuration`, then `? help · q quit`. [Picking the queue](#picking-the-queue) says what they do. While a choice is open its keys are `esc close`, `enter pick` (when the cursor's row can be picked), then `? help · q quit`; while the id input is open its keys are `esc back`, `enter pick` and `ctrl-c quit`, and every other key types; while the crew-size selector is open its keys are `esc close`, `enter pick`, then `? help · q quit`. The movement keys are in the help, not the footer |
 | choice | the choice of the row under the cursor, titled with the agent and the field (`builder model`): a small list with a cursor of its own. A harness lists the table's three; a model lists the harness's models, with `type an id…` last; an effort lists the harness's levels. `enter` picks it for the session, `esc` closes without picking |
 | crew-size selector | `c` opens the three crew sizes, over the window. See [the crew size](#the-configuration) |
 | help | `?` opens the keys, in the sidebar, over the choice and over the selector; any key closes it and gives the choice back |
@@ -97,6 +97,10 @@ prints a bare count of agents. A crew with more than one agent in a role has
 no such rule: the pane says `more than one agent per role` rather than
 claiming a rule the crew does not follow.
 
+**A blocked agent is named on the warning slot.** Its state is `blocked` on
+`semantic.warn`, under the theme's blocked icon. It holds its task and is not
+working, so it carries no spinner.
+
 **A held task belongs to the crew, not the queue.** It appears in its agent's
 row and never in the queue, even when a writer left it in both.
 
@@ -107,7 +111,7 @@ count:
 | block | caption |
 |---|---|
 | `crew` | the session's crew, and what each agent holds |
-| `queue` | tasks waiting, in order |
+| `queue` | tasks waiting, in order; the claimable ones are picked |
 | `round` | where the task in flight is in its build/review loop |
 | `budget` | build/review rounds used of the limit |
 | `findings` | the task in flight's open findings, by severity |
@@ -129,7 +133,9 @@ round 1 ✓ build · ✓ review 3 findings
 the waiting tasks, and the round's task is named as the review, not counted
 again.
 
-The queue's row is an id and a status. Its count names its set: `the
+The queue's row is an id and a status. A waiting task the record does not call
+claimable is drawn dim, with `not claimable` after its status, and it takes no
+mark and no cursor. Its count names its set: `the
 automation's queue · 2 waiting · 2 done`, the done tasks counted after the
 waiting ones when there are any. The budget's count names its set:
 `rounds ████░░░░░░ 2 of 5`, the rounds the task in flight has used of its own
@@ -183,6 +189,9 @@ groups, in this order:
 The configuration is **provisional**: the flow has not written one yet, and the
 format may change when it does. Its shape is
 [tasks/task-model.md § 11.3](../tasks/task-model.md#113-the-configuration-provisional).
+A file that reads but holds what the flow does not run — a table of a name that
+is no role, or a crew the flow does not run — is used as it is, and the sidebar
+names each warning on its own line above the groups, on the warning slot.
 
 The configuration file is `~/.config/coding-crew/config.toml`, and its format
 is **TOML**: it is the one file a human edits, and a comment is how a
@@ -305,15 +314,17 @@ over one a human has edited.
 
 ## Picking the queue
 
-The queue is pickable. `tab` moves the keys from the configuration to the
-queue, and back: it moves only when the queue has a waiting task. While the
-queue has the keys:
+The claimable tasks are pickable. `tab` moves the keys from the configuration to
+the queue, and back: it moves only when the queue has a claimable task. A waiting
+task that is not claimable is drawn and not picked: the cursor passes over it,
+`space` and `a` do not mark it, and a click on it does nothing. While the queue
+has the keys:
 
 | key | does |
 |---|---|
-| `↑ k` and `↓ j` | move the queue's cursor over the waiting tasks, and no further |
+| `↑ k` and `↓ j` | move the queue's cursor over the claimable tasks, and no further |
 | `space` | marks the task under the cursor, or unmarks it |
-| `a` | marks every waiting task, or unmarks them all when they are all marked |
+| `a` | marks every claimable task, or unmarks them all when they are all marked |
 | `s` | starts the orchestrator over the marked tasks, or over the whole queue when none is marked — see [starting the orchestrator](#starting-the-orchestrator) |
 | `tab` | gives the keys back to the configuration |
 
@@ -329,8 +340,9 @@ the current directory by the store's own project boundary. The record sits
 beside the journal; its shape and its provisional state are in
 [tasks/task-model.md § 11.2](../tasks/task-model.md#112-the-runtime-record-provisional).
 
-The record's queue is the run's tasks in queue order, each with its status:
-the done ones and the held one are in it, and the pane draws the waiting ones.
+The record's queue is the run's tasks in queue order, each with its status and
+its `claimable` flag: the done ones and the held one are in it, and the pane
+draws the waiting ones, picking those that are claimable.
 The round, the budget and the findings are the task in flight's. The record is
 the flow's: hugo reads it, and writes nothing. A project
 without a record shows the named empty state `nothing is running`. A record
@@ -347,7 +359,7 @@ order. The tab's environment carries the session's crew, in `HUGO_SESSION`, so
 the skill prints the crew the session runs. The loop is the orchestrator's:
 hugo starts it and does not run it.
 
-The queue `s` starts is the waiting work the main pane draws, in queue order.
+The queue `s` starts is the claimable waiting work, in queue order.
 When some of it is marked, `s` hands over the marked tasks alone, still in queue
 order; otherwise the whole queue. A task an agent holds is that agent's, so no
 second orchestrator is given it. The footer names `s start`
@@ -358,6 +370,7 @@ harness, model and effort, and no start is in flight.
 |---|---|
 | outside herdr (`HERDR_ENV` is not `1`) | starts nothing: `start needs herdr` |
 | the queue is empty | starts nothing: `the queue is empty` |
+| tasks wait, none claimable | starts nothing: `no waiting task is claimable` |
 | an agent has no harness, model or effort | starts nothing: `the orchestrator did not start:` and the gaps, named — `builder has no model` — on the failure slot |
 | herdr already names an orchestrator | starts nothing: `an orchestrator is already running in herdr` |
 | starting | `starting the orchestrator…`, dim. The herdr calls run beside the window, which keeps drawing and taking keys |

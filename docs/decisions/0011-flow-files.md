@@ -79,3 +79,13 @@ ran on.
 - The move happens with the dogfooding unit, when the writers exist.
 - `mock-data/generate.py` holds a third copy of the model pair, unpinned
   against the role configs.
+
+## Note, 2026-11-22
+
+The role configs name their agents and nothing else: `flow/builder.json` and
+`flow/reviewer.json` drop the `model` pin. A model is the configuration's to
+name, so a role config cannot pin one the defaults do not. The defaults' models
+are pinned by the configuration's own test; the test on the role configs checks
+only that each names its agent and no model. The follow-up above is narrowed
+accordingly: the generator's pair is the configuration's defaults, not a copy of
+the flow's files.

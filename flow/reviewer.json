@@ -4,8 +4,7 @@
   "agents": {
     "reviewer": {
       "mode": "primary",
-      "description": "Reviews a change against its kickoff and the project's rules, finds defects by reading and reasoning, and reports findings and counts to the orchestrator, which owns the round's verdict. Never modifies code, never commits, never prompts another agent.",
-      "model": "claude-opus-5-5"
+      "description": "Reviews a change against its kickoff and the project's rules, finds defects by reading and reasoning, and reports findings and counts to the orchestrator, which owns the round's verdict. Never modifies code, never commits, never prompts another agent."
     }
   }
 }

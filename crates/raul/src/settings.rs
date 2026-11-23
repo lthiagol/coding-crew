@@ -903,7 +903,17 @@ impl Panel {
     /// and a cursor stop; every other line is text. The values the file leaves
     /// out follow the lines: see `absent_parts`.
     fn file_parts(&self) -> Vec<Part> {
-        let mut parts = Vec::new();
+        // The warnings come first, above the file's own lines: each names what
+        // the file says that the flow does not run as written.
+        let mut parts: Vec<Part> = self
+            .warnings()
+            .into_iter()
+            .map(|warning| Part {
+                shape: Shape::Text(warning, Paint::Warn),
+                stop: None,
+                section: TOP.to_string(),
+            })
+            .collect();
         let mut place = Place::default();
         let mut agents = 0;
         let mut steps = 0;
@@ -943,6 +953,14 @@ impl Panel {
         }
         parts.extend(self.absent_parts());
         parts
+    }
+
+    /// The warnings the file carries, as the configuration names them.
+    fn warnings(&self) -> Vec<String> {
+        self.file
+            .as_ref()
+            .map(ConfigFile::warnings)
+            .unwrap_or_default()
     }
 
     /// The `[raul]` values the file leaves out, drawn after its lines as the
@@ -1248,6 +1266,8 @@ enum Paint {
     Dim,
     Strong,
     Error,
+    /// A warning: the file reads, and the flow does not run it as written.
+    Warn,
 }
 
 /// The section a line sits in: a table's name, and its place among an array's
@@ -1426,6 +1446,7 @@ fn paint_of(paint: Paint, theme: &Theme) -> Style {
         Paint::Dim => theme.text.dim,
         Paint::Strong => theme.text.strong,
         Paint::Error => theme.semantic.error,
+        Paint::Warn => theme.semantic.warn,
     }
 }
 
@@ -1979,6 +2000,51 @@ mod tests {
             "{title}"
         );
         assert!(!title.contains("modified"), "{title}");
+    }
+
+    #[test]
+    fn a_warning_is_a_line_on_the_warning_slot_above_the_file() {
+        // An odd table is named, and the file still reads and draws below it.
+        let text = format!(
+            "{}\n[agents.unused]\nharness = \"claude\"\nmodel = \"claude-haiku-5-5\"\n",
+            Config::default().to_toml()
+        );
+        let panel = panel_with("warned", &text);
+        let rows = draw(&panel, 100, 200, None);
+        let first = inner(&rows);
+        let at = first
+            .find("[agents.unused] is not read")
+            .expect("the warning");
+        assert!(
+            at < first.find("round_limit = 5").expect("the file"),
+            "{first}"
+        );
+        // The warning is on the warning slot, not the failure slot.
+        let theme = theme();
+        let buffer = buffer_of(&panel, &theme, 100, 200, None);
+        let cell = cell_on(&buffer, "[agents.unused] is not read", "[agents.unused]");
+        assert_eq!(cell.fg, theme.semantic.warn.fg.expect("the warn colour"));
+    }
+
+    #[test]
+    fn a_crew_the_flow_does_not_run_is_named_in_settings() {
+        let mut config = Config::default();
+        config
+            .agents
+            .retain(|agent| agent.role != FlowRole::Builder);
+        let panel = panel_with("crew", &config.to_toml());
+        let rows = draw(&panel, 100, 200, None);
+        assert!(
+            inner(&rows).contains("the crew is orchestrator and reviewer"),
+            "{}",
+            rows.join("\n")
+        );
+    }
+
+    #[test]
+    fn a_clean_file_draws_no_warning() {
+        let (panel, _) = panel("clean");
+        assert!(panel.warnings().is_empty());
     }
 
     #[test]

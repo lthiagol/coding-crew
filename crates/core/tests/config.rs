@@ -2,8 +2,8 @@
 //!
 //! The order the configuration ships with is the one `docs/roles/roles.md`
 //! records, so the two cannot drift: editing the table alone fails the gate, and
-//! so does editing the defaults alone. The models are the ones the flow's role
-//! configs name.
+//! so does editing the defaults alone. The flow's role configs name their agents
+//! only; the models are the configuration's, pinned by its own unit tests.
 
 use std::path::PathBuf;
 
@@ -89,24 +89,30 @@ fn the_default_order_is_the_one_roles_md_records() {
 }
 
 #[test]
-fn the_default_models_are_the_ones_the_flows_role_configs_name() {
+fn the_flow_files_name_their_agents_and_no_model() {
+    // A role config names the agent it runs and nothing else: the model is the
+    // configuration's, so a flow file cannot pin one that the defaults do not.
     let config = Config::default();
     for (config_file, agent_name) in [("builder.json", "builder"), ("reviewer.json", "reviewer")] {
         let text = std::fs::read_to_string(repo_root().join("flow").join(config_file))
             .unwrap_or_else(|error| panic!("flow/{config_file}: {error}"));
         let flow: serde_json::Value = serde_json::from_str(&text)
             .unwrap_or_else(|error| panic!("flow/{config_file}: {error}"));
-        let model = flow["agents"][agent_name]["model"]
-            .as_str()
-            .unwrap_or_else(|| panic!("flow/{config_file} names no model for {agent_name}"));
-        let agent = config
-            .agents
-            .iter()
-            .find(|agent| agent.role.as_str() == agent_name)
-            .unwrap_or_else(|| panic!("the defaults name no {agent_name}"));
-        assert_eq!(
-            agent.model, model,
-            "the defaults and flow/{config_file} differ"
+        let agent = &flow["agents"][agent_name];
+        assert!(
+            agent.is_object(),
+            "flow/{config_file} names no {agent_name}"
+        );
+        assert!(
+            agent.get("model").is_none(),
+            "flow/{config_file} pins a model: the configuration names it"
+        );
+        assert!(
+            config
+                .agents
+                .iter()
+                .any(|agent| agent.role.as_str() == agent_name),
+            "the defaults name no {agent_name}"
         );
     }
 }

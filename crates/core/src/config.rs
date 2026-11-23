@@ -104,6 +104,19 @@ impl Config {
         Ok(result?)
     }
 
+    /// What a configuration file says that the flow does not run as written,
+    /// one line each, naming the table or the crew. The file still loads: a
+    /// warning is not an error. Empty when the file is clean or does not read.
+    pub fn warnings(text: &str) -> Vec<String> {
+        let Ok(config) = Config::from_toml(text) else {
+            return Vec::new();
+        };
+        match text.parse::<DocumentMut>() {
+            Ok(document) => warnings_of(&document, &config),
+            Err(_) => Vec::new(),
+        }
+    }
+
     /// Set the orchestrator's model. `false` when there is no orchestrator.
     pub fn set_orchestrator_model(&mut self, model: &str) -> bool {
         match self
@@ -251,6 +264,11 @@ impl ConfigFile {
         &self.loaded
     }
 
+    /// The warnings the file carries, as [`Config::warnings`] says them.
+    pub fn warnings(&self) -> Vec<String> {
+        warnings_of(&self.document, &self.loaded)
+    }
+
     /// Whether the file assigns `key` in the table `table`, in any form TOML
     /// writes it: a header, a dotted key or an inline table. The table is
     /// dotted, as `raul.tasks`; the root is the empty name. An array of tables
@@ -318,6 +336,46 @@ impl ConfigFile {
             file: self.path.display().to_string(),
         }
     }
+}
+
+/// The tables the crew may hold: one per role, the orchestrator always.
+const CREW_TABLES: [&str; 3] = ["orchestrator", "builder", "reviewer"];
+
+/// The warnings of a file that reads as `config`: a table the crew has no role
+/// for is named and not read, and a crew the flow does not run is named as it
+/// is. Three crews run: the orchestrator alone, the orchestrator and the
+/// builder, or all three.
+fn warnings_of(document: &DocumentMut, config: &Config) -> Vec<String> {
+    let mut warnings = Vec::new();
+    if let Some(agents) = document.get("agents").and_then(Item::as_table_like) {
+        for (name, _) in agents.iter() {
+            if !CREW_TABLES.contains(&name) {
+                warnings.push(format!(
+                    "[agents.{name}] is not read: the crew's tables are {}",
+                    CREW_TABLES.join(", ")
+                ));
+            }
+        }
+    }
+    let roles: Vec<FlowRole> = config.agents.iter().map(|agent| agent.role).collect();
+    let runs = matches!(
+        roles.as_slice(),
+        [FlowRole::Orchestrator]
+            | [FlowRole::Orchestrator, FlowRole::Builder]
+            | [
+                FlowRole::Orchestrator,
+                FlowRole::Builder,
+                FlowRole::Reviewer
+            ]
+    );
+    if !runs {
+        let crew: Vec<&str> = roles.iter().map(|role| role.as_str()).collect();
+        warnings.push(format!(
+            "the crew is {}, which the flow does not run: it runs the orchestrator alone, the orchestrator and the builder, or all three",
+            crew.join(" and ")
+        ));
+    }
+    warnings
 }
 
 /// The configuration as a document, the way the writer writes it.
@@ -1230,6 +1288,80 @@ mod tests {
         assert!(!text.contains("[agents.builder]"), "{text}");
         assert!(!text.contains("[agents.reviewer]"), "{text}");
         assert_eq!(Config::from_toml(&text).expect("a crew of one"), config);
+    }
+
+    #[test]
+    fn the_defaults_and_the_crews_the_flow_runs_have_no_warning() {
+        assert!(Config::warnings(&Config::default().to_toml()).is_empty());
+        for keep in [
+            vec![FlowRole::Orchestrator],
+            vec![FlowRole::Orchestrator, FlowRole::Builder],
+        ] {
+            let mut config = Config::default();
+            config.agents.retain(|agent| keep.contains(&agent.role));
+            assert!(Config::warnings(&config.to_toml()).is_empty(), "{keep:?}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_agent_table_loads_and_is_named() {
+        // The table is not read, so the crew is the same; the file says so.
+        let text = format!(
+            "{}\n[agents.unused]\nharness = \"claude\"\nmodel = \"claude-haiku-5-5\"\n",
+            Config::default().to_toml()
+        );
+        assert_eq!(
+            Config::from_toml(&text).expect("an unknown table loads"),
+            Config::default()
+        );
+        let warnings = Config::warnings(&text);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("[agents.unused]"), "{warnings:?}");
+        assert!(
+            warnings[0].contains("orchestrator, builder, reviewer"),
+            "{warnings:?}"
+        );
+    }
+
+    #[test]
+    fn a_crew_the_flow_does_not_run_loads_and_names_the_crew() {
+        // The orchestrator and the reviewer: two agents, not a crew the flow runs.
+        let mut config = Config::default();
+        config
+            .agents
+            .retain(|agent| agent.role != FlowRole::Builder);
+        let text = config.to_toml();
+        assert_eq!(Config::from_toml(&text).expect("it loads"), config);
+        let warnings = Config::warnings(&text);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].starts_with("the crew is orchestrator and reviewer"),
+            "{warnings:?}"
+        );
+    }
+
+    #[test]
+    fn an_unknown_harness_is_still_unreadable_and_has_no_warning() {
+        // A harness the table does not hold is an error, not a warning.
+        let text = Config::default().to_toml().replacen(
+            "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"",
+            "harness = \"nope\"\nmodel = \"claude-haiku-5-5\"",
+            1,
+        );
+        assert!(Config::from_toml(&text).is_err());
+        assert!(Config::warnings(&text).is_empty());
+    }
+
+    #[test]
+    fn a_file_names_its_warnings_as_it_is_read() {
+        let text = format!(
+            "{}\n[agents.unused]\nharness = \"claude\"\nmodel = \"claude-haiku-5-5\"\n",
+            Config::default().to_toml()
+        );
+        let scratch = scratch_file("warnings", &text);
+        let file = ConfigFile::read(&scratch.path()).expect("the configuration");
+        assert_eq!(file.warnings(), Config::warnings(&text));
+        assert_eq!(file.warnings().len(), 1);
     }
 
     #[test]

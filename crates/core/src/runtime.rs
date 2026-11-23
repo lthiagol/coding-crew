@@ -75,6 +75,12 @@ impl Runtime {
             .filter(|item| !self.is_held(&item.id) && item.status != Status::Done)
     }
 
+    /// The waiting work an agent could claim now, in order: the part of the
+    /// queue the pane lets a human pick.
+    pub fn claimable(&self) -> impl Iterator<Item = &QueueItem> {
+        self.waiting().filter(|item| item.claimable)
+    }
+
     /// How the crew's size composes into who reviews.
     pub fn composition(&self) -> Composition {
         composition(&self.crew)
@@ -105,6 +111,9 @@ pub enum AgentState {
     Idle,
     Executing,
     Reviewing,
+    /// The agent holds its task and cannot go on: it is not working, and the
+    /// pane says so on the warning slot.
+    Blocked,
 }
 
 impl AgentState {
@@ -114,12 +123,14 @@ impl AgentState {
             AgentState::Idle => "idle",
             AgentState::Executing => "executing",
             AgentState::Reviewing => "reviewing",
+            AgentState::Blocked => "blocked",
         }
     }
 
-    /// Whether the agent is doing something: executing or reviewing.
+    /// Whether the agent is doing something: executing or reviewing. A blocked
+    /// agent holds its task and does nothing with it.
     pub fn is_working(self) -> bool {
-        !matches!(self, AgentState::Idle)
+        matches!(self, AgentState::Executing | AgentState::Reviewing)
     }
 }
 
@@ -128,6 +139,11 @@ impl AgentState {
 pub struct QueueItem {
     pub id: String,
     pub status: Status,
+    /// Whether an agent could claim the task now: the task model's claim rule,
+    /// derived by the writer. A file that leaves it out says it is not, so
+    /// nothing is offered that the record does not vouch for.
+    #[serde(default)]
+    pub claimable: bool,
 }
 
 /// The review in flight: the task in flight, its stage and its round.
@@ -345,20 +361,48 @@ mod tests {
                 QueueItem {
                     id: "TSK22".to_string(),
                     status: Status::Done,
+                    claimable: false,
                 },
                 QueueItem {
                     id: "TSK10".to_string(),
                     status: Status::Approved,
+                    claimable: false,
                 },
                 QueueItem {
                     id: "TSK29".to_string(),
                     status: Status::Approved,
+                    claimable: true,
                 },
             ],
         );
         assert!(runtime.is_held("TSK10"));
         let waiting: Vec<&str> = runtime.waiting().map(|item| item.id.as_str()).collect();
         assert_eq!(waiting, ["TSK29"]);
+    }
+
+    #[test]
+    fn a_waiting_task_the_record_does_not_call_claimable_is_not_offered() {
+        // The queue shows what waits; only a claimable waiting task is offered
+        // for a pick.
+        let runtime = record(
+            Vec::new(),
+            vec![
+                QueueItem {
+                    id: "TSK07".to_string(),
+                    status: Status::Approved,
+                    claimable: false,
+                },
+                QueueItem {
+                    id: "TSK29".to_string(),
+                    status: Status::Approved,
+                    claimable: true,
+                },
+            ],
+        );
+        let waiting: Vec<&str> = runtime.waiting().map(|item| item.id.as_str()).collect();
+        assert_eq!(waiting, ["TSK07", "TSK29"]);
+        let offered: Vec<&str> = runtime.claimable().map(|item| item.id.as_str()).collect();
+        assert_eq!(offered, ["TSK29"]);
     }
 
     #[test]
@@ -498,11 +542,40 @@ mod tests {
     }
 
     #[test]
+    fn a_blocked_agent_is_not_working() {
+        // Blocked holds its task but does nothing with it: no spinner, no
+        // working state.
+        assert!(!AgentState::Blocked.is_working());
+    }
+
+    #[test]
+    fn a_blocked_agent_keeps_its_stored_word() {
+        let json = serde_json::to_string(&AgentState::Blocked).expect("a state");
+        assert_eq!(json, "\"blocked\"");
+        let read: AgentState = serde_json::from_str("\"blocked\"").expect("the stored word");
+        assert_eq!(read, AgentState::Blocked);
+    }
+
+    #[test]
+    fn a_queue_item_the_record_leaves_unclaimable_is_not_offered() {
+        // A record written before the flag, or by a writer that leaves it out,
+        // names no task an agent may take.
+        let item: QueueItem =
+            serde_json::from_str(r#"{"id":"TSK01","status":"approved"}"#).expect("an item");
+        assert!(!item.claimable);
+        let item: QueueItem =
+            serde_json::from_str(r#"{"id":"TSK01","status":"approved","claimable":true}"#)
+                .expect("an item");
+        assert!(item.claimable);
+    }
+
+    #[test]
     fn every_agent_state_keeps_its_stored_word() {
         for (state, word) in [
             (AgentState::Idle, "idle"),
             (AgentState::Executing, "executing"),
             (AgentState::Reviewing, "reviewing"),
+            (AgentState::Blocked, "blocked"),
         ] {
             assert_eq!(state.as_str(), word);
             let json = serde_json::to_string(&state).expect("a state");

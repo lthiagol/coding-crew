@@ -21,7 +21,7 @@ use ratatui::widgets::{Block, Clear, Paragraph};
 
 use coding_crew_core::config::{Agent, Config};
 use coding_crew_core::harness::{self, HARNESSES, Harness};
-use coding_crew_core::runtime::{CrewMember, QueueItem, Runtime};
+use coding_crew_core::runtime::{AgentState, CrewMember, QueueItem, Runtime};
 use coding_crew_core::{FlowRole, Status, age_text, parse_rfc3339};
 use coding_crew_theme::picker::Picked;
 use coding_crew_theme::text::{cut_to, head_to, tail_to, text_width};
@@ -81,6 +81,8 @@ const CREW_HINTS: [&str; 3] = [
 pub const START_NEEDS_HERDR: &str = "start needs herdr";
 /// The notice when `s` is pressed with no task in the queue.
 pub const QUEUE_EMPTY: &str = "the queue is empty";
+/// The notice when `s` is pressed with tasks waiting, none of them claimable.
+pub const NONE_CLAIMABLE: &str = "no waiting task is claimable";
 /// The note while the orchestrator's start runs.
 pub const STARTING: &str = "starting the orchestrator…";
 /// The notice when herdr already names an orchestrator.
@@ -398,9 +400,12 @@ pub struct App {
     /// The orchestrator's start in flight. It runs off the window's thread,
     /// as the catalogue read does, so no key handling waits on herdr.
     starting: Option<JoinHandle<Result<Start, String>>>,
-    /// The waiting tasks' ids, as the last frame drew them: the work `s`
-    /// hands the orchestrator, in queue order.
+    /// The claimable waiting tasks' ids, as the last frame drew them: the work
+    /// `s` hands the orchestrator, in queue order. A waiting task that is not
+    /// claimable is drawn and not picked.
     queued: Vec<String>,
+    /// How many tasks wait, claimable or not, as the last frame drew them.
+    waiting: usize,
     /// The pane the keys go to.
     focus: Focus,
     /// The queue row the cursor is on, as the waiting tasks number them.
@@ -457,6 +462,7 @@ impl App {
             launch: None,
             starting: None,
             queued: Vec::new(),
+            waiting: 0,
             focus: Focus::Configuration,
             queue_cursor: 0,
             marked: Vec::new(),
@@ -771,10 +777,17 @@ impl App {
         // The regions are the ones this frame draws: a click answers to them.
         self.hits = Hits::default();
         // The queue `s` starts the orchestrator over is the one drawn: the
-        // waiting work, in order. Held and done tasks are not in it.
+        // claimable waiting work, in order. Held and done tasks are not in it,
+        // and a waiting task the record does not call claimable is not picked.
         self.queued = match runtime {
-            RuntimeRead::Record(runtime) => runtime.waiting().map(|item| item.id.clone()).collect(),
+            RuntimeRead::Record(runtime) => {
+                runtime.claimable().map(|item| item.id.clone()).collect()
+            }
             _ => Vec::new(),
+        };
+        self.waiting = match runtime {
+            RuntimeRead::Record(runtime) => runtime.waiting().count(),
+            _ => 0,
         };
         // The queue keeps the keys only while it has a task to pick, and its
         // cursor stays on a row it has.
@@ -1486,7 +1499,12 @@ impl App {
             return;
         };
         if self.queued.is_empty() {
-            self.note = Some(Note::Notice(QUEUE_EMPTY.to_string()));
+            let notice = if self.waiting > 0 {
+                NONE_CLAIMABLE
+            } else {
+                QUEUE_EMPTY
+            };
+            self.note = Some(Note::Notice(notice.to_string()));
             return;
         }
         let gaps = self.gaps();
@@ -2047,23 +2065,30 @@ impl App {
     /// One agent's row of the crew table.
     ///
     /// A working agent carries the spinner's frame before its state; an idle
-    /// one is dim, the row and its state alike.
+    /// one is dim, the row and its state alike. A blocked agent is drawn on
+    /// the warning slot, under the theme's blocked icon.
     fn crew_row(&self, member: &CrewMember, now: &str, tick: usize) -> CrewRow {
         let working = member.state.is_working();
-        let normal = if working {
+        let blocked = member.state == AgentState::Blocked;
+        let normal = if working || blocked {
             self.theme.text.normal
         } else {
             self.theme.text.dim
         };
-        let state = if working {
-            format!("{} {}", chrome::spinner_frame(tick), member.state.as_str())
-        } else {
-            member.state.as_str().to_string()
+        // A blocked agent names itself on the warning slot, with its own icon.
+        let state = match member.state {
+            AgentState::Blocked => format!(
+                "{} {}",
+                Icon::Blocked.glyph(self.icons),
+                member.state.as_str()
+            ),
+            _ if working => format!("{} {}", chrome::spinner_frame(tick), member.state.as_str()),
+            _ => member.state.as_str().to_string(),
         };
-        let state_style = if working {
-            self.theme.semantic.agent
-        } else {
-            self.theme.text.dim
+        let state_style = match member.state {
+            AgentState::Blocked => self.theme.semantic.warn,
+            _ if working => self.theme.semantic.agent,
+            _ => self.theme.text.dim,
         };
         let held = held_length(member.since.as_deref(), now);
         let phrase = match &member.holds {
@@ -2147,7 +2172,24 @@ impl App {
         let mut lines = vec![self.fit(count, width)];
         let mut picks = Vec::new();
         let focused = self.focus == Focus::Queue;
-        for (index, item) in items.into_iter().enumerate() {
+        let mut index = 0;
+        for item in items {
+            // A task that is not claimable is drawn dim, with no mark and no
+            // cursor: it cannot be picked.
+            if !item.claimable {
+                lines.push(self.fit(
+                    vec![
+                        (" ".to_string(), Style::default()),
+                        ("  ".to_string(), Style::default()),
+                        (item.id.clone(), self.theme.text.dim),
+                        ("  ".to_string(), Style::default()),
+                        (item.status.as_str().to_string(), self.theme.text.dim),
+                        ("  not claimable".to_string(), self.theme.text.dim),
+                    ],
+                    width,
+                ));
+                continue;
+            }
             picks.push((lines.len(), index));
             let selected = focused && index == self.queue_cursor;
             let (bar, bar_style) = if selected {
@@ -2181,6 +2223,7 @@ impl App {
             } else {
                 row
             });
+            index += 1;
         }
         (lines, picks)
     }
@@ -2681,7 +2724,7 @@ impl App {
                 (2, line(MARK_KEY, "mark the task under the cursor")),
                 (
                     2,
-                    line(MARK_ALL_KEY, "mark every waiting task, or unmark them"),
+                    line(MARK_ALL_KEY, "mark every claimable task, or unmark them"),
                 ),
                 (
                     3,
@@ -3091,6 +3134,7 @@ mod tests {
         QueueItem {
             id: id.to_string(),
             status,
+            claimable: true,
         }
     }
 
@@ -4399,6 +4443,7 @@ mod tests {
         let config = ConfigRead {
             state: ConfigState::Config(Config::default()),
             legacy: Some(LEGACY_CONFIG_FILE.to_string()),
+            warnings: Vec::new(),
         };
         let (rows, paint) = render_all(100, 40, &RuntimeRead::Absent, &config);
         let text = rows.join("\n");
@@ -6019,6 +6064,97 @@ mod tests {
             started_tasks(&mut window, &fake),
             ["TSK29", "TSK07", "TSK08"]
         );
+    }
+
+    #[test]
+    fn a_blocked_agent_is_drawn_on_the_warning_slot_under_its_icon() {
+        // The mock has no blocked agent; this fixture holds one, the builder.
+        let mut record = runtime();
+        record.crew[1].state = AgentState::Blocked;
+        let (rows, paint) = render_runtime(100, 40, &record);
+        let text = rows.join("\n");
+        let glyph = Icon::Blocked.glyph(IconSet::Nerd);
+        assert!(text.contains(&format!("{glyph} blocked")), "{text}");
+        let builder = rows
+            .iter()
+            .find(|row| row.contains("deepseek"))
+            .expect("the builder");
+        assert!(!builder.contains("executing"), "{builder}");
+        assert_eq!(
+            colour_of(&rows, &paint, "blocked"),
+            theme().semantic.warn.fg.expect("the warn colour")
+        );
+    }
+
+    #[test]
+    fn a_blocked_agent_is_drawn_under_the_unicode_icon_too() {
+        let mut record = runtime();
+        record.crew[1].state = AgentState::Blocked;
+        let mut app = App::new(
+            theme(),
+            IconSet::Unicode,
+            ConfigRead::of(ConfigState::Config(Config::default())),
+            None,
+        );
+        let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Record(record));
+        let text = rows.join("\n");
+        assert!(text.contains("⊘ blocked"), "{text}");
+    }
+
+    #[test]
+    fn a_waiting_task_the_record_does_not_call_claimable_is_drawn_and_not_picked() {
+        // TSK07 waits on work not yet done: it is drawn, dim and unmarked, and
+        // the cursor and the marks pass over it.
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = in_herdr(&fake);
+        let mut record = runtime();
+        record.queue = vec![
+            QueueItem {
+                id: "TSK07".to_string(),
+                status: Status::Approved,
+                claimable: false,
+            },
+            queue_item("TSK29", Status::Approved),
+        ];
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Record(record.clone()));
+        let text = rows.join("\n");
+        let row = rows
+            .iter()
+            .find(|row| row.contains("TSK07"))
+            .expect("the row");
+        assert!(row.contains("not claimable"), "{text}");
+        assert!(!row.contains("[ ]") && !row.contains("[x]"), "{row}");
+        window.on_key(press(KeyCode::Tab));
+        // The queue's help says what `a` marks: the claimable tasks only.
+        window.on_key(press(KeyCode::Char('?')));
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Record(record.clone()));
+        let text = text_of(&rows);
+        assert!(text.contains("mark every claimable task"), "{text}");
+        assert!(!text.contains("every waiting task"), "{text}");
+        window.on_key(press(KeyCode::Char('x')));
+        assert!(!window.help, "a key left the help open");
+        window.on_key(press(KeyCode::Char('a')));
+        assert_eq!(started_tasks(&mut window, &fake), ["TSK29"]);
+    }
+
+    #[test]
+    fn a_queue_with_no_claimable_task_starts_nothing_and_says_why() {
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = in_herdr(&fake);
+        let mut record = runtime();
+        record.queue = vec![QueueItem {
+            id: "TSK07".to_string(),
+            status: Status::Approved,
+            claimable: false,
+        }];
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Record(record));
+        // The queue shows the waiting task, but the keys cannot reach it.
+        assert!(rows.iter().any(|row| row.contains("TSK07")), "{rows:#?}");
+        assert!(!rows.last().expect("a footer row").contains("tab queue"));
+        window.on_key(press(KeyCode::Char('s')));
+        assert!(!window.start_pending());
+        assert_eq!(window.note, Some(Note::Notice(NONE_CLAIMABLE.to_string())));
+        assert!(fake.requests.lock().expect("the requests").is_empty());
     }
 
     #[test]

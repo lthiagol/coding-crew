@@ -54,6 +54,9 @@ pub struct ConfigRead {
     pub state: ConfigState,
     /// An old `config.json` beside it, named so nothing is ignored silently.
     pub legacy: Option<String>,
+    /// What the file says that the flow does not run as written: a warning
+    /// line each. The configuration is used; the sidebar names the warnings.
+    pub warnings: Vec<String>,
 }
 
 impl ConfigRead {
@@ -62,6 +65,7 @@ impl ConfigRead {
         Self {
             state,
             legacy: None,
+            warnings: Vec::new(),
         }
     }
 }
@@ -105,7 +109,18 @@ pub fn load_at(home: &Path) -> ConfigRead {
             }
         }
     };
-    ConfigRead { state, legacy }
+    // The warnings are read from the file the configuration was read from.
+    let warnings = match &state {
+        ConfigState::Config(_) => fs::read_to_string(&path)
+            .map(|text| Config::warnings(&text))
+            .unwrap_or_default(),
+        ConfigState::Absent | ConfigState::Unreadable(_) => Vec::new(),
+    };
+    ConfigRead {
+        state,
+        legacy,
+        warnings,
+    }
 }
 
 /// Read the configuration under a home, or the named empty state when the
@@ -253,6 +268,7 @@ mod tests {
             ConfigRead {
                 state: ConfigState::Config(config),
                 legacy: None,
+                ..
             } => assert_eq!(config, Config::default()),
             other => panic!("{other:?}"),
         }
@@ -315,6 +331,32 @@ mod tests {
         let _ = fs::remove_dir_all(&home);
     }
 
+    #[test]
+    fn an_odd_table_loads_and_its_warning_is_kept_for_the_sidebar() {
+        // A table the crew has no role for is read past, and the read says so.
+        let home = scratch("odd-table");
+        fs::create_dir_all(home_at(&home)).expect("the home");
+        let path = config_path(&home);
+        let text = format!(
+            "{}\n[agents.unused]\nharness = \"claude\"\nmodel = \"claude-haiku-5-5\"\n",
+            Config::default().to_toml()
+        );
+        fs::write(&path, &text).expect("the configuration");
+        let read = load_at(&home);
+        assert!(
+            matches!(&read.state, ConfigState::Config(config) if *config == Config::default()),
+            "{:?}",
+            read.state
+        );
+        assert_eq!(read.warnings.len(), 1, "{:?}", read.warnings);
+        assert!(
+            read.warnings[0].contains("[agents.unused]"),
+            "{:?}",
+            read.warnings
+        );
+        let _ = fs::remove_dir_all(&home);
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_dangling_link_is_named_and_the_defaults_are_not_written_through_it() {
@@ -372,6 +414,7 @@ mod tests {
             ConfigRead {
                 state: ConfigState::Config(config),
                 legacy: Some(file),
+                ..
             } => {
                 assert_eq!(file, LEGACY_CONFIG_FILE);
                 // The old file is not read: the configuration is the

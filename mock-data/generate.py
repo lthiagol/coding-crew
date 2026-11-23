@@ -20,10 +20,10 @@ TASKS = ROOT / "coding-crew" / "work"
 ACTIVITY = ROOT / "coding-crew" / "activity.json"
 RUNTIME = ROOT / "coding-crew" / "runtime.json"
 
-# The models the flow's configuration names, in flow/builder.json and
-# flow/reviewer.json. The orchestrator reviews when the crew is two, so it
-# runs the reviewer's family: the reviewer is never the model that wrote the
-# code.
+# The models the flow's configuration defaults to (crates/core/src/config.rs).
+# The flow files name their agents only. The orchestrator reviews when the
+# crew is two, so it runs the reviewer's family: the reviewer is never the
+# model that wrote the code.
 ORCHESTRATOR_MODEL = "claude-opus-5-5"
 RUNNER_MODEL = "claude-haiku-5-5"
 REVIEWER_MODEL = "claude-opus-5-5"
@@ -1532,7 +1532,11 @@ def runtime_record(tasks):
             },
         ],
         "queue": [
-            {"id": task_id, "status": by_id[task_id]["status"]}
+            {
+                "id": task_id,
+                "status": by_id[task_id]["status"],
+                "claimable": claimable(by_id[task_id], by_id),
+            }
             for task_id in RUN_QUEUE
         ],
         "round": {
@@ -1560,8 +1564,12 @@ def check_runtime(record, tasks):
     assert queued == RUN_QUEUE, queued
     for item in record["queue"]:
         assert item["status"] == by_id[item["id"]]["status"], item
+        # The flag is the claim rule's answer, so a pick offers what an agent
+        # could take right now and nothing else.
+        assert item["claimable"] == claimable(by_id[item["id"]], by_id), item
 
     # Two done, one in flight and held by the crew, two approved and waiting.
+    # One of the waiting is claimable; the other waits on work not yet done.
     done = [item["id"] for item in record["queue"] if item["status"] == "done"]
     assert len(done) == 2, done
     held = [member["holds"] for member in record["crew"] if member.get("holds")]
@@ -1575,6 +1583,8 @@ def check_runtime(record, tasks):
     for task_id in waiting:
         item = by_id[task_id]
         assert item["status"] == "approved" and not item["overlays"], item["id"]
+    claimable_now = [item["id"] for item in record["queue"] if item["claimable"]]
+    assert claimable_now == ["TSK29"], claimable_now
 
     # The stamp runs, and a record that stops says why.
     if record["stamp"]["runs"]:

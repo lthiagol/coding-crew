@@ -24,23 +24,28 @@
   "queue": [
     {
       "id": "TSK22",
-      "status": "done"
+      "status": "done",
+      "claimable": false
     },
     {
       "id": "TSK25",
-      "status": "done"
+      "status": "done",
+      "claimable": false
     },
     {
       "id": "TSK14",
-      "status": "code-review"
+      "status": "code-review",
+      "claimable": false
     },
     {
       "id": "TSK29",
-      "status": "approved"
+      "status": "approved",
+      "claimable": true
     },
     {
       "id": "TSK07",
-      "status": "approved"
+      "status": "approved",
+      "claimable": false
     }
   ],
   "round": {

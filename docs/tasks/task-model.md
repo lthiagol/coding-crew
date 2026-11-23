@@ -577,7 +577,7 @@ The file is one object.
 |---|---|
 | `started_at` | when this run began, RFC 3339 |
 | `crew` | one entry per agent of the flow |
-| `queue` | the run's tasks in queue order: an `id` and a `status` each, never a task's title, note or intent. A held task and a done one are in it; the pane offers the waiting ones |
+| `queue` | the run's tasks in queue order: an `id`, a `status` and a `claimable` each, never a task's title, note or intent. A held task and a done one are in it; the pane draws the waiting ones, and offers the waiting ones that are `claimable` |
 | `round` | the task in flight: the `task`, the `stage` (`self` or `external`), the round's `number`, and `earlier`, the rounds before it on the same task, oldest first |
 | `earlier` | each finished round: its `number` and the `raised` findings its review raised, open or since resolved |
 | `budget` | the rounds the task in flight has used, as `spent` (the round in flight counts), of its round limit `total` |
@@ -597,7 +597,7 @@ A crew entry:
 | `model` | the model the agent runs |
 | `holds` | the task it holds, or none |
 | `since` | when it took it, RFC 3339 |
-| `state` | `idle`, `executing` or `reviewing` |
+| `state` | `idle`, `executing`, `reviewing` or `blocked`. A blocked agent holds its task and cannot go on; it is not working |
 
 The crew's size is a **composition**, not a number: the crew is the roles
 present. Three agents are one per role and the reviewer reviews; an
@@ -636,7 +636,7 @@ writes carry a short note beside each part. The records — the journal and the
 runtime record — are machine-written and stay JSON.
 
 The file is one TOML document. When it is absent, hugo or raul writes the
-defaults into the home it creates on demand. A configuration that parses is used as it is. A
+defaults into the home it creates on demand. A configuration that parses is used as it is, and a file that reads but holds what the flow does not run is named with a warning (below). A
 configuration that does not parse is named with its error, and the defaults are
 shown beside it, so the human sees both what is wrong and what the tool would
 use; the file is never replaced. The old `config.json` is not read: when one is
@@ -706,6 +706,18 @@ reviews. Two are the orchestrator and the builder, and the orchestrator
 reviews. One is the orchestrator alone, which builds and reviews. Two tables
 of one role are unreadable: the file holds one table per role.
 
+A file that reads but holds what the flow does not run is **used as it is and
+named**: a warning on hugo's sidebar and on raul's Settings, one line each, on
+the warning slot. Two cases:
+
+- a table `[agents.<name>]` whose name is no role of the crew is not read, and
+  the warning names the table;
+- a crew of roles the flow does not run (the orchestrator and the reviewer, with
+  no builder) loads, and the warning names the crew.
+
+Nothing is dropped silently. A file with no orchestrator, or a harness the table
+does not hold, is still unreadable.
+
 Each agent table holds:
 
 | field | rule |
@@ -758,8 +770,9 @@ file, then the default.
 The defaults are the project's own flow: the builder on `claude-haiku-5-5` at
 `high`, the reviewer and the orchestrator on `claude-opus-5-5` at `medium`, all
 in the `claude` harness; five build-and-fix cycles; and the order
-[roles.md](../roles/roles.md#the-order) records. A test reads that table and
-the two role configs, so the defaults and the flow cannot drift.
+[roles.md](../roles/roles.md#the-order) records. A test reads that table, and
+the two role configs name their agents only: the models are the defaults'
+alone, pinned by their own test.
 
 **hugo's picks are the session's.** hugo picks each agent's harness, model and
 effort in its sidebar, and its crew-size selector picks which roles the crew

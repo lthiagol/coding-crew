@@ -163,6 +163,11 @@ pub fn lines(
     match &state.state {
         ConfigState::Absent => prefix.push((EMPTY.to_string(), line(EMPTY, theme.text.dim, width))),
         ConfigState::Config(config) => {
+            // What the file says the flow does not run as written, on the warning
+            // slot: the configuration is used, and the sidebar names each part.
+            for warning in &state.warnings {
+                prefix.push((warning.clone(), line(warning, theme.semantic.warn, width)));
+            }
             if let Some(file) = &state.legacy {
                 prefix.push((
                     legacy_notice(file),
@@ -1016,6 +1021,7 @@ mod tests {
         let state = ConfigRead {
             state: ConfigState::Config(Config::default()),
             legacy: Some("config.json".to_string()),
+            warnings: Vec::new(),
         };
         let rows = rendered(&state, 30, 40);
         let notice = rows.first().expect("the notice");
@@ -1041,6 +1047,34 @@ mod tests {
     }
 
     #[test]
+    fn a_warning_is_a_line_on_the_warning_slot_above_the_groups() {
+        // The configuration is used, and the file's odd table is named above
+        // the agents, on the warning slot.
+        let state = ConfigRead {
+            state: ConfigState::Config(Config::default()),
+            legacy: None,
+            warnings: vec!["[agents.unused] is not read: the crew's tables are orchestrator, builder, reviewer".to_string()],
+        };
+        let rows = rendered(&state, 100, 40);
+        assert!(rows[0].contains("[agents.unused] is not read"), "{rows:#?}");
+        assert!(
+            rows.join("\n").contains("build-and-fix rounds"),
+            "{rows:#?}"
+        );
+        let drawn = lines(
+            &state,
+            None,
+            &Levels::default(),
+            &theme(),
+            IconSet::Nerd,
+            100,
+            40,
+            usize::MAX,
+        );
+        assert_eq!(drawn.lines[0].spans[1].style, theme().semantic.warn);
+    }
+
+    #[test]
     fn an_old_json_file_is_named_beside_an_unreadable_one() {
         let state = ConfigRead {
             state: ConfigState::Unreadable(crate::app::ReadError {
@@ -1048,6 +1082,7 @@ mod tests {
                 error: syntax_error(),
             }),
             legacy: Some("config.json".to_string()),
+            warnings: Vec::new(),
         };
         let rows = rendered(&state, 30, 40);
         // The error comes first; the old file's notice is kept after it.
@@ -1074,6 +1109,7 @@ mod tests {
                 error: syntax_error(),
             }),
             legacy: Some("config.json".to_string()),
+            warnings: Vec::new(),
         };
         // At three rows the error is still the first line after the state.
         let rows = rendered(&state, 60, 3);

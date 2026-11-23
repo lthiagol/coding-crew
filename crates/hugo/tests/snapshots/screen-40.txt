@@ -14,7 +14,7 @@
 │tasks waiting, in order               │
 │the automation's queue · 2 waiting · …│
 │ [ ] TSK29  approved                  │
-│ [ ] TSK07  approved                  │
+│   TSK07  approved  not claimable     │
 │󰈈 round                               │
 │where the task in flight is in its bu…│
 │TSK14 · external                      │

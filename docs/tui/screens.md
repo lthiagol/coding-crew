@@ -272,6 +272,12 @@ repaints in Nord; `esc` puts the old choice back — and is written only by `w`.
 unsaved changes asks first, in the footer: `w` save, `q` quit without saving,
 `esc` stay.
 
+**A warning is a line, not a refusal.** A file that reads but holds what the
+flow does not run shows each warning on its own line above the file's lines, on
+the warning slot: an `[agents.<name>]` table that is no role of the crew, and a
+crew the flow does not run. The file is used as it is, and a save keeps those
+tables. The warnings are [task-model § 11.3](../tasks/task-model.md#113-the-configuration-provisional)'s.
+
 **A value is checked before it is kept.** A choice can only be one of its
 choices; a number must be in its range (`round_limit` ≥ 1); a typed `model` is
 one word with no `#` — its effort is the agent's own `effort`. An `effort` is one
