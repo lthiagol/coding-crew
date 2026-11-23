@@ -1,16 +1,19 @@
 //! `item create|show|list|shape|dismiss|promote`: the work that is not a
 //! task yet — an idea, a bug or a small feature, in `ITM*`.
 
-use coding_crew_core::store::by_number;
+use coding_crew_core::store::{ACTIVITY_FILE, by_number};
 use coding_crew_core::{
-    Actor, ActorKind, Item, ItemError, ItemKind, ItemStatus, Note, Role, Store, StoreError,
+    Actor, ActorKind, EventKind, Item, ItemError, ItemKind, ItemStatus, Note, Role, Store,
+    StoreError,
 };
 use serde_json::{Value, json};
 
 use crate::envelope::Done;
 use crate::error::{Code, Failure};
 use crate::project::Project;
-use crate::write::{Call, required_text, text, title, work_file};
+use crate::write::{
+    Call, NewEvent, append_journal, read_journal, required_text, text, title, work_file,
+};
 
 /// The creator agent, or the refusal. Every item write is the creator's.
 fn creator(actor: &Actor, verb: &str) -> Result<(), Failure> {
@@ -255,6 +258,7 @@ pub fn dismiss(call: &Call, id: &str, reason: &str) -> Result<Done, Failure> {
 pub fn promote(call: &Call, id: &str) -> Result<Done, Failure> {
     creator(&call.actor, "item promote")?;
     let lock = call.project.store.lock()?;
+    let mut journal = read_journal(&lock)?;
     let mut item = load(&lock, id)?;
     if item.status != ItemStatus::Open {
         return Err(not_open(&item));
@@ -281,7 +285,21 @@ pub fn promote(call: &Call, id: &str) -> Result<Done, Failure> {
     let item_path = item_file(call, &item);
     lock.save_item(&item)?;
     lock.save(&mut task)?;
-    let task_path = work_file(&lock.task_path(&task));
+    let mut wrote = vec![item_path, work_file(&lock.task_path(&task))];
+    let kinds = append_journal(
+        &lock,
+        &mut journal,
+        &task.id,
+        &call.actor,
+        &coding_crew_core::now_rfc3339(),
+        vec![NewEvent::note(
+            EventKind::Created,
+            format!("from {}", item.id),
+        )],
+    )?;
+    if !kinds.is_empty() {
+        wrote.push(ACTIVITY_FILE.to_string());
+    }
     Ok(Done {
         data: json!({
             "item": &item,
@@ -292,7 +310,7 @@ pub fn promote(call: &Call, id: &str) -> Result<Done, Failure> {
                 "promoted_from": task.promoted_from,
             },
         }),
-        wrote: vec![item_path, task_path],
-        journal: Vec::new(),
+        wrote,
+        journal: kinds,
     })
 }

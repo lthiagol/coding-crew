@@ -8,8 +8,8 @@ use coding_crew_core::lifecycle::{
     GateFailure, check_independence, check_remediation, check_round_owner, latest_external,
 };
 use coding_crew_core::{
-    Actor, Comment, Finding, FindingStatus, Focus, Round, RoundKind, Section, Severity, Status,
-    Task, Verdict,
+    Actor, Comment, EventKind, Finding, FindingStatus, Focus, Round, RoundKind, Section, Severity,
+    Status, Task, Verdict,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -19,7 +19,7 @@ use crate::error::{Code, Failure, GateDetail};
 use crate::parts;
 use crate::project::Project;
 use crate::task::word;
-use crate::write::{Call, next_part_id, own, part_not_found, required_text, text};
+use crate::write::{Call, NewEvent, next_part_id, own, part_not_found, required_text, text};
 
 /// The flags of `round file`. `input` carries the whole round instead.
 #[derive(Debug, Default)]
@@ -80,7 +80,7 @@ pub fn round_file(call: &Call, id: &str, flags: RoundFlags<'_>) -> Result<Done, 
             "talita round file {id} --kind self --focus <f> --verdict ok|changes-needed"
         )));
     }
-    call.task(id, |task, actor| {
+    call.task_journaled(id, |task, actor| {
         check_filing(task, actor, &spec, id)?;
         Ok(file(task, actor, spec))
     })
@@ -157,8 +157,9 @@ fn check_filing(task: &Task, actor: &Actor, spec: &RoundSpec, id: &str) -> Resul
     Ok(())
 }
 
-/// The one write: the findings, the round and `review.verdict`.
-fn file(task: &mut Task, actor: &Actor, spec: RoundSpec) -> Value {
+/// The one write: the findings, the round and `review.verdict`, and the
+/// events both append.
+fn file(task: &mut Task, actor: &Actor, spec: RoundSpec) -> (Value, Vec<NewEvent>) {
     let RoundSpec {
         kind,
         focus,
@@ -187,6 +188,20 @@ fn file(task: &mut Task, actor: &Actor, spec: RoundSpec) -> Value {
         refs.insert(finding.reference, fid.clone());
         ids.push(fid);
     }
+    let round = match kind {
+        RoundKind::SelfReview => "self".to_string(),
+        RoundKind::External => format!("external {n}"),
+    };
+    let mut events = vec![NewEvent::note(
+        EventKind::RoundFiled,
+        format!("{round}, {}, {}", word(&focus), word(&verdict)),
+    )];
+    for fid in &ids {
+        events.push(NewEvent::note(
+            EventKind::FindingRaised,
+            format!("raised {fid}"),
+        ));
+    }
     task.review.rounds.push(Round {
         n,
         kind,
@@ -206,11 +221,14 @@ fn file(task: &mut Task, actor: &Actor, spec: RoundSpec) -> Value {
             "message": format!("{} repeats the previous external round's focus", word(&focus)),
         }));
     }
-    json!({
-        "round": task.review.rounds.last(),
-        "refs": refs,
-        "warnings": warnings,
-    })
+    (
+        json!({
+            "round": task.review.rounds.last(),
+            "refs": refs,
+            "warnings": warnings,
+        }),
+        events,
+    )
 }
 
 /// `round show`: the rounds (or those numbered `n`), each with its findings.
@@ -258,7 +276,7 @@ pub fn finding_open(
 ) -> Result<Done, Failure> {
     let severity = parse_severity(severity)?;
     let description = required_text("--description", description)?;
-    call.task(id, |task, actor| {
+    call.task_journaled(id, |task, actor| {
         if task.status != Status::CodeReview {
             return Err(status_wrong(
                 id,
@@ -304,7 +322,13 @@ pub fn finding_open(
         {
             latest.findings.push(fid.clone());
         }
-        Ok(json!({ "finding": task.review.findings.iter().find(|f| f.id == fid) }))
+        Ok((
+            json!({ "finding": task.review.findings.iter().find(|f| f.id == fid) }),
+            vec![NewEvent::note(
+                EventKind::FindingRaised,
+                format!("raised {fid}"),
+            )],
+        ))
     })
 }
 
@@ -352,7 +376,7 @@ fn close(
     resolution: String,
     outcome: FindingStatus,
 ) -> Result<Done, Failure> {
-    call.task(id, |task, actor| {
+    call.task_journaled(id, |task, actor| {
         if task.status != Status::Remediating {
             return Err(status_wrong(
                 id,
@@ -382,7 +406,13 @@ fn close(
         finding.status = outcome;
         finding.resolved = coding_crew_core::now_rfc3339();
         finding.resolution = resolution;
-        Ok(json!({ "finding": task.review.findings.iter().find(|f| f.id == finding_id) }))
+        Ok((
+            json!({ "finding": task.review.findings.iter().find(|f| f.id == finding_id) }),
+            vec![NewEvent::note(
+                EventKind::FindingResolved,
+                format!("{} {finding_id}", word(&outcome)),
+            )],
+        ))
     })
 }
 
@@ -392,7 +422,7 @@ fn close(
 /// a human too (ADR 0017, `Section::Notes`).
 pub fn comment_add(call: &Call, id: &str, finding: &str, body: &str) -> Result<Done, Failure> {
     let body = required_text("--body", body)?;
-    call.task(id, |task, actor| {
+    call.task_journaled(id, |task, actor| {
         owned(Section::Notes, task, actor, "comment add")?;
         if task.review.findings.iter().all(|f| f.id != finding) {
             return Err(part_not_found(task, finding));
@@ -412,7 +442,10 @@ pub fn comment_add(call: &Call, id: &str, finding: &str, body: &str) -> Result<D
         };
         let target = task.finding_mut(finding).expect("the finding was checked");
         target.comments.push(comment);
-        Ok(json!({ "comment": task.review.findings.iter().find(|f| f.id == finding).and_then(|f| f.comments.iter().find(|c| c.id == cid)) }))
+        Ok((
+            json!({ "comment": task.review.findings.iter().find(|f| f.id == finding).and_then(|f| f.comments.iter().find(|c| c.id == cid)) }),
+            vec![NewEvent::new(EventKind::Commented)],
+        ))
     })
 }
 

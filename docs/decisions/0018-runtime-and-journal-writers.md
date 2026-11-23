@@ -151,6 +151,12 @@ run stays `runs: true` until the next `run start`, which refuses
 ### Negative
 
 - Every task write also rewrites `runtime.json` while a run exists.
+- A journal write that fails after the task file is written refuses the call
+  with the task already on disk. The write order
+  ([ADR 0016](0016-concurrency.md)) puts the truth first: the journal never
+  claims a move that did not happen, and the reverse window — a task written
+  with no event — is accepted. It takes a full disk or a vanished permission
+  between the two writes.
 - New journal kinds are a core enum change; an older raul counts them as
   unreadable.
 - A crash leaves `runs: true` until a human or the next run clears it.

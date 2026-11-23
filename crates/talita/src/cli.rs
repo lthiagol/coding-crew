@@ -14,7 +14,7 @@ use crate::parts::{self, StepFields};
 use crate::project::{self, Project};
 use crate::review::RoundFlags;
 use crate::write::Call;
-use crate::{item, lifecycle, review, session, task};
+use crate::{item, journal, lifecycle, review, session, task};
 
 /// Task Administration, Lifecycle & Interaction Terminal Application — the CLI
 /// tool of coding-crew. Every call prints one JSON object on stdout.
@@ -106,6 +106,11 @@ enum Noun {
     Item {
         #[command(subcommand)]
         verb: ItemVerb,
+    },
+    /// The project's journal: what happened, oldest first.
+    Journal {
+        #[command(subcommand)]
+        verb: JournalVerb,
     },
 }
 
@@ -474,6 +479,25 @@ enum ItemVerb {
 }
 
 #[derive(Debug, Subcommand)]
+enum JournalVerb {
+    /// The events oldest first, and the count this reader cannot read.
+    Show {
+        /// Keep one task's events.
+        #[arg(long, value_name = "TSK")]
+        task: Option<String>,
+        /// Keep these kinds; may be given more than once.
+        #[arg(long = "kind", value_name = "K")]
+        kinds: Vec<String>,
+        /// Keep the events at or after this RFC 3339 instant.
+        #[arg(long, value_name = "TS")]
+        since: Option<String>,
+        /// Keep the last N events, still oldest first.
+        #[arg(long, value_name = "N")]
+        limit: Option<usize>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum SessionVerb {
     /// Mint a session id for --as and --role. Writes nothing.
     New,
@@ -716,6 +740,27 @@ fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
             }
         }
         Noun::Item { verb } => item_verb(verb, project_flag, identity),
+        Noun::Journal { verb } => match verb {
+            JournalVerb::Show {
+                task,
+                kinds,
+                since,
+                limit,
+            } => (
+                "journal show",
+                project::locate(project_flag).and_then(|project| {
+                    journal::show(
+                        &project,
+                        &journal::Filter {
+                            task: task.as_deref(),
+                            kinds,
+                            since: since.as_deref(),
+                            limit: *limit,
+                        },
+                    )
+                }),
+            ),
+        },
     }
 }
 

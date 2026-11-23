@@ -4,16 +4,17 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use coding_crew_core::claim::claim_failures;
 use coding_crew_core::lifecycle::{TransitionContext, check};
-use coding_crew_core::store::by_number;
+use coding_crew_core::store::{ACTIVITY_FILE, by_number};
 use coding_crew_core::task::{Effort, Priority, slugify};
-use coding_crew_core::{Actor, ActorKind, Event, Role, Section, Status, Task, TaskKind};
+use coding_crew_core::{Actor, ActorKind, Event, EventKind, Role, Section, Status, Task, TaskKind};
 use serde_json::{Value, json};
 
 use crate::envelope::Done;
 use crate::error::{Code, Failure};
 use crate::project::Project;
 use crate::write::{
-    Call, own, refuse_cancelled, refuse_frozen, require_pre_approval, text, title, work_file,
+    Call, NewEvent, append_journal, own, read_journal, refuse_cancelled, refuse_frozen,
+    require_pre_approval, text, title, work_file,
 };
 
 /// The record's word for an enum value.
@@ -78,6 +79,7 @@ pub fn create(
     let title = title(title_value)?;
     let kind = kind.map(parse_kind).transpose()?.unwrap_or_default();
     let lock = project.store.lock()?;
+    let mut journal = read_journal(&lock)?;
     let mut wrote = Vec::new();
     let mut parent_task = match parent {
         Some(id) => {
@@ -104,6 +106,17 @@ pub fn create(
         lock.save(p)?;
         wrote.push(work_file(&lock.task_path(p)));
     }
+    let journal_kinds = append_journal(
+        &lock,
+        &mut journal,
+        &task.id,
+        actor,
+        &coding_crew_core::now_rfc3339(),
+        vec![NewEvent::new(EventKind::Created)],
+    )?;
+    if !journal_kinds.is_empty() {
+        wrote.push(ACTIVITY_FILE.to_string());
+    }
     Ok(Done {
         data: json!({
             "id": task.id,
@@ -114,7 +127,7 @@ pub fn create(
             "parent": task.parent,
         }),
         wrote,
-        journal: Vec::new(),
+        journal: journal_kinds,
     })
 }
 

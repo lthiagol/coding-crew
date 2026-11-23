@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 
 use coding_crew_core::lifecycle::{TransitionContext, check};
 use coding_crew_core::{Actor, Event, Role, Store};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 const ENVS: [&str; 4] = [
     "TALITA_PROJECT",
@@ -533,7 +533,15 @@ fn a_frozen_section_is_refused_with_the_child_task_remedy() {
     );
     assert_eq!(child["data"]["id"], "TSK01.1");
     assert_eq!(child["data"]["kind"], "bug");
-    assert_eq!(child["wrote"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        child["wrote"],
+        json!([
+            "work/TSK01.1-fix-the-typo.json",
+            "work/TSK01-frozen.json",
+            "activity.json"
+        ]),
+        "the child, the parent, then the journal"
+    );
     let second = applied(
         talita(
             &dir,

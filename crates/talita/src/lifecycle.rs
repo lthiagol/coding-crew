@@ -6,12 +6,12 @@
 use std::collections::BTreeMap;
 
 use coding_crew_core::lifecycle::{Event, TransitionContext, TransitionError, transition};
-use coding_crew_core::{Status, Task};
+use coding_crew_core::{EventKind, Status, Task};
 use serde_json::{Value, json};
 
 use crate::envelope::Done;
 use crate::error::{Code, Failure, GateDetail};
-use crate::write::{Call, required_text, text};
+use crate::write::{Call, NewEvent, required_text, text};
 
 /// One lifecycle move under the project lock: core's gates, talita's codes,
 /// and the records the move owes.
@@ -24,7 +24,7 @@ fn apply(
     instructed_by: Option<&str>,
     grant_rounds: u32,
 ) -> Result<Done, Failure> {
-    call.task(id, |task, actor| {
+    call.task_journaled(id, |task, actor| {
         match event {
             Event::Unblock if task.overlays.blocked.is_none() => {
                 return Err(overlay_absent(id, "blocked"));
@@ -86,8 +86,76 @@ fn apply(
             released = Some(live);
         }
 
-        Ok(data(task, event, overlay_reason, instructed_by, released))
+        let events = events(task, event, overlay_reason, instructed_by, released);
+        Ok((
+            data(task, event, overlay_reason, instructed_by, released),
+            events,
+        ))
     })
+}
+
+/// The journal events this move appends (ADR 0018): its kind, and the note
+/// the decision names.
+fn events(
+    task: &Task,
+    event: Event,
+    reason: Option<&str>,
+    instructed_by: Option<&str>,
+    released: Option<bool>,
+) -> Vec<NewEvent> {
+    let note = |kind, text: String| NewEvent::note(kind, text);
+    match event {
+        Event::Groom => vec![NewEvent::new(EventKind::Groomed)],
+        Event::Approve => vec![NewEvent::new(EventKind::Approved)],
+        Event::Start => vec![NewEvent::new(EventKind::Started)],
+        Event::Finish => vec![NewEvent::new(EventKind::ReviewRequested)],
+        Event::PassReview => vec![NewEvent::new(EventKind::Completed)],
+        Event::RequestChanges => vec![NewEvent::new(EventKind::ChangesRequested)],
+        Event::ReReview => {
+            let after = task
+                .review
+                .re_reviews
+                .last()
+                .map(|record| record.after_round)
+                .unwrap_or(0);
+            vec![note(EventKind::Remediated, format!("after round {after}"))]
+        }
+        Event::Escalate => vec![NewEvent::new(EventKind::Escalated)],
+        Event::ResumeWork => vec![note(EventKind::Resumed, instructed(instructed_by, reason))],
+        Event::Reopen => vec![note(EventKind::Reopened, instructed(instructed_by, reason))],
+        Event::Block => vec![note(
+            EventKind::Blocked,
+            reason.unwrap_or_default().to_string(),
+        )],
+        Event::Unblock => vec![NewEvent::new(EventKind::Unblocked)],
+        Event::Defer => vec![note(
+            EventKind::Deferred,
+            reason.unwrap_or_default().to_string(),
+        )],
+        Event::Undefer => vec![NewEvent::new(EventKind::Undeferred)],
+        Event::Cancel => {
+            let mut events = vec![note(
+                EventKind::Cancelled,
+                reason.unwrap_or_default().to_string(),
+            )];
+            if released == Some(true) {
+                events.push(note(
+                    EventKind::Released,
+                    reason.unwrap_or_default().to_string(),
+                ));
+            }
+            events
+        }
+    }
+}
+
+/// The note of `resumed` and `reopened`: who instructed the move, and why.
+fn instructed(instructed_by: Option<&str>, reason: Option<&str>) -> String {
+    format!(
+        "instructed by {}: {}",
+        instructed_by.unwrap_or_default(),
+        reason.unwrap_or_default()
+    )
 }
 
 /// What the verb returns: the status it moved to, and what the move wrote.
@@ -307,8 +375,7 @@ pub fn resume(
     reason: &str,
     grant_rounds: Option<u32>,
 ) -> Result<Done, Failure> {
-    // The journal's `resumed` event records the reason (ADR 0018); the
-    // journal writer is T11.
+    // The journal's `resumed` event records the reason (ADR 0018).
     required_text("--reason", reason)?;
     let instructed = instructed_by
         .map(|human| required_text("--instructed-by", human))
@@ -318,7 +385,7 @@ pub fn resume(
         id,
         "task resume",
         Event::ResumeWork,
-        None,
+        Some(reason),
         instructed.as_deref(),
         grant_rounds.unwrap_or(0),
     )
@@ -330,8 +397,7 @@ pub fn reopen(
     instructed_by: Option<&str>,
     reason: &str,
 ) -> Result<Done, Failure> {
-    // The journal's `reopened` event records the reason (ADR 0018); the
-    // journal writer is T11.
+    // The journal's `reopened` event records the reason (ADR 0018).
     required_text("--reason", reason)?;
     let instructed = instructed_by
         .map(|human| required_text("--instructed-by", human))
@@ -341,7 +407,7 @@ pub fn reopen(
         id,
         "task reopen",
         Event::Reopen,
-        None,
+        Some(reason),
         instructed.as_deref(),
         0,
     )

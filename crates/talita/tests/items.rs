@@ -193,9 +193,10 @@ fn an_idea_is_shaped_and_promoted_into_a_draft_task() {
         promoted["wrote"],
         json!([
             "work/ITM01-parse-the-config.json",
-            "work/TSK01-parse-the-config.json"
+            "work/TSK01-parse-the-config.json",
+            "activity.json"
         ]),
-        "the item is written first"
+        "the item is written first, the task second, the journal last"
     );
 
     let shown = applied(talita(&dir, &[], &["task", "show", "TSK01"]), "task show");

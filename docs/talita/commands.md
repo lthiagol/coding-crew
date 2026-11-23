@@ -1,6 +1,6 @@
 # talita — command reference
 
-Accepted 2026-11-22. Built: `session`, `project` (T5); `task` create and content, `show` and `list` without `review_state`, `lane`, `--lane` and `--needs-you`, `scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`, `note` (T6); the `task` lifecycle verbs and overlays (T7); the `round`, `finding` and `comment` verbs (T10); the `item` verbs (T13). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
+Accepted 2026-11-22. Built: `session`, `project` (T5); `task` create and content, `show` and `list` without `review_state`, `lane`, `--lane` and `--needs-you`, `scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`, `note` (T6); the `task` lifecycle verbs and overlays (T7); the `round`, `finding` and `comment` verbs (T10); the journal writer and `journal show` (T11); the `item` verbs (T13). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
 the output and errors [ADR 0014](../decisions/0014-output-and-errors.md);
 identity [ADR 0015](../decisions/0015-identity.md). Gate names are task-model
 § 3.3's. "TM" is `docs/tasks/task-model.md`, "LC" `crates/core/src/lifecycle.rs`.
@@ -146,7 +146,7 @@ gate), `role.wrong` (5).
 | `unblock` | `task unblock <TSK>` | any | blocked overlay present | `unblocked` |
 | `defer` | `task defer <TSK> --reason <t>` | any | `overlay.reason_present` | `deferred` |
 | `undefer` | `task undefer <TSK>` | any | deferred overlay present | `undeferred` |
-| `cancel` | `task cancel <TSK> --reason <t>` | any | `overlay.reason_present` | `cancelled` |
+| `cancel` | `task cancel <TSK> --reason <t>` | any | `overlay.reason_present` | `cancelled`; with a live claim also `released` |
 
 Overlay writes set `{reason, by, at}`; `by` is the actor id. A cancelled task
 refuses every later write (`task.cancelled`). Cancel releases a live claim.

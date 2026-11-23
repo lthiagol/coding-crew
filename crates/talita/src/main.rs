@@ -7,6 +7,7 @@ mod envelope;
 mod error;
 mod identity;
 mod item;
+mod journal;
 mod lifecycle;
 mod parts;
 mod project;

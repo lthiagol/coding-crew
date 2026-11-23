@@ -2,15 +2,15 @@
 //! `step add|revise|remove`, `question ask|answer`, `note add`.
 
 use coding_crew_core::{
-    AcceptanceCriterion, Actor, Note, Question, QuestionStatus, Section, Status, Step, StepStatus,
-    Task,
+    AcceptanceCriterion, Actor, EventKind, Note, Question, QuestionStatus, Section, Status, Step,
+    StepStatus, Task,
 };
 use serde_json::json;
 
 use crate::envelope::Done;
 use crate::error::{Code, Failure, GateDetail};
 use crate::write::{
-    Call, next_part_id, own, part_not_found, pre_approval, refuse_frozen, required_text,
+    Call, NewEvent, next_part_id, own, part_not_found, pre_approval, refuse_frozen, required_text,
 };
 
 // ---- scope
@@ -445,7 +445,7 @@ pub fn answer(
 
 pub fn note(call: &Call, id: &str, body: &str) -> Result<Done, Failure> {
     let body = required_text("--body", body)?;
-    call.task(id, |task, actor| {
+    call.task_journaled(id, |task, actor| {
         own(Section::Notes, actor, task)?;
         let nid = next_part_id("NOTE", task.notes.iter().map(|n| n.id.as_str()));
         task.notes.push(Note {
@@ -454,6 +454,9 @@ pub fn note(call: &Call, id: &str, body: &str) -> Result<Done, Failure> {
             body,
             at: coding_crew_core::now_rfc3339(),
         });
-        Ok(json!({ "note": task.notes.iter().find(|n| n.id == nid) }))
+        Ok((
+            json!({ "note": task.notes.iter().find(|n| n.id == nid) }),
+            vec![NewEvent::new(EventKind::Commented)],
+        ))
     })
 }

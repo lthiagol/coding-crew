@@ -4,8 +4,11 @@
 use std::io::Read;
 
 use coding_crew_core::ownership::authorize;
-use coding_crew_core::store::WORK_DIR;
-use coding_crew_core::{Actor, OwnershipError, Section, Status, Task};
+use coding_crew_core::store::{ACTIVITY_FILE, WORK_DIR};
+use coding_crew_core::{
+    Activity, ActivityError, ActivityEvent, Actor, EventKind, OwnershipError, ProjectLock, Section,
+    Status, StoreError, Task,
+};
 use serde_json::{Value, json};
 
 use crate::envelope::Done;
@@ -19,6 +22,29 @@ pub struct Call<'a> {
     pub expect_revision: Option<u32>,
 }
 
+/// An event a verb appends, before the write path stamps its task, actor and
+/// instant.
+#[derive(Debug, Clone)]
+pub struct NewEvent {
+    pub kind: EventKind,
+    pub note: Option<String>,
+}
+
+impl NewEvent {
+    /// An event with no note.
+    pub fn new(kind: EventKind) -> Self {
+        Self { kind, note: None }
+    }
+
+    /// An event with the note ADR 0018 names.
+    pub fn note(kind: EventKind, note: impl Into<String>) -> Self {
+        Self {
+            kind,
+            note: Some(note.into()),
+        }
+    }
+}
+
 impl Call<'_> {
     /// Load `id` under the project lock, run `change` on it, and save it.
     /// `change` returns the verb's `data`; `id` and `revision` are added.
@@ -27,7 +53,19 @@ impl Call<'_> {
         id: &str,
         change: impl FnOnce(&mut Task, &Actor) -> Result<Value, Failure>,
     ) -> Result<Done, Failure> {
+        self.task_journaled(id, |task, actor| Ok((change(task, actor)?, Vec::new())))
+    }
+
+    /// The same write, appending the given events to the journal in the same
+    /// locked call (ADR 0018). `change` returns the verb's `data` and its
+    /// events.
+    pub fn task_journaled(
+        &self,
+        id: &str,
+        change: impl FnOnce(&mut Task, &Actor) -> Result<(Value, Vec<NewEvent>), Failure>,
+    ) -> Result<Done, Failure> {
         let lock = self.project.store.lock()?;
+        let mut journal = read_journal(&lock)?;
         let mut task = lock.load(id)?;
         if let Some(expected) = self.expect_revision
             && expected != task.revision
@@ -42,19 +80,81 @@ impl Call<'_> {
             .remedy(format!("talita task show {id}")));
         }
         refuse_cancelled(&task)?;
-        let mut data = change(&mut task, &self.actor)?;
-        task.updated = coding_crew_core::now_rfc3339();
+        let (mut data, events) = change(&mut task, &self.actor)?;
+        let now = coding_crew_core::now_rfc3339();
+        task.updated = now.clone();
         lock.save(&mut task)?;
+        let mut wrote = vec![work_file(&lock.task_path(&task))];
+        let kinds = append_journal(&lock, &mut journal, &task.id, &self.actor, &now, events)?;
+        if !kinds.is_empty() {
+            wrote.push(ACTIVITY_FILE.to_string());
+        }
         if let Value::Object(map) = &mut data {
             map.insert("id".into(), json!(task.id));
             map.insert("revision".into(), json!(task.revision));
         }
         Ok(Done {
             data,
-            wrote: vec![work_file(&lock.task_path(&task))],
-            journal: Vec::new(),
+            wrote,
+            journal: kinds,
         })
     }
+}
+
+/// The project's journal under the lock.
+///
+/// A journal that does not parse, or that holds events this reader cannot
+/// read, refuses the whole call before anything is written: rewriting it
+/// would lose the events it cannot read (ADR 0018).
+pub fn read_journal(lock: &ProjectLock<'_>) -> Result<Activity, Failure> {
+    match Activity::read(&lock.activity_path()) {
+        Ok(journal) if journal.unreadable > 0 => Err(Failure::from(StoreError::JournalUnreadable(
+            journal.unreadable,
+        ))),
+        Ok(journal) => Ok(journal),
+        Err(ActivityError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(Activity::default())
+        }
+        Err(error) => Err(Failure::new(Code::StoreUnreadable, error.to_string())),
+    }
+}
+
+/// Append a call's events to the journal and write it, atomically. Returns
+/// the kinds appended, oldest first.
+pub fn append_journal(
+    lock: &ProjectLock<'_>,
+    journal: &mut Activity,
+    task: &str,
+    actor: &Actor,
+    at: &str,
+    events: Vec<NewEvent>,
+) -> Result<Vec<String>, Failure> {
+    if events.is_empty() {
+        return Ok(Vec::new());
+    }
+    let by = by(actor);
+    let mut kinds = Vec::with_capacity(events.len());
+    for event in events {
+        kinds.push(event.kind.as_str().to_string());
+        journal.events.push(ActivityEvent {
+            at: at.to_string(),
+            kind: event.kind,
+            task: task.to_string(),
+            by: by.clone(),
+            note: event.note,
+        });
+    }
+    lock.write_activity(journal)?;
+    Ok(kinds)
+}
+
+/// The word the journal stores as `by`: the actor's role, or `human`
+/// (ADR 0018).
+fn by(actor: &Actor) -> String {
+    actor
+        .role
+        .map(|role| role.as_str().to_string())
+        .unwrap_or_else(|| "human".to_string())
 }
 
 /// A work file's path relative to `coding-crew/`.
