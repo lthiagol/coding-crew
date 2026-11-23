@@ -103,6 +103,10 @@ A unit without one is not ready, and belongs under **Grooming** instead.
 | 81 | **The triage's hugo and config rulings** ✓ | done | an odd `[agents.<name>]` table and an odd crew load with a warning in hugo's sidebar and raul's Settings, while a missing orchestrator and an unknown harness stay unreadable; the flow files name agents only; an agent can be `blocked`; the queue offers only claimable tasks; the mock's one claimable waiting task is TSK29, by ruling |
 | 82 | **The triage's raul changes** ✓ | done | effort can be typed after a failed read, `?` grows to its content and scrolls when it overflows, `r` asks before dropping unsaved edits, a Settings heading or comment click does nothing, and the spec notes match the code |
 | 83 | **TOML in colour, and one story for TSK14** ✓ | done | the engine highlights `toml` fences through a bundled grammar; TSK14 carries round 1's three findings in both TUIs, and its round 2 is the runtime's story |
+| 84 | **T1 · Core schema additions** | M | `Round.session`, `review.re_reviews[]`, `Evidence.manual`, `Task.revision`, `crew[].actor`, the new journal kinds; the generator writes them; TSK14 carries a re-review |
+| 85 | **T2 · Core gates** | M | collect-all `check()`; `review.round_current`, `review.round_owner`, `task.claimed` on finish, external round refused from the claim's session |
+| 86 | **T3 · Core operations** | M | claim take/renew/release with takeover; the section ownership table; the stored criterion-status mirror |
+| 87 | **T4 · Core store** | S | project lock, atomic journal and runtime writes, numeric id sort, `save_item` removes an old file |
 
 ## Grooming
 

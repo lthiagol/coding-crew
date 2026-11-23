@@ -199,9 +199,6 @@ None blocking. Carried from the closed units.
 - **2026-11-22, unit 81:** the sidebar's config warning is cut at the pane
   width with `…`. At 100 columns the table name stays visible; the full text
   is shown only in the test.
-- **2026-11-22, unit 81:** AGENTS.md's `flow/` bullet still says the role
-  configs name the model they run on. The orchestrator updates it; the unit
-  did not edit AGENTS.md.
 - **2026-11-22, unit 78:** `needs.rs:338` is unchanged. The done-when named
   it; the review found Needs rows are one line, so "Only a pane of one line
   shows the row alone" is accurate. Confirm it, or reopen to name the case.
