@@ -166,3 +166,86 @@ pub(super) fn highlight_code(
     }
     (out, inner_width, digit_width)
 }
+
+/// What a token of a TOML line is, as the TOML grammar scopes it. A caller
+/// paints each class with its own syntax role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenClass {
+    /// Body text: an operator, punctuation, a space.
+    Plain,
+    /// A `#` comment, to the end of the line.
+    Comment,
+    /// A quoted string, and an escape inside one.
+    String,
+    /// An integer, float, datetime, boolean.
+    Number,
+    /// A key, or a dotted part of one.
+    Tag,
+    /// A `[table]` or `[[array]]` name.
+    Type,
+    /// Text the grammar does not accept.
+    Invalid,
+}
+
+/// The TOML grammar's scopes and the class each one takes. The outermost scope
+/// that names a class decides the token, so a quote inside a string is the
+/// string's, and an `=` is plain although the grammar scopes it as an operator.
+const TOML_CLASSES: [(&str, TokenClass); 10] = [
+    ("comment", TokenClass::Comment),
+    ("keyword.operator", TokenClass::Plain),
+    ("string", TokenClass::String),
+    ("constant.numeric", TokenClass::Number),
+    ("constant.language", TokenClass::Number),
+    ("entity.name.tag", TokenClass::Tag),
+    ("entity.name.type", TokenClass::Type),
+    ("invalid", TokenClass::Invalid),
+    ("punctuation.definition.string", TokenClass::String),
+    ("constant.character.escape", TokenClass::String),
+];
+
+/// A line of TOML, as tokens with their classes, from the bundled TOML grammar.
+///
+/// The line is parsed alone, so a token that continues from an earlier line
+/// (a multi-line string) is classed as if it began here. The tokens cover the
+/// line, without its end.
+pub fn toml_tokens(line: &str, ss: &SyntaxSet) -> Vec<(String, TokenClass)> {
+    let text = format!("{line}\n");
+    let mut state = syntect::parsing::ParseState::new(resolve_syntax("toml", ss));
+    let mut stack = syntect::parsing::ScopeStack::new();
+    let ops = state.parse_line(&text, ss).unwrap_or_default();
+    let mut tokens: Vec<(String, TokenClass)> = Vec::new();
+    let mut push = |piece: &str, stack: &syntect::parsing::ScopeStack| {
+        let piece = piece.trim_end_matches('\n');
+        if piece.is_empty() {
+            return;
+        }
+        let class = toml_class(stack);
+        match tokens.last_mut() {
+            Some((last, kind)) if *kind == class => last.push_str(piece),
+            _ => tokens.push((piece.to_string(), class)),
+        }
+    };
+    let mut at = 0;
+    for (index, op) in &ops {
+        push(&text[at..*index], &stack);
+        let _ = stack.apply(op);
+        at = *index;
+    }
+    push(&text[at..], &stack);
+    tokens
+}
+
+/// The class of a token under `stack`: the outermost scope that names one.
+fn toml_class(stack: &syntect::parsing::ScopeStack) -> TokenClass {
+    for scope in stack.as_slice() {
+        let name = scope.build_string();
+        let named = TOML_CLASSES.iter().find(|(prefix, _)| {
+            name.strip_prefix(prefix)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('.'))
+        });
+        if let Some((_, class)) = named {
+            return *class;
+        }
+    }
+    TokenClass::Plain
+}

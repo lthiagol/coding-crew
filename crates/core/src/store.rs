@@ -496,7 +496,7 @@ impl ProjectLock<'_> {
 /// The lock belongs to the open file, so a second writer in this process waits
 /// on the first as another process would. Dropping the file frees it, and a
 /// crashed writer frees it too: no stale lock file to clean.
-fn acquire(path: &Path, wait: Duration) -> Result<fs::File, StoreError> {
+pub(crate) fn acquire(path: &Path, wait: Duration) -> Result<fs::File, StoreError> {
     let file = fs::OpenOptions::new()
         .create(true)
         .write(true)
@@ -542,7 +542,7 @@ fn is_newer(a: &Task, b: &Task) -> bool {
 
 /// Orders ids by their numbers, not their text: `TSK99` before `TSK100`,
 /// and `TSK03` before its child `TSK03.1`.
-fn by_number(a: &str, b: &str) -> Ordering {
+pub fn by_number(a: &str, b: &str) -> Ordering {
     let (mut a, mut b) = (a.chars().peekable(), b.chars().peekable());
     loop {
         match (a.peek().copied(), b.peek().copied()) {

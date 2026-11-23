@@ -685,3 +685,13 @@ fn a_link_url_in_a_heading_stays_dim() {
         "a link's URL in a heading keeps its dim (deviation 21)"
     );
 }
+
+#[test]
+fn a_heading_toc_title_is_its_text_without_the_link_url() {
+    let (ss, theme) = super::test_assets();
+    let src = "## [Text here](https://example.test/x) tail\n\n# Plain\n\n## [Only](https://example.test/y)\n";
+    let (_, toc, _, _) =
+        parse_markdown(src, &ss, &theme, &super::test_md_theme(), false, true).into();
+    let titles: Vec<&str> = toc.iter().map(|entry| entry.title.as_str()).collect();
+    assert_eq!(titles, ["Text here tail", "Plain", "Only"]);
+}

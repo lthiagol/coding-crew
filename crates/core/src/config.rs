@@ -13,6 +13,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -21,6 +22,7 @@ use toml_edit::{DocumentMut, Item, RawString, Table, TableLike, TomlError};
 use crate::actor::FlowRole;
 use crate::harness;
 use crate::lifecycle::Status;
+use crate::store::{self, LOCK_WAIT, StoreError};
 
 /// The configuration's file name under the tool's home.
 pub const CONFIG_FILE: &str = "config.toml";
@@ -95,13 +97,13 @@ impl Config {
     /// The temporary name is unique to the write: two hugo instances on one
     /// home must not rename each other's file.
     pub fn write_text(path: &Path, text: &str) -> Result<(), ConfigError> {
+        Self::write_text_waiting(path, text, LOCK_WAIT)
+    }
+
+    fn write_text_waiting(path: &Path, text: &str, wait: Duration) -> Result<(), ConfigError> {
         let path = resolve_links(path)?;
-        let tmp = temp_path(&path);
-        let result = write_beside(&tmp, &path, text);
-        if result.is_err() {
-            let _ = fs::remove_file(&tmp);
-        }
-        Ok(result?)
+        let _lock = lock_beside(&path, wait)?;
+        replace_file(&path, text)
     }
 
     /// What a configuration file says that the flow does not run as written,
@@ -290,7 +292,15 @@ impl ConfigFile {
     /// on disk since it was read is not written: the save is refused, and the
     /// file stays as it is on disk.
     pub fn save(&mut self, config: &Config) -> Result<(), ConfigError> {
-        match fs::read_to_string(&self.path) {
+        self.save_waiting(config, LOCK_WAIT)
+    }
+
+    fn save_waiting(&mut self, config: &Config, wait: Duration) -> Result<(), ConfigError> {
+        // The lock is held from the check to the rename, so no other writer
+        // can change the file between them.
+        let path = resolve_links(&self.path)?;
+        let _lock = lock_beside(&path, wait)?;
+        match fs::read_to_string(&path) {
             Ok(text) if content_hash(&text) == self.hash => {}
             Ok(_) => return Err(self.changed()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -324,7 +334,7 @@ impl ConfigFile {
                 file: self.path.display().to_string(),
             });
         }
-        Config::write_text(&self.path, &text)?;
+        replace_file(&path, &text)?;
         self.document = document;
         self.loaded = saved;
         self.hash = content_hash(&text);
@@ -614,9 +624,33 @@ fn resolve_links(path: &Path) -> std::io::Result<PathBuf> {
     Err(std::io::Error::other("too many symbolic links"))
 }
 
+/// Take the lock beside a configuration file, waiting up to `wait`. The
+/// writer holds it for its whole read-check-write, as the store's writes do
+/// (ADR 0016).
+fn lock_beside(path: &Path, wait: Duration) -> Result<fs::File, ConfigError> {
+    store::acquire(&lock_path(path), wait).map_err(|error| match error {
+        StoreError::Locked => ConfigError::Locked {
+            file: path.display().to_string(),
+        },
+        StoreError::Io(error) => ConfigError::Io(error),
+        other => ConfigError::Io(std::io::Error::other(other.to_string())),
+    })
+}
+
+/// Replace `path` with `text`, as [`Config::write_text`] does. The caller
+/// holds the lock beside `path`.
+fn replace_file(path: &Path, text: &str) -> Result<(), ConfigError> {
+    let tmp = temp_path(path);
+    let result = write_beside(&tmp, path, text);
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result
+}
+
 /// Write `text` to `tmp`, give it the mode of `path` when there is one, and
 /// rename it over `path`.
-fn write_beside(tmp: &Path, path: &Path, text: &str) -> std::io::Result<()> {
+fn write_beside(tmp: &Path, path: &Path, text: &str) -> Result<(), ConfigError> {
     {
         let mut file = fs::File::create(tmp)?;
         if let Ok(meta) = fs::metadata(path) {
@@ -625,7 +659,17 @@ fn write_beside(tmp: &Path, path: &Path, text: &str) -> std::io::Result<()> {
         file.write_all(text.as_bytes())?;
         file.sync_all()?;
     }
-    fs::rename(tmp, path)
+    fs::rename(tmp, path)?;
+    Ok(())
+}
+
+/// The lock beside a configuration file: `.config.toml.lock` for `config.toml`.
+fn lock_path(path: &Path) -> PathBuf {
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| CONFIG_FILE.to_string());
+    path.with_file_name(format!(".{name}.lock"))
 }
 
 /// The gates as the file writes them: a TOML list of inline tables.
@@ -1042,6 +1086,9 @@ pub enum ConfigError {
     /// given: nothing is written.
     #[error("the save would not keep every value in {file}: nothing was written")]
     Lost { file: String },
+    /// Another writer holds the configuration's lock: nothing is written.
+    #[error("another writer holds the lock on {file}; try again")]
+    Locked { file: String },
 }
 
 #[cfg(test)]
@@ -1160,6 +1207,58 @@ mod tests {
         let mode = fs::metadata(&path).expect("the file").permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "the write reset the mode");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_write_waits_for_the_lock_and_writes_nothing_while_it_is_held() {
+        let dir =
+            std::env::temp_dir().join(format!("coding-crew-config-lock-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch folder");
+        let path = dir.join(CONFIG_FILE);
+        fs::write(&path, "round_limit = 1\n").expect("the file");
+        // Another writer holds the lock beside the file.
+        let held = store::acquire(&lock_path(&path), Duration::ZERO).expect("the lock");
+        let error = Config::write_text_waiting(&path, "round_limit = 2\n", Duration::ZERO)
+            .expect_err("the lock is held");
+        assert!(matches!(error, ConfigError::Locked { .. }), "{error:?}");
+        assert_eq!(
+            fs::read_to_string(&path).expect("the file"),
+            "round_limit = 1\n"
+        );
+        // Once it is released the same write goes through.
+        drop(held);
+        Config::write_text_waiting(&path, "round_limit = 2\n", Duration::ZERO).expect("the write");
+        assert_eq!(
+            fs::read_to_string(&path).expect("the file"),
+            "round_limit = 2\n"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_save_checks_the_file_under_the_lock() {
+        // Writer B holds the lock and changes the file. A save by writer A
+        // must wait for the lock before it checks the file, so it is refused
+        // as blocked and does not overwrite B's change.
+        let scratch = scratch_file("save-lock", HAND_WRITTEN);
+        let path = scratch.path();
+        let mut file = ConfigFile::read(&path).expect("the configuration");
+        let mut config = file.config().clone();
+        config.round_limit = 3;
+        let held = store::acquire(&lock_path(&path), Duration::ZERO).expect("the lock");
+        let theirs = Config::default().to_toml();
+        fs::write(&path, &theirs).expect("another writer");
+        let error = file
+            .save_waiting(&config, Duration::ZERO)
+            .expect_err("the lock is held");
+        assert!(matches!(error, ConfigError::Locked { .. }), "{error:?}");
+        assert_eq!(fs::read_to_string(&path).expect("the file"), theirs);
+        // Once B releases the lock, A's save sees the change and is refused.
+        drop(held);
+        let error = file.save(&config).expect_err("the file changed");
+        assert!(matches!(error, ConfigError::Changed { .. }), "{error:?}");
+        assert_eq!(fs::read_to_string(&path).expect("the file"), theirs);
     }
 
     #[test]

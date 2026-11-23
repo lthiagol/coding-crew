@@ -1,5 +1,5 @@
 use super::{test_assets, test_md_theme};
-use crate::markdown::{parse_markdown, resolve_syntax};
+use crate::markdown::{TokenClass, parse_markdown, resolve_syntax};
 use ratatui::style::Color;
 
 /// The colour of the first span whose text is `needle`, if it has one.
@@ -53,4 +53,41 @@ fn a_toml_fence_is_painted_with_the_syntax_roles() {
         colour_of(&lines, "true").is_some(),
         "the boolean is not painted"
     );
+}
+
+#[test]
+fn toml_tokens_class_a_key_a_string_a_number_and_a_comment() {
+    let ss = crate::syntax_set();
+    // The class of the token that holds `needle`.
+    let class_of = |tokens: &[(String, TokenClass)], needle: &str| {
+        tokens
+            .iter()
+            .find(|(piece, _)| piece.contains(needle))
+            .map(|(_, class)| *class)
+    };
+    let tokens = crate::toml_tokens("round_limit = 5  # the rounds", &ss);
+    assert_eq!(class_of(&tokens, "round_limit"), Some(TokenClass::Tag));
+    assert_eq!(class_of(&tokens, " = "), Some(TokenClass::Plain));
+    assert_eq!(class_of(&tokens, "5"), Some(TokenClass::Number));
+    assert_eq!(class_of(&tokens, "# the rounds"), Some(TokenClass::Comment));
+    let tokens = crate::toml_tokens("theme = \"dark\" # \"not a string\"", &ss);
+    assert_eq!(
+        class_of(&tokens, "dark"),
+        Some(TokenClass::String),
+        "{tokens:?}"
+    );
+    assert_eq!(
+        class_of(&tokens, "# \"not"),
+        Some(TokenClass::Comment),
+        "{tokens:?}"
+    );
+    let tokens = crate::toml_tokens("[raul]", &ss);
+    assert_eq!(class_of(&tokens, "raul"), Some(TokenClass::Type));
+    // The tokens cover the line, byte for byte.
+    let line = "gates = [{ from = \"a\", to = \"b\" }]";
+    let joined: String = crate::toml_tokens(line, &ss)
+        .iter()
+        .map(|(piece, _)| piece.as_str())
+        .collect();
+    assert_eq!(joined, line);
 }

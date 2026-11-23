@@ -8,7 +8,7 @@ use unicode_width::UnicodeWidthStr;
 
 use super::LastBlock;
 use super::latex;
-use super::links::{LinkSpan, LinkedSpan};
+use super::links::{LinkId, LinkSpan, LinkedSpan};
 use super::lists::{ItemState, ListKind, list_item_prefix};
 use super::mermaid;
 use super::syntax::highlight_code;
@@ -155,6 +155,34 @@ pub(super) fn trim_paragraph_gap_before_block(
     }
 }
 
+/// A heading's text as the outline shows it: its spans without a link's marker
+/// and without the URL in parentheses that follows the link's text.
+fn heading_text(spans: &[LinkedSpan], theme: &MarkdownTheme) -> String {
+    let mut text = String::new();
+    let mut previous: Option<LinkId> = None;
+    // The marker is followed by one space of its own when the link text
+    // starts with a word; that space goes with the marker.
+    let mut after_marker = false;
+    for linked in spans {
+        let content = linked.span.content.as_ref();
+        let opens_link = linked.link_id.is_some() && linked.link_id != previous;
+        previous = linked.link_id;
+        let marker = opens_link && !theme.link_glyph.is_empty() && content == theme.link_glyph;
+        let glyph_space = after_marker && linked.link_id.is_some() && content == " ";
+        after_marker = marker;
+        if marker || glyph_space {
+            continue;
+        }
+        let url = linked.link_id.is_some()
+            && linked.span.style.add_modifier.contains(Modifier::DIM)
+            && content.starts_with(" (");
+        if !url {
+            text.push_str(content);
+        }
+    }
+    text
+}
+
 pub(super) fn push_heading_lines(
     lines: &mut Vec<Line<'static>>,
     ranges: &mut Vec<LinkSpan>,
@@ -175,7 +203,7 @@ pub(super) fn push_heading_lines(
     let title: String = spans.iter().map(|s| s.span.content.as_ref()).collect();
     toc.push(TocEntry {
         level,
-        title: title.clone(),
+        title: heading_text(spans, theme),
         line: lines.len(),
     });
     let mut body: Vec<LinkedSpan> = spans

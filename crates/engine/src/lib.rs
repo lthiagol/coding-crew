@@ -12,8 +12,8 @@ pub mod theme;
 mod tests;
 
 pub use markdown::{
-    CodeBlockInfo, LinkId, LinkSpan, ParseResult, TocEntry, parse_markdown,
-    parse_markdown_with_width,
+    CodeBlockInfo, LinkId, LinkSpan, ParseResult, TocEntry, TokenClass, parse_markdown,
+    parse_markdown_with_width, toml_tokens,
 };
 pub use theme::{MarkdownTheme, ThemePreset};
 

@@ -212,7 +212,7 @@ Errors: `evidence.timeout` (4; the run is still recorded, exit code absent →
 
 | Verb | Synopsis | When | Writes | J |
 |---|---|---|---|---|
-| `take` | `claim take <TSK> [--lease <dur>]` | approved and claimable (no overlay, deps done, no live claim); or executing with an expired lease (takeover) | `claim {by, session, at, lease_expires_at}`; default lease 2h; crew row of this actor: holds, executing | `claimed` |
+| `take` | `claim take <TSK> [--lease <dur>]` | approved and claimable (no overlay, deps done, no live claim); or executing with an expired lease and no `blocked` overlay (takeover) | `claim {by, session, at, lease_expires_at}`; default lease 2h; crew row of this actor: holds, executing | `claimed` |
 | `renew` | `claim renew <TSK> [--lease <dur>]` | holder (same actor and session) | `lease_expires_at` | — |
 | `release` | `claim release <TSK> --reason <t>` | holder; approved or executing | removes `claim`; crew row released | `released` |
 | `show` | `claim show <TSK>` | read | the claim and whether it is live | — |

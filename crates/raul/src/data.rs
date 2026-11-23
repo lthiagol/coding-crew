@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use coding_crew_core::store::{ACTIVITY_FILE, activity_path};
+use coding_crew_core::store::{ACTIVITY_FILE, activity_path, by_number};
 use coding_crew_core::{Activity, ActivityError, Item, ItemKind, Status, Task};
 
 // The human lane's vocabulary is the model's, beside the statuses it names.
@@ -119,8 +119,8 @@ impl Work {
                 }
             }
         }
-        work.tasks.sort_by(|a, b| a.id.cmp(&b.id));
-        work.items.sort_by(|a, b| a.id.cmp(&b.id));
+        work.tasks.sort_by(|a, b| by_number(&a.id, &b.id));
+        work.items.sort_by(|a, b| by_number(&a.id, &b.id));
         // The journal is optional: a project without one has no activity,
         // not a broken one. A journal that is there but does not parse is a
         // file that could not be read, like a task that does not parse.
@@ -389,6 +389,33 @@ mod tests {
             "the journal is inside the work folder"
         );
         assert!(work.errors.is_empty(), "{:?}", work.errors);
+    }
+
+    #[test]
+    fn tasks_and_items_load_in_numeric_id_order() {
+        let dir = std::env::temp_dir().join(format!("raul-id-order-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a work folder");
+        let task = |id: &str| {
+            format!(
+                r#"{{"schema_version":1,"id":"{id}","title":"t","slug":"t","created":"2026-11-02T09:00Z","updated":"2026-11-02T09:00Z","status":"approved","status_since":"2026-11-02T09:00Z"}}"#
+            )
+        };
+        let item = |id: &str| {
+            format!(
+                r#"{{"schema_version":1,"id":"{id}","title":"t","slug":"t","kind":"idea","status":"open"}}"#
+            )
+        };
+        fs::write(dir.join("TSK10-ten.json"), task("TSK10")).expect("a task");
+        fs::write(dir.join("TSK2-two.json"), task("TSK2")).expect("a task");
+        fs::write(dir.join("ITM10-ten.json"), item("ITM10")).expect("an item");
+        fs::write(dir.join("ITM2-two.json"), item("ITM2")).expect("an item");
+        let work = Work::load(&dir);
+        let tasks: Vec<&str> = work.tasks.iter().map(|task| task.id.as_str()).collect();
+        let items: Vec<&str> = work.items.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(tasks, ["TSK2", "TSK10"]);
+        assert_eq!(items, ["ITM2", "ITM10"]);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

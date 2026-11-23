@@ -120,8 +120,9 @@ pub fn claimable(task: &Task, dependency_done: Option<&dyn Fn(&str) -> bool>, no
 /// Take a claim on the task, as a runner.
 ///
 /// In `approved` the task must be claimable; an expired claim is replaced. In
-/// `executing` only an expired claim is taken over: the new holder and session
-/// become the execution session, so the holder cannot remediate later.
+/// `executing` only an expired claim is taken over, and never a blocked task's:
+/// the new holder and session become the execution session, so the holder
+/// cannot remediate later.
 pub fn take(
     task: &mut Task,
     actor: &Actor,
@@ -143,6 +144,12 @@ pub fn take(
             }
         }
         Status::Executing => {
+            if task.overlays.blocked.is_some() {
+                return Err(ClaimError::NotClaimable(vec![gate(
+                    "overlay.clear",
+                    "the task is blocked; a blocked task's claim is not taken over".to_string(),
+                )]));
+            }
             let Some(claim) = &task.claim else {
                 return Err(ClaimError::NotClaimable(vec![gate(
                     "claim.takeover",
@@ -420,6 +427,31 @@ mod tests {
         let claim = task.claim.expect("the claim");
         assert_eq!(claim.by, "runner-2");
         assert_eq!(claim.session.as_deref(), Some("s-other"));
+    }
+
+    #[test]
+    fn a_blocked_executing_task_is_not_taken_over_even_when_the_lease_expired() {
+        let mut task = approved();
+        take(&mut task, &runner(), DEFAULT_LEASE, None, NOW).unwrap();
+        task.status = Status::Executing;
+        task.overlays.blocked = Some(crate::Overlay {
+            reason: "waiting on a key".to_string(),
+            by: "creator-1".to_string(),
+            at: NOW.to_string(),
+        });
+        let other = Actor::agent("runner-2", Role::Runner).in_session("s-other");
+        let error = take(&mut task, &other, DEFAULT_LEASE, None, LATER).unwrap_err();
+        assert!(
+            matches!(&error, ClaimError::NotClaimable(failures)
+                if failures.iter().any(|failure| failure.gate == "overlay.clear")),
+            "{error:?}"
+        );
+        assert!(error.to_string().contains("blocked"), "{error}");
+        assert_eq!(task.claim.as_ref().expect("the claim").by, "runner-1");
+        // Once the block is cleared the expired claim can be taken over.
+        task.overlays.blocked = None;
+        take(&mut task, &other, DEFAULT_LEASE, None, LATER).unwrap();
+        assert_eq!(task.claim.as_ref().expect("the claim").by, "runner-2");
     }
 
     #[test]

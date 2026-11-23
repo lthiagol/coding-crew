@@ -244,10 +244,12 @@ as the task it is, and a smaller task opens its own document (below).
 **The configuration file, as a file.** Settings shows
 `~/.config/coding-crew/config.toml` — the one configuration both tools read —
 drawn the way the file reads: one `key = value` per line, in the file's own
-order, each token on its document role — a `[section]` header on the section
-heading, a key on `syntax.variable`, a string, a number or a boolean on
-`syntax.string` or `syntax.number`, a comment on `syntax.comment`, and the `=`
-on the body text; the terminal preset tells them apart by attribute. The pane's title
+order, each token on its document role, as the TOML grammar classes it: a
+`[section]` name on `syntax.type`, a key on `syntax.tag`, a string on
+`syntax.string`, a number or a boolean on `syntax.number`, a comment on
+`syntax.comment`, and the `=` on the body text. The values the pane edits
+take the same roles; an absent value is dim. The terminal
+preset tells them apart by attribute. The pane's title
 names the path, and `● modified` while there are unsaved changes. Decided
 2026-11-22: the tab that "persists nothing" is overruled.
 

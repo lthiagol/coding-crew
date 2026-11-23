@@ -48,7 +48,7 @@ install: ## Install hugo and raul from this checkout, then name the folder to ad
 	$(CARGO) install --path crates/raul
 	@echo "add $${CARGO_INSTALL_ROOT:-$${CARGO_HOME:-$$HOME/.cargo}}/bin to PATH: agents run hugo --skill <role>"
 
-.PHONY: test test-scripts columns
+.PHONY: test test-scripts columns columns-write
 test: ## Run the test suite
 	$(CARGO) test --workspace
 
@@ -57,6 +57,9 @@ test-scripts: ## Run the shell script tests
 
 columns: ## Check the terminal-column table against its rules (writes nothing)
 	python3 scripts/generate-terminal-columns.py --check
+
+columns-write: ## Regenerate the terminal-column ranges from their rules (rewrites scripts/terminal-columns.txt)
+	python3 scripts/generate-terminal-columns.py --write
 
 .PHONY: sweep
 sweep: build-raul ## Sweep the plain render at every width from 40 to 120: the Overview and the Tasks tab, in both icon sets

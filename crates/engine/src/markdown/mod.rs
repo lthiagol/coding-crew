@@ -18,7 +18,7 @@ mod wrapping;
 
 pub use highlight::{highlight_line, highlight_matches_only};
 pub use links::{LinkId, LinkSpan};
-pub use syntax::resolve_syntax;
+pub use syntax::{TokenClass, resolve_syntax, toml_tokens};
 use tables::{TableBuf, handle_table_event, start_table};
 pub use width::line_plain_text;
 pub use width::{

@@ -23,6 +23,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use crate::announce;
+use crate::detail::shared_syntax;
 use crate::tasks::{Key, Order};
 use crate::view::{self, BAR, Lines, View};
 use coding_crew_core::FlowRole;
@@ -35,6 +36,7 @@ use coding_crew_core::config::{
     quote,
 };
 use coding_crew_core::harness::{self, Harness};
+use coding_crew_engine::{TokenClass, toml_tokens};
 use coding_crew_theme::chrome;
 use coding_crew_theme::icons::ENV as ICONS_ENV;
 use coding_crew_theme::picker::{self, Row};
@@ -1100,7 +1102,10 @@ impl Panel {
                 Line::from(Span::styled(cut_to(text, room), paint_of(*paint, theme))),
                 None,
             ),
-            Shape::Toml(text) => (Line::from(cut_spans(toml_spans(text, theme), room)), None),
+            Shape::Toml(text) => (
+                Line::from(cut_spans(grammar_spans(text, theme), room)),
+                None,
+            ),
             Shape::Value {
                 field,
                 value,
@@ -1128,7 +1133,7 @@ impl Panel {
         let key = if absent {
             dim
         } else {
-            theme.document_style(DocRole::SyntaxVariable)
+            theme.document_style(DocRole::SyntaxTag)
         };
         let equals = if absent {
             dim
@@ -1144,13 +1149,14 @@ impl Panel {
                 } else {
                     edit.text.clone()
                 };
-                spans.extend(value_spans(&open, theme));
+                spans.extend(value_spans(field.key(), &open, theme));
                 spans.push(Span::styled(
                     " ",
                     Style::default().add_modifier(Modifier::REVERSED),
                 ));
                 if quoted {
-                    spans.extend(value_spans("\"", theme));
+                    let style = theme.document_style(DocRole::SyntaxString);
+                    spans.push(Span::styled("\"", style));
                 }
                 edit.text.clone()
             }
@@ -1169,7 +1175,7 @@ impl Panel {
                 if absent || none {
                     spans.push(Span::styled(written, dim));
                 } else {
-                    spans.extend(value_spans(&written, theme));
+                    spans.extend(value_spans(field.key(), &written, theme));
                 }
                 current.clone()
             }
@@ -1529,105 +1535,52 @@ fn cut_spans(spans: Vec<Span<'static>>, room: usize) -> Vec<Span<'static>> {
     out
 }
 
-/// A line of the file on its syntax roles: a `[section]` header is the section
-/// heading, a `key = value` line takes the key, the `=` and the value's tokens,
-/// and a comment line is a comment.
-fn toml_spans(line: &str, theme: &Theme) -> Vec<Span<'static>> {
-    let trimmed = line.trim_start();
-    if trimmed.starts_with('[') {
-        let style = theme.document_style(DocRole::HeadingSection);
-        return vec![Span::styled(line.to_string(), style)];
-    }
-    let Some(at) = line.find('=').filter(|_| !trimmed.starts_with('#')) else {
-        return value_spans(line, theme);
-    };
-    let key = &line[..at];
-    let name = key.trim();
-    let bare = !name.is_empty()
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
-    if !bare {
-        return value_spans(line, theme);
-    }
-    let lead = key.len() - key.trim_start().len();
-    let trail = key.len() - key.trim_end().len();
-    let text = theme.document_style(DocRole::Text);
-    let mut spans = vec![Span::styled(key[..lead].to_string(), text)];
-    spans.push(Span::styled(
-        name.to_string(),
-        theme.document_style(DocRole::SyntaxVariable),
-    ));
-    spans.push(Span::styled(key[key.len() - trail..].to_string(), text));
-    spans.push(Span::styled("=", text));
-    spans.extend(value_spans(&line[at + 1..], theme));
-    spans
+/// A line of the file on its syntax roles, as the engine's TOML grammar
+/// classes its tokens: a key takes the tag role, a `[table]` the type role, a
+/// value its string, number or boolean role, and a `#` comment the comment
+/// role. The document's own TOML code blocks paint the same way.
+fn grammar_spans(line: &str, theme: &Theme) -> Vec<Span<'static>> {
+    toml_tokens(line, shared_syntax())
+        .into_iter()
+        .map(|(text, class)| Span::styled(text, theme.document_style(token_role(class))))
+        .collect()
 }
 
-/// Text on its syntax roles: a string, a number or a boolean, and a `#` comment
-/// to the end of the line. Every other character is body text.
-fn value_spans(text: &str, theme: &Theme) -> Vec<Span<'static>> {
-    let mut runs: Vec<(usize, DocRole)> = Vec::new();
+/// The value of `key = value` on the grammar's roles. The grammar reads the
+/// value in the line it sits in, so the key and the ` = ` are parsed with it
+/// and left out. The key is ASCII, as every field's is.
+fn value_spans(key: &str, value: &str, theme: &Theme) -> Vec<Span<'static>> {
+    let skip = key.len() + " = ".len();
+    let mut spans = Vec::new();
     let mut at = 0;
-    while at < text.len() {
-        let rest = &text[at..];
-        let first = rest.chars().next().unwrap_or_default();
-        let (len, role) = if first == '#' {
-            (rest.len(), DocRole::SyntaxComment)
-        } else if first == '"' || first == '\'' {
-            (string_len(rest, first), DocRole::SyntaxString)
-        } else if first.is_ascii_alphanumeric() || matches!(first, '-' | '+') {
-            let word = rest
-                .find(|c: char| {
-                    !(c.is_ascii_alphanumeric() || matches!(c, '-' | '+' | '.' | '_' | ':'))
-                })
-                .unwrap_or(rest.len());
-            let unsigned = rest[..word].trim_start_matches(['-', '+']);
-            let number = matches!(&rest[..word], "true" | "false")
-                || unsigned.starts_with(|c: char| c.is_ascii_digit());
-            let role = if number {
-                DocRole::SyntaxNumber
-            } else {
-                DocRole::Text
-            };
-            (word, role)
-        } else {
-            (first.len_utf8(), DocRole::Text)
-        };
-        runs.push((at, role));
-        at += len;
-    }
-    // Adjacent runs of one role are one span.
-    let mut spans: Vec<Span<'static>> = Vec::new();
-    for (index, (start, role)) in runs.iter().enumerate() {
-        let end = runs.get(index + 1).map_or(text.len(), |next| next.0);
-        let style = theme.document_style(*role);
-        match spans.last_mut() {
-            Some(span) if span.style == style => {
-                span.content = format!("{}{}", span.content, &text[*start..end]).into();
-            }
-            _ => spans.push(Span::styled(text[*start..end].to_string(), style)),
+    for (text, class) in toml_tokens(&format!("{key} = {value}"), shared_syntax()) {
+        let start = at;
+        at += text.len();
+        if at <= skip {
+            continue;
         }
+        let text = if start < skip {
+            text[skip - start..].to_string()
+        } else {
+            text
+        };
+        spans.push(Span::styled(text, theme.document_style(token_role(class))));
     }
     spans
 }
 
-/// The length of the quoted string that opens `text` with `quote`: up to its
-/// closing quote, or to the end of the text when it is not closed.
-fn string_len(text: &str, quote: char) -> usize {
-    let mut escaped = false;
-    for (index, c) in text.char_indices().skip(1) {
-        match c {
-            '\\' if quote == '"' && !escaped => {
-                escaped = true;
-                continue;
-            }
-            c if c == quote && !escaped => return index + c.len_utf8(),
-            _ => {}
-        }
-        escaped = false;
+/// The document role a TOML token takes. An invalid token takes the caution
+/// role, as the code blocks' invalid tokens do.
+fn token_role(class: TokenClass) -> DocRole {
+    match class {
+        TokenClass::Plain => DocRole::Text,
+        TokenClass::Comment => DocRole::SyntaxComment,
+        TokenClass::String => DocRole::SyntaxString,
+        TokenClass::Number => DocRole::SyntaxNumber,
+        TokenClass::Tag => DocRole::SyntaxTag,
+        TokenClass::Type => DocRole::SyntaxType,
+        TokenClass::Invalid => DocRole::AlertCaution,
     }
-    text.len()
 }
 
 /// A line with the selection bar's column left empty.
@@ -2087,13 +2040,13 @@ mod tests {
         let buffer = buffer_of(&panel, &theme, 100, 200, None);
         let fg = |line: &str, token: &str| cell_on(&buffer, line, token).fg;
         assert_eq!(
-            fg("[raul]", "[raul]"),
-            paint(DocRole::HeadingSection),
-            "a header"
+            fg("[raul]", "raul"),
+            paint(DocRole::SyntaxType),
+            "a table name"
         );
         assert_eq!(
             fg("round_limit = ", "round_limit"),
-            paint(DocRole::SyntaxVariable),
+            paint(DocRole::SyntaxTag),
             "a key"
         );
         assert_eq!(fg("round_limit = ", " = "), paint(DocRole::Text), "the =");
@@ -2125,18 +2078,48 @@ mod tests {
     }
 
     #[test]
+    fn a_line_the_file_does_not_read_takes_the_toml_grammar() {
+        // A value of the wrong type makes the file unreadable, so every line
+        // is shown as the file has it, and each line is painted by the grammar.
+        let theme = theme();
+        let palette = theme.document();
+        let paint = |role| palette.paint(role, DocSide::One);
+        let panel = panel_with("grammar", "[raul]\nround_limit = \"five\"  # the rounds\n");
+        let buffer = buffer_of(&panel, &theme, 100, 200, None);
+        let fg = |line: &str, token: &str| cell_on(&buffer, line, token).fg;
+        assert_eq!(fg("[raul]", "raul"), paint(DocRole::SyntaxType), "a table");
+        assert_eq!(
+            fg("round_limit = ", "round_limit"),
+            paint(DocRole::SyntaxTag),
+            "a key"
+        );
+        assert_eq!(
+            fg("round_limit = ", "\"five\""),
+            paint(DocRole::SyntaxString),
+            "a string"
+        );
+        assert_eq!(
+            fg("round_limit = ", "# the rounds"),
+            paint(DocRole::SyntaxComment),
+            "a comment"
+        );
+    }
+
+    #[test]
     fn the_terminal_preset_tells_the_tokens_apart_by_attribute() {
         let theme = Theme::preset(Preset::Terminal);
         let panel = panel_with("terminal", &tokens());
         let buffer = buffer_of(&panel, &theme, 100, 200, None);
         let cell = |line: &str, token: &str| cell_on(&buffer, line, token);
         assert!(
-            cell("[raul]", "[raul]").modifier.contains(Modifier::BOLD),
-            "a header"
+            cell("[raul]", "raul")
+                .modifier
+                .contains(Modifier::ITALIC | Modifier::UNDERLINED),
+            "a table name"
         );
         assert_eq!(
             cell("round_limit = ", "round_limit").modifier,
-            Modifier::empty(),
+            Modifier::DIM | Modifier::ITALIC,
             "a key"
         );
         assert!(
@@ -2216,7 +2199,7 @@ mod tests {
             let buffer = buffer_of(&panel, &theme, width, 200, None);
             assert_eq!(
                 cell_on(&buffer, "round_limit = ", "round_limit").fg,
-                paint(DocRole::SyntaxVariable),
+                paint(DocRole::SyntaxTag),
                 "a key at {width} columns"
             );
             assert_eq!(

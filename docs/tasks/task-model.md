@@ -286,7 +286,7 @@ fails; a refused transition carries that whole list ([ADR 0014](../decisions/001
 | `claim.status` | the task is `approved` (a take) | `claim take`, `claimable` |
 | `claim.held` | no live claim (the holder renews its own) | `claim take`, `claimable` |
 | `claim.takeover` | a claim exists to take over, and its lease has expired | `claim take` in `executing` |
-| `overlay.clear` | no `blocked`, `deferred` or `cancelled` overlay | `claim take`, `claimable` |
+| `overlay.clear` | no `blocked`, `deferred` or `cancelled` overlay | `claim take`, `claimable`; `claim take` in `executing` (`blocked` only) |
 
 The claim gates are the operation's, not an edge's: a refused take names each
 failing one. See § 3.6.
@@ -341,7 +341,7 @@ in a session; its lease is an RFC 3339 instant.
 
 | Operation | Who | Allowed when | Writes |
 |---|---|---|---|
-| `take` | runner, in a session | claimable; or `executing` with an expired lease (takeover) | `claim {by, session, at, lease_expires_at}`, lease 2 h by default |
+| `take` | runner, in a session | claimable; or `executing` with an expired lease and no `blocked` overlay (takeover) | `claim {by, session, at, lease_expires_at}`, lease 2 h by default |
 | `renew` | the holder: same actor, same session | `approved` or `executing`, claim present | `lease_expires_at` |
 | `release` | the holder | `approved` or `executing`; a reason | removes the claim |
 

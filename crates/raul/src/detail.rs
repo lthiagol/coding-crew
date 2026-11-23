@@ -56,7 +56,13 @@ static SYNTAX: OnceLock<SyntaxSet> = OnceLock::new();
 /// code tokens with a theme derived from its own document palette — see
 /// [`code_theme`].
 fn syntect(theme: &Theme) -> (&'static SyntaxSet, SyntectTheme) {
-    (SYNTAX.get_or_init(syntax_set), code_theme(theme))
+    (shared_syntax(), code_theme(theme))
+}
+
+/// The syntax set the document and the Settings tab highlight with, loaded
+/// on first use.
+pub(crate) fn shared_syntax() -> &'static SyntaxSet {
+    SYNTAX.get_or_init(syntax_set)
 }
 
 /// The syntect theme for a preset, derived from its document palette.

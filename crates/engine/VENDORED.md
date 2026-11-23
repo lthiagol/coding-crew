@@ -30,7 +30,7 @@ bytes cannot drift apart silently.
 
 | upstream file | upstream sha256 | vendored file | vendored sha256 | deviation |
 |---|---|---|---|---|
-| `src/markdown/blocks.rs` | `8c4e53212383b794247b2e7502a6d6b74e01266a322ad42c787b98c0524360f7` | `crates/engine/src/markdown/blocks.rs` | `8474530a55fa7ed5865a48b0a9e4c25532323d0e9916b4093defb357c4c6d714` | 1, 6, 11, 16, 17, 21, 22 |
+| `src/markdown/blocks.rs` | `8c4e53212383b794247b2e7502a6d6b74e01266a322ad42c787b98c0524360f7` | `crates/engine/src/markdown/blocks.rs` | `2b4b418c5e0505a973bbe8e5fa9f98546f4295ae4f41c48e9ef499fc009ec197` | 1, 6, 11, 16, 17, 21, 22, 27 |
 | `src/markdown/fences.rs` | `e5810317dd42f09780ddbd800d6ef7d81e213461181f38096cc0821d554d6ce0` | `crates/engine/src/markdown/fences.rs` | `99cc29ba50ee9b591dded59ef745d03dbd6cc82ec5c910268246e81400242487` | 11, 12 |
 | `src/markdown/footnotes.rs` | `40a60dbff36117b6e4a6803bca6ba43b4b5965c523285d2d8471e89f9014ee76` | `crates/engine/src/markdown/footnotes.rs` | `0c4a012058588f9b34c6bfcef85382296a077fdb3c836e512a58636d32ca01aa` | 1, 4, 11 |
 | `src/markdown/frontmatter.rs` | `de8dd7ae2337ab6a2c7837e98826280f4e0374fa809c3cfbaf6af7f0918d1e8c` | `crates/engine/src/markdown/frontmatter.rs` | `de8dd7ae2337ab6a2c7837e98826280f4e0374fa809c3cfbaf6af7f0918d1e8c` | identical |
@@ -40,9 +40,9 @@ bytes cannot drift apart silently.
 | `src/markdown/lists.rs` | `dd16f32b5fbb766560e7c0e8395d00813496ba4ade00bb07bf330e1bff127f75` | `crates/engine/src/markdown/lists.rs` | `a3b96e07fa0b01dc5aed15cef9326700382c4e154fd4fc9840b7dfc17b6cba70` | 1, 4, 6, 11, 18 |
 | `src/markdown/markers.rs` | `2e9f315bad630b9c651d79bc1118e9ba5bcded9cebc81fd37e15472bfaf841ca` | `crates/engine/src/markdown/markers.rs` | `f07514a3ecb6d37ae767c49ec860986bda079e56e79d3b96e53b93491f8eaa79` | 1, 3, 10, 11 |
 | `src/markdown/mermaid.rs` | `dc2b217974a36dcd06dc0a5c199bdc7cadef743ec7719279f304e01a677df9da` | `crates/engine/src/markdown/mermaid.rs` | `f1aeaebd7a4ce303098046cffa017fdb0ab27939f594efed2f14f5c112b10274` | 1, 11, 12 |
-| `src/markdown/mod.rs` | `53177c3e6b309cdca9c9af0e9ef511e7bb7581c29248a4c489fa76b63bfbcebb` | `crates/engine/src/markdown/mod.rs` | `66d0328d26037453ae6e6b4072c1be4697850e5810ea1881ce69ebd1d69b19bc` | 1, 4, 5, 6, 7, 9, 11, 18, 19, 20, 21, 22 |
+| `src/markdown/mod.rs` | `53177c3e6b309cdca9c9af0e9ef511e7bb7581c29248a4c489fa76b63bfbcebb` | `crates/engine/src/markdown/mod.rs` | `a484b51d996746ac7b8018d1aa55e6b2c6da51ab7a2c11d0c808ab7cb08486b0` | 1, 4, 5, 6, 7, 9, 11, 18, 19, 20, 21, 22 |
 | `src/markdown/spans.rs` | `51f40f57a3fbea5638ee3d74b157122c7616b3c480721b7888e6fedd3e2e3be6` | `crates/engine/src/markdown/spans.rs` | `ef8844a9c341d9a5bc79d04e3129baa902d5b7daaaf95eeaecd746593ddd50a6` | 7, 11, 21, 24 |
-| `src/markdown/syntax.rs` | `b46409c050d4c9fc859be1acf958859958f000c77217cec453caff49b81e1403` | `crates/engine/src/markdown/syntax.rs` | `6c60870f950e420442734ce06fe612dcbd7813ba41a45443e3f85a11c72bfbf3` | 1, 6, 11, 12, 23 |
+| `src/markdown/syntax.rs` | `b46409c050d4c9fc859be1acf958859958f000c77217cec453caff49b81e1403` | `crates/engine/src/markdown/syntax.rs` | `3c7261038cb790f0d46a70b950aa0137c33f37bb746f42711ff32521d8680367` | 1, 6, 9, 11, 12, 23 |
 | `src/markdown/table_layout.rs` | `05e2d328a05ae048f2d52c4f72eb365414e21fe621ac62e67f04f8b9f03703a7` | `crates/engine/src/markdown/table_layout.rs` | `108c3621ecf055de7253310473c5cf6df9b93a583a877676584a1e0665801b9c` | 7, 11, 12, 15, 21, 24, 25 |
 | `src/markdown/tables.rs` | `b824647992b0bb665f516e95b8537594ceba3b6846f2d845d66695febfa66a10` | `crates/engine/src/markdown/tables.rs` | `9c2782f24a93aafc2f94ae555ae82e04dc00e907dc590f20f7906418699cd250` | 2, 3, 5, 7, 11, 15, 20, 21, 24 |
 | `src/markdown/toc.rs` | `68ae47f2387f7cb66ae50929d6554684a25312eb1a5323bbefdf5b82aadca0bd` | `crates/engine/src/markdown/toc.rs` | `9640a529ae05aff4ca96cdde1ff72772bceb7ca336294a81bf79722beec873e8` | 1, 4, 6, 9, 11 |
@@ -201,6 +201,10 @@ for leaf's `SyntaxSet::load_defaults_newlines()` and `ThemeSet::load_defaults()`
 and `syntect_theme(preset, themes)` for the old `current_syntect_theme`
 selection, without global state. `syntax_set()` also adds the bundled TOML
 grammar (deviation 26).
+
+`toml_tokens(line, ss)` and `TokenClass` classify one line of TOML token by
+token, from the TOML grammar, for raul's Settings. Each token takes the class
+of the outermost scope that names one.
 
 `syntax_set()` and `theme_set()` build the whole default set on every call.
 The doc comments say to load them once at startup, keep the result, and never
@@ -373,3 +377,11 @@ Loading it needs syntect's `yaml-load` feature, which pulls in `yaml-rust`
 0.4.5 and `linked-hash-map` 0.5.6. Those are the only new crates; no grammar
 crate (such as `two-face`) is used. `tests/markdown_toml.rs` pins the
 resolution and the painted roles.
+
+### 27. A heading's outline title is its text
+
+Leaf's `TocEntry.title` is the heading's spans, so a link heading's title holds
+the link's glyph and its URL in parentheses. Here the title is the heading's
+text: the glyph, the space that follows it, and the URL are left out. The
+heading's drawn width is unchanged; only the outline's title differs.
+`tests/markdown_links.rs` pins it.
