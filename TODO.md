@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 83.
+Updated 2026-11-22 by the orchestrator, after unit 84.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,12 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–83, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–84, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- None. Every row of `docs/plan.md` is ✓.
+- 85 · **T2 · Core gates** (M): collect-all `check()`; `review.round_current`, `review.round_owner`, `task.claimed` on finish, external round refused from the claim's session.
+- 86 · **T3 · Core operations** (M): claim take/renew/release with takeover; the section ownership table; the stored criterion-status mirror.
+- 87 · **T4 · Core store** (S): project lock, atomic journal and runtime writes, numeric id sort, `save_item` removes an old file.
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
@@ -175,12 +177,24 @@ None blocking. Carried from the closed units.
   T1–T14. Nothing is built: talita code waits on the human's word.
 - **hugo renames `HUGO_SESSION` to `HUGO_CREW`** (2026-11-22, ADR 0015). It
   holds the crew's configuration, not an actor's session. A small hugo unit.
-- **2026-11-22, unit 83:** the model has no re-review record (TSK14's round 2
-  is unstampable) — talita's design adds one. The stamp rule in
-  `crates/core/tests/mock_data.rs` cannot place a `re_review` moment, so
-  TSK14 sits in `code-review` with round 2 in flight and an open high. The
-  story is recorded in `mock-data/generate.py` (`check_runtime`) and
-  `mock-data/README.md`.
+- **2026-11-22, unit 84:** `mock-data/README.md:115` still says TSK14's
+  re-review cannot be stamped. It can now, through `review.re_reviews[]`.
+- **2026-11-22, unit 84:** the `assert_ne!` added to
+  `tsk14_is_handed_back_after_its_findings_are_fixed` was not run against the
+  old fixture value, so it is not shown to fail without the fix.
+- **2026-11-22, unit 84:** six of the twenty-two journal kinds have no fixture
+  history: `started`, `released`, `resumed`, `reopened`, `unblocked` and
+  `undeferred`. Every fixture's `Evidence.manual` is `false`, so no override is
+  exercised. Recorded, not ruled.
+- **2026-11-22, unit 84:** two ADR 0018 deviations stand. `approved` is still
+  read from the `Approved by` note, and `remediated` keeps "answered the
+  findings" where ADR 0018 says `after round <n>`. Both change the Overview's
+  render, so they wait for a ruling.
+- **2026-11-22, unit 84:** raul's icons for the thirteen new kinds
+  (`crates/raul/src/overview.rs`, `event_icon`) are the builder's guess. No
+  ruling.
+- **2026-11-22, unit 84:** `orchestrator-01` is the builder's choice for the
+  orchestrator's `crew[].actor`. No fixture names one.
 - **2026-11-22, unit 83:** the TOML render test was not run against the old
   code, so it is not shown to fail without the grammar. The resolve assertion
   was probed against the YAML fallback.

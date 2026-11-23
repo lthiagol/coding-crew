@@ -1478,6 +1478,20 @@ The lifecycle reaches that state only by `re_review`, which the model cannot
 stamp, so the story is kept as built and recorded in `mock-data/generate.py`
 and the README. Limits are in THE FOLLOW-UPS. Commit `7479283`.
 
+Unit closed: the core schema additions (plan 84). One build round, one fix
+round and two reviews; the second clean. Core gains the optional fields of
+ADRs 0016–0019: `Round.session`, `review.re_reviews[]`, `Evidence.manual`,
+`Task.revision`, `crew[].actor` and thirteen journal kinds, read with defaults
+so old files still load. The generator writes them. TSK14 carries its
+re-review, `session-runner-02-remediation-1`, and its status moves to the
+hand-back, which closes the unit 83 gap that the model had no re-review
+record. Review one found a medium: every hand-back named the execution
+session, which `remediation.session_distinct` refuses. The fix gives all 17
+hand-backs a remediating session of their own and pins the rule in the
+generator. Ruling: the Overview's activity block changes, because the new
+`round_filed` event displaces an older one; the review accepted the snapshot
+change. Limits are in THE FOLLOW-UPS. Commit `200eea9`.
+
 ---
 
 ## Lessons
