@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after the triage.
+Updated 2026-11-22 by the orchestrator, after unit 78.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -51,10 +51,14 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–77, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–78, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-**H1**: TODO.md reflects the triage (not in the plan). **78–83**: in `docs/plan.md`.
+- **79** hugo and theme loose ends (M)
+- **80** Docs and the gate (S)
+- **81** The triage's hugo and config rulings (M)
+- **82** The triage's raul changes (S)
+- **83** TOML in colour, and one story for TSK14 (S)
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
@@ -171,7 +175,14 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
-- Loose ends from the triage: units 78–80 in `docs/plan.md`.
+- Loose ends from the triage: units 79–80 in `docs/plan.md`.
+- **2026-11-22, unit 78:** `needs.rs:338` is unchanged. The done-when named
+  it; the review found Needs rows are one line, so "Only a pane of one line
+  shows the row alone" is accurate. Confirm it, or reopen to name the case.
+- **2026-11-22, unit 78:** the atomicity pin
+  (`a_two_line_row_is_drawn_whole_from_any_first_row`) pins current behaviour.
+  It was not run against the code before the fix, so it is not shown to fail
+  without it.
 
 ## WHAT WAITS ON THE FLOW
 
@@ -202,7 +213,7 @@ None blocking. Carried from the closed units.
   `crates/raul/src/main.rs` has no test: it lives in the interactive loop.
 - **The journal:** every fixture's approved stamp is thirty minutes before its
   claim, and no fixture holds an approved task that has waited long; the kinds
-  are provisional. The inverted comment beside the activity panel is unit 78's.
+  are provisional.
 - **The Tasks nerd glyph is unchecked** (2026-11-22, unit 60). The unicode set
   draws the tab as `☑`, because `☰` measures two columns. The nerd glyph
   (U+F0AE7) was not checked against a font; no nerd font is installed here.

@@ -1392,6 +1392,21 @@ closes the scroll and is not announced while off screen: option (a), the
 reviewers' recommendation, taken in round two and written into
 `docs/tui/screens.md` § Path (see THE FOLLOW-UPS). Commit `d8f7058`.
 
+Unit closed: raul's loose ends (plan 78). One build round and one review round,
+clean. The Overview's unreadable line names and counts its files:
+`unreadable not shown: 2 files (a: e, b: e)`. The Backlog announces through
+`announce.rs`: the dropped-header shape moved there as a `dropped` flag on
+`Group`, and the private copy in `backlog.rs`, about 400 lines, is gone.
+`body_line` returns a blank line at width 0. The stale comments at
+`backlog.rs`, `overview.rs` and `path.rs` now say what the code does. The copy
+scan checks all six theme text helpers across `crates/raul` and `crates/hugo`,
+and a planted copy fails it.
+Ruling: `needs.rs:338` is unchanged, against the done-when. Needs rows are one
+line, so the reviewer found the comment accurate and recommended it stay.
+Behaviour change: at narrow widths a Backlog label whose count does not fit
+keeps its own row and is not cut, as `announce.rs` draws it. No test pinned the
+old form. Commit `0d89ff6`.
+
 ---
 
 ## Lessons
