@@ -165,3 +165,53 @@ fn the_journal_holds_the_moves_a_history_can_tell() {
         assert!(kinds.contains(&kind), "the journal holds no {kind:?}");
     }
 }
+
+#[test]
+fn a_remediated_event_names_the_round_its_hand_back_answers() {
+    // The note is `after round <n>`, the round the hand-back answered, as
+    // the review record names it (ADR 0017).
+    let tasks: HashMap<String, coding_crew_core::Task> = store()
+        .list()
+        .expect("the tasks")
+        .into_iter()
+        .map(|task| (task.id.clone(), task))
+        .collect();
+    let remediated: Vec<_> = journal()
+        .events
+        .into_iter()
+        .filter(|event| event.kind == EventKind::Remediated)
+        .collect();
+    assert!(!remediated.is_empty(), "the journal holds no remediation");
+    for event in remediated {
+        let note = event.note.as_deref().unwrap_or_default();
+        let after: u32 = note
+            .strip_prefix("after round ")
+            .and_then(|round| round.parse().ok())
+            .unwrap_or_else(|| panic!("{} remediated with {note:?}", event.task));
+        let task = &tasks[&event.task];
+        assert!(
+            task.review
+                .re_reviews
+                .iter()
+                .any(|hand_back| hand_back.after_round == after && hand_back.at == event.at),
+            "{} has no hand-back after round {after} at {}",
+            event.task,
+            event.at
+        );
+    }
+}
+
+#[test]
+fn no_task_note_records_an_approval() {
+    // The approval is the journal's `approved` event. A task note that says
+    // "Approved by" is the old record, which the journal replaced.
+    for task in store().list().expect("the tasks") {
+        assert!(
+            task.notes
+                .iter()
+                .all(|note| !note.body.starts_with("Approved by")),
+            "{} records its approval in a note",
+            task.id
+        );
+    }
+}

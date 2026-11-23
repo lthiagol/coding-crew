@@ -28,7 +28,7 @@ in [vocabulary.md](../vocabulary.md); the roles are in
 | tab bar | the six tabs, each its icon and name; `Needs you` and `Backlog` carry their counts as badges; the active tab is bold and underlined by a `▔` on the rule under the bar; `1`–`6`, `←`/`→`, `h`/`l`, `tab`/`shift+tab` on every tab, Settings included |
 | content pane | the active tab's rows; `↑`/`↓`, `j`/`k`, `pgup`/`pgdn`, `g`/`G` |
 | detail pane | `enter` on a row opens the task as a full-screen overlay; `esc` returns to the tab and the selection it came from, and `enter` again reopens |
-| footer | the active tab's own keys, centred under a thin rule, then `? help · q quit` — never a key that does nothing. Navigation keys are in the `?` overlay, not the footer. When the content pane has no room for the hidden-rows announcement, the footer carries that count first, and the content pane says nothing about it — the same fact is never painted twice |
+| footer | the active tab's own keys, centred under a thin rule, then `? help · q quit` — never a key that does nothing. Navigation keys are in the `?` overlay, not the footer. When the content pane has no room for the hidden-rows announcement, the footer carries that count first, and the content pane says nothing about it — the same fact is never painted twice. A narrow footer drops whole keys, the context's first, and says so: its line ends in `+N keys`, N the keys it leaves out. The count takes room of its own, so a key gives way to it; the hidden-rows count gives way last |
 | quit | `q` quits, and `esc` quits too — in the window. `esc` in the detail pane returns to the tab instead |
 
 The detail pane is not a tab: it is the same task seen close up, and it opens
@@ -314,6 +314,8 @@ The `[raul]` table:
 | `[raul.tasks] sort` | `id` · `created` · `updated` · `status` · `priority` · `effort` | `id` |
 | `[raul.tasks] reverse` | `true` · `false` | `false` |
 
+A harness or an effort the file leaves out is an empty row, `harness = ` with the note `(not in the file yet)` beside it: a cursor stop like the others, set with `enter` and saved with `w`. A file with no harness reads, so the empty row can be filled in; the flow names the gap when it starts.
+
 The key bindings are not configuration yet; the help overlay (`?`) lists them.
 
 ## The detail pane
@@ -375,6 +377,18 @@ record, the width, the theme and the icon set are unchanged. Keys that are
 queued together are answered before the next draw, so a burst of scrolling is
 one redraw.
 
+## The help (`?`)
+
+`?` opens the keys that work on the screen, over it. It is drawn as a rounded
+box titled `keys`, three fifths of the window wide and as tall as its lines,
+or as the window is when they do not fit. Any key closes it, except the keys
+below when the lines overflow.
+
+When the lines overflow, the help scrolls: `↑`/`↓` (`j`/`k`) move a row,
+`pgup`/`pgdn` a page, `g`/`G` to the top and the bottom, and the wheel three
+rows a notch. The bottom border then shows the rows in view, `1–9 of 14`. A
+help that fits takes no scroll and draws no count. Every line stays reachable.
+
 ## Mouse
 
 The mouse works where the keys do. Capture is on while raul runs and off when
@@ -382,13 +396,14 @@ it exits, and on a panic.
 
 | gesture | does |
 |---|---|
-| wheel | scrolls what is under the pointer, three rows a notch: the detail pane, a list tab's rows, Settings, a picker |
+| wheel | scrolls what is under the pointer, three rows a notch: the detail pane, a list tab's rows, Settings, a picker, and the `?` overlay when it overflows |
 | click a tab label | switches to that tab; a bar that shows only the active tab takes no clicks |
 | click a row | selects it; a second click on the selected row opens it, as `enter` does |
 | click a picker entry | moves the picker to it, previewing it; a second click keeps it, as `enter` does |
 
 A click outside these regions does nothing. The pointer waits while the help,
-a question, or a typed filter or value holds the keys. The regions are the ones
+a question, or a typed filter or value holds the keys; the wheel still scrolls
+an overflowing help. The regions are the ones
 the last frame drew, so a click lands on what is on screen. Most terminals keep
 their own text selection for a drag held with shift.
 

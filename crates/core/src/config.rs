@@ -965,24 +965,33 @@ fn stored_agent(name: &str, value: &toml::Value) -> Result<StoredAgent, String> 
 }
 
 /// An agent as the file states it, checked against the harness table. An
-/// agent that names no harness takes the old global one; a model's `#effort`
-/// is split off into the effort when the file names none.
+/// agent that names no harness takes the old global one; with neither, its
+/// harness is empty, and the flow names the gap. A model's `#effort` is split
+/// off into the effort when the file names none.
 fn agent_of(role: FlowRole, stored: StoredAgent, legacy: Option<&str>) -> Result<Agent, String> {
     let name = role.as_str();
     let harness = stored
         .harness
         .or_else(|| legacy.map(str::to_string))
-        .ok_or_else(|| format!("{name} names no harness"))?;
+        .unwrap_or_default();
+    let (model, effort) = match (stored.effort, stored.model.split_once('#')) {
+        (None, Some((model, effort))) => (model.to_string(), Some(effort.to_string())),
+        (effort, _) => (stored.model, effort),
+    };
+    if harness.is_empty() {
+        return Ok(Agent {
+            role,
+            harness,
+            model,
+            effort,
+        });
+    }
     let known = harness::find(&harness).ok_or_else(|| {
         format!(
             "{name} runs in {harness}, which is not a harness: the harnesses are {}",
             harness::names().join(", ")
         )
     })?;
-    let (model, effort) = match (stored.effort, stored.model.split_once('#')) {
-        (None, Some((model, effort))) => (model.to_string(), Some(effort.to_string())),
-        (effort, _) => (stored.model, effort),
-    };
     // A model the table holds names its levels; any other model's levels are
     // its listing's to say, and the file cannot be checked against them here.
     if let (Some(effort), Some(levels)) = (&effort, known.curated_efforts(&model))
@@ -2249,18 +2258,58 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
     }
 
     #[test]
-    fn an_agent_with_no_harness_and_no_global_one_is_unreadable() {
+    fn an_agent_with_no_harness_and_no_global_one_reads_with_an_empty_harness() {
+        // The file reads, so raul can show the gap as a row to fill in; the
+        // flow names it when it starts (`builder has no harness`).
         let text = Config::default().to_toml().replacen(
             "[agents.builder]\nharness = \"claude\"\n",
             "[agents.builder]\n",
             1,
         );
-        let error = Config::from_toml(&text).expect_err("the builder names no harness");
-        assert!(matches!(&error, ConfigError::Shape { .. }), "{error:?}");
-        assert!(
-            error.to_string().contains("builder names no harness"),
-            "{error}"
+        let config = Config::from_toml(&text).expect("the builder reads");
+        let builder = config
+            .agents
+            .iter()
+            .find(|agent| agent.role == FlowRole::Builder)
+            .expect("the builder");
+        assert_eq!(builder.harness, "");
+        assert_eq!(builder.model, "claude-haiku-5-5");
+        assert_eq!(builder.effort.as_deref(), Some("high"));
+    }
+
+    #[test]
+    fn a_missing_harness_is_set_and_saved_through_the_writer() {
+        // raul's row for a missing harness is saved by the configuration's own
+        // writer: the key is added to the agent's table, and nothing else moves.
+        let dir = std::env::temp_dir().join(format!("cc-missing-harness-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a scratch folder");
+        let path = dir.join("config.toml");
+        let text = Config::default().to_toml().replacen(
+            "[agents.builder]\nharness = \"claude\"\n",
+            "[agents.builder]\n",
+            1,
         );
+        std::fs::write(&path, &text).expect("the file");
+        let mut file = ConfigFile::open(&path).expect("the file reads");
+        let mut config = file.config().clone();
+        config
+            .agents
+            .iter_mut()
+            .find(|agent| agent.role == FlowRole::Builder)
+            .expect("the builder")
+            .harness = "opencode".to_string();
+        file.save(&config).expect("the save");
+        let saved = std::fs::read_to_string(&path).expect("the saved file");
+        let table = saved
+            .split("[agents.builder]")
+            .nth(1)
+            .and_then(|rest| rest.split("\n\n").next())
+            .expect("the builder's table");
+        assert!(table.contains("harness = \"opencode\""), "{table}");
+        assert!(table.contains("model = \"claude-haiku-5-5\""), "{table}");
+        let reread = Config::from_toml(&saved).expect("the saved file reads");
+        assert_eq!(reread, config);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

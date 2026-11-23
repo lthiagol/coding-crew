@@ -1,5 +1,7 @@
 use coding_crew_core::lifecycle::{Event, TransitionContext, transition};
-use coding_crew_core::{Actor, Role, RoundKind, Status, Store, Task, Verdict, parse_rfc3339};
+use coding_crew_core::{
+    Activity, Actor, EventKind, Role, RoundKind, Status, Store, Task, Verdict, parse_rfc3339,
+};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -8,6 +10,23 @@ fn mock_store() -> Store {
         .join("../..")
         .join("mock-data/coding-crew/work");
     Store::new(root)
+}
+
+/// The committed journal: the moments the tasks' moves happened.
+fn journal() -> Activity {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("mock-data/coding-crew/activity.json");
+    Activity::read(&path).expect("the mock journal")
+}
+
+/// The moment the journal's `approved` event names for a task, if it has one.
+fn approved_at(task: &Task) -> Option<String> {
+    journal()
+        .events
+        .into_iter()
+        .find(|event| event.task == task.id && event.kind == EventKind::Approved)
+        .map(|event| event.at)
 }
 
 fn tasks() -> Vec<Task> {
@@ -70,7 +89,9 @@ fn status_transition_event(task: &Task) -> String {
     match task.status {
         Status::Draft => task.created.clone(),
         Status::Groomed => transition_note_at(task, "Groomed by"),
-        Status::Approved => transition_note_at(task, "Approved by"),
+        Status::Approved => {
+            approved_at(task).unwrap_or_else(|| panic!("{} has no approved event", task.id))
+        }
         Status::Executing => task.claim.as_ref().expect("a claim").at.clone(),
         Status::CodeReview => {
             // A hand-back to review is the latest move into code-review, when
@@ -95,15 +116,16 @@ fn status_transition_event(task: &Task) -> String {
 }
 
 /// Every lifecycle event, in the order the model has them: creation, the
-/// transitions a note records, the claim, the evidence, and the review
-/// rounds that assess it.
+/// groom note, the approval the journal records, the claim, the evidence, and
+/// the review rounds that assess it.
 fn lifecycle_events(task: &Task) -> Vec<String> {
     let mut events = vec![task.created.clone()];
     for note in &task.notes {
-        if note.body.starts_with("Groomed by") || note.body.starts_with("Approved by") {
+        if note.body.starts_with("Groomed by") {
             events.push(note.at.clone());
         }
     }
+    events.extend(approved_at(task));
     if let Some(claim) = &task.claim {
         events.push(claim.at.clone());
     }

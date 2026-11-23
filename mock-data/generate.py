@@ -951,6 +951,11 @@ FIXTURE_NOW = "2026-11-19T08:00:00Z"
 # and its second external round closed it again. The file holds both rounds.
 REOPENED = {"TSK25": "2026-11-07T22:00Z"}
 
+# When each approved task left the human lane. The task file holds no note for
+# it: the journal's `approved` event carries the moment, and the generator keeps
+# it here, as it keeps REOPENED.
+APPROVED_AT = {}
+
 DONE_IDS = [f"TSK{number:02d}" for number in range(22, 27)]
 
 
@@ -1151,12 +1156,13 @@ def transition_moment(item):
         return item["review"]["rounds"][0]["at"]
     if status == "draft":
         return item["created"]
-    if status in ("groomed", "approved"):
-        prefix = "Groomed by" if status == "groomed" else "Approved by"
+    if status == "approved":
+        return APPROVED_AT[item["id"]]
+    if status == "groomed":
         for candidate in reversed(item["notes"]):
-            if candidate["body"].startswith(prefix):
+            if candidate["body"].startswith("Groomed by"):
                 return candidate["at"]
-        raise ValueError(f"{item['id']} has no {prefix} transition note")
+        raise ValueError(f"{item['id']} has no Groomed by transition note")
     if status == "executing":
         return item["claim"]["at"]
     # Every other status is entered by its last review round.
@@ -1402,12 +1408,9 @@ def event(at, kind, task_id, by, note=""):
 
 
 def approval_at(item):
-    """When the task left the human lane, from its own history."""
-    for note in reversed(item["notes"]):
-        if note["body"].startswith("Approved by"):
-            return note["at"]
-    if item["status"] == "approved":
-        return item["status_since"]
+    """When the task left the human lane: the journal's `approved` event."""
+    if item["id"] in APPROVED_AT:
+        return APPROVED_AT[item["id"]]
     if item.get("claim"):
         # An older fixture records the claim but not the approval: the
         # claim is the next event, and the approval is shortly before it.
@@ -1569,7 +1572,7 @@ def activity_events(tasks):
                     "remediated",
                     task_id,
                     "runner",
-                    "answered the findings",
+                    f"after round {entry['after_round']}",
                 )
             )
         for kind in ("blocked", "deferred", "cancelled"):
@@ -1593,9 +1596,7 @@ def activity_events(tasks):
                 event(item["status_since"], "completed", task_id, "reviewer", "reviewed clean")
             )
         for candidate in item.get("notes", []):
-            if candidate["body"].startswith("Groomed by") or candidate["body"].startswith(
-                "Approved by"
-            ):
+            if candidate["body"].startswith("Groomed by"):
                 continue
             # The journal's note is one line, so a multi-line note gives its
             # first line.
@@ -2038,6 +2039,7 @@ def build():
                     ts(5, 15),
                 )
             )
+        APPROVED_AT[tid] = ts(5 + i, 16 + i)
         item = planned(
             tid,
             i + 6,
@@ -2049,13 +2051,6 @@ def build():
                     creator,
                     f"Groomed by {creator}: intent, scope and criteria written.",
                     ts(4 + i, 9),
-                ),
-                transition_note(
-                    i + 3,
-                    creator,
-                    f"Approved by {creator}: criteria covered, steps planned.",
-                    ts(5 + i, 16 + i),
-                    note_id="NOTE-02",
                 ),
             ],
             questions=questions,
@@ -3129,6 +3124,7 @@ def build():
     tid = next_id()
     assert tid == "TSK29", tid
     ids.setdefault("approved", []).append(tid)
+    APPROVED_AT[tid] = ts(4, 12)
     b = brief(tid)
     tasks.append(
         task(
@@ -3163,13 +3159,6 @@ def build():
                     "session-creator-05",
                     "Groomed by session-creator-05: intent, scope and criteria written.",
                     ts(3, 10),
-                ),
-                transition_note(
-                    6,
-                    "session-creator-05",
-                    "Approved by session-creator-05: criteria covered, steps planned.",
-                    ts(4, 12),
-                    note_id="NOTE-02",
                 ),
             ],
             depends_on=[done_ids[0]],

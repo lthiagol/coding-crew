@@ -459,7 +459,22 @@ impl App {
     /// button's release, change nothing: they answer `Idle`, so a pointer
     /// passing over the window costs no redraw.
     pub fn on_mouse(&mut self, mouse: MouseEvent, work: &Work, now: &str) -> Action {
-        if self.help || self.typing || self.settings.asking() || self.settings.editing() {
+        if self.help {
+            // The help takes the wheel when it scrolls, and nothing else: a
+            // help that fits has no wheel, and a click waits for the keys.
+            return match mouse.kind {
+                MouseEventKind::ScrollDown if self.help_scroll.scrolls() => {
+                    self.help_scroll.move_rows(WHEEL_ROWS);
+                    Action::Redraw
+                }
+                MouseEventKind::ScrollUp if self.help_scroll.scrolls() => {
+                    self.help_scroll.move_rows(-WHEEL_ROWS);
+                    Action::Redraw
+                }
+                _ => Action::Idle,
+            };
+        }
+        if self.typing || self.settings.asking() || self.settings.editing() {
             return Action::Idle;
         }
         let at = Position::new(mouse.column, mouse.row);
@@ -1052,19 +1067,14 @@ impl App {
         }
     }
 
-    /// The footer's chips: the keys that do something on this screen, and
-    /// the closing keys, `? help · q quit`, which answer wherever `?` opens
-    /// the help. Navigation keys are not here: the help names them.
+    /// The footer's chips: the lead, the keys that do something on this
+    /// screen, and the closing keys, `? help · q quit`, which answer wherever
+    /// `?` opens the help. Navigation keys are not here: the help names them.
     ///
-    /// The hidden count of a pane that cannot say what it hides leads the
-    /// actions, so it is the last to give way. The content pane says nothing
-    /// about it: the same fact is never painted twice.
-    fn footer_chips(
-        &self,
-        work: &Work,
-        now: &str,
-        hidden: Option<usize>,
-    ) -> (Vec<Vec<Span<'static>>>, Vec<Vec<Span<'static>>>) {
+    /// The hidden count of a pane that cannot say what it hides is the lead:
+    /// it is the last chip a narrow footer gives way. The content pane says
+    /// nothing about it: the same fact is never painted twice.
+    fn footer_chips(&self, work: &Work, now: &str, hidden: Option<usize>) -> (Chips, Chips, Chips) {
         let chip = |key: &str, action: &str| chrome::key_chip(key, action, &self.theme);
         if let Some(asked) = self.settings.asked() {
             // The question is waiting for an answer: the footer is the question.
@@ -1073,11 +1083,12 @@ impl App {
                 Ask::Reload => chip("r", "reload"),
             };
             let actions = vec![chip("w", "save"), drop, chip("esc", "stay")];
-            return (actions, Vec::new());
+            return (Vec::new(), actions, Vec::new());
         }
         if self.typing {
             // The filter line takes the keys as its text: no closing key works.
             return (
+                Vec::new(),
                 vec![chip("enter", "keep"), chip("esc", "clear")],
                 Vec::new(),
             );
@@ -1089,19 +1100,25 @@ impl App {
                 chip("enter", "keep"),
                 chip("esc", "restore"),
             ];
-            return (actions, Vec::new());
+            return (Vec::new(), actions, Vec::new());
         }
         if self.settings.editing() {
-            return (vec![chip("enter", "keep"), chip("esc", "drop")], Vec::new());
+            return (
+                Vec::new(),
+                vec![chip("enter", "keep"), chip("esc", "drop")],
+                Vec::new(),
+            );
         }
         let closing = vec![chip("?", "help"), chip("q", "quit")];
         if self.help {
-            return (vec![chip("esc", "close help")], closing);
+            return (Vec::new(), vec![chip("esc", "close help")], closing);
         }
+        // The hidden count leads: it is the last chip a narrow footer loses.
+        let lead: Vec<Vec<Span<'static>>> = hidden
+            .map(|hidden| hidden_chip(hidden, &self.theme))
+            .into_iter()
+            .collect();
         let mut actions = Vec::new();
-        if let Some(hidden) = hidden {
-            actions.push(hidden_chip(hidden, &self.theme));
-        }
         if self.tab == Tab::Settings {
             // Enter edits a value or opens a choice's list: both are named in
             // the help, and the footer names what changes the file. A file
@@ -1117,7 +1134,7 @@ impl App {
             if !self.settings.stale() {
                 actions.push(reload);
             }
-            return (actions, closing);
+            return (lead, actions, closing);
         }
         let has_rows = rows_of(work, self.tab, now, self.order, &self.filter)
             .is_some_and(|ids| !ids.is_empty());
@@ -1132,7 +1149,7 @@ impl App {
             }
             actions.push(chip("/", "filter"));
         }
-        (actions, closing)
+        (lead, actions, closing)
     }
 
     /// The footer at `width`, in `rows` rows: see `chrome::footer`.
@@ -1144,8 +1161,8 @@ impl App {
         now: &str,
         hidden: Option<usize>,
     ) -> Vec<Line<'static>> {
-        let (actions, closing) = self.footer_chips(work, now, hidden);
-        chrome::footer(&actions, &closing, width, rows, &self.theme)
+        let (lead, actions, closing) = self.footer_chips(work, now, hidden);
+        chrome::footer_led(&lead, &actions, &closing, width, rows, &self.theme)
     }
 
     /// The note above the footer's rule: the filter line while it is typed
@@ -1285,6 +1302,9 @@ fn tail(text: &str, room: usize) -> String {
     }
     format!("…{}", kept.into_iter().rev().collect::<String>())
 }
+
+/// The chips a footer draws: each its spans.
+type Chips = Vec<Vec<Span<'static>>>;
 
 /// The chip of a pane's hidden count: the number in `text.strong`, then the
 /// word in `text.dim`.
@@ -1487,20 +1507,30 @@ fn render_help(
     scroll.page = room;
     scroll.first = scroll.first.min(scroll.last);
     let first = u16::try_from(scroll.first).unwrap_or(u16::MAX);
+    let mut block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .title(Line::from(vec![
+            Span::styled("─", theme.chrome.border_focus),
+            Span::styled(" keys ", block_title_style(theme)),
+        ]))
+        .border_style(theme.chrome.border_focus);
+    if scroll.scrolls() {
+        // The rows shown out of the rows the help has: where the window is.
+        let last = (scroll.first + room).min(rows);
+        block = block.title_bottom(
+            Line::from(Span::styled(
+                format!(" {}–{} of {rows} ", scroll.first + 1, last),
+                theme.text.dim,
+            ))
+            .right_aligned(),
+        );
+    }
     frame.render_widget(Clear, popup);
     frame.render_widget(
         Paragraph::new(lines)
             .wrap(Wrap { trim: true })
             .scroll((first, 0))
-            .block(
-                Block::bordered()
-                    .border_type(BorderType::Rounded)
-                    .title(Line::from(vec![
-                        Span::styled("─", theme.chrome.border_focus),
-                        Span::styled(" keys ", block_title_style(theme)),
-                    ]))
-                    .border_style(theme.chrome.border_focus),
-            ),
+            .block(block),
         popup,
     );
 }
@@ -3189,6 +3219,76 @@ mod tests {
         }
     }
 
+    /// The help's indicator, from its bottom border: the rows in view, `first`
+    /// to `last`, of `total`.
+    fn help_indicator(rows: &[String]) -> Option<(usize, usize, usize)> {
+        let bottom = help_popup_rows(rows).last()?.clone();
+        let text = bottom.find(" of ").map(|at| &bottom[..at])?;
+        let (first, last) = text.rsplit_once('–')?;
+        let first = first.rsplit(' ').next()?.parse().ok()?;
+        let total = bottom
+            .split(" of ")
+            .nth(1)?
+            .split_whitespace()
+            .next()?
+            .parse()
+            .ok()?;
+        Some((first, last.trim().parse().ok()?, total))
+    }
+
+    #[test]
+    fn a_help_taller_than_the_window_shows_the_rows_in_view() {
+        // The indicator is on the bottom border: which rows the popup holds,
+        // of how many the help has. A help that fits draws none.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Tasks, true);
+        let (first, last, total) = help_indicator(&render(&mut app, 100, 14).0)
+            .expect("an indicator on a help that overflows");
+        assert_eq!(first, 1, "the help opens at its top");
+        assert!(last < total, "{last} of {total}");
+        app.on_key(key(KeyCode::Down), &work, now());
+        let (first, _, _) = help_indicator(&render(&mut app, 100, 14).0).expect("an indicator");
+        assert_eq!(first, 2, "a row down moves the window by one row");
+        app.on_key(key(KeyCode::Char('G')), &work, now());
+        let (_, last, total) = help_indicator(&render(&mut app, 100, 14).0).expect("an indicator");
+        assert_eq!(last, total, "G shows the last row");
+        let fits = render(&mut window(&theme, Tab::Tasks, true), 100, 60).0;
+        assert_eq!(
+            help_indicator(&fits),
+            None,
+            "a help that fits draws no indicator"
+        );
+    }
+
+    #[test]
+    fn the_wheel_scrolls_a_taller_help_three_rows_a_notch_and_a_click_does_not() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Tasks, true);
+        render(&mut app, 100, 14);
+        wheel_at(&mut app, &work, true, 5, 5);
+        let (first, _, _) = help_indicator(&render(&mut app, 100, 14).0).expect("an indicator");
+        assert_eq!(first, 4, "the wheel moves three rows");
+        wheel_at(&mut app, &work, false, 5, 5);
+        let (first, _, _) = help_indicator(&render(&mut app, 100, 14).0).expect("an indicator");
+        assert_eq!(first, 1, "the wheel back up returns the window");
+        click_at(&mut app, &work, 5, 5);
+        assert!(app.help, "a click closed the help");
+        let (first, _, _) = help_indicator(&render(&mut app, 100, 14).0).expect("an indicator");
+        assert_eq!(first, 1, "a click moved the help");
+    }
+
+    #[test]
+    fn the_wheel_does_nothing_to_a_help_that_fits() {
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let mut app = window(&theme, Tab::Tasks, true);
+        render(&mut app, 100, 60);
+        assert_eq!(wheel_at(&mut app, &work, true, 5, 5), Action::Idle);
+        assert!(app.help);
+    }
+
     #[test]
     fn the_help_jumps_to_its_ends_and_other_keys_still_close_it() {
         let work = mock_work();
@@ -3464,6 +3564,45 @@ mod tests {
                 "{tab:?}: the footer paints it twice: {footer}"
             );
         }
+    }
+
+    #[test]
+    fn a_narrow_footer_counts_the_keys_it_drops() {
+        // The Tasks footer has five chips: enter, o/O, /, ? and q. A narrow
+        // footer shows fewer, and says how many it left out, never silently.
+        let work = mock_work();
+        let theme = Theme::preset(Preset::Dark);
+        let app = window(&theme, Tab::Tasks, false);
+        let text = |width: u16, rows: u16| -> String {
+            app.footer(width, rows, &work, now(), None)
+                .iter()
+                .map(|line| {
+                    line.spans
+                        .iter()
+                        .map(|span| span.content.as_ref())
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+                .join(" | ")
+        };
+        let chips = ["enter open", "o/O sort", "/ filter", "? help", "q quit"];
+        assert!(!text(60, 1).contains("keys"), "{}", text(60, 1));
+        for (width, dropped) in [(44u16, 2usize), (30, 3), (20, 4)] {
+            let line = text(width, 1);
+            let shown = chips.iter().filter(|chip| line.contains(*chip)).count();
+            assert_eq!(5 - shown, dropped, "{width} columns: {line}");
+            assert!(
+                line.contains(&format!("+{dropped} keys")),
+                "{width} columns: the footer does not count {dropped} keys: {line}"
+            );
+        }
+        // Two rows: the closing keys keep their own row, and the count rides
+        // the context's.
+        assert_eq!(
+            text(24, 2),
+            "enter open · +2 keys | ? help · q quit",
+            "two rows, 24 columns"
+        );
     }
 
     #[test]

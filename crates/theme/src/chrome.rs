@@ -70,9 +70,14 @@ pub fn key_chip(key: &str, action: &str, theme: &Theme) -> Vec<Span<'static>> {
 ///
 /// One line when the whole fits. Otherwise, with two rows, the context's
 /// chips take the first line and the closing chips the second. With one row
-/// the closing chips stay and the context's chips give way from the right.
-/// A chip that does not fit ends its line, so only whole chips drop: a
-/// closing chip too wide for the pane drops too, rather than being cut.
+/// the context's chips give way from the right first, then the closing chips
+/// from the right. A chip that does not fit ends its line, so only whole chips
+/// drop: a chip too wide for the pane drops too, rather than being cut.
+///
+/// Every chip a line leaves out is counted: the line ends in `+N keys`, where
+/// N is the number of chips dropped, so a drop is never silent. The count
+/// takes room of its own, so a chip gives way to it when the line is too
+/// narrow for both.
 pub fn footer(
     actions: &[Vec<Span<'static>>],
     closing: &[Vec<Span<'static>>],
@@ -80,30 +85,108 @@ pub fn footer(
     rows: u16,
     theme: &Theme,
 ) -> Vec<Line<'static>> {
+    footer_led(&[], actions, closing, width, rows, theme)
+}
+
+/// The footer with a lead: chips that come first on the line and hold while
+/// anything else can, such as a pane's count of the rows it hides. The lead
+/// gives way last of all.
+pub fn footer_led(
+    lead: &[Vec<Span<'static>>],
+    actions: &[Vec<Span<'static>>],
+    closing: &[Vec<Span<'static>>],
+    width: u16,
+    rows: u16,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
     let width = usize::from(width);
-    let closing = prefix(closing, width, theme);
-    if closing.is_empty() {
-        return vec![Line::from(prefix(actions, width, theme)).centered()];
-    }
-    let dot = if actions.is_empty() {
-        0
-    } else {
-        text_width(DOT)
-    };
-    let room = width.saturating_sub(columns(&closing) + dot);
-    let whole = join(actions, theme);
-    if rows < 2 || columns(&whole) + dot + columns(&closing) <= width {
-        let mut spans = prefix(actions, room, theme);
-        if !spans.is_empty() {
-            spans.push(Span::styled(DOT, theme.chrome.border));
-        }
-        spans.extend(closing);
+    let whole = line_of(lead, actions, actions.len(), closing, closing.len(), theme);
+    if rows < 2 || closing.is_empty() || columns(&whole) <= width {
+        let spans = (0..=closing.len())
+            .rev()
+            .flat_map(|shown_closing| {
+                (0..=actions.len())
+                    .rev()
+                    .map(move |shown_actions| (shown_actions, shown_closing))
+            })
+            .map(|(shown_actions, shown_closing)| {
+                line_of(lead, actions, shown_actions, closing, shown_closing, theme)
+            })
+            .find(|spans| columns(spans) <= width)
+            .unwrap_or_else(|| groups_line(vec![join(lead, theme)], theme));
         return vec![Line::from(spans).centered()];
     }
-    vec![
-        Line::from(prefix(actions, width, theme)).centered(),
-        Line::from(closing).centered(),
-    ]
+    // Two rows: the closing chips keep the second whole if they can, and the
+    // count rides the first line with the context's chips.
+    let shown_closing = (0..=closing.len())
+        .rev()
+        .find(|&shown| columns(&join(&closing[..shown], theme)) <= width)
+        .unwrap_or(0);
+    let dropped_closing = closing.len() - shown_closing;
+    let first = (0..=actions.len())
+        .rev()
+        .map(|shown| {
+            let dropped = actions.len() - shown + dropped_closing;
+            groups_line(
+                vec![
+                    join(lead, theme),
+                    join(&actions[..shown], theme),
+                    marker(dropped, theme),
+                ],
+                theme,
+            )
+        })
+        .find(|spans| columns(spans) <= width)
+        .unwrap_or_default();
+    let second = join(&closing[..shown_closing], theme);
+    if second.is_empty() {
+        return vec![Line::from(first).centered()];
+    }
+    vec![Line::from(first).centered(), Line::from(second).centered()]
+}
+
+/// One footer line: the lead, the first `shown_actions` context chips, the
+/// first `shown_closing` closing chips, and the count of the rest.
+fn line_of(
+    lead: &[Vec<Span<'static>>],
+    actions: &[Vec<Span<'static>>],
+    shown_actions: usize,
+    closing: &[Vec<Span<'static>>],
+    shown_closing: usize,
+    theme: &Theme,
+) -> Vec<Span<'static>> {
+    let dropped = (actions.len() - shown_actions) + (closing.len() - shown_closing);
+    groups_line(
+        vec![
+            join(lead, theme),
+            join(&actions[..shown_actions], theme),
+            join(&closing[..shown_closing], theme),
+            marker(dropped, theme),
+        ],
+        theme,
+    )
+}
+
+/// The groups of a footer line, joined by the separator. A group with no
+/// chips is left out, so no separator stands beside nothing.
+fn groups_line(groups: Vec<Vec<Span<'static>>>, theme: &Theme) -> Vec<Span<'static>> {
+    let groups: Vec<Vec<Span<'static>>> = groups
+        .into_iter()
+        .filter(|group| !group.is_empty())
+        .collect();
+    join(&groups, theme)
+}
+
+/// The count of the chips a line leaves out: `+N keys`, or nothing when none
+/// is left out.
+fn marker(dropped: usize, theme: &Theme) -> Vec<Span<'static>> {
+    if dropped == 0 {
+        return Vec::new();
+    }
+    vec![Span::styled(
+        format!("+{dropped} keys"),
+        theme.chrome.footer,
+    )]
 }
 
 /// The thin rule over the footer: `─` across the width, in `chrome.border`.
@@ -121,15 +204,6 @@ fn join(chips: &[Vec<Span<'static>>], theme: &Theme) -> Vec<Span<'static>> {
         spans.extend(chip.iter().cloned());
     }
     spans
-}
-
-/// The longest run of chips, from the first, that fits in `room` columns.
-fn prefix(chips: &[Vec<Span<'static>>], room: usize, theme: &Theme) -> Vec<Span<'static>> {
-    (0..=chips.len())
-        .rev()
-        .map(|count| join(&chips[..count], theme))
-        .find(|spans| columns(spans) <= room)
-        .unwrap_or_default()
 }
 
 /// The columns the spans take.
@@ -310,23 +384,34 @@ mod tests {
         let closing = chips(&[("?", "help"), ("q", "quit")]);
         assert_eq!(
             footer_text(&actions, &closing, 24, 2),
-            ["enter open · o/O sort", "? help · q quit"]
+            ["enter open · +2 keys", "? help · q quit"],
+            "the count rides the context's line, the closing chips keep their own"
+        );
+        assert_eq!(
+            footer_text(&actions, &closing, 50, 2),
+            ["enter open · o/O sort · / filter · ? help · q quit"],
+            "a footer that fits takes one line"
         );
         assert_eq!(footer(&actions, &closing, 24, 2, &theme()).len(), 2);
     }
 
     #[test]
-    fn a_footer_with_one_row_drops_whole_chips_from_the_right_and_keeps_the_closing() {
+    fn a_footer_with_one_row_drops_whole_chips_and_counts_them() {
         let actions = chips(&[("enter", "open"), ("o/O", "sort"), ("/", "filter")]);
         let closing = chips(&[("?", "help"), ("q", "quit")]);
         assert_eq!(
+            footer_text(&actions, &closing, 50, 1),
+            ["enter open · o/O sort · / filter · ? help · q quit"]
+        );
+        assert_eq!(
             footer_text(&actions, &closing, 30, 1),
-            ["enter open · ? help · q quit"]
+            ["? help · q quit · +3 keys"],
+            "the closing chips stay; the count takes the room the actions gave"
         );
         assert_eq!(
             footer_text(&actions, &closing, 19, 1),
-            ["? help · q quit"],
-            "the closing chips stay when no action fits"
+            ["? help · +4 keys"],
+            "a closing chip gives way when the count cannot sit beside both"
         );
     }
 
@@ -334,8 +419,54 @@ mod tests {
     fn a_closing_chip_too_wide_drops_whole_and_is_never_cut() {
         let actions = chips(&[("enter", "open")]);
         let closing = chips(&[("?", "help"), ("q", "quit")]);
-        assert_eq!(footer_text(&actions, &closing, 10, 1), ["? help"]);
+        assert_eq!(footer_text(&actions, &closing, 10, 1), ["+3 keys"]);
         assert_eq!(footer_text(&actions, &closing, 4, 2), [""]);
+    }
+
+    #[test]
+    fn a_lead_holds_while_the_other_chips_give_way() {
+        let lead = vec![vec![Span::raw("8 hidden")]];
+        let actions = chips(&[("enter", "open")]);
+        let closing = chips(&[("?", "help"), ("q", "quit")]);
+        let text = |width: u16| -> Vec<String> {
+            footer_led(&lead, &actions, &closing, width, 1, &theme())
+                .iter()
+                .map(|line| {
+                    line.spans
+                        .iter()
+                        .map(|span| span.content.as_ref())
+                        .collect()
+                })
+                .collect()
+        };
+        assert_eq!(text(40), ["8 hidden · enter open · ? help · q quit"]);
+        assert_eq!(text(27), ["8 hidden · ? help · +2 keys"]);
+        assert_eq!(text(10), ["8 hidden"], "the lead is the last to go");
+    }
+
+    #[test]
+    fn a_footer_that_drops_nothing_has_no_count() {
+        let actions = chips(&[("enter", "open")]);
+        let closing = chips(&[("?", "help"), ("q", "quit")]);
+        let text = footer_text(&actions, &closing, 40, 1);
+        assert!(!text.join("").contains("keys"), "{text:?}");
+    }
+
+    #[test]
+    fn every_footer_line_fits_the_width_at_every_width() {
+        // The count takes room, so no line runs past the pane at any width.
+        let actions = chips(&[("enter", "open"), ("o/O", "sort"), ("/", "filter")]);
+        let closing = chips(&[("?", "help"), ("q", "quit")]);
+        for width in 1..=60u16 {
+            for rows in 1..=2u16 {
+                for line in footer_text(&actions, &closing, width, rows) {
+                    assert!(
+                        text_width(&line) <= usize::from(width),
+                        "{width}x{rows}: {line:?} is wider than the footer"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

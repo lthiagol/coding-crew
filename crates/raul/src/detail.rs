@@ -1930,7 +1930,9 @@ mod tests {
     #[test]
     fn the_footer_degrades_in_the_built_order() {
         // The pane's own chip gives way first, whole, and the closing chips
-        // hold longest: `q quit` is the last one dropped, and never cut.
+        // hold longest. Every chip left out is counted, so the count takes
+        // room, and the closing chips give way to it last of all: `q quit`
+        // goes before `? help`, and neither is cut.
         let text = |width: u16| {
             footer(width, 1, false, &theme())
                 .iter()
@@ -1940,8 +1942,17 @@ mod tests {
         };
         // The whole footer is 27 columns.
         assert_eq!(text(27), "esc close · ? help · q quit");
-        assert_eq!(text(20), "? help · q quit", "esc gives way first");
-        assert_eq!(text(12), "? help", "q quit is dropped whole, not cut");
+        assert_eq!(text(25), "? help · q quit · +1 keys", "esc gives way first");
+        assert_eq!(
+            text(20),
+            "? help · +2 keys",
+            "q quit gives way to the count"
+        );
+        assert_eq!(
+            text(12),
+            "+3 keys",
+            "? help gives way to the count, not cut"
+        );
     }
 
     #[test]

@@ -964,6 +964,38 @@ impl Panel {
                 section,
             });
         }
+        // A missing harness or effort is a row all the same: an empty one, after
+        // the table's last value, so it can be set and saved. The lines are
+        // parts one for one, after the warnings.
+        let offset = parts.len() - self.text.len();
+        for block in agent_blocks(&self.text).iter().rev() {
+            let at = offset + block.last + 1;
+            let missing = [
+                Field::AgentHarness(block.role),
+                Field::AgentEffort(block.role),
+            ]
+            .into_iter()
+            .filter(|field| !block.fields.contains(field));
+            for (rows, field) in missing.enumerate() {
+                let current = field.text(&self.saved);
+                parts.insert(
+                    at + rows,
+                    Part {
+                        shape: Shape::Value {
+                            field,
+                            value: if current.is_empty() {
+                                String::new()
+                            } else {
+                                field.literal(&current)
+                            },
+                            comment: None,
+                        },
+                        stop: Some(field.id()),
+                        section: "agents".to_string(),
+                    },
+                );
+            }
+        }
         parts.extend(self.absent_parts());
         parts
     }
@@ -1030,6 +1062,12 @@ impl Panel {
     /// Whether the file leaves one of raul's values out: it assigns the key in
     /// no form. Only those values have defaults drawn in place of a line.
     fn absent(&self, field: Field) -> bool {
+        if let Field::AgentHarness(role) | Field::AgentEffort(role) = field {
+            return self.file.is_some()
+                && agent_blocks(&self.text)
+                    .iter()
+                    .any(|block| block.role == role && !block.fields.contains(&field));
+        }
         let (section, _) = field.place();
         RAUL_VALUES.contains(&field)
             && self
@@ -1386,6 +1424,52 @@ fn array_roles(lines: &[String]) -> Vec<Option<FlowRole>> {
         }
     }
     roles
+}
+
+/// An agent's table in the file: its role, the line its last value sits on
+/// (its header when it holds none), and the values it assigns.
+struct AgentBlock {
+    role: FlowRole,
+    last: usize,
+    fields: Vec<Field>,
+}
+
+/// The agents' tables the file holds, in the order it holds them.
+fn agent_blocks(lines: &[String]) -> Vec<AgentBlock> {
+    let crew = array_roles(lines);
+    let mut place = Place::default();
+    let (mut agents, mut steps) = (0, 0);
+    let mut blocks: Vec<AgentBlock> = Vec::new();
+    let mut open = false;
+    for (index, raw) in lines.iter().enumerate() {
+        let trimmed = raw.trim();
+        if trimmed.starts_with('[') {
+            place = header(trimmed, &mut agents, &mut steps, &crew);
+            open = false;
+            if let Some(role) = place
+                .name
+                .strip_prefix("agents.")
+                .and_then(role_of)
+                .filter(|role| *role != FlowRole::Creator)
+            {
+                blocks.push(AgentBlock {
+                    role,
+                    last: index,
+                    fields: Vec::new(),
+                });
+                open = true;
+            }
+            continue;
+        }
+        if let Some((field, _)) = assignment(trimmed, &place)
+            && open
+            && let Some(block) = blocks.last_mut()
+        {
+            block.last = index;
+            block.fields.push(field);
+        }
+    }
+    blocks
 }
 
 /// The place a `[section]` or `[[array]]` header opens. An agent's table is
@@ -2643,6 +2727,84 @@ mod tests {
             "{}",
             rows.join("\n")
         );
+    }
+
+    /// A file whose builder names a model and no harness or effort.
+    const NO_HARNESS: &str = "round_limit = 5\norder = []\n\n[agents.orchestrator]\nharness = \"claude\"\nmodel = \"claude-opus-5-5\"\neffort = \"medium\"\n\n[agents.builder]\nmodel = \"claude-haiku-5-5\"\n";
+
+    #[test]
+    fn a_missing_harness_and_effort_show_as_empty_rows_that_can_be_set() {
+        // The file reads, so the tab is not read-only; the two values it leaves
+        // out are rows, empty and cursor stops, after the builder's model.
+        let panel = panel_with("no-harness-rows", NO_HARNESS);
+        assert!(!panel.read_only(), "a file with no harness is read-only");
+        let ids = panel.ids();
+        assert!(
+            ids.contains(&"agents.builder.harness".to_string()),
+            "{ids:?}"
+        );
+        assert!(
+            ids.contains(&"agents.builder.effort".to_string()),
+            "{ids:?}"
+        );
+        let rows = draw(&panel, 100, 200, None);
+        // The builder's table is the last one: its rows are the last of each.
+        let harness = rows
+            .iter()
+            .rfind(|row| row.contains("harness = "))
+            .expect("a harness row");
+        assert!(harness.contains("harness =  "), "{harness}");
+        assert!(harness.contains("(not in the file yet)"), "{harness}");
+        let effort = rows
+            .iter()
+            .rfind(|row| row.contains("effort = "))
+            .expect("an effort row");
+        assert!(effort.contains("effort =  "), "{effort}");
+        let model = rows
+            .iter()
+            .rposition(|row| row.contains("model = \"claude-haiku"))
+            .expect("the model");
+        let harness_at = rows
+            .iter()
+            .rposition(|row| row.contains("harness = "))
+            .expect("the row");
+        assert_eq!(
+            harness_at,
+            model + 1,
+            "the harness row is after the model: {rows:?}"
+        );
+    }
+
+    #[test]
+    fn a_missing_harness_and_effort_are_set_and_saved_through_the_writer() {
+        let mut panel = panel_with("no-harness-save", NO_HARNESS);
+        panel.reader = listing;
+        choose(&mut panel, "agents.builder.harness", 0);
+        assert!(panel.unsaved(), "the pick did not change the harness");
+        choose(&mut panel, "agents.builder.effort", 0);
+        assert!(
+            panel.save(),
+            "the save was refused: {:?} {:?}",
+            panel.notice(),
+            panel.first_reason()
+        );
+        assert!(!panel.unsaved());
+        let saved = fs::read_to_string(panel.path.clone().expect("the file")).expect("the file");
+        let table = saved
+            .split("[agents.builder]")
+            .nth(1)
+            .and_then(|rest| rest.split("\n\n").next())
+            .expect("the builder's table");
+        assert!(table.contains("harness = \"claude\""), "{saved}");
+        assert!(table.contains("effort = \""), "{saved}");
+        let config = Config::from_toml(&saved).expect("the saved file reads");
+        let builder = config
+            .agents
+            .iter()
+            .find(|agent| agent.role == FlowRole::Builder)
+            .expect("the builder");
+        assert_eq!(builder.harness, "claude");
+        assert!(builder.effort.is_some(), "the effort is not saved");
     }
 
     #[test]

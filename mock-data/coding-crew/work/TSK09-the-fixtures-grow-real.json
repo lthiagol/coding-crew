@@ -110,16 +110,10 @@
       "author": "session-creator-03",
       "body": "Groomed by session-creator-03: intent, scope and criteria written.",
       "at": "2026-11-06T09:00Z"
-    },
-    {
-      "id": "NOTE-02",
-      "author": "session-creator-03",
-      "body": "Approved by session-creator-03: criteria covered, steps planned.",
-      "at": "2026-11-07T18:00Z"
     }
   ],
   "depends_on": [
     "TSK23"
   ],
-  "revision": 5
+  "revision": 4
 }
