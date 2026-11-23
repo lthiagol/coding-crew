@@ -123,14 +123,25 @@
         "kind": "self",
         "focus": "spec-compliance",
         "reviewer": "runner-03",
-        "verdict": "changes-needed",
+        "verdict": "ok",
         "at": "2026-11-12T16:00Z",
-        "notes": "The pre-screen found the row and the mark before the external round spent budget.",
+        "notes": "The pre-screen found nothing to fix before the external round.",
+        "findings": [],
+        "session": "session-runner-03"
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "reviewer-03",
+        "verdict": "changes-needed",
+        "at": "2026-11-12T16:40Z",
+        "notes": "The findings need fixing before the task can pass.",
         "findings": [
           "FIND-01",
           "FIND-02"
         ],
-        "session": "session-runner-03"
+        "session": "session-reviewer-03"
       }
     ],
     "verdict": null,
@@ -140,7 +151,7 @@
         "severity": "medium",
         "status": "open",
         "description": "The document paints a level-two heading as the first level, so the hierarchy is flat.",
-        "created": "2026-11-12T16:00Z",
+        "created": "2026-11-12T16:40Z",
         "resolved": "",
         "resolution": "",
         "comments": []
@@ -150,7 +161,7 @@
         "severity": "high",
         "status": "open",
         "description": "The fenced block's gutter numbers the wrapped rows, so one line has three numbers.",
-        "created": "2026-11-12T16:00Z",
+        "created": "2026-11-12T16:40Z",
         "resolved": "",
         "resolution": "",
         "comments": []
@@ -171,5 +182,5 @@
     "TSK24",
     "TSK25"
   ],
-  "revision": 9
+  "revision": 10
 }

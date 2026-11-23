@@ -890,7 +890,7 @@ when it changes, so an id in a doc is a fact that goes stale.
 | an approved task whose dependencies are done | **claimable** — the one thing an agent could take right now |
 | an executing task | claimed with a lease, evidence attached, a `deviation` on the step, a note |
 | a task with a deferred criterion | `status` `deferred`, a `deferral` with a `follow_up` |
-| a task in code review | a `self` round and one open finding |
+| a task in code review | a `self` round (`ok`) then an `external` round (`changes-needed`) with findings still open |
 | a task in remediation | a `self` round (`ok`) then an `external` round (`changes-needed`) |
 | a task needing a human | five external rounds spent, work still outstanding |
 | a done task | verdict `ok`, no open findings |

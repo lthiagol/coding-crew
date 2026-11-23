@@ -12,7 +12,7 @@
 │ 󰀦 needs-human 3 ███████████████░░░░░░░░░░░░░░░ │ │ approved, free, dependencies done             │
 │ 󰄬 done        5 █████████████████████████░░░░░ │ ╰───────────────────────────────────────────────╯
 ╰────────────────────────────────────────────────╯ ╭─ 󰥔 activity ──────────────────────────────────╮
-╭─ 󰚇 smaller tasks ──────────────────────────────╮ │ +245 earlier events                           │
+╭─ 󰚇 smaller tasks ──────────────────────────────╮ │ +248 earlier events                           │
 │ smaller tasks by kind                          │ │ ── 2026-11-16 ──                              │
 │ 󰌵 idea        1                                │ │ 10:00 󰈈 TSK21 round_filed external 5, spec-c… │
 │ 󰐕 feature     2                                │ │ 10:00 󰅚 TSK21 finding_raised raised FIND-05   │

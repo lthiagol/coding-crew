@@ -3071,12 +3071,16 @@ mod tests {
         let rows = inner(&draw(&mock_work(), 100, 40));
         // A row with the room for the whole state says it whole, severities
         // and all.
-        let row = rows
+        // TSK13's state is longer than a hundred columns leave room for, so
+        // its whole state is drawn at a hundred and twenty.
+        let wide = inner(&draw(&mock_work(), 120, 40));
+        let row = wide
             .iter()
             .find(|row| row.contains("TSK13"))
-            .unwrap_or_else(|| panic!("no row for TSK13: {rows:?}"));
+            .unwrap_or_else(|| panic!("no row for TSK13: {wide:?}"));
         assert!(
-            row.ends_with("1 open finding (1 medium)"),
+            row.trim_end()
+                .ends_with("2 open findings (1 medium, 1 low) · 1/5 rounds"),
             "TSK13 loses its state: {row}"
         );
         // A long title leaves less room: the state is cut and says so, and

@@ -1142,6 +1142,9 @@ def transition_moment(item):
             item["review"]["rounds"][-1]["at"],
             item["review"]["re_reviews"][-1]["at"],
         )
+    if status == "code-review":
+        # `finish` moved the task here with its self round.
+        return item["review"]["rounds"][0]["at"]
     if status == "draft":
         return item["created"]
     if status in ("groomed", "approved"):
@@ -2052,18 +2055,16 @@ def build():
         )
         tasks.append(item)
 
-    # code-review — steps settled, evidence, self round, findings: one open,
-    # one resolved with a comment, and one finding no round names.
+    # code-review — steps settled, a clean self round, then an external round
+    # that raised findings. ADR 0017 refuses findings on a self round, so every
+    # code-review task raised its findings in its external round.
     for i in range(3):
         tid = next_id()
         ids.setdefault("code-review", []).append(tid)
         review_day = 10 + i
         claim_at = ts(review_day, 9)
         round_at = ts(review_day, 16)
-        # TSK14's findings were raised by its first external round, after the
-        # self pre-screen had found nothing; every other task raised its own at
-        # the self round.
-        raised_at = ts(review_day, 16, 40) if tid == "TSK14" else round_at
+        raised_at = ts(review_day, 16, 40)
         runner = f"runner-{i + 1:02d}"
         session = f"session-runner-{i + 1:02d}"
         b = brief(tid)
@@ -2093,27 +2094,16 @@ def build():
             findings.append(
                 finding(
                     2,
-                    round_at,
+                    raised_at,
                     severity="low",
-                    status="fixed",
                     description="The mark's background says nothing about the selection.",
-                    resolved=ts(review_day, 16, 30),
-                    resolution="The mark now reads the selection's two slots, foreground and background.",
-                    comments=[
-                        comment(
-                            "CMT-01",
-                            "runner-01",
-                            "Took the slots from the pane rather than inventing a third colour.",
-                            ts(review_day, 16, 10),
-                        )
-                    ],
                 )
             )
         elif tid == "TSK15":
             findings.append(
                 finding(
                     2,
-                    round_at,
+                    raised_at,
                     severity="high",
                     description=pick(FINDING_TEXT, 7),
                 )
@@ -2198,35 +2188,32 @@ def build():
                     "self",
                     "spec-compliance",
                     runner,
-                    "changes-needed",
+                    "ok",
                     round_at,
-                    "The pre-screen found the row and the mark before the external round spent budget.",
-                    [finding["id"] for finding in findings if finding["created"] == round_at],
+                    "The pre-screen found nothing to fix before the external round.",
                 )
             ],
             "verdict": None,
             "findings": findings,
         }
-        if tid == "TSK14":
-            # The first external round raised the three findings and sent the
-            # work back, and the self round before it found nothing. The high
-            # finding is still open, so the review is round 2's, in flight.
-            self_round = item["review"]["rounds"][0]
-            self_round["verdict"] = "ok"
-            self_round["notes"] = "The pre-screen found nothing to fix before the external round."
-            self_round["findings"] = []
-            item["review"]["rounds"].append(
-                round_(
-                    1,
-                    "external",
-                    pick(FOCI, i + 1),
-                    f"reviewer-{i + 1:02d}",
-                    "changes-needed",
-                    raised_at,
-                    "The count is lost when the cut moves, and the pin misses the cut.",
-                    [finding["id"] for finding in findings],
-                )
+        # The external round raised the findings and sent the work back. TSK14
+        # is the task in flight: its high finding is still open.
+        item["review"]["rounds"].append(
+            round_(
+                1,
+                "external",
+                pick(FOCI, i + 1),
+                f"reviewer-{i + 1:02d}",
+                "changes-needed",
+                raised_at,
+                (
+                    "The count is lost when the cut moves, and the pin misses the cut."
+                    if tid == "TSK14"
+                    else "The findings need fixing before the task can pass."
+                ),
+                [finding["id"] for finding in findings],
             )
+        )
         tasks.append(item)
 
     # remediating — external round with changes-needed: one finding fixed,

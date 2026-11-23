@@ -1163,8 +1163,11 @@ mod tests {
         assert!(text.contains("TSK04"), "{text}");
         assert!(text.contains("TSK13"), "{text}");
         assert!(text.contains("TSK19"), "{text}");
+        // TSK13's state is long enough to cut its title at a hundred columns,
+        // so the row keeps the title's head.
         let title = work_title(&work, "TSK13");
-        assert!(text.contains(&title), "{text}");
+        let head: String = title.chars().take(12).collect();
+        assert!(text.contains(&head), "{text}");
     }
 
     /// The title of a task.
@@ -2130,7 +2133,7 @@ mod tests {
         );
         assert_eq!(
             review_state::text(row("TSK13").review.as_deref().expect("a state")),
-            "1 open finding (1 medium)"
+            "2 open findings (1 medium, 1 low) · 1/5 rounds"
         );
     }
 
@@ -2222,7 +2225,7 @@ mod tests {
             .iter()
             .find(|row| row.contains("TSK13"))
             .unwrap_or_else(|| panic!("no row for TSK13: {rows:?}"));
-        assert!(row.contains("1 open finding…"), "{row}");
+        assert!(row.contains("2 open findings…"), "{row}");
         assert!(!row.contains("1 medium"), "{row}");
     }
 

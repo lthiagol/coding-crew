@@ -28,7 +28,7 @@ mock-data/
 | `groomed` | 3 | intent, scope, criteria; one carries a `blocked` overlay |
 | `approved` | 4 | criteria covered by steps, every step has `done_when`; one carries a `blocked` overlay, one a claim held elsewhere |
 | `executing` | 3 | claimed with a lease, evidence attached; one defers a criterion |
-| `code-review` | 3 | steps settled, self round filed, one open finding |
+| `code-review` | 3 | steps settled, self round `ok`, external round filed with findings open |
 | `remediating` | 3 | external round, `changes-needed`, findings open |
 | `needs-human` | 3 | five external rounds exhausted |
 | `done` | 5 | clean verdict, no open findings |
@@ -47,8 +47,8 @@ is what holds it. Four shapes are covered:
 - **forward edges** — the phase tasks past `approved` — `executing` through
   `needs-human` — wait on the `done` tasks `TSK22`–`TSK26`, whose ids are
   higher: the gate, not the id order, is what makes a dependency real
-- **fan-in** — most tasks wait on two others; the last `done` task waits on
-  three
+- **fan-in** — ten tasks wait on nothing, eleven on a single task, eight on a
+  pair; the last `done` task waits on three
 - **chains** — the `done` tasks form a chain among themselves
 - **waiting on a blocked task** — `TSK07` waits on `TSK05`, which
   carries a `blocked` overlay, so it cannot start until it is unblocked

@@ -68,18 +68,24 @@
 │                                                                                                  │
 │▍ Review ─────────────────────────────────────────────────────────────────────────────────────────│
 │• verdict: none                                                                                   │
-│• budget:  0/5  external rounds                                                                   │
+│• budget:  1/5  external rounds                                                                   │
 │                                                                                                  │
 │Rounds                                                                                            │
 │                                                                                                  │
-│▸ Round  0  —  self  —  changes-needed  —  runner-01                                              │
+│▸ Round  0  —  self  —  ok  —  runner-01                                                          │
 │• focus:  spec-compliance                                                                         │
 │• at:  2026-11-10T16:00Z                                                                          │
-│• notes: The pre-screen found the row and the mark before the external round spent budget.        │
+│• notes: The pre-screen found nothing to fix before the external round.                           │
+│• findings: none                                                                                  │
+│                                                                                                  │
+│▸ Round  1  —  external  —  changes-needed  —  reviewer-01                                        │
+│• focus:  edge-cases                                                                              │
+│• at:  2026-11-10T16:40Z                                                                          │
+│• notes: The findings need fixing before the task can pass.                                       │
 │                                                                                                  │
 │Medium                                                                                            │
 │•  FIND-01  —  open                                                                               │
-│  ◦ created:  2026-11-10T16:00Z                                                                   │
+│  ◦ created:  2026-11-10T16:40Z                                                                   │
 │  ◦ resolved: none                                                                                │
 │  ◦ description: At forty columns the round’s notes wrap into the next column and the reader loses│
 │    the verdict.                                                                                  │
@@ -87,14 +93,12 @@
 │  ◦ comments: none                                                                                │
 │                                                                                                  │
 │Low                                                                                               │
-│•  FIND-02  —  fixed                                                                              │
-│  ◦ created:  2026-11-10T16:00Z                                                                   │
-│  ◦ resolved:  2026-11-10T16:30Z                                                                  │
+│•  FIND-02  —  open                                                                               │
+│  ◦ created:  2026-11-10T16:40Z                                                                   │
+│  ◦ resolved: none                                                                                │
 │  ◦ description: The mark’s background says nothing about the selection.                          │
-│  ◦ resolution: The mark now reads the selection’s two slots, foreground and background.          │
-│  ◦ comments:                                                                                     │
-│    ▸  CMT-01  —  runner-01  at  2026-11-10T16:10Z                                                │
-│      Took the slots from the pane rather than inventing a third colour.                          │
+│  ◦ resolution: none                                                                              │
+│  ◦ comments: none                                                                                │
 │                                                                                                  │
 │▍ Questions ──────────────────────────────────────────────────────────────────────────────────────│
 │Open                                                                                              │
@@ -128,10 +132,6 @@
 │                                                                                                  │
 │▍ Children ───────────────────────────────────────────────────────────────────────────────────────│
 │none                                                                                              │
-│                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

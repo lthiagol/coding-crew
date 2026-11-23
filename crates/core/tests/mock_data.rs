@@ -74,13 +74,14 @@ fn status_transition_event(task: &Task) -> String {
         Status::Executing => task.claim.as_ref().expect("a claim").at.clone(),
         Status::CodeReview => {
             // A hand-back to review is the latest move into code-review, when
-            // it comes after the round it answers.
+            // it comes after the round it answers. Otherwise `finish` put the
+            // task there with its self round, the first.
             let round = &task.review.rounds.last().expect("a review round").at;
             match task.review.re_reviews.last() {
                 Some(hand_back) if parse_rfc3339(&hand_back.at) > parse_rfc3339(round) => {
                     hand_back.at.clone()
                 }
-                _ => round.clone(),
+                _ => task.review.rounds[0].at.clone(),
             }
         }
         Status::Remediating | Status::NeedsHuman | Status::Done => task
@@ -243,12 +244,49 @@ fn the_self_review_round_put_tsk13_in_review() {
     let task = tasks.iter().find(|task| task.id == "TSK13").expect("TSK13");
     assert_eq!(task.status, Status::CodeReview);
     assert_eq!(task.status_since, "2026-11-10T16:00Z");
-    assert_eq!(
-        task.status_since,
-        task.review.rounds.last().expect("a round").at
+    // `finish` moved the task here with its self round, the first. The
+    // external round came after, and raised the findings.
+    let [self_round, external] = task.review.rounds.as_slice() else {
+        panic!(
+            "TSK13 has a self and an external round: {:?}",
+            task.review.rounds
+        );
+    };
+    assert_eq!(self_round.kind, RoundKind::SelfReview);
+    assert!(
+        self_round.findings.is_empty(),
+        "a self round carries no findings"
+    );
+    assert_eq!(task.status_since, self_round.at);
+    assert_eq!(external.kind, RoundKind::External);
+    assert!(
+        parse_rfc3339(&external.at) > parse_rfc3339(&self_round.at),
+        "the external round follows the self round"
     );
     // The old generator stamped the day after creation.
     assert_ne!(task.status_since, "2026-11-03T13:00Z");
+}
+
+#[test]
+fn no_self_round_carries_a_finding() {
+    // ADR 0017: a self round with findings is refused, so no fixture may hold
+    // one. The findings of a code-review task sit on its external round.
+    for task in tasks() {
+        for round in task
+            .review
+            .rounds
+            .iter()
+            .filter(|round| round.kind == RoundKind::SelfReview)
+        {
+            assert!(
+                round.findings.is_empty(),
+                "{} self round {} carries findings: {:?}",
+                task.id,
+                round.n,
+                round.findings
+            );
+        }
+    }
 }
 
 #[test]
@@ -841,23 +879,25 @@ fn a_claim_is_held_by_another_session() {
     );
 }
 
-/// The shapes the screens are read against: zero, one and five review
+/// The shapes the screens are read against: zero, two and five review
 /// rounds, open and resolved findings, open and resolved questions, children,
 /// and done tasks that carry their history.
 #[test]
 fn the_fixtures_hold_every_shape_the_screens_read() {
     let tasks = tasks();
 
-    // Review rounds: zero, one, and five. The budget counts external rounds,
+    // Review rounds: zero, two, and five. The budget counts external rounds,
     // so five external rounds are fifty per cent of the ceiling; five rounds
-    // in all is a task that was reviewed, fixed and reviewed again.
+    // in all is a task that was reviewed, fixed and reviewed again. No fixture
+    // has a self round alone: code-review fixtures carry their findings on an
+    // external round, as ADR 0017 requires.
     assert!(
         tasks.iter().any(|task| task.review.rounds.is_empty()),
         "no fixture with zero review rounds"
     );
     assert!(
-        tasks.iter().any(|task| task.review.rounds.len() == 1),
-        "no fixture with one review round"
+        tasks.iter().any(|task| task.review.rounds.len() == 2),
+        "no fixture with two review rounds"
     );
     assert!(
         tasks.iter().any(|task| task.review.rounds.len() == 5),

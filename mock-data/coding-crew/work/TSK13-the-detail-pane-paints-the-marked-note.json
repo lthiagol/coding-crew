@@ -123,14 +123,25 @@
         "kind": "self",
         "focus": "spec-compliance",
         "reviewer": "runner-01",
-        "verdict": "changes-needed",
+        "verdict": "ok",
         "at": "2026-11-10T16:00Z",
-        "notes": "The pre-screen found the row and the mark before the external round spent budget.",
+        "notes": "The pre-screen found nothing to fix before the external round.",
+        "findings": [],
+        "session": "session-runner-01"
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "reviewer-01",
+        "verdict": "changes-needed",
+        "at": "2026-11-10T16:40Z",
+        "notes": "The findings need fixing before the task can pass.",
         "findings": [
           "FIND-01",
           "FIND-02"
         ],
-        "session": "session-runner-01"
+        "session": "session-reviewer-01"
       }
     ],
     "verdict": null,
@@ -140,7 +151,7 @@
         "severity": "medium",
         "status": "open",
         "description": "At forty columns the round's notes wrap into the next column and the reader loses the verdict.",
-        "created": "2026-11-10T16:00Z",
+        "created": "2026-11-10T16:40Z",
         "resolved": "",
         "resolution": "",
         "comments": []
@@ -148,19 +159,12 @@
       {
         "id": "FIND-02",
         "severity": "low",
-        "status": "fixed",
+        "status": "open",
         "description": "The mark's background says nothing about the selection.",
-        "created": "2026-11-10T16:00Z",
-        "resolved": "2026-11-10T16:30Z",
-        "resolution": "The mark now reads the selection's two slots, foreground and background.",
-        "comments": [
-          {
-            "id": "CMT-01",
-            "author": "runner-01",
-            "body": "Took the slots from the pane rather than inventing a third colour.",
-            "at": "2026-11-10T16:10Z"
-          }
-        ]
+        "created": "2026-11-10T16:40Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
       }
     ],
     "re_reviews": []
@@ -178,5 +182,5 @@
     "TSK22",
     "TSK23"
   ],
-  "revision": 11
+  "revision": 10
 }

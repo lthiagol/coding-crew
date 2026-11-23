@@ -756,7 +756,7 @@
       "kind": "round_filed",
       "task": "TSK13",
       "by": "runner",
-      "note": "self, spec-compliance, changes-needed"
+      "note": "self, spec-compliance, ok"
     },
     {
       "at": "2026-11-10T16:00Z",
@@ -766,25 +766,31 @@
       "note": "sent to review"
     },
     {
-      "at": "2026-11-10T16:00Z",
+      "at": "2026-11-10T16:40Z",
+      "kind": "round_filed",
+      "task": "TSK13",
+      "by": "reviewer",
+      "note": "external 1, edge-cases, changes-needed"
+    },
+    {
+      "at": "2026-11-10T16:40Z",
       "kind": "finding_raised",
       "task": "TSK13",
       "by": "reviewer",
       "note": "raised FIND-01"
     },
     {
-      "at": "2026-11-10T16:00Z",
+      "at": "2026-11-10T16:40Z",
       "kind": "finding_raised",
       "task": "TSK13",
       "by": "reviewer",
       "note": "raised FIND-02"
     },
     {
-      "at": "2026-11-10T16:30Z",
-      "kind": "finding_resolved",
+      "at": "2026-11-10T16:40Z",
+      "kind": "changes_requested",
       "task": "TSK13",
-      "by": "runner",
-      "note": "fixed FIND-02"
+      "by": "reviewer"
     },
     {
       "at": "2026-11-11T08:30Z",
@@ -923,7 +929,7 @@
       "kind": "round_filed",
       "task": "TSK15",
       "by": "runner",
-      "note": "self, spec-compliance, changes-needed"
+      "note": "self, spec-compliance, ok"
     },
     {
       "at": "2026-11-12T16:00Z",
@@ -933,18 +939,31 @@
       "note": "sent to review"
     },
     {
-      "at": "2026-11-12T16:00Z",
+      "at": "2026-11-12T16:40Z",
+      "kind": "round_filed",
+      "task": "TSK15",
+      "by": "reviewer",
+      "note": "external 1, empirical, changes-needed"
+    },
+    {
+      "at": "2026-11-12T16:40Z",
       "kind": "finding_raised",
       "task": "TSK15",
       "by": "reviewer",
       "note": "raised FIND-01"
     },
     {
-      "at": "2026-11-12T16:00Z",
+      "at": "2026-11-12T16:40Z",
       "kind": "finding_raised",
       "task": "TSK15",
       "by": "reviewer",
       "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-12T16:40Z",
+      "kind": "changes_requested",
+      "task": "TSK15",
+      "by": "reviewer"
     },
     {
       "at": "2026-11-13T08:30Z",

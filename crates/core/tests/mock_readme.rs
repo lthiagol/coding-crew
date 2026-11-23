@@ -566,18 +566,23 @@ fn recomputed_shape(phase: &str, tasks: &[Task]) -> String {
                     "{} has unsettled steps",
                     task.id
                 );
+                // The self round comes first, and is clean: ADR 0017 keeps
+                // findings off it, so the findings sit on an external round.
                 assert!(task.self_rounds() > 0, "{} has no self round", task.id);
+                assert_eq!(
+                    task.review.rounds[0].verdict,
+                    Verdict::Ok,
+                    "{} has a self round with findings",
+                    task.id
+                );
+                assert!(
+                    task.external_rounds() > 0,
+                    "{} has no external round",
+                    task.id
+                );
                 assert!(task.open_findings() > 0, "{} has no open finding", task.id);
             }
-            let open = fixtures
-                .iter()
-                .map(|task| task.open_findings())
-                .min()
-                .expect("a code-review fixture");
-            format!(
-                "steps settled, self round filed, {} open finding",
-                word(open)
-            )
+            "steps settled, self round `ok`, external round filed with findings open".to_string()
         }
         "remediating" => {
             for task in &fixtures {
@@ -653,6 +658,14 @@ fn phase_errors(readme: &str, tasks: &[Task]) -> Vec<String> {
     errors
 }
 
+/// How many tasks wait on exactly `count` others.
+fn dependency_count(tasks: &[Task], count: usize) -> usize {
+    tasks
+        .iter()
+        .filter(|task| task.depends_on.len() == count)
+        .count()
+}
+
 /// The prose count sentences and the numbers each one should state.
 fn count_claims(tasks: &[Task]) -> Vec<(&'static str, Vec<usize>)> {
     let shapes = dependency_shapes(tasks);
@@ -663,8 +676,13 @@ fn count_claims(tasks: &[Task]) -> Vec<(&'static str, Vec<usize>)> {
     vec![
         ("Four shapes are covered", vec![shapes.len()]),
         (
-            "most tasks wait on two others",
-            vec![2, last_done.depends_on.len()],
+            "ten tasks wait on nothing",
+            vec![
+                dependency_count(tasks, 0),
+                dependency_count(tasks, 1),
+                dependency_count(tasks, 2),
+                last_done.depends_on.len(),
+            ],
         ),
         (
             "can be held by three things",
