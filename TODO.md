@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 78.
+Updated 2026-11-22 by the orchestrator, after unit 79.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -51,10 +51,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–78, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–79, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- **79** hugo and theme loose ends (M)
 - **80** Docs and the gate (S)
 - **81** The triage's hugo and config rulings (M)
 - **82** The triage's raul changes (S)
@@ -175,7 +174,7 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
-- Loose ends from the triage: units 79–80 in `docs/plan.md`.
+- Loose ends from the triage: units 80–83 in `docs/plan.md`.
 - **2026-11-22, unit 78:** `needs.rs:338` is unchanged. The done-when named
   it; the review found Needs rows are one line, so "Only a pane of one line
   shows the row alone" is accurate. Confirm it, or reopen to name the case.
@@ -183,6 +182,19 @@ None blocking. Carried from the closed units.
   (`a_two_line_row_is_drawn_whole_from_any_first_row`) pins current behaviour.
   It was not run against the code before the fix, so it is not shown to fail
   without it.
+- **2026-11-22, unit 79:** the queue-pick proof is partial. `captioned_picks`
+  fails on a fixed offset, but `queue_lines` still draws at `2 + index` for
+  every runtime, so restoring the old offset there is not caught. No runtime
+  shows it today.
+- **2026-11-22, unit 79:** the footer drops whole chips with no mark: at 40 and
+  60 columns `enter choose` goes. Recommended: a short `+N keys` marker, as
+  TSK02 does for rows. Waits on a ruling.
+- **2026-11-22, unit 79:** the width sweep's row check fires only when a glyph
+  measures wider than ratatui draws it, because the buffer clips overflow. No
+  mutation has shown it fail.
+- **2026-11-22, unit 79:** `NOT_COUNTS` exempts five channel-gap phrases that
+  no test recomputes, and thirteen contrast-ratio phrases that are exempt
+  without a check that any test reads them.
 
 ## WHAT WAITS ON THE FLOW
 

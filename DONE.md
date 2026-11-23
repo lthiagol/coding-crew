@@ -1407,6 +1407,23 @@ Behaviour change: at narrow widths a Backlog label whose count does not fit
 keeps its own row and is not cut, as `announce.rs` draws it. No test pinned the
 old form. Commit `0d89ff6`.
 
+Unit closed: hugo and theme loose ends (plan 79). Two build rounds and two
+review rounds; the second clean. Esc from the id input goes back to the state
+it opened from, with its error kept. `skill.rs` writes `unset` for an absent
+effort. hugo's screen and footer are swept from 40 to 120 columns in both icon
+sets, through the real binary and the sweep's own column reader
+(`crates/hugo/tests/render_sweep.rs`). The sidebar tests use the config
+pipeline's own error; apartness has a near-duplicate fixture; `states_a_count`
+treats any stated number as a count unless it is exempt.
+Round one's review found two. The in-process width test measured a buffer that
+clips overflow, so it could not fail; it is replaced by the sweep. The queue
+fixture did not make the old offset pick a different row. Ruling: the
+reviewer's option (a), taken in round two. The recording is proven below the
+runtime through `captioned_picks`. No runtime makes today's queue layout differ
+from `2 + index`, so the done-when's runtime form cannot be met. A behaviour
+change outside the brief: esc from the id input on an empty model choice now
+returns to Empty, not Listed. Limits are in THE FOLLOW-UPS. Commit `14c81d5`.
+
 ---
 
 ## Lessons
