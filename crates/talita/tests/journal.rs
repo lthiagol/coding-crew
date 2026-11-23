@@ -175,7 +175,16 @@ fn groom(dir: &Path, id: &str) {
 }
 
 /// `groomed` → `approved`: a covering step, then the approval.
-fn approve(dir: &Path, id: &str) {
+fn approve(dir: &Path, id: &str) -> Value {
+    approved(dir, id, None)
+}
+
+/// The same approval, naming the human who decided it.
+fn approve_instructed(dir: &Path, id: &str, human: &str) -> Value {
+    approved(dir, id, Some(human))
+}
+
+fn approved(dir: &Path, id: &str, human: Option<&str>) -> Value {
     applied(
         talita(
             dir,
@@ -194,11 +203,13 @@ fn approve(dir: &Path, id: &str) {
         ),
         "step add",
     );
-    let done = applied(
-        talita(dir, &CREATOR, &["task", "approve", id]),
-        "task approve",
-    );
+    let mut args = vec!["task", "approve", id];
+    if let Some(human) = human {
+        args.extend(["--instructed-by", human]);
+    }
+    let done = applied(talita(dir, &CREATOR, &args), "task approve");
     assert_eq!(done["data"]["status"], "approved", "{done}");
+    done
 }
 
 /// A task `executing`, claimed by `runner-1` in `ses-runner`.
@@ -666,6 +677,54 @@ fn notes_and_comments_journal_commented() {
     assert_eq!(last.kind, EventKind::Commented);
     assert_eq!(last.by, "reviewer");
     assert!(last.note.is_none());
+}
+
+#[test]
+fn the_approving_humans_name_reaches_the_approved_note() {
+    let dir = project("approved");
+    let id = create(&dir, "Approve with a name");
+    groom(&dir, &id);
+    let done = approve_instructed(&dir, &id, "hannah");
+    assert_eq!(done["journal"], json!(["approved"]), "{done}");
+    assert_eq!(done["data"]["instructed_by"], "hannah", "{done}");
+
+    // The task file keeps the acting session; the journal's note keeps the
+    // human who decided (ADR 0015).
+    let task = read(&dir, &id);
+    assert_eq!(
+        done["data"]["planned_by"].as_str(),
+        task.planned_by.as_deref(),
+        "{done}"
+    );
+    let last = journal(&dir).events.last().cloned().expect("an event");
+    assert_eq!(last.kind, EventKind::Approved);
+    assert_eq!(last.by, "creator");
+    assert_eq!(last.note.as_deref(), Some("instructed by hannah"));
+
+    // No flag, no note: the flag is optional on `approve`.
+    let bare = create(&dir, "Approve with no name");
+    groom(&dir, &bare);
+    let done = approve(&dir, &bare);
+    assert_eq!(done["journal"], json!(["approved"]), "{done}");
+    assert!(done["data"].get("instructed_by").is_none(), "{done}");
+    let last = journal(&dir).events.last().cloned().expect("an event");
+    assert_eq!(last.kind, EventKind::Approved);
+    assert!(last.note.is_none(), "{last:?}");
+
+    // An empty flag is refused, and no approval lands.
+    let empty = create(&dir, "Approve with an empty name");
+    groom(&dir, &empty);
+    refused(
+        talita(
+            &dir,
+            &CREATOR,
+            &["task", "approve", &empty, "--instructed-by", ""],
+        ),
+        "task approve",
+        "input.invalid",
+        2,
+    );
+    assert_eq!(read(&dir, &empty).status, Status::Groomed);
 }
 
 #[test]
@@ -1147,4 +1206,30 @@ fn an_unreadable_journal_refuses_every_write() {
         b"{ not json",
         "the refused create wrote the journal"
     );
+}
+
+/// The two dogfood projects' journals predate this unit: their history still
+/// reads, and this unit rewrote none of it.
+#[test]
+fn the_dogfood_journals_still_read_clean() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for name in ["pantry", "ledgerline"] {
+        let path = root
+            .join("examples")
+            .join(name)
+            .join("coding-crew/activity.json");
+        let activity =
+            Activity::read(&path).unwrap_or_else(|error| panic!("{name}'s journal: {error}"));
+        assert_eq!(
+            activity.unreadable, 0,
+            "{name}'s journal holds unreadable events"
+        );
+        assert!(
+            activity
+                .events
+                .iter()
+                .any(|event| event.kind == EventKind::Approved),
+            "{name}'s journal lost its approvals"
+        );
+    }
 }

@@ -66,7 +66,7 @@ findings or a verdict that the findings contradict.
 | Findings | refused — the builder fixes what it finds before `finish` | allowed |
 | `ok` + any open finding on the task | — | `review.verdict_mismatch` |
 | `changes-needed` + no finding in this round | — | `review.verdict_mismatch` |
-| Budget | not counted | refused when `max_rounds` external rounds exist (`review.budget_spent`) |
+| Budget | not counted | refused when `max_rounds` external rounds exist (`review.budget_spent`); the last round's way out is `task escalate`, its findings open (the human's ruling, 2026-11-23) |
 | Session | recorded | recorded; must differ from `planned_by` (`review.independent`, checked now, not only at the transition) and from `claim.session` |
 
 A self round's verdict is the builder's opinion; `finish` needs one to exist

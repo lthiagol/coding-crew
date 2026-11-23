@@ -117,7 +117,7 @@ reports every failing gate, not only the first ([decision 6](decisions.md)).
 | Verb | Synopsis | From → to | Who | Gates | Also writes | J |
 |---|---|---|---|---|---|---|
 | `groom` | `task groom <TSK>` | draft → groomed | creator | `intent.outcome_present` · `criteria.present` · `scope.out_of_scope_declared` | — | `groomed` |
-| `approve` | `task approve <TSK> [--instructed-by <human>]` | groomed → approved | creator | `questions.resolved` · `criteria.covered` · `steps.done_when_present` (step rules skipped for a small task) | `planned_by` = acting session; freezes intent, scope, criteria | `approved` |
+| `approve` | `task approve <TSK> [--instructed-by <human>]` | groomed → approved | creator | `questions.resolved` · `criteria.covered` · `steps.done_when_present` (step rules skipped for a small task) | `planned_by` = acting session; freezes intent, scope, criteria | `approved` (note: `instructed by <human>`, when given) |
 | `start` | `task start <TSK>` | approved → executing | runner | `task.claimed` (holder, lease live) · `dependencies.satisfied` | — | `started` |
 | `finish` | `task finish <TSK>` | executing → code-review | runner, claim holder | `steps.settled` · `evidence.attached` · `criteria.proven` · `self_round.filed` · `task.claimed` (new on finish) | crew: builder idle | `review_requested` |
 | `pass-review` | `task pass-review <TSK>` | code-review → done | reviewer | `review.verdict_ok` · `review.no_open_findings` · `review.within_budget` · `review.independent` · `review.round_current` (new) · `review.round_owner` (new) | crew: holds cleared; queue: done | `completed` |
@@ -251,7 +251,7 @@ talita round file <TSK> --input <path|->
 | Status | executing, remediating | code-review |
 | `n` | `0` | external rounds filed + 1 |
 | Findings | none | via `--input` only |
-| Budget | not counted | counted; refused past `max_rounds` (`review.budget_spent`) |
+| Budget | not counted | counted; refused past `max_rounds` (`review.budget_spent`); the last round escalates with its findings open (the human's ruling, 2026-11-23) |
 | Session check | — | acting session ≠ `planned_by` (`review.independent`, checked at filing too) and ≠ `claim.session` |
 
 Writes the round `{n, kind, focus, reviewer: actor id, session, verdict, at,

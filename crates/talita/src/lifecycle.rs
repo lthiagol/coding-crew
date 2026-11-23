@@ -106,7 +106,7 @@ fn events(
     let note = |kind, text: String| NewEvent::note(kind, text);
     match event {
         Event::Groom => vec![NewEvent::new(EventKind::Groomed)],
-        Event::Approve => vec![NewEvent::new(EventKind::Approved)],
+        Event::Approve => vec![instructed(EventKind::Approved, instructed_by, None)],
         Event::Start => vec![NewEvent::new(EventKind::Started)],
         Event::Finish => vec![NewEvent::new(EventKind::ReviewRequested)],
         Event::PassReview => vec![NewEvent::new(EventKind::Completed)],
@@ -121,8 +121,8 @@ fn events(
             vec![note(EventKind::Remediated, format!("after round {after}"))]
         }
         Event::Escalate => vec![NewEvent::new(EventKind::Escalated)],
-        Event::ResumeWork => vec![note(EventKind::Resumed, instructed(instructed_by, reason))],
-        Event::Reopen => vec![note(EventKind::Reopened, instructed(instructed_by, reason))],
+        Event::ResumeWork => vec![instructed(EventKind::Resumed, instructed_by, reason)],
+        Event::Reopen => vec![instructed(EventKind::Reopened, instructed_by, reason)],
         Event::Block => vec![note(
             EventKind::Blocked,
             reason.unwrap_or_default().to_string(),
@@ -149,13 +149,17 @@ fn events(
     }
 }
 
-/// The note of `resumed` and `reopened`: who instructed the move, and why.
-fn instructed(instructed_by: Option<&str>, reason: Option<&str>) -> String {
-    format!(
-        "instructed by {}: {}",
-        instructed_by.unwrap_or_default(),
-        reason.unwrap_or_default()
-    )
+/// The event a human's decision appends (ADR 0015): its note reads
+/// `instructed by <human>`, with the move's reason after it when the move has
+/// one. No flag, no note.
+fn instructed(kind: EventKind, instructed_by: Option<&str>, reason: Option<&str>) -> NewEvent {
+    let Some(human) = instructed_by else {
+        return NewEvent::new(kind);
+    };
+    match reason {
+        Some(reason) => NewEvent::note(kind, format!("instructed by {human}: {reason}")),
+        None => NewEvent::note(kind, format!("instructed by {human}")),
+    }
 }
 
 /// What the verb returns: the status it moved to, and what the move wrote.

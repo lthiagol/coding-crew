@@ -36,7 +36,7 @@ Follow-ups from the core units, placed where they are built:
 - **T10:** `round file` refuses a round filed by the claim's own session (ADR 0017), calling core's check; a fixture holds a code-review task before its first external round.
 - **T8:** `claim take` journals `claimed` — on a takeover the note is `took over from <actor>` — and `claim release` journals `released` with its required reason. T11 wrote the writer; the verbs are T8's.
 - **T12:** the crew rows the claim verbs touch — `claim take` holds the task and is `executing`, `claim release` releases the row — and the derived fields the runtime record recomputes on every write. T8 built the verbs; the rows are T12's.
-- **T11:** `release` stores its required reason in the journal; `item promote` appends the `created` event for the task it creates, with the note `from ITM<nn>`; the review verbs append `round_filed`, `finding_raised`, `finding_resolved` and `commented`.
+- **T11:** `release` stores its required reason in the journal; `item promote` appends the `created` event for the task it creates, with the note `from ITM<nn>`; the review verbs append `round_filed`, `finding_raised`, `finding_resolved` and `commented`; `task approve --instructed-by` writes `instructed by <human>` into the `approved` note (T11a).
 
 T6–T10 can each ship alone once T5 is in. T11 and T12 can start after T7,
 since every later verb then gains its side effects as it lands.

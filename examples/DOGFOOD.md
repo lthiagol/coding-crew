@@ -11,7 +11,8 @@ not re-run for this list; its entry quotes the run that hit it.
 - command: `talita --project examples/pantry --as nadia --role reviewer --session ses-nadia-pantry task request-changes TSK05`
 - happened: Not re-run (it writes). Refused, exit 4, `review.budget_left`: "the review round budget is exhausted"; remedy `talita task show TSK05`. The round's high finding stays open and the reviewer escalates it unfixed. Ledgerline's TSK03 ends the same way: five rounds filed, FIND-05 open, `needs-human`.
 - expected: the fifth round to go back for a fix like the first four, or the refusal to name `task escalate` as the only move left. A caller following the cycle reads the budget's last round as one more round.
-- severity: high
+- ruled: the human, 2026-11-23 — when the budget is spent, the last round escalates with its findings open; that is the intended behaviour, and no code change follows.
+- severity: low
 
 ## The human's name
 
@@ -19,6 +20,7 @@ not re-run for this list; its entry quotes the run that hit it.
 - command: `talita --project examples/ledgerline --as thea --role creator --session ses-thea-ledgerline task approve TSK01 --instructed-by hugo`
 - happened: Not re-run (it writes). Accepted, exit 0, `data.instructed_by: "hugo"`; the journal event is a bare `approved` with no note, and the task file records only `planned_by: ses-thea-ledgerline`. Every approval in both projects used `--instructed-by` — Pantry's ten, Ledgerline's nine — and all 19 `approved` events have an empty note.
 - expected: ADR 0015 says the human's name is recorded in the journal event's note, so the approval should read "instructed by hugo" after the call. The command's own output says it was carried.
+- fixed: unit T11a — `task approve --instructed-by <human>` now appends an `approved` event with the note `instructed by <human>`. The approvals written before it keep their empty notes.
 - severity: high
 
 ## Remedies

@@ -44,7 +44,7 @@ Kinds, one per act (bold = new; core's enum and raul's reader gain them):
 |---|---|
 | `created` | `task create`, `item promote` (note: `from ITM<nn>`) |
 | **`groomed`** | `task groom` |
-| `approved` | `task approve` |
+| `approved` | `task approve` (note: `instructed by <human>`, when the flag is given) |
 | `claimed` | `claim take` (note on takeover: `took over from <actor>`) |
 | **`released`** | `claim release`, `task cancel` with a live claim |
 | **`started`** | `task start` |
