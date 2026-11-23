@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after unit 90.
+Updated 2026-11-23 by the orchestrator, after unit 91.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–90, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–91, 63b and 70b are closed; their record is in
 `DONE.md`. Open, in order:
 
-- 91 · Review D · hugo — M
 - 92 · Review E · fixtures — S
 - 93 · Review F · engine, theme, tooling — S
 - 94 · Review G · docs — S
@@ -173,6 +172,18 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
+- **2026-11-23, unit 91:** the tests for F7, F8, F18, F20 and F21 were not run
+  against the pre-fix code (round 0's report). The reviewer read each as failing
+  without its fix. Recorded, not ruled.
+- **2026-11-23, unit 91:** F8 and F20's failure paths are covered by unit tests
+  of the pure helpers only. Neither runs end to end: F8 needs herdr, F20 needs a
+  slow child. Recorded, not ruled.
+- **2026-11-23, unit 91:** round 1's `cargo fmt --all` may have reflowed lines in
+  `crates/hugo/src/app.rs` that were already in the tree. Nobody diffed them out.
+  Recorded, not ruled.
+- **2026-11-23, unit 91:** an odd crew opens with no size painted (F19). That is
+  the reviewer's recommendation, taken in round 1 with no human ruling. The
+  alternative was the nearest size. Recorded, not ruled.
 - **2026-11-23, unit 90:** F2's option to drop only the offending row, not the
   branch, was not taken. The builder read it as optional. Recorded, not ruled.
 - **2026-11-23, unit 90:** F6's test was not run against the pre-fix code, so it

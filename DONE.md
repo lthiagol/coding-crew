@@ -1566,6 +1566,19 @@ review found the `evidence.command` fixture check loosened to pass a non-manual
 empty command (D1); the fix keeps it for non-manual entries. No ruling. Limits
 are in THE FOLLOW-UPS. Commit `457c87d`.
 
+Unit closed: Review D · hugo (plan 91). One build round, one fix round and two
+reviews; the second clean. Six findings of the full review's batch D, each with
+a test. The crew skill prints `start args` and `start env` as shell words (F7).
+A failed start after the tab opens names the prompt when herdr may already have
+named the orchestrator (F8). A bare model that also takes levels offers `none`
+after them (F18). An odd crew opens with no size painted, and `↑` on the top
+row moves nothing (F19). Drains get 500 ms after the child exits, still bounded
+(F20). A field error under an agent names its role and field, not the untagged
+enum's message (F21). Round one's review found F19 still painted size 1; the fix
+gives the picker an optional cursor, so an odd crew paints none. Ruling: an odd
+crew opens unpicked, not at the nearest size, the builder's choice on the
+reviewer's recommendation. Limits are in THE FOLLOW-UPS. Commit `a538692`.
+
 ---
 
 ## Lessons
