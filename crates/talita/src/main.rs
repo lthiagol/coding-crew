@@ -6,6 +6,7 @@ mod claim;
 mod cli;
 mod envelope;
 mod error;
+mod evidence;
 mod identity;
 mod item;
 mod journal;

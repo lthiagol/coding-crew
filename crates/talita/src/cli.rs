@@ -14,7 +14,7 @@ use crate::parts::{self, StepFields};
 use crate::project::{self, Project};
 use crate::review::RoundFlags;
 use crate::write::Call;
-use crate::{claim, item, journal, lifecycle, review, session, task};
+use crate::{claim, evidence, item, journal, lifecycle, review, session, task};
 
 /// Task Administration, Lifecycle & Interaction Terminal Application — the CLI
 /// tool of coding-crew. Every call prints one JSON object on stdout.
@@ -91,6 +91,11 @@ enum Noun {
     Note {
         #[command(subcommand)]
         verb: NoteVerb,
+    },
+    /// What a criterion's verification shows: the run, and the override.
+    Evidence {
+        #[command(subcommand)]
+        verb: EvidenceVerb,
     },
     /// A review round: the self pre-screen or the reviewer's external round.
     Round {
@@ -324,6 +329,24 @@ enum CriterionVerb {
     },
     /// Remove it; refused while a step covers it.
     Remove { id: String, criterion: String },
+    /// Park it on a follow-up task. The working runner.
+    Defer {
+        id: String,
+        criterion: String,
+        #[arg(long)]
+        reason: Option<String>,
+        #[arg(long, value_name = "TSK")]
+        follow_up: Option<String>,
+    },
+    /// Clear the deferral; the status is derived again.
+    Undefer { id: String, criterion: String },
+    /// Why a failed criterion failed. Refused unless it is failed.
+    Explain {
+        id: String,
+        criterion: String,
+        #[arg(long)]
+        failure_reason: Option<String>,
+    },
 }
 
 #[derive(Debug, clap::Args)]
@@ -373,6 +396,29 @@ enum StepVerb {
     },
     /// Remove it. Draft or groomed; after approval, skip it.
     Remove { id: String, step: String },
+    /// Mark it in progress. The working runner.
+    Begin { id: String, step: String },
+    /// Mark it done; the deviation is optional.
+    Done {
+        id: String,
+        step: String,
+        #[arg(long)]
+        deviation: Option<String>,
+    },
+    /// Mark it skipped; the deviation says why.
+    Skip {
+        id: String,
+        step: String,
+        #[arg(long)]
+        deviation: Option<String>,
+    },
+    /// Mark it failed; the deviation says why.
+    Fail {
+        id: String,
+        step: String,
+        #[arg(long)]
+        deviation: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -401,6 +447,27 @@ enum NoteVerb {
         id: String,
         #[arg(long)]
         body: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum EvidenceVerb {
+    /// Run the criterion's verification and record its exit code.
+    Run {
+        id: String,
+        criterion: String,
+        /// 30s, 5m, 2h or 1d. Default 10m.
+        #[arg(long)]
+        timeout: Option<String>,
+        #[arg(long)]
+        summary: Option<String>,
+    },
+    /// Record a manual pass, marked as the bypass (ADR 0019).
+    Override {
+        id: String,
+        criterion: String,
+        #[arg(long)]
+        reason: Option<String>,
     },
 }
 
@@ -679,6 +746,35 @@ fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
                     "criterion remove",
                     run(&|c| parts::criterion_remove(c, id, criterion)),
                 ),
+                CriterionVerb::Defer {
+                    id,
+                    criterion,
+                    reason,
+                    follow_up,
+                } => (
+                    "criterion defer",
+                    run(&|c| {
+                        parts::criterion_defer(
+                            c,
+                            id,
+                            criterion,
+                            reason.as_deref(),
+                            follow_up.as_deref(),
+                        )
+                    }),
+                ),
+                CriterionVerb::Undefer { id, criterion } => (
+                    "criterion undefer",
+                    run(&|c| parts::criterion_undefer(c, id, criterion)),
+                ),
+                CriterionVerb::Explain {
+                    id,
+                    criterion,
+                    failure_reason,
+                } => (
+                    "criterion explain",
+                    run(&|c| parts::criterion_explain(c, id, criterion, failure_reason.as_deref())),
+                ),
             }
         }
         Noun::Step { verb } => {
@@ -695,6 +791,33 @@ fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
                 StepVerb::Remove { id, step } => {
                     ("step remove", run(&|c| parts::step_remove(c, id, step)))
                 }
+                StepVerb::Begin { id, step } => {
+                    ("step begin", run(&|c| parts::step_begin(c, id, step)))
+                }
+                StepVerb::Done {
+                    id,
+                    step,
+                    deviation,
+                } => (
+                    "step done",
+                    run(&|c| parts::step_done(c, id, step, deviation.as_deref())),
+                ),
+                StepVerb::Skip {
+                    id,
+                    step,
+                    deviation,
+                } => (
+                    "step skip",
+                    run(&|c| parts::step_skip(c, id, step, deviation.as_deref())),
+                ),
+                StepVerb::Fail {
+                    id,
+                    step,
+                    deviation,
+                } => (
+                    "step fail",
+                    run(&|c| parts::step_fail(c, id, step, deviation.as_deref())),
+                ),
             }
         }
         Noun::Question { verb } => {
@@ -718,6 +841,30 @@ fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
             let run = writer(project_flag, identity, talita.expect_revision);
             match verb {
                 NoteVerb::Add { id, body } => ("note add", run(&|c| parts::note(c, id, body))),
+            }
+        }
+        Noun::Evidence { verb } => {
+            let run = writer(project_flag, identity, talita.expect_revision);
+            match verb {
+                EvidenceVerb::Run {
+                    id,
+                    criterion,
+                    timeout,
+                    summary,
+                } => (
+                    "evidence run",
+                    run(&|c| {
+                        evidence::run(c, id, criterion, timeout.as_deref(), summary.as_deref())
+                    }),
+                ),
+                EvidenceVerb::Override {
+                    id,
+                    criterion,
+                    reason,
+                } => (
+                    "evidence override",
+                    run(&|c| evidence::manual(c, id, criterion, reason.as_deref())),
+                ),
             }
         }
         Noun::Round { verb } => {

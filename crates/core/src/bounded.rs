@@ -6,6 +6,7 @@
 
 use std::ffi::OsStr;
 use std::io::{self, Read};
+use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
@@ -36,12 +37,26 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let mut child = Command::new(tool)
+    run_in(None, tool, args, bound)
+}
+
+/// [`run`], started in `dir` when one is given: a command whose meaning is
+/// the project it runs in.
+pub fn run_in<I, S>(dir: Option<&Path>, tool: &str, args: I, bound: Duration) -> io::Result<Answer>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let mut command = Command::new(tool);
+    command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+        .stderr(Stdio::piped());
+    if let Some(dir) = dir {
+        command.current_dir(dir);
+    }
+    let mut child = command.spawn()?;
     // Both pipes are drained beside the wait: a tool that prints more than a
     // pipe holds would block before it exits, and the bound would then kill a
     // run that was only slow to be drained.
@@ -153,5 +168,21 @@ mod tests {
         assert_eq!(answer.stdout, b"ok\n");
         assert_eq!(answer.stderr, b"oops\n");
         assert_eq!(answer.status.code(), Some(3));
+    }
+
+    #[test]
+    fn a_run_starts_in_the_directory_it_names() {
+        let dir = std::env::temp_dir().join(format!("bounded-cwd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a scratch folder");
+
+        let answer =
+            run_in(Some(&dir), "sh", ["-c", "pwd"], Duration::from_secs(10)).expect("an answer");
+        let printed = String::from_utf8_lossy(&answer.stdout);
+        assert_eq!(
+            std::fs::canonicalize(printed.trim()).expect("the printed folder"),
+            std::fs::canonicalize(&dir).expect("the scratch folder")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

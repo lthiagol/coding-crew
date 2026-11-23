@@ -1,17 +1,27 @@
-//! The parts of a task's content: `scope`, `criterion add|revise|remove`,
-//! `step add|revise|remove`, `question ask|answer`, `note add`.
+//! The parts of a task's content: `scope`, `criterion add|revise|remove` and
+//! its work verbs, `step add|revise|remove` and its work verbs, `question
+//! ask|answer`, `note add`.
 
 use coding_crew_core::{
-    AcceptanceCriterion, Actor, EventKind, Note, Question, QuestionStatus, Section, Status, Step,
-    StepStatus, Task,
+    AcceptanceCriterion, Actor, ActorKind, CriterionStatus, Deferral, EventKind, Note, Question,
+    QuestionStatus, Role, Section, Status, Step, StepStatus, Task,
 };
 use serde_json::json;
 
 use crate::envelope::Done;
 use crate::error::{Code, Failure, GateDetail};
+use crate::task::word;
 use crate::write::{
     Call, NewEvent, next_part_id, own, part_not_found, pre_approval, refuse_frozen, required_text,
 };
+
+/// A text flag the verb cannot do without.
+fn needed(flag: &str, value: Option<&str>) -> Result<String, Failure> {
+    value
+        .map(|value| required_text(flag, value))
+        .transpose()?
+        .ok_or_else(|| Failure::new(Code::InputInvalid, format!("{flag} is required")))
+}
 
 // ---- scope
 
@@ -166,6 +176,89 @@ pub fn criterion_remove(call: &Call, id: &str, cid: &str) -> Result<Done, Failur
     })
 }
 
+/// `criterion defer`: the criterion is parked on a follow-up task. The
+/// status is core's mirror of the deferral (ADR 0019).
+pub fn criterion_defer(
+    call: &Call,
+    id: &str,
+    cid: &str,
+    reason: Option<&str>,
+    follow_up: Option<&str>,
+) -> Result<Done, Failure> {
+    let reason = needed("--reason", reason)?;
+    let follow_up = needed("--follow-up", follow_up)?;
+    call.task(id, |task, actor| {
+        work_runner(actor, "criterion defer")?;
+        working_runner(task, actor, "criteria")?;
+        if task.criterion(cid).is_none() {
+            return Err(part_not_found(task, cid));
+        }
+        call.project.store.load(&follow_up)?;
+        let criterion = task.criterion_mut(cid).expect("checked above");
+        criterion.set_deferral(Some(Deferral { reason, follow_up }));
+        Ok(json!({ "criterion": task.criterion(cid) }))
+    })
+}
+
+/// `criterion undefer`: clear the deferral; the status is derived again.
+/// A cleared deferral with no evidence is `pending`.
+pub fn criterion_undefer(call: &Call, id: &str, cid: &str) -> Result<Done, Failure> {
+    call.task(id, |task, actor| {
+        work_runner(actor, "criterion undefer")?;
+        working_runner(task, actor, "criteria")?;
+        let Some(criterion) = task.criterion(cid) else {
+            return Err(part_not_found(task, cid));
+        };
+        if criterion.deferral.is_none() {
+            return Err(Failure::new(
+                Code::StatusWrong,
+                format!(
+                    "{cid} is not deferred: its status is {}",
+                    word(&criterion.effective_status())
+                ),
+            )
+            .remedy(format!("talita task show {id}")));
+        }
+        task.criterion_mut(cid)
+            .expect("checked above")
+            .set_deferral(None);
+        Ok(json!({ "criterion": task.criterion(cid) }))
+    })
+}
+
+/// `criterion explain`: why a criterion failed. Refused unless the derived
+/// status is `failed` (`criterion.not_failed`).
+pub fn criterion_explain(
+    call: &Call,
+    id: &str,
+    cid: &str,
+    failure_reason: Option<&str>,
+) -> Result<Done, Failure> {
+    let failure_reason = needed("--failure-reason", failure_reason)?;
+    call.task(id, |task, actor| {
+        work_runner(actor, "criterion explain")?;
+        working_runner(task, actor, "criteria")?;
+        let Some(criterion) = task.criterion(cid) else {
+            return Err(part_not_found(task, cid));
+        };
+        let status = criterion.effective_status();
+        if status != CriterionStatus::Failed {
+            return Err(Failure::new(
+                Code::CriterionNotFailed,
+                format!(
+                    "{cid} is {}, not failed; there is nothing to explain",
+                    word(&status)
+                ),
+            )
+            .remedy(format!("talita task show {id}")));
+        }
+        task.criterion_mut(cid)
+            .expect("checked above")
+            .failure_reason = failure_reason;
+        Ok(json!({ "criterion": task.criterion(cid) }))
+    })
+}
+
 // ---- step
 
 /// The fields `step add` and `step revise` take.
@@ -255,6 +348,26 @@ pub(crate) fn working_runner(task: &Task, actor: &Actor, subject: &str) -> Resul
             ),
         )),
     }
+}
+
+/// The runner a work verb takes (commands.md, Conventions: the working
+/// runner). A criterion's deferral and failure reason have no owning section
+/// — ADR 0013 keeps them writable while the criterion itself is frozen — so
+/// the role is checked here; the session rule is `working_runner`.
+pub(crate) fn work_runner(actor: &Actor, verb: &str) -> Result<(), Failure> {
+    if actor.kind != ActorKind::Agent {
+        return Err(
+            Failure::new(Code::ActorNotAgent, format!("{verb} is a runner's act"))
+                .remedy("act as --role runner"),
+        );
+    }
+    if actor.role != Some(Role::Runner) {
+        return Err(
+            Failure::new(Code::RoleWrong, format!("{verb} needs the runner role"))
+                .remedy("act as --role runner"),
+        );
+    }
+    Ok(())
 }
 
 /// `--covers` and `--after` refuse ids the task does not hold.
@@ -389,6 +502,107 @@ pub fn step_remove(call: &Call, id: &str, sid: &str) -> Result<Done, Failure> {
             step.depends_on.retain(|d| d != sid);
         }
         Ok(json!({ "removed": sid }))
+    })
+}
+
+/// `step begin`: the runner starts the step.
+pub fn step_begin(call: &Call, id: &str, sid: &str) -> Result<Done, Failure> {
+    step_status(
+        call,
+        id,
+        sid,
+        "step begin",
+        StepStatus::InProgress,
+        None,
+        false,
+    )
+}
+
+/// `step done`: done, with the deviation when the step went differently.
+pub fn step_done(
+    call: &Call,
+    id: &str,
+    sid: &str,
+    deviation: Option<&str>,
+) -> Result<Done, Failure> {
+    step_status(
+        call,
+        id,
+        sid,
+        "step done",
+        StepStatus::Done,
+        deviation,
+        false,
+    )
+}
+
+/// `step skip`: skipped; the deviation is the why.
+pub fn step_skip(
+    call: &Call,
+    id: &str,
+    sid: &str,
+    deviation: Option<&str>,
+) -> Result<Done, Failure> {
+    step_status(
+        call,
+        id,
+        sid,
+        "step skip",
+        StepStatus::Skipped,
+        deviation,
+        true,
+    )
+}
+
+/// `step fail`: failed; the deviation is the why.
+pub fn step_fail(
+    call: &Call,
+    id: &str,
+    sid: &str,
+    deviation: Option<&str>,
+) -> Result<Done, Failure> {
+    step_status(
+        call,
+        id,
+        sid,
+        "step fail",
+        StepStatus::Failed,
+        deviation,
+        true,
+    )
+}
+
+/// The one write behind the four work verbs. The docs name no transition
+/// rule, so the verb writes the status it names.
+fn step_status(
+    call: &Call,
+    id: &str,
+    sid: &str,
+    verb: &str,
+    status: StepStatus,
+    deviation: Option<&str>,
+    deviation_needed: bool,
+) -> Result<Done, Failure> {
+    let deviation = deviation
+        .map(|value| required_text("--deviation", value))
+        .transpose()?;
+    if deviation_needed && deviation.is_none() {
+        return Err(Failure::new(
+            Code::InputInvalid,
+            "--deviation is required: why the step did not go as written",
+        ));
+    }
+    call.task(id, |task, actor| {
+        work_runner(actor, verb)?;
+        working_runner(task, actor, "steps")?;
+        let Some(step) = task.step_mut(sid) else {
+            return Err(part_not_found(task, sid));
+        };
+        step.status = status;
+        if let Some(deviation) = deviation {
+            step.deviation = deviation;
+        }
+        Ok(json!({ "step": task.step(sid) }))
     })
 }
 
