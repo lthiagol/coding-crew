@@ -59,7 +59,7 @@ queue (T5 → T6 → T7 → T10 → T11 → T13, then the `examples/` dogfood) s
 after T6: T5 and T6 are closed. Since then the opencode crew (deepseek-v4.1-flash builder, glm-5.3
 reviewer, slug `oc`) fixed the macOS catalogue failure and built T7. The long-path sweep is closed. T13 is closed too: a MiniMax orchestrator on branch
 `mm/talita` (a trial of an opencode orchestrator) ran the opencode crew again — deepseek-v4.1-flash builder,
-glm-5.3 reviewer, slug `mm` — and the review was clean in one round. Next: T10, then T11. Unit 101 waits for green CI and the human's `v0.1.0`
+glm-5.3 reviewer, slug `mm` — and the review was clean in one round. T10 is closed too, on the same branch and the same crew, one clean round. Next: T11, the journal writer — every verb's event lands at once — then the `examples/` dogfood. Unit 101 waits for green CI and the human's `v0.1.0`
 tag.
 
 | phase | units | needs |
@@ -219,6 +219,11 @@ themes and a theme file on disk (`docs/plan.md` § Deferred).
   (review state: TM § 12 names `pending-review` · `open-findings` · `clean`
   without a mapping). Move them into `crates/core`, have raul call them,
   then build them in talita.
+- 2026-11-23 · the fixtures hold no code-review task before its first
+  external round (unit 92's follow-up, placed in T10). T10 covers that state
+  in talita's own tests; the mock still holds no such task, because it
+  changes the fixture count and raul's and hugo's pins. Add it when one of
+  them must read the state.
 
 Grooming on 2026-11-23 placed every earlier follow-up: the buildable ones
 are in units 96–99 of `docs/plan.md`, the talita-bound ones in the units of

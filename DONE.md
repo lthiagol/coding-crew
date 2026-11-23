@@ -1853,6 +1853,23 @@ journal is T11's, and the event for the promoted task is carried there. By
 the opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug `mm`),
 review 1 clean, one round. Commit `1dd7ea1`.
 
+### 2026-11-23 · talita T10, the review
+
+`round file` (flags and `--input`), `round show`, `finding open|resolve|dismiss`
+and `comment add`: a round is filed whole, in one write — the round, its
+findings, the `FIND-nn` ids and `review.verdict`. The verdict rules refuse
+both mismatches before anything is written, and `refs` maps the reviewer's
+`D`-numbers to the ids talita allocated. The roles and the session rules are
+core's — the ownership table, `review.independent` checked at filing too,
+`review.round_owner`, `remediation.session_distinct` — exposed and called,
+not re-implemented; core gained four `pub`s and no behaviour.
+`re_reviews[]` on `task re-review` is pinned. No journal and no runtime: T11
+and T12 write those. The README's sequence runs through talita as far as the
+built verbs reach: the claim, the steps and the evidence come from core, and
+T8 and T9 wait for the word. By the opencode crew (deepseek-v4.1-flash
+builder, glm-5.3 reviewer, slug `mm`), review 1 clean, one round. Commit
+`a410620`.
+
 ---
 
 ## Lessons
