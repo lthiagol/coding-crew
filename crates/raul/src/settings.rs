@@ -1787,7 +1787,7 @@ pub fn render_pick(
         theme,
         &[],
         &rows,
-        pick.cursor,
+        Some(pick.cursor),
     )
 }
 

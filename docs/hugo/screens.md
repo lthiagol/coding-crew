@@ -250,8 +250,10 @@ The roles are the icons of the sidebar: the orchestrator, the builder and the
 reviewer; an empty circle stands for a role the size leaves out. The unicode
 set draws the same roles with its own glyphs, as the sidebar does. The cursor
 starts on the size in force, `↑ k` and `↓ j` move it, `enter` picks it for the
-session and `esc` closes it. The orchestrator is always there, so the sizes
-are one, two and three roles, not a count.
+session and `esc` closes it. A crew no size names (an orchestrator and a
+reviewer, say) has no size in force: no size is painted, and `enter` does
+nothing until `↑` or `↓` moves the cursor (a `↑` on the first size is no move). The orchestrator is always
+there, so the sizes are one, two and three roles, not a count.
 
 A size takes the roles it has and leaves the rest off the session's crew. A
 role that is left off keeps its values, so a role the crew takes back comes

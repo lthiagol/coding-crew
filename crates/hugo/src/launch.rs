@@ -15,6 +15,8 @@ use serde_json::Value;
 
 use coding_crew_core::bounded::{self, Answer};
 
+use crate::skill::shell_word;
+
 /// The label of the orchestrator's tab, and the name of its agent in herdr.
 pub const ORCHESTRATOR: &str = "orchestrator";
 
@@ -130,13 +132,33 @@ impl Launcher for Herdr {
         // The tab is open from here on: a failure after it names the tab, so
         // the human can see what was left behind. An agent that started but
         // was not prompted is named in herdr, so `s` will not prompt it: the
-        // error says how to send the prompt by hand.
-        herdr_within(&agent_start_args(req, &pane), AGENT_START_BOUND)
-            .with_context(|| format!("tab {tab_id} is open"))?;
-        herdr(&agent_prompt_args(req)).with_context(|| {
-            format!("tab {tab_id} is open; prompt it with `herdr agent prompt {ORCHESTRATOR}`")
-        })?;
+        // error carries the prompt to send by hand.
+        let after = |error: anyhow::Error| {
+            after_tab(
+                &tab_id,
+                req,
+                self.orchestrator_named().unwrap_or(true),
+                error,
+            )
+        };
+        herdr_within(&agent_start_args(req, &pane), AGENT_START_BOUND).map_err(after)?;
+        herdr(&agent_prompt_args(req)).map_err(after)?;
         Ok(Launched { tab: tab_id })
+    }
+}
+
+/// The error for a start that failed once its tab was open. When herdr may
+/// name the orchestrator, the error carries the prompt, since `s` will refuse
+/// to start a second one. `named` is true when the check failed too: it is
+/// not known that nothing is named.
+fn after_tab(tab: &str, req: &LaunchRequest, named: bool, error: anyhow::Error) -> anyhow::Error {
+    if named {
+        error.context(format!(
+            "tab {tab} is open; if the orchestrator is named in herdr, send it the prompt by hand: herdr agent prompt {ORCHESTRATOR} {}",
+            shell_word(&prompt(req))
+        ))
+    } else {
+        error.context(format!("tab {tab} is open"))
     }
 }
 
@@ -475,6 +497,35 @@ mod tests {
         assert!(!not_found(other));
         assert!(!not_found(b"herdr: socket refused"));
         assert!(!not_found(b""));
+    }
+
+    #[test]
+    fn a_failed_start_names_the_prompt_when_herdr_may_name_the_orchestrator() {
+        // An agent that started but was not prompted is named, and `s` will
+        // refuse: the error must carry the prompt to send it by hand.
+        let error = after_tab(
+            "w1:t3",
+            &request(),
+            true,
+            anyhow!("herdr agent start: timed out"),
+        );
+        let text = format!("{error:#}");
+        assert!(text.starts_with("tab w1:t3 is open; "), "{text}");
+        assert!(text.contains(&shell_word(&prompt(&request()))), "{text}");
+        assert!(text.contains("herdr agent start: timed out"), "{text}");
+    }
+
+    #[test]
+    fn a_failed_start_says_only_that_the_tab_is_open_when_nothing_is_named() {
+        let error = after_tab(
+            "w1:t3",
+            &request(),
+            false,
+            anyhow!("herdr agent start: no pane"),
+        );
+        let text = format!("{error:#}");
+        assert!(text.starts_with("tab w1:t3 is open: "), "{text}");
+        assert!(!text.contains("prompt"), "{text}");
     }
 
     #[test]

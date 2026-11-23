@@ -58,9 +58,9 @@ pub struct Picked {
 }
 
 /// Draw a picker in `popup`, which [`popup`] sized: the `lead` lines first, then
-/// the `entries`, the one at `cursor` painted as the selection. The entries
-/// scroll to keep the cursor in view. A popup too small to hold a line is not
-/// drawn.
+/// the `entries`, the one at `cursor` painted as the selection. `None` paints no
+/// selection and shows the entries from the top. The entries scroll to keep the
+/// cursor in view. A popup too small to hold a line is not drawn.
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     frame: &mut Frame,
@@ -71,7 +71,7 @@ pub fn draw(
     theme: &Theme,
     lead: &[Row],
     entries: &[Row],
-    cursor: usize,
+    cursor: Option<usize>,
 ) -> Picked {
     if popup.width < 4 || popup.height < 3 {
         return Picked::default();
@@ -95,7 +95,7 @@ pub fn draw(
         .collect();
     let height = room.saturating_sub(lines.len());
     let top = lines.len();
-    let hits = window_range(entries, cursor, height)
+    let hits = window_range(entries, cursor.unwrap_or(0), height)
         .enumerate()
         .map(|(line, index)| {
             let rect = Rect {
@@ -127,15 +127,15 @@ fn window_range(entries: &[Row], cursor: usize, height: usize) -> std::ops::Rang
 
 /// The entries that fit in `height` lines, from the top or scrolled so the
 /// cursor is the last of them. The entry under the cursor takes the selection's
-/// paint.
+/// paint; with no cursor, none does.
 fn window(
     entries: &[Row],
-    cursor: usize,
+    cursor: Option<usize>,
     width: usize,
     height: usize,
     theme: &Theme,
 ) -> Vec<Line<'static>> {
-    let shown = window_range(entries, cursor, height);
+    let shown = window_range(entries, cursor.unwrap_or(0), height);
     let first = shown.start;
     entries[shown]
         .iter()
@@ -143,7 +143,7 @@ fn window(
         .map(|(offset, row)| {
             let index = first + offset;
             let line = Line::from(Span::styled(cut_to(&row.text, width), row.style));
-            if index == cursor {
+            if Some(index) == cursor {
                 selected_line(line, width, theme)
             } else {
                 line
@@ -185,20 +185,40 @@ mod tests {
                 style: theme.text.normal,
             })
             .collect();
-        let shown = window(&entries, 6, 20, 3, &theme);
+        let shown = window(&entries, Some(6), 20, 3, &theme);
         let text: Vec<String> = shown.iter().map(line_text).collect();
         assert_eq!(text[0], "entry 4");
         assert_eq!(text[2], "entry 6");
         // The top of the list shows from its first entry.
-        let top = window(&entries, 0, 20, 3, &theme);
+        let top = window(&entries, Some(0), 20, 3, &theme);
         assert_eq!(line_text(&top[0]), "entry 0");
         assert_eq!(top.len(), 3);
     }
 
     #[test]
+    fn a_picker_with_no_cursor_paints_no_entry_and_shows_from_the_top() {
+        let theme = Theme::preset(crate::Preset::Dark);
+        let entries: Vec<Row> = (0..10)
+            .map(|index| Row {
+                text: format!("entry {index}"),
+                style: theme.text.normal,
+            })
+            .collect();
+        let shown = window(&entries, None, 20, 3, &theme);
+        let text: Vec<String> = shown.iter().map(line_text).collect();
+        assert_eq!(text, ["entry 0", "entry 1", "entry 2"]);
+        for line in &shown {
+            assert_ne!(
+                line.spans[0].style.bg, theme.text.selected_bg.bg,
+                "a row is painted selected"
+            );
+        }
+    }
+
+    #[test]
     fn an_empty_list_shows_no_entry() {
         let theme = Theme::preset(crate::Preset::Dark);
-        assert!(window(&[], 0, 20, 5, &theme).is_empty());
+        assert!(window(&[], Some(0), 20, 5, &theme).is_empty());
     }
 
     fn line_text(line: &Line<'_>) -> String {

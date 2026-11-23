@@ -113,6 +113,21 @@ pub fn for_role(role: SkillName, read: ConfigRead) -> String {
     format!("{}{}", crew(&config, note.as_deref()), role.text())
 }
 
+/// A word a POSIX shell reads back as the text given. Text with nothing a
+/// shell would split, expand or quote stands bare; anything else is in single
+/// quotes, with each quote closed, escaped and reopened.
+pub fn shell_word(text: &str) -> String {
+    let bare = !text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_./:=,@%+".contains(c));
+    if bare {
+        text.to_string()
+    } else {
+        format!("'{}'", text.replace('\'', "'\\''"))
+    }
+}
+
 /// The crew section: each agent's role, its harness, model and effort, the
 /// arguments and environment that start it, and the review-round limit. A role
 /// the crew leaves out is named `none`, and who does its work: the orchestrator
@@ -140,9 +155,13 @@ fn crew(config: &Config, note: Option<&str>) -> String {
                 let start =
                     known.invocation(agent.role.as_str(), &agent.model, agent.effort.as_deref());
                 out.push_str(&format!("  start kind: {}\n", known.kind));
-                out.push_str(&format!("  start args: {}\n", start.args.join(" ")));
+                let args: Vec<String> = start.args.iter().map(|arg| shell_word(arg)).collect();
+                out.push_str(&format!("  start args: {}\n", args.join(" ")));
                 for (key, value) in &start.env {
-                    out.push_str(&format!("  start env: {key}={value}\n"));
+                    out.push_str(&format!(
+                        "  start env: {}\n",
+                        shell_word(&format!("{key}={value}"))
+                    ));
                 }
             }
             None => out.push_str("  start: the harness is not in the table\n"),
@@ -256,10 +275,59 @@ mod tests {
         );
         assert!(
             text.contains(
-                "  start env: OPENCODE_CONFIG_CONTENT={\"agent\":{\"reviewer\":{\"mode\":\"primary\",\"model\":\"opencode-go/glm-5.3#high\"}},\"default_agent\":\"reviewer\"}\n"
+                "  start env: 'OPENCODE_CONFIG_CONTENT={\"agent\":{\"reviewer\":{\"mode\":\"primary\",\"model\":\"opencode-go/glm-5.3#high\"}},\"default_agent\":\"reviewer\"}'\n"
             ),
             "{text}"
         );
+    }
+
+    #[test]
+    fn the_environment_and_arguments_a_shell_reads_back_are_the_ones_started_with() {
+        // The orchestrator pastes these values into a shell line: the words a
+        // shell reads must be the values the harness is started with.
+        let mut config = Config::default();
+        config.agents[2].harness = "opencode".to_string();
+        config.agents[2].model = "opencode-go/glm-5.3".to_string();
+        config.agents[2].effort = Some("high".to_string());
+        let start = harness::find("opencode").expect("opencode").invocation(
+            "reviewer",
+            "opencode-go/glm-5.3",
+            Some("high"),
+        );
+        let text = crew(&config, None);
+        // The reviewer is the last agent the crew lists: its lines come last.
+        let line = |prefix: &str| -> String {
+            text.lines()
+                .filter_map(|line| line.strip_prefix(prefix))
+                .next_back()
+                .unwrap_or_else(|| panic!("no {prefix:?} line:\n{text}"))
+                .to_string()
+        };
+        let read_back = |words: &str| -> Vec<String> {
+            let output = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(format!("printf '%s\\n' {words}"))
+                .output()
+                .expect("sh");
+            String::from_utf8(output.stdout)
+                .expect("utf-8")
+                .lines()
+                .map(str::to_string)
+                .collect()
+        };
+        let env = read_back(&line("  start env: "));
+        assert_eq!(env, [format!("OPENCODE_CONFIG_CONTENT={}", start.env[0].1)]);
+        assert_eq!(read_back(&line("  start args: ")), start.args);
+    }
+
+    #[test]
+    fn a_shell_word_is_bare_when_nothing_is_special_and_quoted_otherwise() {
+        assert_eq!(shell_word("--model"), "--model");
+        assert_eq!(shell_word("claude-opus-5-5"), "claude-opus-5-5");
+        assert_eq!(shell_word(""), "''");
+        assert_eq!(shell_word("a b"), "'a b'");
+        assert_eq!(shell_word("it's"), "'it'\\''s'");
+        assert_eq!(shell_word("{\"a\":1}"), "'{\"a\":1}'");
     }
 
     #[test]

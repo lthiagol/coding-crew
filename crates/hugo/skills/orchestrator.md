@@ -33,10 +33,11 @@ no builder you write the code, with no reviewer you review it.
 - **Never two builds at once** unless the machine has room: builds compete for
   CPU and memory.
 
-Start an agent:
+Start an agent. The crew's `start env` and `start args` are shell words, already
+quoted: paste them as printed.
 
 ```sh
-R=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$PWD" --label <name> --env <start env, KEY=VALUE, when the crew names one>)
+R=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$PWD" --label <name> --env <start env word, when the crew names one>)
 # read .result.root_pane.pane_id and .result.tab.tab_id from R
 herdr agent start <name> --kind <start kind> --pane <pane> -- <start args>
 herdr agent prompt <name> "Read <brief path> and do the job it describes."

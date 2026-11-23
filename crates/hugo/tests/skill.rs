@@ -110,7 +110,7 @@ fn the_crew_header_reflects_a_configuration_that_is_not_the_default() {
         "{text}"
     );
     assert!(
-        text.contains("  start env: OPENCODE_CONFIG_CONTENT={"),
+        text.contains("  start env: 'OPENCODE_CONFIG_CONTENT={"),
         "{text}"
     );
     assert!(!text.contains("Review-round limit: 5."), "{text}");

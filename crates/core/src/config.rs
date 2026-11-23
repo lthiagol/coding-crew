@@ -795,7 +795,9 @@ fn rank(role: FlowRole) -> u8 {
 /// and a model that carried its effort as `#effort`.
 #[derive(Deserialize)]
 struct Stored {
-    agents: StoredAgents,
+    /// Read as a value: its shape is decided first, then each agent is read
+    /// alone, so an error names the role or entry it is in.
+    agents: toml::Value,
     /// The old shape's harness: an agent that names none runs in it.
     harness: Option<StoredHarness>,
     round_limit: u32,
@@ -804,36 +806,8 @@ struct Stored {
     raul: Raul,
 }
 
-/// The list comes first: a struct also reads a sequence, field by field.
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum StoredAgents {
-    List(Vec<StoredListAgent>),
-    Tables(StoredTables),
-}
-
-/// The crew's tables: one for each role it may hold.
-#[derive(Deserialize)]
-struct StoredTables {
-    orchestrator: Option<StoredAgent>,
-    builder: Option<StoredAgent>,
-    reviewer: Option<StoredAgent>,
-}
-
 /// An agent's table. Its role is the table's name, so it is not repeated here.
-#[derive(Deserialize)]
 struct StoredAgent {
-    harness: Option<String>,
-    model: String,
-    effort: Option<String>,
-}
-
-/// An agent of the old `[[agents]]` array: its name and role were its own.
-#[derive(Deserialize)]
-struct StoredListAgent {
-    #[allow(dead_code)]
-    name: String,
-    role: FlowRole,
     harness: Option<String>,
     model: String,
     effort: Option<String>,
@@ -851,36 +825,7 @@ impl TryFrom<Stored> for Config {
 
     fn try_from(stored: Stored) -> Result<Self, String> {
         let legacy = stored.harness.as_ref().map(|harness| harness.tool.clone());
-        let entries: Vec<(FlowRole, StoredAgent)> = match stored.agents {
-            StoredAgents::Tables(tables) => [
-                (FlowRole::Orchestrator, tables.orchestrator),
-                (FlowRole::Builder, tables.builder),
-                (FlowRole::Reviewer, tables.reviewer),
-            ]
-            .into_iter()
-            .filter_map(|(role, agent)| agent.map(|agent| (role, agent)))
-            .collect(),
-            StoredAgents::List(list) => {
-                let mut entries: Vec<(FlowRole, StoredAgent)> = Vec::new();
-                for agent in list {
-                    if agent.role == FlowRole::Creator {
-                        return Err(format!(
-                            "{} is not an agent's role: the crew holds the orchestrator, the builder and the reviewer",
-                            agent.role.as_str()
-                        ));
-                    }
-                    entries.push((
-                        agent.role,
-                        StoredAgent {
-                            harness: agent.harness,
-                            model: agent.model,
-                            effort: agent.effort,
-                        },
-                    ));
-                }
-                entries
-            }
-        };
+        let entries = stored_entries(stored.agents)?;
         let mut agents = Vec::new();
         for (role, agent) in entries {
             if agents.iter().any(|done: &Agent| done.role == role) {
@@ -908,6 +853,71 @@ impl TryFrom<Stored> for Config {
             raul: stored.raul,
         })
     }
+}
+
+/// The agents the file holds, in the shape it holds them: a table per role, or
+/// the array before it. The shape is decided first, then each agent is read
+/// field by field, so an error names its role or entry and the field.
+fn stored_entries(agents: toml::Value) -> Result<Vec<(FlowRole, StoredAgent)>, String> {
+    match agents {
+        toml::Value::Table(tables) => [
+            FlowRole::Orchestrator,
+            FlowRole::Builder,
+            FlowRole::Reviewer,
+        ]
+        .into_iter()
+        .filter_map(|role| tables.get(role.as_str()).map(|table| (role, table)))
+        .map(|(role, table)| {
+            let name = format!("[agents.{}]", role.as_str());
+            Ok((role, stored_agent(&name, table)?))
+        })
+        .collect(),
+        toml::Value::Array(list) => list
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                let name = format!("[[agents]] entry {}", index + 1);
+                let role = entry
+                    .get("role")
+                    .ok_or_else(|| format!("{name} names no role"))?
+                    .clone()
+                    .try_into::<FlowRole>()
+                    .map_err(|error| format!("{name} role: {}", error.message()))?;
+                if role == FlowRole::Creator {
+                    return Err(format!(
+                        "{} is not an agent's role: the crew holds the orchestrator, the builder and the reviewer",
+                        role.as_str()
+                    ));
+                }
+                Ok((role, stored_agent(&name, entry)?))
+            })
+            .collect(),
+        _ => Err("agents must be a table for each role, or an array of agents".to_string()),
+    }
+}
+
+/// An agent's fields, read one at a time: a field of the wrong type, or no
+/// model, is named with the agent it is in.
+fn stored_agent(name: &str, value: &toml::Value) -> Result<StoredAgent, String> {
+    let table = value
+        .as_table()
+        .ok_or_else(|| format!("{name} is not a table"))?;
+    let text = |key: &str| -> Result<Option<String>, String> {
+        table
+            .get(key)
+            .map(|value| {
+                value
+                    .as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| format!("{name} {key} is not a string"))
+            })
+            .transpose()
+    };
+    Ok(StoredAgent {
+        harness: text("harness")?,
+        model: text("model")?.ok_or_else(|| format!("{name} names no model"))?,
+        effort: text("effort")?,
+    })
 }
 
 /// An agent as the file states it, checked against the harness table. An
@@ -1883,6 +1893,36 @@ gates = [{ from = \"groomed\", to = \"approved\" }]
             "{picked}"
         );
         assert_eq!(picked.matches("kimi-k3").count(), 1, "{picked}");
+    }
+
+    #[test]
+    fn a_field_error_under_an_agent_names_its_role_and_field() {
+        // The sidebar shows this message, so it names the agent and the field.
+        let head = "round_limit = 5\norder = []\n\n[agents.orchestrator]\nharness = \"claude\"\nmodel = \"claude-opus-5-5\"\n\n";
+        let shape = |text: &str| match Config::from_toml(text) {
+            Err(ConfigError::Shape { message, .. }) => message,
+            other => panic!("a shape error was expected: {other:?}"),
+        };
+        let missing = shape(&format!("{head}[agents.reviewer]\nharness = \"claude\"\n"));
+        assert!(
+            missing.contains("[agents.reviewer]") && missing.contains("model"),
+            "{missing}"
+        );
+        let typo = shape(&format!(
+            "{head}[agents.reviewer]\nharness = \"claude\"\nmodel = \"claude-haiku-5-5\"\neffort = 3\n"
+        ));
+        assert!(
+            typo.contains("[agents.reviewer]") && typo.contains("effort"),
+            "{typo}"
+        );
+        assert!(!typo.contains("untagged"), "{typo}");
+        let listed = shape(
+            "round_limit = 5\norder = []\n\n[[agents]]\nname = \"o\"\nrole = \"orchestrator\"\nharness = \"claude\"\n",
+        );
+        assert!(
+            listed.contains("entry 1") && listed.contains("model"),
+            "{listed}"
+        );
     }
 
     #[test]

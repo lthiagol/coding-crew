@@ -394,6 +394,9 @@ pub struct App {
     help: bool,
     /// The crew-size selector is open, with its cursor on this size minus one.
     crew_cursor: Option<usize>,
+    /// The crew in force is no size the selector names, so the cursor starts
+    /// on no pick: enter does nothing until a key or a click moves it.
+    crew_unsized: bool,
     /// The launcher `s` starts the orchestrator through. `None` outside herdr:
     /// the key says why, and starts nothing.
     launch: Option<Arc<dyn Launcher>>,
@@ -459,6 +462,7 @@ impl App {
             levels: pick::Levels::new(),
             help: false,
             crew_cursor: None,
+            crew_unsized: false,
             launch: None,
             starting: None,
             queued: Vec::new(),
@@ -624,7 +628,9 @@ impl App {
             KeyCode::Up | KeyCode::Char('k') => self.move_crew(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_crew(1),
             KeyCode::Enter => {
-                if let Some(cursor) = self.crew_cursor.take() {
+                if !self.crew_unsized
+                    && let Some(cursor) = self.crew_cursor.take()
+                {
                     self.set_crew(cursor + 1);
                 }
             }
@@ -739,12 +745,13 @@ impl App {
         }
         if self.crew_cursor.is_some() {
             if let Some(index) = hit(&self.hits.crew.entries, at) {
-                if self.crew_cursor == Some(index) {
+                if self.crew_cursor == Some(index) && !self.crew_unsized {
                     if let Some(cursor) = self.crew_cursor.take() {
                         self.set_crew(cursor + 1);
                     }
                 } else {
                     self.crew_cursor = Some(index);
+                    self.crew_unsized = false;
                 }
             }
             return Action::Redraw;
@@ -973,22 +980,28 @@ impl App {
     }
 
     /// Open the crew-size selector, with its cursor on the crew in force. A
-    /// window with no configuration has no crew to size.
+    /// window with no configuration has no crew to size. A crew no size names
+    /// (an orchestrator and a reviewer, say) has no size in force: the cursor
+    /// starts on the first size, unpicked, and enter waits for a move.
     fn open_crew(&mut self) {
-        let Some(size) = self
-            .session()
-            .map(|config| crew_size_of(config).unwrap_or(1))
-        else {
+        let Some(size) = self.session().map(crew_size_of) else {
             return;
         };
-        self.crew_cursor = Some(size - 1);
+        self.crew_unsized = size.is_none();
+        self.crew_cursor = Some(size.unwrap_or(1) - 1);
     }
 
-    /// Move the crew-size selector's cursor over the three sizes.
+    /// Move the crew-size selector's cursor over the three sizes. A real move is
+    /// the first pick of a crew no size names; a move at the end of the list is
+    /// no move and leaves it unpicked.
     fn move_crew(&mut self, delta: isize) {
         if let Some(cursor) = self.crew_cursor.as_mut() {
             let last = CREW_ORDER.len() as isize - 1;
-            *cursor = (*cursor as isize + delta).clamp(0, last) as usize;
+            let moved = (*cursor as isize + delta).clamp(0, last) as usize;
+            if moved != *cursor {
+                *cursor = moved;
+                self.crew_unsized = false;
+            }
         }
     }
 
@@ -1235,13 +1248,26 @@ impl App {
         };
         let (entries, cursor, state) = match loaded {
             Ok(catalog) => {
-                let levels = catalog.efforts_of(&model).map(<[String]>::to_vec);
                 // A model the catalogue does not list has no levels of its own:
-                // it is offered the harness's, then `none` and a typed level.
-                let offered = if model.is_empty() {
-                    Vec::new()
-                } else {
-                    levels.unwrap_or_else(|| catalog.unlisted_choices())
+                // it is offered the harness's, then `none` and a typed level. A
+                // listed model is offered its levels, and `none` when it also
+                // runs bare.
+                let offered = match catalog.efforts_of(&model) {
+                    _ if model.is_empty() => Vec::new(),
+                    // A model that takes no level is offered none to pick.
+                    Some([]) => Vec::new(),
+                    Some(levels) => {
+                        let mut offered = levels.to_vec();
+                        if catalog.takes_none(&model)
+                            && !offered
+                                .iter()
+                                .any(|level| level == coding_crew_core::catalog::NONE_ENTRY)
+                        {
+                            offered.push(coding_crew_core::catalog::NONE_ENTRY.to_string());
+                        }
+                        offered
+                    }
+                    None => catalog.unlisted_choices(),
                 };
                 self.levels.insert(&harness, catalog);
                 if offered.is_empty() {
@@ -1387,9 +1413,18 @@ impl App {
             self.open_typing();
             return;
         }
-        let listed = self.effort_listed(agent);
+        // A model that also runs bare stores `none` as no level, as an
+        // unlisted model does: its listing names the bare start.
+        let listed = self.effort_listed(agent) && !self.takes_none_of(agent);
         self.store_effort(agent, &entry, listed);
         self.close_choice();
+    }
+
+    /// Whether an agent's model runs with no level, as its catalogue reads.
+    fn takes_none_of(&self, agent: usize) -> bool {
+        self.session()
+            .and_then(|config| config.agents.get(agent))
+            .is_some_and(|row| self.levels.takes_none(row))
     }
 
     /// Save an agent's effort as a picked entry: `none` on a model the
@@ -2546,7 +2581,7 @@ impl App {
             &self.theme,
             &lead,
             &entries,
-            choice.cursor,
+            Some(choice.cursor),
         );
         self.hits.choice = picked;
     }
@@ -2572,7 +2607,7 @@ impl App {
             &self.theme,
             &[],
             &entries,
-            cursor,
+            (!self.crew_unsized).then_some(cursor),
         );
         self.hits.crew = picked;
     }
@@ -5269,6 +5304,81 @@ mod tests {
     }
 
     #[test]
+    fn a_crew_no_size_names_opens_unpicked_and_enter_waits_for_a_move() {
+        // An orchestrator and a reviewer is no size the selector names: enter
+        // on the opening cursor must not park the reviewer. A move picks.
+        let home = scratch("crew-size-odd");
+        let mut app = on_orchestrator(Some(home.clone()));
+        let mut config = Config::default();
+        config
+            .agents
+            .retain(|agent| agent.role != FlowRole::Builder);
+        app.config = ConfigRead::of(ConfigState::Config(config.clone()));
+        app.session = Some(config);
+        app.on_key(press(KeyCode::Char('c')));
+        assert!(app.crew_cursor.is_some(), "the selector did not open");
+        app.on_key(press(KeyCode::Enter));
+        assert!(app.crew_cursor.is_some(), "enter picked a size unasked");
+        let roles = |app: &App| -> Vec<FlowRole> {
+            app.session()
+                .expect("the session")
+                .agents
+                .iter()
+                .map(|agent| agent.role)
+                .collect()
+        };
+        assert_eq!(roles(&app), [FlowRole::Orchestrator, FlowRole::Reviewer]);
+        app.on_key(press(KeyCode::Down));
+        app.on_key(press(KeyCode::Enter));
+        assert!(app.crew_cursor.is_none(), "enter left the selector open");
+        assert_eq!(roles(&app), [FlowRole::Orchestrator, FlowRole::Builder]);
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn an_odd_crew_opens_with_no_size_painted_and_up_on_the_top_row_keeps_it_so() {
+        // A crew no size names paints no size, so the screen shows none picked.
+        // ↑ on the top row is no move: enter after it still does nothing, and
+        // ↓ is the first real move that paints a size.
+        let home = scratch("crew-size-unpainted");
+        let mut app = on_orchestrator(Some(home.clone()));
+        let mut config = Config::default();
+        config
+            .agents
+            .retain(|agent| agent.role != FlowRole::Builder);
+        app.config = ConfigRead::of(ConfigState::Config(config.clone()));
+        app.session = Some(config);
+        app.on_key(press(KeyCode::Char('c')));
+        let selected = |app: &mut App, needle: &str| {
+            let (rows, paint) = render_app(app, 100, 40, &RuntimeRead::Absent);
+            let row = row_of(&rows, needle);
+            let column = column_at(&rows, row, needle);
+            theme().text.selected_bg.bg == Some(paint[row][column].bg)
+        };
+        assert!(!selected(&mut app, "single agent"), "a size is painted");
+        assert!(
+            !selected(&mut app, "one agent per role"),
+            "a size is painted"
+        );
+        let roles = |app: &App| -> Vec<FlowRole> {
+            app.session()
+                .expect("the session")
+                .agents
+                .iter()
+                .map(|agent| agent.role)
+                .collect()
+        };
+        app.on_key(press(KeyCode::Up));
+        app.on_key(press(KeyCode::Enter));
+        assert!(app.crew_cursor.is_some(), "enter picked a size after ↑");
+        assert_eq!(roles(&app), [FlowRole::Orchestrator, FlowRole::Reviewer]);
+        app.on_key(press(KeyCode::Down));
+        assert!(selected(&mut app, "orchestrator also reviews"));
+        assert!(!selected(&mut app, "single agent"));
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
     fn the_crew_size_selector_sets_the_session_crew_and_the_file_stays() {
         // c opens the selector on the crew in force; enter on the first size
         // takes the builder and the reviewer off the session's crew, and the
@@ -6751,6 +6861,53 @@ mod tests {
                 .and_then(|agent| agent.effort.clone()),
             Some("ultra".to_string())
         );
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_listed_model_that_also_runs_bare_offers_none_after_its_levels() {
+        // gpt-5.3-codex is listed bare and at its levels. Once a level is
+        // picked the list still offers `none`, and picking it stores no level,
+        // so the bare start is reachable without `r`.
+        let home = scratch("effort-bare-listed");
+        let mut window = on_unlisted_builder_effort(&home);
+        let mut config = window.session().cloned().expect("the session");
+        config.agents[1].harness = "cursor-agent".to_string();
+        config.agents[1].model = "gpt-5.3-codex".to_string();
+        config.agents[1].effort = Some("high".to_string());
+        window.config = ConfigRead::of(ConfigState::Config(config.clone()));
+        window.session = Some(config);
+        window.show(1, Field::Effort, Vec::new(), 0, ChoiceState::Reading);
+        let listing = coding_crew_core::harness::Listing::Cursor;
+        let catalog = listing
+            .parse("gpt-5.3-codex-low\ngpt-5.3-codex\ngpt-5.3-codex-high\n")
+            .expect("the listing");
+        window.fill_effort(Ok(catalog));
+        assert_eq!(
+            entries_of(&window),
+            [
+                ("low".to_string(), true),
+                ("high".to_string(), true),
+                ("none".to_string(), true),
+            ]
+        );
+        assert_eq!(
+            window.choice.as_ref().expect("the choice").cursor,
+            1,
+            "the cursor is not on the level in force"
+        );
+        window.on_key(press(KeyCode::Down));
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.choice.is_none(), "enter did not pick none");
+        let builder = window
+            .session()
+            .and_then(|config| config.agents.get(1))
+            .expect("the builder");
+        assert_eq!(
+            builder.effort.as_deref(),
+            Some(coding_crew_core::catalog::NO_EFFORT)
+        );
+        assert!(pick::gaps(window.session().expect("the session"), &window.levels).is_empty());
         let _ = fs::remove_dir_all(&home);
     }
 

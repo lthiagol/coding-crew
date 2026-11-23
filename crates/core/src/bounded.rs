@@ -14,6 +14,11 @@ use std::time::{Duration, Instant};
 /// How often a run looks at the tool it started.
 const POLL: Duration = Duration::from_millis(10);
 
+/// How long past the bound the output of a tool that answered in time is
+/// still read. The wait ends at the bound, and a tool that exits just before
+/// it leaves its output to be drained: it is not a timeout.
+const DRAIN_GRACE: Duration = Duration::from_millis(500);
+
 /// What a tool printed, and how it ended.
 pub struct Answer {
     pub status: ExitStatus,
@@ -23,9 +28,9 @@ pub struct Answer {
 
 /// Run `tool` with `args`, and read its answer by `bound`.
 ///
-/// The output is held to the same bound as the wait: a tool that left a child
-/// holding its pipes must not hold the read past it. A tool still running at
-/// the bound is killed, and the run answers with a timeout error.
+/// The output is held to the bound and a short grace past it: a tool that left
+/// a child holding its pipes must not hold the read longer. A tool still
+/// running at the bound is killed, and the run answers with a timeout error.
 pub fn run<I, S>(tool: &str, args: I, bound: Duration) -> io::Result<Answer>
 where
     I: IntoIterator<Item = S>,
@@ -59,11 +64,17 @@ where
             }
         }
     };
+    let until = drained_by(deadline);
     Ok(Answer {
         status,
-        stdout: received(&stdout, deadline, bound)?,
-        stderr: received(&stderr, deadline, bound)?,
+        stdout: received(&stdout, until, bound)?,
+        stderr: received(&stderr, until, bound)?,
     })
+}
+
+/// When the output of a run is given up on: the bound, and the grace past it.
+fn drained_by(deadline: Instant) -> Instant {
+    deadline + DRAIN_GRACE
 }
 
 fn timed_out(bound: Duration) -> io::Error {
@@ -88,12 +99,11 @@ fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> Receiver<Vec<u8>> {
     receiver
 }
 
-/// The bytes a drain read, when it finishes by the deadline. A drain that
-/// ended without sending (its thread failed) reads as no bytes. A drain still
-/// reading at the deadline is abandoned, not joined: its thread ends with the
-/// pipe.
-fn received(drain: &Receiver<Vec<u8>>, deadline: Instant, bound: Duration) -> io::Result<Vec<u8>> {
-    match drain.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+/// The bytes a drain read, when it finishes by `until`. A drain that ended
+/// without sending (its thread failed) reads as no bytes. A drain still
+/// reading at `until` is abandoned, not joined: its thread ends with the pipe.
+fn received(drain: &Receiver<Vec<u8>>, until: Instant, bound: Duration) -> io::Result<Vec<u8>> {
+    match drain.recv_timeout(until.saturating_duration_since(Instant::now())) {
         Ok(bytes) => Ok(bytes),
         Err(RecvTimeoutError::Timeout) => Err(timed_out(bound)),
         Err(RecvTimeoutError::Disconnected) => Ok(Vec::new()),
@@ -113,6 +123,23 @@ mod tests {
         };
         assert_eq!(error.kind(), io::ErrorKind::TimedOut);
         assert!(started.elapsed() < Duration::from_secs(10), "{error}");
+    }
+
+    #[test]
+    fn output_that_lands_just_past_the_bound_is_still_read() {
+        // A tool that answered at the bound has its pipes drained after it:
+        // a drain that finishes a moment late is read, not reported as a
+        // timeout.
+        let (sender, receiver) = mpsc::channel();
+        let late = DRAIN_GRACE / 2;
+        thread::spawn(move || {
+            thread::sleep(late);
+            let _ = sender.send(b"late\n".to_vec());
+        });
+        let deadline = Instant::now();
+        let bytes = received(&receiver, drained_by(deadline), Duration::from_secs(1))
+            .expect("the late output");
+        assert_eq!(bytes, b"late\n");
     }
 
     #[test]
