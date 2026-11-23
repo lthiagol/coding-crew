@@ -1519,6 +1519,18 @@ against `roles.md` and `commands.md`, which named the runner. The builder kept
 the code and amended both docs to say transitions alone write `status`. No
 human ruling was made on it. Limits are in THE FOLLOW-UPS. Commit `a094e78`.
 
+Unit closed: T4 · Core store (plan 87). Three build rounds and three reviews;
+the third clean. Core gains a project lock, `ProjectLock`, an exclusive `flock`
+on `coding-crew/.talita.lock` with a 10 s wait, then `StoreError::Locked`; reads
+take none. Every store write takes it. `activity.json` and `runtime.json` are
+written through a temp file and a rename. Ids sort by number, and `save_item`
+removes an item's old file on rename. Against the unlocked code, the
+creating-writers test kept 13 of 50 tasks, and the journal test kept 48 of 50
+events. The fixtures are unchanged. Round one's review found store tests
+locking the shared `/tmp/.talita.lock`; round two found two more test files
+doing it. Round three's review was clean. Limits are in THE FOLLOW-UPS. Commit
+`5c5628e`.
+
 ---
 
 ## Lessons

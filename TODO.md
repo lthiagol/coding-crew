@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after unit 86.
+Updated 2026-11-23 by the orchestrator, after unit 87.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,8 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–86, 63b and 70b are closed; their record is in
-`DONE.md`.
-
-- 87 · **T4 · Core store** (S): project lock, atomic journal and runtime writes, numeric id sort, `save_item` removes an old file.
+Queued in `docs/plan.md`, in order. Units 0–87, 63b and 70b are closed; their record is in
+`DONE.md`. Every row of the plan's Ready table is ✓.
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
@@ -170,6 +168,20 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
+- **2026-11-23, unit 87:** the journal refuses a write while it holds events it
+  cannot read (`StoreError::JournalUnreadable`), because `Activity` drops them
+  on read and a rewrite would delete them. Follows decision 17. Keeping unknown
+  events instead is open. Recorded, not ruled.
+- **2026-11-23, unit 87:** the creating-writers test
+  (`two_writers_creating_at_once_take_no_duplicate_id`) fails unlocked in 5 of 6
+  runs. It is sensitive, not deterministic. Recorded, not ruled.
+- **2026-11-23, unit 87:** `config.rs` has its own `write_beside`, which takes no
+  lock and is not atomic. Left alone. Recorded, not ruled.
+- **2026-11-23, unit 87:** raul's id sort (`crates/raul/src/data.rs:122`) is not
+  the core's numeric order yet. It is raul's follow-up, not core's.
+- **2026-11-23, unit 87:** the Windows lock (std `File::try_lock`) is untested.
+- **2026-11-23, unit 87:** the journal and runtime fixtures' byte-for-byte
+  regeneration is not checked; only the struct round-trip is.
 - **2026-11-23, unit 86:** `status` has no owner in `ownership.rs` or task-model
   § 2.5, and `roles.md:60` and `commands.md:38-42` now say transitions alone
   write it. Round two applied the reviewer's recommendation; no human ruling.
@@ -208,7 +220,8 @@ None blocking. Carried from the closed units.
 
 - **talita's design is accepted** (2026-11-22, the human). `docs/talita/` and
   ADRs 0012–0020; `docs/talita/roadmap.md` holds the build order, units
-  T1–T14. Nothing is built: talita code waits on the human's word.
+  T1–T14. T1–T4 are built in core (units 84–87), with no talita code. T5
+  onward waits on the human's word.
 - **hugo renames `HUGO_SESSION` to `HUGO_CREW`** (2026-11-22, ADR 0015). It
   holds the crew's configuration, not an actor's session. A small hugo unit.
 - **2026-11-22, unit 84:** `mock-data/README.md:115` still says TSK14's
