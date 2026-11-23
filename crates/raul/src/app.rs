@@ -1823,6 +1823,25 @@ mod tests {
     }
 
     #[test]
+    fn a_long_home_does_not_hide_why_the_configuration_cannot_be_used() {
+        // The notice row under the tabs cuts at the window's width: the reason
+        // leads, so the error stays on screen and the path follows it.
+        let home = std::env::temp_dir().join(format!("raul-notice-long-{}", "x".repeat(80)));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(coding_crew_core::config::home_at(&home)).expect("the home");
+        std::fs::write(
+            coding_crew_core::config::config_path(&home),
+            "round_limit = \n",
+        )
+        .expect("a broken file");
+        let mut app = app();
+        app.notice = crate::config::load(Some(&home)).problem;
+        let rows = render(&mut app, 100, 20).0;
+        assert!(rows[3].contains("syntax error"), "{rows:?}");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
     fn a_narrow_footer_does_not_cut_a_key() {
         let rows = draw(24, 8);
         let footer = rows.last().expect("a footer row").trim_end().to_string();

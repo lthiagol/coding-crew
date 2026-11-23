@@ -519,7 +519,7 @@ fn a_configuration_that_cannot_be_read_is_named_and_left_alone() {
 
     let text = screen_in(&mock_project(), &home);
     assert!(text.contains("configuration is unreadable"), "{text}");
-    assert!(text.contains("config.toml"), "{text}");
+    assert!(text.contains("syntax error"), "{text}");
     assert!(!text.contains("no configuration yet"), "{text}");
     assert!(
         text.contains("using the defaults:"),

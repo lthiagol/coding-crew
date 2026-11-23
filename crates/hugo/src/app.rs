@@ -4477,7 +4477,8 @@ mod tests {
         );
         let text = rows.join("\n");
         assert!(text.contains("configuration is unreadable"), "{text}");
-        assert!(text.contains(CONFIG_FILE), "{text}");
+        // The sidebar's 29 columns hold the reason first; the file follows it.
+        assert!(text.contains("syntax error"), "{text}");
         assert!(!text.contains("no configuration yet"), "{text}");
         assert_eq!(
             colour_of(&rows, &paint, "syntax error"),
@@ -4510,9 +4511,9 @@ mod tests {
         let mut app = App::new(theme(), IconSet::Nerd, read, Some(home.clone()));
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         // The sidebar's text is 29 columns: its inner width, less the bar's
-        // column. The row is the error cut to that, exactly, not a shorter
-        // wording a test invented.
-        let visible = cut_to(&format!("{CONFIG_FILE}: {expected}"), 29);
+        // column. The row is the reason first, then the file, cut to that
+        // exactly — not a shorter wording a test invented.
+        let visible = cut_to(&format!("{expected} · {CONFIG_FILE}"), 29);
         assert!(
             rows.iter().any(|row| row.contains(&visible)),
             "the screen does not carry {visible:?}: {}",
@@ -4982,7 +4983,7 @@ mod tests {
         let (rows, _) = render_app(&mut app, 100, 40, &RuntimeRead::Absent);
         let text = text_of(&rows);
         assert!(text.contains("configuration is unreadable"), "{text}");
-        assert!(text.contains(CONFIG_FILE), "{text}");
+        assert!(text.contains("syntax error"), "{text}");
         assert!(text.contains("using the defaults:"), "{text}");
         assert!(text.contains("5 build-and-fix rounds"), "{text}");
         assert_eq!(

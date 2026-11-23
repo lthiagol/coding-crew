@@ -3,8 +3,8 @@
 //! The file is the flow's too, under `~/.config/coding-crew/`, and hugo reads
 //! it at launch. raul reads its own table at startup, and writes the defaults
 //! when the file is absent, as hugo does. A file raul cannot use does not stop
-//! it: raul starts on the defaults, and the one line that names the file and
-//! the error is shown. A typo never draws the wrong palette without a word.
+//! it: raul starts on the defaults, and the one line that names the error and
+//! then the file is shown. A typo never draws the wrong palette without a word.
 //!
 //! The precedence is a flag, then the environment, then the file, then the
 //! defaults. A flag or the environment that names nothing raul draws is
@@ -13,7 +13,7 @@
 use std::fs;
 use std::path::Path;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use coding_crew_core::config::{ConfigFile, Raul, config_path, home_at};
 use coding_crew_theme::{IconSet, Preset, Theme};
 
@@ -66,12 +66,14 @@ pub fn load(home: Option<&Path>) -> Loaded {
 }
 
 /// raul's table in the file under `home`, after the file is created when it
-/// is absent.
+/// is absent. The reason leads and the path follows it: the notice row cuts a
+/// line at the window's width, and a long home folder must not push the reason
+/// out.
 fn read(home: &Path) -> Result<Raul> {
     let dir = home_at(home);
-    fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    fs::create_dir_all(&dir).map_err(|error| anyhow!("{error} · creating {}", dir.display()))?;
     let path = config_path(home);
-    let file = ConfigFile::open(&path).map_err(|error| anyhow!("{}: {error}", path.display()))?;
+    let file = ConfigFile::open(&path).map_err(|error| anyhow!("{error} · {}", path.display()))?;
     Ok(file.config().raul.clone())
 }
 
@@ -377,7 +379,8 @@ mod tests {
     #[test]
     fn a_file_that_does_not_parse_is_named_with_its_path() {
         // raul starts on the defaults and names the file. The broken file is
-        // left as it is: it is the human's to mend.
+        // left as it is: it is the human's to mend. The reason leads and the
+        // path follows it, so a long home folder cannot push the reason out.
         let home = scratch_home("broken");
         fs::create_dir_all(home_at(&home)).expect("the home");
         let broken = "round_limit = \n";
@@ -385,8 +388,9 @@ mod tests {
         let loaded = load(Some(&home));
         assert_eq!(loaded.raul, Raul::default());
         let text = loaded.problem.expect("the named file");
-        assert!(text.contains(CONFIG_FILE), "{text}");
-        assert!(text.contains("syntax error"), "{text}");
+        let (reason, path) = text.split_once(" · ").expect("the reason, then the path");
+        assert!(reason.contains("syntax error"), "{text}");
+        assert!(path.contains(CONFIG_FILE), "{text}");
         assert!(!text.contains('\n'), "the problem is one line: {text}");
         assert_eq!(
             fs::read_to_string(config_path(&home)).expect("the file"),
@@ -398,14 +402,18 @@ mod tests {
 
     #[test]
     fn a_home_that_cannot_hold_the_folder_is_named_and_the_defaults_are_used() {
-        // `.config` is a file, so the configuration folder cannot be made.
+        // `.config` is a file, so the configuration folder cannot be made. The
+        // reason leads and the folder follows it.
         let home = scratch_home("unwritable");
         fs::write(home.join(".config"), "").expect("a file where the folder goes");
         let loaded = load(Some(&home));
         assert_eq!(loaded.raul, Raul::default());
         let text = loaded.problem.expect("the named folder");
-        assert!(text.starts_with("creating "), "{text}");
-        assert!(text.contains("coding-crew"), "{text}");
+        let (reason, folder) = text
+            .split_once(" · creating ")
+            .expect("the reason, then the folder");
+        assert!(!reason.is_empty(), "{text}");
+        assert!(folder.contains("coding-crew"), "{text}");
         assert!(!text.contains('\n'), "the problem is one line: {text}");
         let _ = fs::remove_dir_all(&home);
     }

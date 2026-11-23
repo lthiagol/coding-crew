@@ -1371,11 +1371,13 @@ struct Window {
 }
 
 /// The file the panel reads, open at `path` under `home`: the file is written
-/// when it is absent, and an error names the file.
+/// when it is absent, and an error names the file. The reason leads and the
+/// path follows it: the pane cuts a line at its width, and a long home folder
+/// must not push the reason out.
 fn open_file(home: &Path, path: &Path) -> Result<ConfigFile, String> {
     let dir = home_at(home);
-    fs::create_dir_all(&dir).map_err(|error| format!("creating {}: {error}", dir.display()))?;
-    ConfigFile::open(path).map_err(|error| format!("{}: {error}", path.display()))
+    fs::create_dir_all(&dir).map_err(|error| format!("{error} · creating {}", dir.display()))?;
+    ConfigFile::open(path).map_err(|error| format!("{error} · {}", path.display()))
 }
 
 /// The path as the pane names it: from the home folder, with `~` for it.
@@ -3104,6 +3106,26 @@ mod tests {
         );
         // A read-only pane's lines are the cursor's stops, so it scrolls.
         assert!(panel.ids().iter().all(|id| id.starts_with("line:")));
+    }
+
+    #[test]
+    fn a_long_path_does_not_hide_why_the_file_is_read_only() {
+        // The macOS temp path fills the pane's line: the reason leads, so the
+        // error stays on screen and the path follows it.
+        let home = std::env::temp_dir().join(format!("raul-settings-long-{}", "x".repeat(80)));
+        let _ = fs::remove_dir_all(&home);
+        fs::create_dir_all(home_at(&home)).expect("the home");
+        fs::write(config_path(&home), "round_limit = \n").expect("a broken file");
+        assert!(
+            config_path(&home).to_string_lossy().len() > 100,
+            "the path is not long"
+        );
+        let panel = Panel::open(Some(&home), Overrides::default());
+        assert!(panel.read_only());
+        let rows = draw(&panel, 100, 60, None);
+        let text = inner(&rows);
+        assert!(text.contains("syntax error"), "the reason is cut: {text}");
+        let _ = fs::remove_dir_all(&home);
     }
 
     #[test]

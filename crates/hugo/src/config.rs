@@ -18,7 +18,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use coding_crew_core::config::{CONFIG_FILE, Config, LEGACY_CONFIG_FILE};
 pub use coding_crew_core::config::{config_path, home_at, user_home};
@@ -31,7 +31,10 @@ use crate::app::ReadError;
 /// whole, and an existing one is left alone.
 pub fn ensure_at(home: &Path) -> Result<PathBuf> {
     let dir = home_at(home);
-    fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    // The reason leads and the path follows it: the sidebar cuts the line, and
+    // a long home folder must not push the error out.
+    fs::create_dir_all(&dir)
+        .map_err(|error| anyhow::anyhow!("{error} · creating {}", dir.display()))?;
     Ok(dir)
 }
 

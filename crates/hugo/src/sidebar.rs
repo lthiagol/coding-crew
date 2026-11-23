@@ -12,6 +12,8 @@
 //! the theme's marker, and a group that does not fit the height is left out
 //! whole and named with what it held.
 
+use std::path::Path;
+
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
@@ -189,13 +191,10 @@ pub fn lines(
                 UNREADABLE.to_string(),
                 line(UNREADABLE, theme.text.normal, width),
             ));
+            let detail = format!("{} · {}", error.error, file_name(&error.file));
             prefix.push((
-                format!("{} error", error.file),
-                line(
-                    &format!("{}: {}", error.file, error.error),
-                    theme.semantic.error,
-                    width,
-                ),
+                format!("{} error", file_name(&error.file)),
+                line(&detail, theme.semantic.error, width),
             ));
             prefix.push((
                 USING_DEFAULTS.to_string(),
@@ -600,11 +599,22 @@ fn line(text: &str, style: Style, width: usize) -> Line<'static> {
     ])
 }
 
+/// The name a read gives the path it could not use: its last part, so a long
+/// home folder does not take the line's room from the reason.
+fn file_name(file: &str) -> String {
+    Path::new(file)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| file.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use coding_crew_core::config::{Agent, CONFIG_FILE, OrderStep};
+    use coding_crew_core::config::{Agent, CONFIG_DIR, CONFIG_FILE, OrderStep};
     use coding_crew_theme::Preset;
+
+    use std::fs;
 
     fn theme() -> Theme {
         Theme::preset(Preset::Dark)
@@ -935,13 +945,14 @@ mod tests {
     #[test]
     fn a_configuration_that_cannot_be_read_is_named_not_called_empty() {
         let state = unreadable();
+        // Wide enough to name both: the reason leads and the file follows it.
         let drawn = lines(
             &state,
             None,
             &Levels::default(),
             &theme(),
             IconSet::Nerd,
-            40,
+            120,
             40,
             usize::MAX,
         );
@@ -955,6 +966,46 @@ mod tests {
         assert!(drawn.agents, "the defaults' agents are not drawn");
         // The error is painted on the failure slot, as raul paints one.
         assert_eq!(drawn.lines[1].spans[1].style, theme().semantic.error);
+    }
+
+    #[test]
+    fn a_long_path_does_not_hide_why_the_configuration_is_unreadable() {
+        // The macOS temp path fills the sidebar's line: the reason leads, so
+        // the error stays on screen and the file follows it.
+        let file = std::env::temp_dir()
+            .join(format!("hugo-sidebar-path-{}", "x".repeat(80)))
+            .join("config.toml");
+        let error = crate::app::ReadError {
+            file: file.display().to_string(),
+            error: syntax_error(),
+        };
+        let state = ConfigRead::of(ConfigState::Unreadable(error));
+        let rows = rendered(&state, 32, 40);
+        assert!(
+            rows[1].contains("syntax error"),
+            "the reason is cut: {rows:#?}"
+        );
+    }
+
+    #[test]
+    fn a_long_home_that_cannot_be_made_keeps_the_reason_on_the_sidebar() {
+        // A file where the configuration folder must go: the reader names the
+        // long home, and the sidebar still says why it cannot be read.
+        let home = std::env::temp_dir().join(format!("hugo-sidebar-home-{}", "x".repeat(80)));
+        let _ = fs::remove_dir_all(&home);
+        fs::create_dir_all(&home).expect("the home");
+        fs::write(home.join(CONFIG_DIR), "not a folder").expect("a blocking file");
+        let state = crate::config::load_at(&home);
+        let ConfigState::Unreadable(error) = &state.state else {
+            panic!("the home's error is not named: {state:?}");
+        };
+        let reason = error.error.split(" · ").next().expect("the reason");
+        let rows = rendered(&state, 32, 40);
+        assert!(
+            rows[1].contains(reason),
+            "the reason {reason:?} is cut: {rows:#?}"
+        );
+        let _ = fs::remove_dir_all(&home);
     }
 
     #[test]
@@ -1000,6 +1051,27 @@ mod tests {
         let rows = rendered(&unreadable(), 60, 2);
         assert_eq!(rows[0], UNREADABLE);
         assert!(rows[1].contains("syntax error"), "{rows:#?}");
+    }
+
+    #[test]
+    fn a_long_path_in_a_one_row_pane_keeps_the_error_marker_whole() {
+        // A one-row pane names what it hides with each prefix row's short name.
+        // The error's marker is the file's name, not its path, so the marker
+        // itself is not cut at a long home.
+        let file = std::env::temp_dir()
+            .join(format!("hugo-sidebar-path-{}", "x".repeat(80)))
+            .join("config.toml");
+        let error = crate::app::ReadError {
+            file: file.display().to_string(),
+            error: syntax_error(),
+        };
+        let state = ConfigRead::of(ConfigState::Unreadable(error));
+        let rows = rendered(&state, 60, 1);
+        assert_eq!(rows.len(), 1, "{rows:#?}");
+        assert!(
+            rows[0].contains("config.toml error"),
+            "the marker is cut: {rows:#?}"
+        );
     }
 
     #[test]
@@ -1085,9 +1157,9 @@ mod tests {
             warnings: Vec::new(),
         };
         let rows = rendered(&state, 30, 40);
-        // The error comes first; the old file's notice is kept after it.
+        // The error comes first; the old file's notice is kept after it. The
+        // path follows the reason and a narrow pane cuts it.
         assert_eq!(rows[0], UNREADABLE);
-        assert!(rows[1].contains(CONFIG_FILE), "{rows:#?}");
         assert!(rows[1].contains("syntax error"), "{rows:#?}");
         assert!(
             rows.iter().any(|row| row.contains("config.json")),

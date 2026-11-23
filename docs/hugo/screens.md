@@ -310,7 +310,8 @@ fit the height is left out whole, and one line under the groups says
 `not shown:` with each group's name and how much it held: `ORDER (14 hidden)`.
 
 A configuration file that is there but cannot be read is not the empty state:
-the sidebar says `configuration is unreadable`, names the file and the error,
+the sidebar says `configuration is unreadable`, names the error first and the
+file after it — so a long home folder cannot push the reason out of the pane —
 and paints the error on the failure slot. Under them it shows the defaults,
 named by `using the defaults:`, so the human sees both what is wrong and what
 the tool would use. hugo only writes the defaults over an absent file, never

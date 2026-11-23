@@ -295,8 +295,9 @@ comments, the order, the spacing and the keys raul does not know survive a
 save. A list whose length changes, such as the order's steps or a step's
 gates, is written whole. A file changed on disk since raul read it is not overwritten: `w` says
 `the file changed on disk` and offers `r` to reload. A file that does not
-parse is named with its error, left alone, and shown read-only with the
-defaults beside it — as hugo does.
+parse is left alone and shown read-only with the defaults beside it — as hugo
+does. Its error leads the line and the path follows it, so a long home folder
+cannot push the reason out of the pane.
 
 **The order of precedence**: a flag (`--theme`, `--icons`), then the
 environment (`CODING_CREW_ICONS`), then the file, then the defaults. A value
