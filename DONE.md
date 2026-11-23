@@ -1737,6 +1737,18 @@ high still open (review 1 caught a first wording that said all findings were
 fixed); TSK22's note says the gate checks the column table. Fixtures
 regenerate byte-identical. Two rounds. Commit `428cc44`.
 
+### 2026-11-23 · Unit 97, consistency
+
+raul sorts ids in core's numeric order; `write_beside` writes atomically under
+the store's lock, the lock held across read, check and write (review 1, D1);
+the engine's `TocEntry.title` drops a heading's link URL; raul's Settings
+paints TOML with the engine grammar, `toml_spans` removed (D2) — keys now take
+`syntax.tag`, sections `syntax.type`, as the grammar classes them, and
+`docs/tui/screens.md` says so; `make columns-write` regenerates
+`scripts/terminal-columns.txt`; core refuses a takeover of a blocked
+`executing` task under gate `overlay.clear`, and `task-model.md` and
+`docs/talita/commands.md` say so (D3). Two rounds. Commit `22446c0`.
+
 ---
 
 ## Lessons
