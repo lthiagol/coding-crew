@@ -30,7 +30,7 @@ use coding_crew_core::{Store, StoreError};
 use coding_crew_theme::{IconSet, Preset, Theme};
 use skill::SkillRequest;
 
-const USAGE: &str = "usage: hugo [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N]] [--skill [orchestrator|builder|reviewer]]";
+const USAGE: &str = "usage: hugo [--version] [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N]] [--skill [orchestrator|builder|reviewer]]";
 /// The columns of a plain render when --width is not given.
 const DEFAULT_WIDTH: u16 = 100;
 /// The rows of a plain render when --height is not given.
@@ -142,6 +142,10 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Options> {
         match arg.as_str() {
             "-h" | "--help" => {
                 println!("{USAGE}");
+                std::process::exit(0);
+            }
+            "-V" | "--version" => {
+                println!("hugo {}", env!("CARGO_PKG_VERSION"));
                 std::process::exit(0);
             }
             "--theme" => {

@@ -8,8 +8,8 @@
 # Every case runs under a wall-clock bound, so a missing script timeout fails
 # the test instead of hanging it.
 #
-# Dependencies: bash, python3, coreutils (mktemp, timeout, tr), findutils,
-# sed, awk.
+# Dependencies: bash, python3, mktemp, tr, findutils, sed, awk. It runs on
+# Linux and macOS: the bound is Python's, since macOS has no timeout(1).
 set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -20,6 +20,28 @@ if ! [[ "$CASE_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
   CASE_TIMEOUT=60
 fi
 trap 'rm -rf "$TMP"' EXIT
+
+# Runs a command under the wall-clock bound and exits 124 when it passes, as
+# timeout(1) does.
+bounded() {
+  python3 -c '
+import subprocess, sys
+try:
+    sys.exit(subprocess.run(sys.argv[2:], timeout=int(sys.argv[1])).returncode)
+except subprocess.TimeoutExpired:
+    sys.exit(124)
+' "$CASE_TIMEOUT" "$@"
+}
+
+# BSD sed takes no bare -i, so an edit writes a copy and moves it back.
+edit_file() {
+  sed "$1" "$2" >"$2.edit" && mv "$2.edit" "$2"
+}
+
+# The number of lines in a file. BSD wc pads its count, so awk counts them.
+line_count() {
+  awk 'END { print NR }' "$1"
+}
 
 BIN="$TMP/bin"
 mkdir -p "$BIN"
@@ -94,14 +116,16 @@ for ((row = 1; row <= rows; row++)); do
   fi
   if [[ $row == 1 && -n ${FAKE_COMBINING_WIDTH:-} && $width == "$FAKE_COMBINING_WIDTH" ]]; then
     # Each e plus its combining mark is one column.
-    for ((cell = 0; cell < width; cell++)); do printf 'e\u0301'; done
+    # The bytes, not \u escapes: bash 3.2, the macOS default, has none.
+    for ((cell = 0; cell < width; cell++)); do printf 'e\xcc\x81'; done
     printf '\n'
     continue
   fi
   if [[ $row == 1 && -n ${FAKE_CLUSTER_WIDTH:-} && $width == "$FAKE_CLUSTER_WIDTH" ]]; then
     # Each woman-joiner-laptop sequence is one cluster of two columns; a
     # per-codepoint measure would count four and overflow.
-    for ((cell = 0; cell < width / 2; cell++)); do printf '\U0001F469\u200D\U0001F4BB'; done
+    # Woman (U+1F469), zero-width joiner (U+200D), laptop (U+1F4BB), as bytes.
+    for ((cell = 0; cell < width / 2; cell++)); do printf '\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x92\xbb'; done
     printf '\n'
     continue
   fi
@@ -138,7 +162,7 @@ new_case() {
 }
 
 run_sweep() {
-  timeout "$CASE_TIMEOUT" python3 "$SWEEP" "$@" >"$STDOUT" 2>"$STDERR"
+  bounded python3 "$SWEEP" "$@" >"$STDOUT" 2>"$STDERR"
   RC=$?
   if ((RC == 124)); then
     bad "case $CASE exceeded ${CASE_TIMEOUT}s wall-clock bound (script timeout missing or broken)"
@@ -224,15 +248,15 @@ if [[ "$OUT" == "$FAKE_STATE_DIR/tmp/raul-pty-sweep-"* ]]; then
 else
   bad "default output folder is not a fresh temp folder: $OUT"
 fi
-expect_count 81 "$(find "$OUT" -maxdepth 1 -type f -name '*.txt' | wc -l)" "one file per width"
+expect_count 81 "$(find "$OUT" -maxdepth 1 -type f -name '*.txt' | awk 'END { print NR }')" "one file per width"
 for width in 40 41 60 100 120; do
   expect_exists "$OUT/$width.txt" "width $width file"
 done
 expect_missing "$OUT/39.txt" "below-range file"
 expect_missing "$OUT/121.txt" "above-range file"
-expect_count 40 "$(wc -l <"$OUT/40.txt")" "default rows in width 40"
+expect_count 40 "$(line_count "$OUT/40.txt")" "default rows in width 40"
 expect_count 0 "$(awk 'length($0) != 40 { count++ } END { print count + 0 }' "$OUT/40.txt")" "width 40 rows are 40 columns"
-expect_count 81 "$(wc -l <"$FAKE_STATE_DIR/calls")" "one call per width"
+expect_count 81 "$(line_count "$FAKE_STATE_DIR/calls")" "one call per width"
 expect_line "$FAKE_STATE_DIR/calls" 1 '40|40|mock-data/coding-crew/work' "first call"
 expect_line "$FAKE_STATE_DIR/calls" 81 '120|40|mock-data/coding-crew/work' "last call"
 expect_count 81 "$(grep -c '^nerd|unset$' "$FAKE_STATE_DIR/icon-calls")" "default renders name the nerd set"
@@ -278,8 +302,8 @@ new_case
 run_sweep --raul="$BIN/raul" --height=12 --out="$FAKE_STATE_DIR/nested/out" --work=work
 expect_rc 0 "explicit output and height"
 expect_contains "$STDOUT" "sweep output: $FAKE_STATE_DIR/nested/out" "explicit output is reported"
-expect_count 81 "$(find "$FAKE_STATE_DIR/nested/out" -maxdepth 1 -type f -name '*.txt' | wc -l)" "explicit output files"
-expect_count 12 "$(wc -l <"$FAKE_STATE_DIR/nested/out/40.txt")" "height reaches the render"
+expect_count 81 "$(find "$FAKE_STATE_DIR/nested/out" -maxdepth 1 -type f -name '*.txt' | awk 'END { print NR }')" "explicit output files"
+expect_count 12 "$(line_count "$FAKE_STATE_DIR/nested/out/40.txt")" "height reaches the render"
 expect_line "$FAKE_STATE_DIR/calls" 1 '40|12|work' "flags reach the render"
 expect_count 0 "$(awk -F'|' '$2 != 12 || $3 != "work" { count++ } END { print count + 0 }' "$FAKE_STATE_DIR/calls")" "every call takes the height and work folder"
 
@@ -406,7 +430,7 @@ expect_contains "$STDOUT" '--timeout' "help names the timeout flag"
 # committed bytes.
 GENERATE="$HERE/generate-terminal-columns.py"
 run_generate() {
-  timeout "$CASE_TIMEOUT" python3 "$@" >"$STDOUT" 2>"$STDERR"
+  bounded python3 "$@" >"$STDOUT" 2>"$STDERR"
   RC=$?
   if ((RC == 124)); then
     bad "generator case exceeded ${CASE_TIMEOUT}s wall-clock bound"
@@ -420,7 +444,7 @@ expect_contains "$STDOUT" 'ranges agree with the rules' "the check counts the ra
 
 new_case
 cp "$GENERATE" "$HERE/terminal-columns.txt" "$FAKE_STATE_DIR/"
-sed -i 's/^0000-0008 0$/0000-0008 2/' "$FAKE_STATE_DIR/terminal-columns.txt"
+edit_file 's/^0000-0008 0$/0000-0008 2/' "$FAKE_STATE_DIR/terminal-columns.txt"
 run_generate "$FAKE_STATE_DIR/generate-terminal-columns.py" --check
 expect_rc 1 "a hand-edited range"
 expect_contains "$STDERR" 'is not what its rules generate' "the edited range is named"
@@ -439,7 +463,7 @@ fi
 # readers do not take.
 new_case
 cp "$GENERATE" "$HERE/terminal-columns.txt" "$FAKE_STATE_DIR/"
-sed -i 's/^rule wide-and-fullwidth 2 east-asian-width W F$/rule wide-and-fullwidth 2 east-asian-width W/' \
+edit_file 's/^rule wide-and-fullwidth 2 east-asian-width W F$/rule wide-and-fullwidth 2 east-asian-width W/' \
   "$FAKE_STATE_DIR/terminal-columns.txt"
 run_generate "$FAKE_STATE_DIR/generate-terminal-columns.py" --check
 expect_rc 1 "a rule edited in the table"
@@ -447,7 +471,7 @@ expect_contains "$STDERR" 'is not what its rules generate' "the edited rule is n
 
 new_case
 cp "$GENERATE" "$HERE/terminal-columns.txt" "$FAKE_STATE_DIR/"
-sed -i 's/^rule default 1$/rule default 2/' "$FAKE_STATE_DIR/terminal-columns.txt"
+edit_file 's/^rule default 1$/rule default 2/' "$FAKE_STATE_DIR/terminal-columns.txt"
 run_generate "$FAKE_STATE_DIR/generate-terminal-columns.py" --check
 expect_rc 1 "a default rule the readers do not take"
 expect_contains "$STDERR" 'default rule says 2' "the default rule is read"

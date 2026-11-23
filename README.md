@@ -80,6 +80,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 | `make doc` | API docs |
 | `make clean` | remove build artifacts |
 
+Cutting a release: [docs/release.md](docs/release.md).
+
 ## License
 
-MIT OR Apache-2.0
+MIT OR Apache-2.0. See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).

@@ -7,12 +7,20 @@ on:
 
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      # The column table is generated under Python 3.15.2's Unicode data, and
+      # scripts/generate-terminal-columns.py refuses any other.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.15.2"
       - uses: Swatinem/rust-cache@v2
       - run: make ci
       - run: cargo build --release

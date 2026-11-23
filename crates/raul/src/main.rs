@@ -42,7 +42,7 @@ use detail::Detail;
 use settings::Overrides;
 use tabs::Tab;
 
-const USAGE: &str = "usage: raul [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N] [--tab NAME] [--detail TASK-ID]] [work-folder]";
+const USAGE: &str = "usage: raul [--version] [--theme dark|nord|catppuccin|dracula|terminal] [--icons nerd|unicode] [--render --plain [--width N] [--height N] [--tab NAME] [--detail TASK-ID]] [work-folder]";
 /// The columns of a plain render when --width is not given.
 const DEFAULT_WIDTH: u16 = 100;
 /// The rows of a plain render when --height is not given.
@@ -126,6 +126,10 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Options> {
         match arg.as_str() {
             "-h" | "--help" => {
                 println!("{USAGE}");
+                std::process::exit(0);
+            }
+            "-V" | "--version" => {
+                println!("raul {}", env!("CARGO_PKG_VERSION"));
                 std::process::exit(0);
             }
             "--theme" => {
