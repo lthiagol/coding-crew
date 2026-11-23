@@ -1728,6 +1728,15 @@ review 1 found the replaced-binary case, review 2 clean. The builder sat on a
 permission prompt for a dry run (`make -n install`) until it timed out; the
 loop was resumed from review 1. Commit `f816d24`.
 
+### 2026-11-23 · Unit 96, docs drift
+
+`crates/theme/src/theme.rs`'s five palette comments give their own counts
+(17, 17, 14, 17, 12), not eighteen; `mock-data/README.md` says TSK14's
+re-review is stamped in `review.re_reviews[]` once its mediums are fixed, its
+high still open (review 1 caught a first wording that said all findings were
+fixed); TSK22's note says the gate checks the column table. Fixtures
+regenerate byte-identical. Two rounds. Commit `428cc44`.
+
 ---
 
 ## Lessons
