@@ -71,6 +71,7 @@ These files do not exist upstream.
 |---|---|
 | `crates/engine/Cargo.toml` | library manifest and the engine's dependency set |
 | `crates/engine/src/lib.rs` | library root, public re-exports, syntax assets |
+| `crates/engine/assets/toml.sublime-syntax` | the TOML grammar `syntax_set()` adds (deviation 26) |
 | `crates/engine/src/theme.rs` | collapsed markdown theme and presets |
 | `crates/engine/src/tests/mod.rs` | shared test helpers |
 | `crates/engine/src/tests/markdown_blocks.rs` | ported `src/tests/markdown_blocks.rs` |
@@ -83,6 +84,7 @@ These files do not exist upstream.
 | `crates/engine/src/tests/markdown_page.rs` | each construct of the page at 40 and 100 columns |
 | `crates/engine/src/tests/markdown_rendering.rs` | ported `src/tests/markdown_rendering.rs` |
 | `crates/engine/src/tests/markdown_tables.rs` | ported `src/tests/markdown_tables.rs` |
+| `crates/engine/src/tests/markdown_toml.rs` | a `toml` fence resolves to the bundled grammar and paints its roles |
 | `crates/engine/src/tests/wrapping.rs` | ported `src/tests/wrapping.rs` |
 | `crates/engine/tests/vendored.rs` | checks this document against the vendored bytes |
 | `crates/engine/LICENSE` | leaf's MIT license |
@@ -197,7 +199,8 @@ are preserved.
 `MarkdownTheme`, and `ThemePreset`. It adds `syntax_set()` and `theme_set()`
 for leaf's `SyntaxSet::load_defaults_newlines()` and `ThemeSet::load_defaults()`,
 and `syntect_theme(preset, themes)` for the old `current_syntect_theme`
-selection, without global state.
+selection, without global state. `syntax_set()` also adds the bundled TOML
+grammar (deviation 26).
 
 `syntax_set()` and `theme_set()` build the whole default set on every call.
 The doc comments say to load them once at startup, keep the result, and never
@@ -234,7 +237,7 @@ Behaviour is unchanged.
 
 The library depends directly only on ratatui 0.30, pulldown-cmark 0.12,
 syntect 5.2 with leaf's feature set (`default-syntaxes`, `default-themes`,
-`regex-onig`), mmdflux 2.5 without default features, unicodeit 0.2,
+`regex-onig`) and `yaml-load` for the TOML grammar (deviation 26), mmdflux 2.5 without default features, unicodeit 0.2,
 unicode-width 0.2, and unicode-segmentation 1. crossterm, serde, and semver are
 not direct dependencies of the engine: crossterm and semver arrive transitively
 through ratatui's default `crossterm` feature, and serde through mmdflux.
@@ -353,3 +356,18 @@ rounds, in proportion to natural width, up to each column's minimum. The
 allocation this replaces gave the leftover to the widest minimums first, which
 left a prose column at one or two cells. `table_layout.rs` carries this deviation; a forced update of
 it erases the deviation and the test that covers it in `markdown_tables.rs`.
+
+### 26. TOML has a grammar
+
+Syntect's default syntaxes have no TOML, so a `toml` fence fell back to YAML.
+`crates/engine/assets/toml.sublime-syntax` is a TOML grammar this crate
+writes, not a copy of upstream or of a grammar pack. `syntax_set()` adds it to
+the defaults, so `resolve_syntax("toml")` names `TOML`. Keys and table names
+take the `entity.name.tag` and `entity.name.type` scopes, which the markdown
+code themes map to the tag and type roles. Its SHA-256 is
+`53c067f4e221ff9f569b9c45670322725d77bc96002f88a99736e3ebc98ce3d7`.
+
+Loading it needs syntect's `yaml-load` feature, which pulls in `yaml-rust`
+0.4.5 and `linked-hash-map` 0.5.6. Those are the only new crates; no grammar
+crate (such as `two-face`) is used. `tests/markdown_toml.rs` pins the
+resolution and the painted roles.

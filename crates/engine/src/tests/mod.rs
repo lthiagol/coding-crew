@@ -18,6 +18,7 @@ mod markdown_lists;
 mod markdown_page;
 mod markdown_rendering;
 mod markdown_tables;
+mod markdown_toml;
 mod wrapping;
 
 pub(super) fn test_assets() -> (SyntaxSet, Theme) {

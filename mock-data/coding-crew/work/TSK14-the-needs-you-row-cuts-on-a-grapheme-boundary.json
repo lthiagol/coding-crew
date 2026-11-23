@@ -10,7 +10,7 @@
   "kind": "task",
   "promoted_from": null,
   "status": "code-review",
-  "status_since": "2026-11-11T16:00Z",
+  "status_since": "2026-11-11T16:40Z",
   "overlays": {},
   "claim": {
     "by": "runner-02",
@@ -121,11 +121,23 @@
         "kind": "self",
         "focus": "spec-compliance",
         "reviewer": "runner-02",
-        "verdict": "changes-needed",
+        "verdict": "ok",
         "at": "2026-11-11T16:00Z",
-        "notes": "The pre-screen found the row and the mark before the external round spent budget.",
+        "notes": "The pre-screen found nothing to fix before the external round.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "security",
+        "reviewer": "reviewer-02",
+        "verdict": "changes-needed",
+        "at": "2026-11-11T16:40Z",
+        "notes": "The count is lost when the cut moves, and the pin misses the cut.",
         "findings": [
-          "FIND-01"
+          "FIND-01",
+          "FIND-02",
+          "FIND-03"
         ]
       }
     ],
@@ -136,7 +148,7 @@
         "severity": "high",
         "status": "open",
         "description": "The row cuts after the age and the finding count disappears from the row.",
-        "created": "2026-11-11T16:00Z",
+        "created": "2026-11-11T16:40Z",
         "resolved": "",
         "resolution": "",
         "comments": [
@@ -147,6 +159,26 @@
             "at": "2026-11-11T17:00Z"
           }
         ]
+      },
+      {
+        "id": "FIND-02",
+        "severity": "medium",
+        "status": "fixed",
+        "description": "The cut leaves a combining mark behind and the row is one column wider than the pane.",
+        "created": "2026-11-11T16:40Z",
+        "resolved": "2026-11-11T17:20Z",
+        "resolution": "The cut goes through the shared helper, so the row keeps whole graphemes.",
+        "comments": []
+      },
+      {
+        "id": "FIND-03",
+        "severity": "medium",
+        "status": "fixed",
+        "description": "The pin passes on a title with no combining mark, so it does not catch a scalar cut.",
+        "created": "2026-11-11T16:40Z",
+        "resolved": "2026-11-11T17:25Z",
+        "resolution": "The pin now builds its title from combining marks.",
+        "comments": []
       }
     ]
   },

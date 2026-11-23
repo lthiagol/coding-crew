@@ -1561,8 +1561,8 @@ mod tests {
         // Each word takes the role its token class names, in every colour
         // preset. The check can fail: a scope the mapping misses leaves the
         // word in the plain ink, and the word is then not its role's colour.
-        // TOML has no grammar in the bundled syntaxes, so the config fixture
-        // is YAML, the bundled one.
+        // TOML is the engine's bundled grammar, not one of syntect's defaults:
+        // the engine adds it to the set the pane highlights with.
         type Role = fn(&SyntaxPaint) -> Color;
         let keyword: Role = |syntax| syntax.keyword;
         let string: Role = |syntax| syntax.string;
@@ -1572,7 +1572,7 @@ mod tests {
         let comment: Role = |syntax| syntax.comment;
         let tag: Role = |syntax| syntax.tag;
         type Fixture = (&'static str, &'static str, Vec<(&'static str, Role)>);
-        let fixtures: [Fixture; 4] = [
+        let fixtures: [Fixture; 5] = [
             (
                 "rust",
                 "fn main() {\n    let answer = \"forty\"; // the answer\n    let n = 42;\n    println!(\"{}\", n);\n    let v = Vec::new();\n}\n",
@@ -1609,6 +1609,17 @@ mod tests {
                     ("coding-crew", string),
                     ("3", number),
                     (" a comment", comment),
+                ],
+            ),
+            (
+                "toml",
+                "[package]\nname = \"coding-crew\"\nversion = 3\n# a comment\n",
+                vec![
+                    ("package", type_name),
+                    ("name", tag),
+                    ("coding-crew", string),
+                    ("3", number),
+                    ("# a comment", comment),
                 ],
             ),
             (

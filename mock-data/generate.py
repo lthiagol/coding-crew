@@ -1594,6 +1594,9 @@ def check_runtime(record, tasks):
 
     # The round is the task in flight's: the next external round, after the
     # rounds it has had. The budget counts those rounds of its own limit.
+    # TSK14 reaches round 2 through a re_review the fixture cannot stamp: the
+    # model has no re-review record yet (talita's design adds one). So its
+    # open high and the fix times are the runtime's story, not the fixture's.
     round_ = record["round"]
     assert round_["task"] == IN_FLIGHT, round_
     assert by_id[IN_FLIGHT]["status"] == "code-review", IN_FLIGHT
@@ -1609,6 +1612,12 @@ def check_runtime(record, tasks):
     assert record["findings"] == sum(record["severities"].values()), record
     assert set(record["severities"]) == {"high", "medium", "low"}, record
     assert record["severities"] == OPEN_SEVERITIES, record["severities"]
+    # The first round's findings are the task's own: the record's count is
+    # what that round raised, in the fixture's external round 1.
+    first = next(r for r in by_id[IN_FLIGHT]["review"]["rounds"] if r["n"] == 1)
+    assert first["kind"] == "external", first
+    assert record["round"]["earlier"] == [{"number": 1, "raised": FIRST_ROUND_RAISED}], record["round"]
+    assert len(first["findings"]) == FIRST_ROUND_RAISED, first
     open_here = [f for f in by_id[IN_FLIGHT]["review"]["findings"] if f["status"] == "open"]
     assert record["findings"] == len(open_here), (record["findings"], open_here)
     for severity in ("high", "medium", "low"):
@@ -1929,15 +1938,21 @@ def build():
         review_day = 10 + i
         claim_at = ts(review_day, 9)
         round_at = ts(review_day, 16)
+        # TSK14's findings were raised by its first external round, after the
+        # self pre-screen had found nothing; every other task raised its own at
+        # the self round.
+        raised_at = ts(review_day, 16, 40) if tid == "TSK14" else round_at
         runner = f"runner-{i + 1:02d}"
         session = f"session-runner-{i + 1:02d}"
         b = brief(tid)
         findings = [
             finding(
                 1,
-                round_at,
+                raised_at,
                 severity="high" if tid == "TSK14" else "medium",
-                description=pick(FINDING_TEXT, i),
+                description=(
+                    FINDING_TEXT[1] if tid == "TSK14" else pick(FINDING_TEXT, i)
+                ),
                 comments=(
                     [
                         comment(
@@ -1980,6 +1995,29 @@ def build():
                     severity="high",
                     description=pick(FINDING_TEXT, 7),
                 )
+            )
+        elif tid == "TSK14":
+            findings.extend(
+                [
+                    finding(
+                        2,
+                        raised_at,
+                        severity="medium",
+                        status="fixed",
+                        description=FINDING_TEXT[5],
+                        resolved=ts(review_day, 17, 20),
+                        resolution="The cut goes through the shared helper, so the row keeps whole graphemes.",
+                    ),
+                    finding(
+                        3,
+                        raised_at,
+                        severity="medium",
+                        status="fixed",
+                        description="The pin passes on a title with no combining mark, so it does not catch a scalar cut.",
+                        resolved=ts(review_day, 17, 25),
+                        resolution="The pin now builds its title from combining marks.",
+                    ),
+                ]
             )
         item = planned(
             tid,
@@ -2047,6 +2085,26 @@ def build():
             "verdict": None,
             "findings": findings,
         }
+        if tid == "TSK14":
+            # The first external round raised the three findings and sent the
+            # work back, and the self round before it found nothing. The high
+            # finding is still open, so the review is round 2's, in flight.
+            self_round = item["review"]["rounds"][0]
+            self_round["verdict"] = "ok"
+            self_round["notes"] = "The pre-screen found nothing to fix before the external round."
+            self_round["findings"] = []
+            item["review"]["rounds"].append(
+                round_(
+                    1,
+                    "external",
+                    pick(FOCI, i + 1),
+                    f"reviewer-{i + 1:02d}",
+                    "changes-needed",
+                    raised_at,
+                    "The count is lost when the cut moves, and the pin misses the cut.",
+                    [finding["id"] for finding in findings],
+                )
+            )
         tasks.append(item)
 
     # remediating — external round with changes-needed: one finding fixed,

@@ -608,11 +608,25 @@
       "note": "sent to review"
     },
     {
-      "at": "2026-11-11T16:00Z",
+      "at": "2026-11-11T16:40Z",
       "kind": "finding_raised",
       "task": "TSK14",
       "by": "reviewer",
       "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-11T16:40Z",
+      "kind": "finding_raised",
+      "task": "TSK14",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-11T16:40Z",
+      "kind": "finding_raised",
+      "task": "TSK14",
+      "by": "reviewer",
+      "note": "raised FIND-03"
     },
     {
       "at": "2026-11-12T08:30Z",

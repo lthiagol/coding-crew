@@ -102,14 +102,20 @@ The record tells a run, and the generator states it: `RUN_QUEUE` and
 | the run | `started_at` is before the first claim the run holds |
 | the round | `TSK14`, its second external round, after a first round that raised findings |
 | the budget | 2 rounds used of the task's limit of 5 |
-| the findings | 1 open: the task's own open high finding; the first round's other findings are resolved |
+| the findings | 1 open: the task's own open high finding; the first round's other findings are fixed |
 | the stamp | the flow runs |
 
 The fixtures are checked against the run: each queued task's status is the
 fixture's own, the waiting ones are approved with no overlay, the held task is
 in `code-review`, and the findings and the limit are the held task's own. The
-first round's findings are not in any fixture: the run's story is the
-generator's, and the task's own review rounds are not rewritten to match it.
+task's own review holds its external round, whose high finding is still open
+and whose medium findings are fixed, after the self round, which found
+nothing. The record's `raised` count is checked against that round.
+
+The held task reaches its second external round through a `re_review` the
+fixture cannot stamp: the model has no re-review record yet (talita's design
+adds that record). So the open high and the fix times are the runtime's story, not the
+fixture's.
 
 ## Not included
 

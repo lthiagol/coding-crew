@@ -18,16 +18,23 @@ pub use markdown::{
 pub use theme::{MarkdownTheme, ThemePreset};
 
 use syntect::highlighting::{Theme, ThemeSet};
-use syntect::parsing::SyntaxSet;
+use syntect::parsing::{SyntaxDefinition, SyntaxSet};
 
-/// Leaf's default syntaxes, loaded the same way the application loaded them.
+/// The TOML grammar, which syntect's default set lacks.
+const TOML_SYNTAX: &str = include_str!("../assets/toml.sublime-syntax");
+
+/// Leaf's default syntaxes, plus the bundled TOML grammar.
 ///
 /// This is an expensive startup asset: it parses and compiles the whole default
 /// syntax set (hundreds of milliseconds and several megabytes). Load it once at
 /// startup, keep the result, and pass it to `parse_markdown`; never call it
 /// from a draw loop.
 pub fn syntax_set() -> SyntaxSet {
-    SyntaxSet::load_defaults_newlines()
+    let toml = SyntaxDefinition::load_from_str(TOML_SYNTAX, true, None)
+        .expect("the bundled TOML grammar parses");
+    let mut builder = SyntaxSet::load_defaults_newlines().into_builder();
+    builder.add(toml);
+    builder.build()
 }
 
 /// Leaf's default syntect themes.
