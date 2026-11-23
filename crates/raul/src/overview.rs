@@ -8,9 +8,9 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Padding, Paragraph, Wrap};
 
-use coding_crew_core::{ActivityEvent, EventKind, Status};
+use coding_crew_core::{ActivityEvent, EventKind, Status, Task};
 
-use crate::data::{Missing, Reason, Work};
+use crate::data::{Missing, Reason, Work, has_overlay, live_claim};
 use crate::needs::reason_icon;
 use coding_crew_theme::chrome;
 use coding_crew_theme::text::{cut_to, head_to, text_width};
@@ -1179,7 +1179,7 @@ fn next_panel(work: &Work, icons: IconSet, theme: &Theme, now: &str) -> Panel {
                 theme.text.normal,
             )),
             Line::from(Span::styled(
-                "  no approved task has its dependencies done",
+                format!("  {}", held_by(work, now)),
                 theme.text.dim,
             )),
         ],
@@ -1195,6 +1195,41 @@ fn next_panel(work: &Work, icons: IconSet, theme: &Theme, now: &str) -> Panel {
         more: "lines",
         marker: None,
     }
+}
+
+/// What holds the approved tasks at `now`, when none is claimable.
+///
+/// Each approved task is held by one thing, taken in the order the claimable
+/// test takes them: an overlay, a live claim, or a dependency not done.
+fn held_by(work: &Work, now: &str) -> String {
+    let approved: Vec<&Task> = work
+        .tasks
+        .iter()
+        .filter(|task| task.status == Status::Approved)
+        .collect();
+    if approved.is_empty() {
+        return "no task is approved".to_string();
+    }
+    let (mut overlaid, mut claimed, mut waiting) = (0, 0, 0);
+    for task in &approved {
+        if has_overlay(task) {
+            overlaid += 1;
+        } else if live_claim(task, now) {
+            claimed += 1;
+        } else {
+            waiting += 1;
+        }
+    }
+    let holds: Vec<String> = [
+        (overlaid, "by an overlay"),
+        (claimed, "by a claim"),
+        (waiting, "by unmet dependencies"),
+    ]
+    .into_iter()
+    .filter(|(count, _)| *count > 0)
+    .map(|(count, by)| format!("{count} {by}"))
+    .collect();
+    format!("every approved task is held: {}", holds.join(", "))
 }
 
 /// The files that could not be read.
@@ -1568,6 +1603,39 @@ mod tests {
     }
 
     #[test]
+    fn the_next_line_names_what_holds_the_approved_tasks() {
+        // Nothing is claimable: the line says what holds each approved task,
+        // not one reason for all of them.
+        let now = "2026-11-19T08:00:00Z";
+        let approved = |id: &str| {
+            let mut task = coding_crew_core::Task::new(id, "a task");
+            task.status = coding_crew_core::Status::Approved;
+            task
+        };
+        let mut overlaid = approved("TSK01");
+        overlaid.overlays.blocked = Some(coding_crew_core::Overlay {
+            reason: "held".into(),
+            by: "human".into(),
+            at: now.into(),
+        });
+        let mut waiting = approved("TSK02");
+        waiting.depends_on = vec!["TSK09".into()];
+        let work_of = |tasks: Vec<coding_crew_core::Task>| Work {
+            root: std::path::PathBuf::new(),
+            tasks,
+            items: Vec::new(),
+            errors: Vec::new(),
+            activity: None,
+            missing: None,
+        };
+        assert_eq!(held_by(&work_of(Vec::new()), now), "no task is approved");
+        assert_eq!(
+            held_by(&work_of(vec![overlaid, waiting]), now),
+            "every approved task is held: 1 by an overlay, 1 by unmet dependencies"
+        );
+    }
+
+    #[test]
     fn the_overview_draws_from_one_instant() {
         // A lease expiring at a boundary: before it the task is held, at it
         // the task is claimable. The claimable count and the next task
@@ -1602,6 +1670,10 @@ mod tests {
             "a held task is still next: {before}"
         );
         assert!(!before.contains("TSK01"), "a held task is drawn: {before}");
+        assert!(
+            before.contains("every approved task is held: 1 by a claim"),
+            "the line names the claim: {before}"
+        );
         // The expired side is the one a fresh clock in the tab fails: the
         // real clock is years before the fixture's lease.
         let after = draw_at(&work, 100, 40, free).join("\n");

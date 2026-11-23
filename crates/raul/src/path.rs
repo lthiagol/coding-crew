@@ -245,12 +245,16 @@ fn unfinished(task: &Task, work: &Work) -> Vec<String> {
 fn branch_view(work: &Work, branch: Branch, now: &str) -> BranchView {
     match branch {
         Branch::AwaitingApproval => {
-            // A task with an overlay is not waiting on a human: it is held.
+            // A task with an overlay still waits on the human's approval: its
+            // row says that it is held too.
             let rows = work
                 .tasks
                 .iter()
-                .filter(|task| task.status == Status::Groomed && !has_overlay(task))
-                .map(|task| entry(task, work))
+                .filter(|task| task.status == Status::Groomed)
+                .map(|task| Entry {
+                    hold: has_overlay(task).then_some(Hold::Overlay),
+                    ..entry(task, work)
+                })
                 .collect();
             simple(branch, rows)
         }
@@ -1368,10 +1372,10 @@ fn row(
     // narrow for it gives the icon up first.
     let mark = Icon::for_status(entry.status.as_str())
         .map(|icon| format!("{} ", icon.glyph(icons)))
-        .filter(|mark| prefix.chars().count() + mark.chars().count() + id.chars().count() <= width)
+        .filter(|mark| text_width(prefix) + text_width(mark) + text_width(id) <= width)
         .unwrap_or_default();
-    let content = prefix.chars().count() + mark.chars().count();
-    let title_col = content + id.chars().count() + GAP;
+    let content = text_width(prefix) + text_width(&mark);
+    let title_col = content + text_width(id) + GAP;
     let available = width.saturating_sub(title_col);
     // The title is never lost: when the pane is too narrow for it beside
     // the id, it goes under it.
@@ -1381,13 +1385,13 @@ fn row(
     // title; under it they stand alone, when the pane has room for them.
     let bars = bars_of(rest, icons);
     let indent = if beside {
-        format!("{bars}{}", " ".repeat(title_col - 1 - bars.chars().count()))
-    } else if bars.chars().count() + 2 <= width {
+        format!("{bars}{}", " ".repeat(title_col - 1 - text_width(&bars)))
+    } else if text_width(&bars) + 2 <= width {
         bars
     } else {
         String::new()
     };
-    let text_col = indent.chars().count() + 1;
+    let text_col = text_width(&indent) + 1;
     let chunks = wrap(
         &entry.title,
         if beside {
@@ -1403,13 +1407,13 @@ fn row(
         Span::styled(mark, style),
         Span::styled(id.to_string(), style),
     ];
-    let mut used = content + id.chars().count();
+    let mut used = content + text_width(id);
     let mut chunks = chunks.iter();
     let first = chunks.next();
     if let Some(first) = first.filter(|_| beside) {
         head.push(Span::raw(" ".repeat(GAP)));
         head.push(Span::styled(first.clone(), style));
-        used += GAP + first.chars().count();
+        used += GAP + text_width(first);
     }
     lines.push(Line::from(head));
     // Beside the id the first piece is on the id's line; under it, every
@@ -1420,7 +1424,7 @@ fn row(
             Span::raw(indent.clone()),
             Span::styled(chunk.clone(), style),
         ]));
-        used = text_col + chunk.chars().count();
+        used = text_col + text_width(chunk);
     }
     // What the row says about the task: what it waits on, and what holds
     // it when it is not only the dependencies.
@@ -1435,7 +1439,7 @@ fn row(
     }
     if !note.is_empty() {
         let note = note.join(" · ");
-        let note_width = note.chars().count();
+        let note_width = text_width(&note);
         if used + 2 + note_width <= width {
             if let Some(line) = lines.last_mut() {
                 line.spans.push(Span::raw("  "));
@@ -1649,11 +1653,31 @@ mod tests {
         // the spec fails here.
         let tree = tree(&mock_work(), now());
         assert_eq!(tree.spine.len(), 1, "the trunk of the fixtures");
-        assert_eq!(tree.rows(Branch::AwaitingApproval), 2);
+        assert_eq!(tree.rows(Branch::AwaitingApproval), 3);
         assert_eq!(tree.rows(Branch::Blocked), 3);
         assert_eq!(tree.rows(Branch::Running), 6);
         assert_eq!(tree.rows(Branch::Review), 3);
         assert_eq!(tree.rows(Branch::Escalated), 3);
+    }
+
+    #[test]
+    fn an_overlaid_groomed_task_waits_in_awaiting_approval_with_its_hold() {
+        // The mock's TSK05 is groomed and held by an overlay. It still waits
+        // on the human's approval, so it stays in the branch, and its row says
+        // that it is held.
+        let tree = tree(&mock_work(), now());
+        let branch = tree
+            .branches
+            .iter()
+            .find(|branch| branch.branch == Branch::AwaitingApproval)
+            .expect("the awaiting branch");
+        let row = branch
+            .groups
+            .iter()
+            .flat_map(|group| group.rows.iter())
+            .find(|row| row.id == "TSK05")
+            .expect("TSK05 in awaiting approval");
+        assert_eq!(row.hold, Some(Hold::Overlay));
     }
 
     #[test]
@@ -1792,7 +1816,7 @@ mod tests {
         // named with the count of what is hidden, and the count is the
         // rows not drawn, not the group's total.
         let tree = tree(&mock_work(), now());
-        let (rows, _, shown, _) = window(&tree, 58, 7, &theme(), IconSet::Nerd, None, 10);
+        let (rows, _, shown, _) = window(&tree, 58, 7, &theme(), IconSet::Nerd, None, 11);
         let text = rows
             .lines
             .iter()
@@ -2116,7 +2140,7 @@ mod tests {
         let work = mock_work();
         let ids = tree(&work, now()).row_ids();
         let last = ids.len() - 1;
-        for (width, height) in [(100u16, 30u16), (40, 62)] {
+        for (width, height) in [(100u16, 30u16), (40, 66)] {
             for index in 0..last {
                 let rows = inner(&draw_with(
                     &work,
@@ -2178,7 +2202,7 @@ mod tests {
         );
         assert!(text.contains(&spine), "{text}");
         // The branch headers, with the count of the group they count.
-        assert!(text.contains("AWAITING APPROVAL  2"), "{text}");
+        assert!(text.contains("AWAITING APPROVAL  3"), "{text}");
         assert!(text.contains("BLOCKED  3"), "{text}");
         assert!(text.contains("RUNNING  6"), "{text}");
         assert!(text.contains("REVIEW  3"), "{text}");
@@ -2210,7 +2234,7 @@ mod tests {
         assert!(
             rows.iter().any(|row| {
                 row.starts_with(&format!(
-                    " ├─ {} AWAITING APPROVAL  2",
+                    " ├─ {} AWAITING APPROVAL  3",
                     phase_glyph("groomed")
                 ))
             }),
@@ -2451,6 +2475,22 @@ mod tests {
     }
 
     #[test]
+    fn a_wide_title_keeps_its_branches() {
+        // A title is measured in columns, as it is drawn: a CJK title takes two
+        // columns a character. Its row keeps its note, and no branch is dropped.
+        let mut work = mock_work();
+        for task in work.tasks.iter_mut().filter(|task| task.id == "TSK07") {
+            task.title = "数据库迁移任务说明".to_string();
+        }
+        let rows = inner(&draw(&work, 60, 40));
+        let text = text_of(&rows);
+        assert!(!text.contains("not shown"), "{text}");
+        assert!(text.contains("FINISHED"), "{text}");
+        assert!(text.contains("waits on TSK04, TSK05"), "{text}");
+        assert!(rows.iter().all(|row| text_width(row) <= 60), "{rows:?}");
+    }
+
+    #[test]
     fn no_line_is_longer_than_the_width() {
         // The check is on the lines the tree builds: a line that is too wide
         // would be wrapped by ratatui, and the tree would ask for more rows
@@ -2629,7 +2669,7 @@ mod tests {
             for height in [8u16, 12, 24, 40] {
                 let text = text_of(&draw(&mock_work(), width, height));
                 for (branch, count) in [
-                    (Branch::AwaitingApproval, 2),
+                    (Branch::AwaitingApproval, 3),
                     (Branch::Blocked, 3),
                     (Branch::Running, 6),
                     (Branch::Review, 3),

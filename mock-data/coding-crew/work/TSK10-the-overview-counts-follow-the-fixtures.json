@@ -49,13 +49,13 @@
       "status": "passed",
       "evidence": [
         {
-          "command": "cargo test -p coding-crew-raul overview",
+          "command": "",
           "exit_code": 0,
-          "summary": "12 passed; 0 failed",
+          "summary": "checked by reading",
           "at": "2026-11-09T12:00Z",
           "by": "runner-01",
           "session": "session-runner-01",
-          "manual": false
+          "manual": true
         }
       ],
       "deferral": null,

@@ -1166,7 +1166,11 @@ fn every_field_the_model_defines_is_populated_by_a_fixture() {
     populated!("evidence", !evidence.is_empty());
     populated!(
         "evidence.command",
-        evidence.iter().all(|e| !e.command.is_empty())
+        evidence.iter().all(|e| e.manual || !e.command.is_empty())
+    );
+    populated!(
+        "evidence.manual",
+        evidence.iter().any(|e| e.manual && e.command.is_empty())
     );
     populated!(
         "evidence.exit_code 0",

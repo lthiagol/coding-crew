@@ -1155,7 +1155,7 @@ impl App {
         if self.settings.asking() || self.settings.editing() {
             return None;
         }
-        if self.typing || (self.tab != Tab::Settings && self.filter_in_force()) {
+        if self.typing || (self.tab == Tab::Tasks && self.filter_in_force()) {
             let spans = self
                 .filter_parts(work, usize::from(width))
                 .into_iter()
@@ -3510,7 +3510,7 @@ mod tests {
                         .to_string(),
                 ],
                 Tab::Path => vec![
-                    "not shown: EXECUTION (1 hidden), AWAITING APPROVAL (2 hidden), BLOCKED (3 hidden)"
+                    "not shown: EXECUTION (1 hidden), AWAITING APPROVAL (3 hidden), BLOCKED (3 hidden)"
                         .to_string(),
                     "RUNNING (6 hidden), REVIEW (3 hidden)".to_string(),
                 ],
@@ -4050,6 +4050,24 @@ mod tests {
     }
 
     #[test]
+    fn the_filter_line_is_drawn_on_the_tasks_tab_alone() {
+        // The filter narrows the Tasks tab only: its line is not drawn on the
+        // others, where it would take a row and say what the tab does not do.
+        let work = mock_work();
+        let mut app = window(&Theme::preset(Preset::Dark), Tab::Tasks, false);
+        app.filter = "TSK13".to_string();
+        assert!(
+            note_of(&mut app).starts_with("/ TSK13"),
+            "Tasks shows the line"
+        );
+        app.on_key(key(KeyCode::Char('2')), &work, now());
+        assert_eq!(app.tab, Tab::NeedsYou);
+        let note = note_of(&mut app);
+        assert!(!note.contains("filtered out"), "{note}");
+        assert!(!note.starts_with("/ "), "{note}");
+    }
+
+    #[test]
     fn the_footer_counts_the_rows_a_filter_leaves() {
         let work = mock_work();
         let total = work.tasks.len();
@@ -4439,7 +4457,7 @@ mod tests {
             for width in [40u16, 100] {
                 let mut app = window(&Theme::preset(Preset::Dark), tab, false);
                 let ids = app.ids(&work, now()).expect("rows");
-                let id = ids[2].clone();
+                let id = ids[3].clone();
                 let rows = render_work(&mut app, &work, width, 40, now()).0;
                 let by_title = !rows.iter().any(|row| row.contains(&id));
                 let (column, row) = row_cell(&rows, &work, &id, by_title)

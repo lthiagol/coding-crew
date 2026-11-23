@@ -702,6 +702,10 @@ fn evidence_text(evidence: &crate::task::Evidence) -> String {
         Some(exit_code) => code_owned(&exit_code.to_string()),
         None => EMPTY.to_string(),
     });
+    if evidence.manual {
+        // A judgement, not a command's exit code: the reader sees the debt.
+        text.push_str(" — manual override");
+    }
     if !evidence.summary.trim().is_empty() {
         text.push_str(" — ");
         // The summary is a fixed field of the record: what the command

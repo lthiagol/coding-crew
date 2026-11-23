@@ -683,6 +683,35 @@ fn evidence_is_quoted_in_a_blockquote() {
 }
 
 #[test]
+fn a_manual_override_says_so_on_its_evidence_line() {
+    // A manual override records a judgement, not a command: its line names
+    // the override, so the reviewer sees the debt. A command's line does not.
+    let mut task = minimal("TSK01");
+    let mut override_ = evidence("", Some(0), "checked by reading", "2026-11-14T09:00:00Z");
+    override_.manual = true;
+    task.acceptance_criteria = vec![AcceptanceCriterion {
+        id: "ACCEPT-01".to_string(),
+        verification: "cargo test".to_string(),
+        evidence: vec![
+            override_,
+            evidence("cargo test", Some(0), "12 passed", "2026-11-14T10:00:00Z"),
+        ],
+        ..AcceptanceCriterion::default()
+    }];
+
+    let document = task_to_markdown(&task, &[]);
+    let body = section(&document, "# Acceptance criteria");
+
+    let lines: Vec<&str> = body.lines().filter(|line| line.contains("exit")).collect();
+    assert_eq!(lines.len(), 2, "{body}");
+    assert!(
+        lines[0].contains("— manual override — checked by reading"),
+        "{body}"
+    );
+    assert!(!lines[1].contains("manual override"), "{body}");
+}
+
+#[test]
 fn evidence_output_cannot_open_a_heading_an_entity_or_a_block() {
     let mut task = minimal("TSK01");
     task.acceptance_criteria = vec![AcceptanceCriterion {

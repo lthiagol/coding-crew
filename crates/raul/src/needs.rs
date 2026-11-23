@@ -224,6 +224,7 @@ fn window(
 ) -> (Lines, bool, Vec<usize>, bool) {
     let groups = groups(work, now);
     let ages = age_width(&groups);
+    let ids = id_width(&groups);
     let all: Vec<String> = groups
         .iter()
         .flat_map(|group| group.rows.iter().map(|row| row.id.clone()))
@@ -238,7 +239,7 @@ fn window(
         // The pane holds one line: the cursor's row is worth more than the
         // headline, so the cursor is never on a row the pane does not draw.
         if let Some(id) = selected
-            && let Some((index, line)) = cursor_row(&groups, width, ages, icons, theme, id)
+            && let Some((index, line)) = cursor_row(&groups, width, ages, ids, icons, theme, id)
         {
             return (
                 Lines::of(vec![line], Some(index)),
@@ -254,7 +255,9 @@ fn window(
         // Everything fits: there is nothing to say.
         let mut start = 0;
         for group in &groups {
-            push_group(&mut out, group, start, width, ages, icons, theme, selected);
+            push_group(
+                &mut out, group, start, width, ages, ids, icons, theme, selected,
+            );
             start += group.rows.len();
         }
         return (out, false, (0..all.len()).collect(), true);
@@ -268,8 +271,9 @@ fn window(
     let mut shortest: Option<(Lines, Lines, Vec<usize>)> = None;
     let mut with_cursor: Option<(Lines, Lines, Vec<usize>)> = None;
     for budget in (0..=rest).rev() {
-        let (rows, omitted, shown) =
-            layout(&groups, budget, width, ages, icons, theme, selected, first);
+        let (rows, omitted, shown) = layout(
+            &groups, budget, width, ages, ids, icons, theme, selected, first,
+        );
         let room = rest.saturating_sub(rows.len());
         let (word, cut) = announcement(&omitted, width, room, theme);
         let said = Lines::of(word, None);
@@ -307,7 +311,7 @@ fn window(
         if said.is_empty()
             && height >= 2
             && let Some(id) = selected
-            && let Some((index, line)) = cursor_row(&groups, width, ages, icons, theme, id)
+            && let Some((index, line)) = cursor_row(&groups, width, ages, ids, icons, theme, id)
         {
             // The rows took every line and said nothing about what they hid.
             // The cursor's row is drawn, the headline gives way first, and the
@@ -331,7 +335,7 @@ fn window(
             && !shown
                 .iter()
                 .any(|index| all.get(*index).is_some_and(|other| other == id))
-            && let Some((index, line)) = cursor_row(&groups, width, ages, icons, theme, id)
+            && let Some((index, line)) = cursor_row(&groups, width, ages, ids, icons, theme, id)
         {
             // The pane is too short for the cursor's row and the layout: the
             // row is drawn, the headline gives way, and what is left says what
@@ -361,7 +365,7 @@ fn window(
     // No layout was chosen: the pane is too short to say anything. The
     // cursor's row is still drawn, alone.
     if let Some(id) = selected
-        && let Some((index, line)) = cursor_row(&groups, width, ages, icons, theme, id)
+        && let Some((index, line)) = cursor_row(&groups, width, ages, ids, icons, theme, id)
     {
         return (
             Lines::of(vec![line], Some(index)),
@@ -393,6 +397,7 @@ fn cursor_row(
     groups: &[Group],
     width: usize,
     age_width: usize,
+    id_width: usize,
     icons: IconSet,
     theme: &Theme,
     id: &str,
@@ -401,7 +406,7 @@ fn cursor_row(
     for group in groups {
         for row in &group.rows {
             if row.id == id {
-                let line = row_line(row, width, age_width, icons, theme, Some(id));
+                let line = row_line(row, width, age_width, id_width, icons, theme, Some(id));
                 return Some((index, line));
             }
             index += 1;
@@ -422,6 +427,7 @@ fn layout(
     capacity: usize,
     width: usize,
     age_width: usize,
+    id_width: usize,
     icons: IconSet,
     theme: &Theme,
     selected: Option<&str>,
@@ -457,7 +463,7 @@ fn layout(
         for (offset, row) in group.rows.iter().skip(skip).take(shown).enumerate() {
             let index = start + skip + offset;
             out.push(
-                row_line(row, width, age_width, icons, theme, selected),
+                row_line(row, width, age_width, id_width, icons, theme, selected),
                 Some(index),
             );
             shown_rows.push(index);
@@ -565,6 +571,7 @@ fn push_group(
     start: usize,
     width: usize,
     age_width: usize,
+    id_width: usize,
     icons: IconSet,
     theme: &Theme,
     selected: Option<&str>,
@@ -572,10 +579,22 @@ fn push_group(
     out.push(header(group, width, theme), None);
     for (offset, row) in group.rows.iter().enumerate() {
         out.push(
-            row_line(row, width, age_width, icons, theme, selected),
+            row_line(row, width, age_width, id_width, icons, theme, selected),
             Some(start + offset),
         );
     }
+}
+
+/// The width of the id column: the widest id of the rows, and at least
+/// `ID_WIDTH`. Core numbers past `TSK99`, so the column grows with the ids.
+fn id_width(groups: &[Group]) -> usize {
+    groups
+        .iter()
+        .flat_map(|group| group.rows.iter())
+        .map(|row| row.id.chars().count())
+        .max()
+        .unwrap_or(0)
+        .max(ID_WIDTH)
 }
 
 /// The width of the age column: the widest age of the rows.
@@ -599,6 +618,7 @@ fn row_line(
     row: &Row,
     width: usize,
     age_width: usize,
+    id_width: usize,
     icons: IconSet,
     theme: &Theme,
     selected: Option<&str>,
@@ -606,15 +626,15 @@ fn row_line(
     let selected = selected == Some(row.id.as_str());
     // The bar gives way before the id is cut: a row too narrow for both draws
     // its id whole, and a selected row keeps its paint without the bar.
-    if width < view::BAR + ID_WIDTH {
-        let line = row_line_plain(row, width, age_width, icons, theme);
+    if width < view::BAR + id_width {
+        let line = row_line_plain(row, width, age_width, id_width, icons, theme);
         return if selected {
             selected_line(line, width, theme)
         } else {
             line
         };
     }
-    let line = row_line_plain(row, width - view::BAR, age_width, icons, theme);
+    let line = row_line_plain(row, width - view::BAR, age_width, id_width, icons, theme);
     view::barred(line, width, selected, icons, theme)
 }
 
@@ -641,12 +661,13 @@ fn row_line_plain(
     row: &Row,
     width: usize,
     age_width: usize,
+    id_width: usize,
     icons: IconSet,
     theme: &Theme,
 ) -> Line<'static> {
     let age = format!("{:>width$}", age_text(row.waited), width = age_width);
     let style = reason_style(theme, row.reason);
-    let id = format!("{:<id_width$}", row.id, id_width = ID_WIDTH);
+    let id = format!("{:<id_width$}", row.id, id_width = id_width);
     let why = format!("{:<why_width$}", row.reason.label(), why_width = WHY_WIDTH);
     let gap = " ".repeat(GAP);
     let margin = " ".repeat(MARGIN);
@@ -684,7 +705,7 @@ fn row_line_plain(
     };
 
     // The row with every column.
-    let head_width = lead_width + ID_WIDTH + GAP + WHY_WIDTH + GAP;
+    let head_width = lead_width + id_width + GAP + WHY_WIDTH + GAP;
     let title_width = width.saturating_sub(head_width + tail_width);
     // The review state sits before the age, in the room the title leaves.
     // The title keeps its comfortable width, so the state gives way first —
@@ -734,7 +755,7 @@ fn row_line_plain(
     }
     // The reason gives way: the group header names it, and the title is
     // what the reader is here for.
-    let head_width = lead_width + ID_WIDTH + GAP;
+    let head_width = lead_width + id_width + GAP;
     let title_width = width.saturating_sub(head_width + tail_width);
     if title_width >= MIN_TITLE {
         let mut spans = [lead.clone(), vec![id_cell.clone(), gap_cell.clone()]].concat();
@@ -743,7 +764,7 @@ fn row_line_plain(
         return Line::from(spans);
     }
     // The title gives way: the age stays at the right of the row.
-    let head_width = lead_width + ID_WIDTH + GAP + WHY_WIDTH;
+    let head_width = lead_width + id_width + GAP + WHY_WIDTH;
     if head_width + tail_width <= width {
         let mut spans = [lead.clone(), vec![id_cell.clone(), gap_cell.clone()]].concat();
         spans.push(why_cell.clone());
@@ -752,7 +773,7 @@ fn row_line_plain(
         return Line::from(spans);
     }
     // The reason gives way too: the id and the age are what is left.
-    let head_width = lead_width + ID_WIDTH;
+    let head_width = lead_width + id_width;
     if head_width + tail_width <= width {
         let mut spans = [lead, vec![id_cell.clone()]].concat();
         spans.push(Span::raw(" ".repeat(width - head_width - tail_width)));
@@ -760,7 +781,7 @@ fn row_line_plain(
         return Line::from(spans);
     }
     // The icon gives way before the id does: the lead is a space.
-    let head_width = 1 + ID_WIDTH;
+    let head_width = 1 + id_width;
     if head_width + tail_width <= width {
         let mut spans = vec![Span::raw(" "), id_cell];
         spans.push(Span::raw(" ".repeat(width - head_width - tail_width)));
@@ -1407,6 +1428,7 @@ mod tests {
             5,
             100,
             age_width(&groups),
+            id_width(&groups),
             IconSet::Nerd,
             &theme(),
             None,
@@ -1684,14 +1706,22 @@ mod tests {
         let escalated = &groups[2].rows[0];
         // A row that is not the cursor's keeps the slot of its reason on its
         // icon, after the bar's column and the space that leads the row.
-        let plain = row_line(approve, 60, 2, IconSet::Nerd, &theme, None);
+        let plain = row_line(approve, 60, 2, ID_WIDTH, IconSet::Nerd, &theme, None);
         assert_eq!(plain.spans[0].content, " ", "the bar's column is blank");
         assert_eq!(plain.spans[2].style, theme.semantic.human, "an approval");
-        let plain = row_line(escalated, 60, 2, IconSet::Nerd, &theme, None);
+        let plain = row_line(escalated, 60, 2, ID_WIDTH, IconSet::Nerd, &theme, None);
         assert_eq!(plain.spans[2].style, theme.semantic.error, "an escalation");
         // The cursor's row takes the selection's pair on every cell after its
         // bar, and the bar runs to the edge of the pane.
-        let selected = row_line(approve, 60, 2, IconSet::Nerd, &theme, Some("TSK01"));
+        let selected = row_line(
+            approve,
+            60,
+            2,
+            ID_WIDTH,
+            IconSet::Nerd,
+            &theme,
+            Some("TSK01"),
+        );
         assert_eq!(selected.width(), 60, "the selection bar stops short");
         assert_eq!(selected.spans[0].content, "▌");
         assert_eq!(
@@ -1706,7 +1736,15 @@ mod tests {
             );
         }
         // A later row is not painted as the selection.
-        let other = row_line(escalated, 60, 2, IconSet::Nerd, &theme, Some("TSK01"));
+        let other = row_line(
+            escalated,
+            60,
+            2,
+            ID_WIDTH,
+            IconSet::Nerd,
+            &theme,
+            Some("TSK01"),
+        );
         assert_eq!(other.spans[2].style, theme.semantic.error);
     }
 
@@ -1720,7 +1758,7 @@ mod tests {
             (&groups[2].rows[0], Icon::StatusNeedsHuman),
         ];
         for (row, icon) in cases {
-            let line = row_line(row, 60, 2, IconSet::Nerd, &theme, None);
+            let line = row_line(row, 60, 2, ID_WIDTH, IconSet::Nerd, &theme, None);
             // The bar, the space that leads the row, the icon, a space, the id.
             assert_eq!(
                 line.spans[2].content,
@@ -1741,7 +1779,15 @@ mod tests {
     #[test]
     fn an_age_is_led_by_the_clock() {
         let groups = groups(&human_lane(), "2026-11-07T16:00:00Z");
-        let line = row_line(&groups[0].rows[0], 60, 2, IconSet::Nerd, &theme(), None);
+        let line = row_line(
+            &groups[0].rows[0],
+            60,
+            2,
+            ID_WIDTH,
+            IconSet::Nerd,
+            &theme(),
+            None,
+        );
         let text = line_text(&line);
         let clock = Icon::Clock.glyph(IconSet::Nerd);
         assert!(text.ends_with(&format!("{clock} 3h ")), "{text:?}");
@@ -1755,7 +1801,7 @@ mod tests {
         let row = &groups[0].rows[0];
         let theme = theme();
         let icon = Icon::StatusGroomed.glyph(IconSet::Nerd);
-        let narrow = line_text(&row_line_plain(row, 14, 2, IconSet::Nerd, &theme));
+        let narrow = line_text(&row_line_plain(row, 14, 2, ID_WIDTH, IconSet::Nerd, &theme));
         assert_eq!(narrow.chars().count(), 14, "{narrow:?}");
         let clock = Icon::Clock.glyph(IconSet::Nerd);
         assert!(
@@ -1763,7 +1809,7 @@ mod tests {
             "{narrow:?}"
         );
         assert!(!narrow.contains(icon), "{narrow:?}");
-        let wide = line_text(&row_line_plain(row, 15, 2, IconSet::Nerd, &theme));
+        let wide = line_text(&row_line_plain(row, 15, 2, ID_WIDTH, IconSet::Nerd, &theme));
         assert!(wide.contains(icon), "{wide:?}");
     }
 
@@ -1777,12 +1823,42 @@ mod tests {
             &groups[0].rows[0],
             5,
             2,
+            ID_WIDTH,
             IconSet::Nerd,
             &theme,
             Some("TSK01"),
         );
         assert_eq!(line_text(&line), "TSK01");
         assert_eq!(line.spans[0].style.bg, theme.text.selected_bg.bg);
+    }
+
+    #[test]
+    fn an_id_past_99_keeps_the_columns_of_its_group() {
+        // Core numbers past TSK99. The id column takes the widest id, so the
+        // reason and the title of every row of a group start in one column.
+        let mut work = human_lane();
+        for task in work.tasks.iter_mut().filter(|task| task.id == "TSK02") {
+            task.id = "TSK104".to_string();
+        }
+        let groups = groups(&work, "2026-11-07T16:00:00Z");
+        let ids = id_width(&groups);
+        assert_eq!(ids, "TSK104".len());
+        let ages = age_width(&groups);
+        let rows: Vec<String> = groups
+            .iter()
+            .filter(|group| matches!(group.reason, Reason::Approve))
+            .flat_map(|group| group.rows.iter())
+            .map(|row| line_text(&row_line(row, 80, ages, ids, IconSet::Nerd, &theme(), None)))
+            .collect();
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        let reasons: Vec<usize> = rows
+            .iter()
+            .map(|text| text.find(Reason::Approve.label()).expect("the reason"))
+            .collect();
+        assert_eq!(reasons[0], reasons[1], "{rows:?}");
+        for text in &rows {
+            assert_eq!(text.chars().count(), 80, "{text:?}");
+        }
     }
 
     #[test]
@@ -1966,7 +2042,7 @@ mod tests {
             review: None,
         };
         // At this width the title column is eighteen columns wide.
-        let line = row_line_plain(&row, 35, 2, IconSet::Nerd, &theme());
+        let line = row_line_plain(&row, 35, 2, ID_WIDTH, IconSet::Nerd, &theme());
         let cut = line
             .spans
             .iter()
@@ -2022,7 +2098,7 @@ mod tests {
             waited: 2 * 86_400,
             review: None,
         };
-        let line = row_line_plain(&row, 60, 2, IconSet::Nerd, &theme());
+        let line = row_line_plain(&row, 60, 2, ID_WIDTH, IconSet::Nerd, &theme());
         let expected = format!(
             " {} {:<5}  {:<9}  {:<32}  {} {:<2} ",
             Icon::StatusGroomed.glyph(IconSet::Nerd),
@@ -2178,7 +2254,7 @@ mod tests {
             waited: 2 * 86_400,
             review: review_state::state(&task),
         };
-        let line = row_line(&row, 60, 2, IconSet::Nerd, &theme, Some("TSK01"));
+        let line = row_line(&row, 60, 2, ID_WIDTH, IconSet::Nerd, &theme, Some("TSK01"));
         assert_eq!(line.width(), 60, "the selection bar stops short");
         assert_eq!(line.spans[0].style, theme.chrome.border_focus, "the bar");
         for span in &line.spans[1..] {

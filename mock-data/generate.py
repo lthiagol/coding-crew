@@ -992,6 +992,19 @@ def pass_evidence(command, by, session, day, hour, minute=0):
     }
 
 
+def override_evidence(reason, by, session, day, hour, minute=0):
+    """A manual override: a judgement, not a command's exit code."""
+    return {
+        "command": "",
+        "exit_code": 0,
+        "summary": reason,
+        "at": ts(day, hour, minute),
+        "by": by,
+        "session": session,
+        "manual": True,
+    }
+
+
 def fail_evidence(command, by, session, day, hour, minute=0):
     return {
         "command": command,
@@ -1288,7 +1301,7 @@ def finalize(item):
         round_["session"] = f"session-{round_['reviewer']}"
     for criterion_ in item["acceptance_criteria"]:
         for evidence in criterion_["evidence"]:
-            evidence["manual"] = False
+            evidence.setdefault("manual", False)
     item["review"]["re_reviews"] = re_reviews(item)
     item["status_since"] = transition_moment(item)
     # The last write is the latest event in the fixture's history.
@@ -1933,7 +1946,9 @@ def build():
                 first_verification,
                 status="passed",
                 evidence=[
-                    pass_evidence(first_verification, runner, session, claim_day, 12)
+                    override_evidence("checked by reading", runner, session, claim_day, 12)
+                    if i == 0
+                    else pass_evidence(first_verification, runner, session, claim_day, 12)
                 ],
             )
         ]
