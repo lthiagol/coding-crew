@@ -62,11 +62,13 @@ The gate is `make check`; `make ci` is an alias for it.
 
 ## Orchestration flow
 
-- The build loop is the global skill `orchestration-flow`
-  (`~/.config/opencode/skills/orchestration-flow/SKILL.md`), and its tools
-  sit beside it. It reads this project's `TODO.md` and `docs/plan.md`.
-- `.orchestration.json` holds the flow's project prefix, `cl`. It stays at the
-  repository root: the global skill reads it there.
+- The build loop is the global skill `herdr-crew`
+  (`~/.claude/skills/herdr-crew/SKILL.md`): an orchestrator briefs, fresh
+  builders build, one reviewer reviews per unit, in herdr's `herdr-crew`
+  workspace under the slug `cc`. `claude-crew` is its subagent sibling. Both
+  read this project's `TODO.md` and `docs/plan.md`.
+- `.orchestration.json` (prefix `cl`) belongs to the retired
+  `orchestration-flow` skill; nothing reads it now.
 - The project's flow files live with the project; `~/.config/coding-crew/`
   holds hugo's configuration alone. `docs/decisions/0011-flow-files.md` has
   the reasoning.
@@ -87,8 +89,8 @@ The gate is `make check`; `make ci` is an alias for it.
 - Four skills are used from upstream `github.com/mattpocock/skills`, pinned at
   commit `5beb35b040e3de97e54fa9e386d7e42d15c295c2`: `codebase-design`,
   `diagnosing-bugs`, `domain-modeling`, `writing-for-agents`.
-- They live whole at `~/.config/opencode/skills/`, with the MIT licence and
-  their provenance beside them. This repository does not carry them.
+- They are not installed on this machine now. This repository does not carry
+  them.
 
 ## Communication
 
