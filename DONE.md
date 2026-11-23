@@ -1830,6 +1830,15 @@ reached through talita alone (claims set through core until T8). Reasons on
 resume and reopen are validated now and journalled in T11. By the opencode
 crew; review 1 found a remedy naming the wrong role. Two rounds. Commit `61d1fe2`.
 
+### 2026-11-23 · Long paths keep their reasons
+
+Under a 100+ character temp dir the workspace tests failed once: raul's
+read-only Settings pane cut `syntax error` off behind the path. raul's
+Settings, raul's notice row (review 1, D1) and hugo's not-shown marker (D2)
+now read `<reason> · <path>`, each pinned under a long path. A core lib test
+failed once and passed on reruns; not reproduced. By the opencode crew, two
+rounds. Commit `50549be`.
+
 ---
 
 ## Lessons
