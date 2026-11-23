@@ -1543,6 +1543,16 @@ example `9999999999999h` never wrapped; it was born expired, because its end
 does not parse back, and the fix covers both. Limits are in THE FOLLOW-UPS.
 Commit `0489893`.
 
+Unit closed: Review B · core store (plan 89). One build round and one review,
+clean. Three findings of the full review's batch B, each with a test.
+`ProjectLock::save` reads the on-disk revision, refuses a mismatch with
+`StoreError::Revision`, and writes the next revision. `Store`'s own writers that
+took no lock are gone, so only the lock writes a caller's record. `list` and
+`load` keep one record per id, and `duplicate_ids` names the ids held twice; the
+talita check that calls it waits for talita. The signature became `save(&mut
+Task)`, a choice the orchestrator is asked to rule on. No other ruling. Limits
+are in THE FOLLOW-UPS. Commit `6717714`.
+
 ---
 
 ## Lessons

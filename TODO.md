@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after unit 88.
+Updated 2026-11-23 by the orchestrator, after unit 89.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–88, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–89, 63b and 70b are closed; their record is in
 `DONE.md`. Open, in order:
 
-- 89 · Review B · core store — S
 - 90 · Review C · raul — M
 - 91 · Review D · hugo — M
 - 92 · Review E · fixtures — S
@@ -174,6 +173,19 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 ## THE FOLLOW-UPS
 
 None blocking. Carried from the closed units.
+
+- **2026-11-23, unit 89:** `ProjectLock::save` takes `&mut Task`, so the caller's
+  copy follows the file's revision. The alternative `&Task` leaves a stale copy
+  that the next save of the same object refuses. Open for the human to rule.
+- **2026-11-23, unit 89:** F3 and F4 have no fail-before run. F3's test uses the
+  new signature and `StoreError::Revision`, so it cannot compile on the old code.
+  F4 removed the unlocked writers, so no runtime test can fail on the old API.
+  Recorded, not ruled.
+- **2026-11-23, unit 89:** `Store::duplicate_ids()` is in core, but nothing calls
+  it. `project check` is a talita verb and waits until talita is opened.
+- **2026-11-23, unit 89:** an unparseable existing file for an id makes a save
+  fail, not overwrite. This is a choice the reviewer accepted. Recorded, not
+  ruled.
 
 - **2026-11-23, unit 88:** the new tests were not run against the pre-fix code.
   The reviewer checked each by reading, not by running it, so none is shown to
