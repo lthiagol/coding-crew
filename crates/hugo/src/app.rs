@@ -6,7 +6,7 @@
 //! findings, with the stamp at its foot. `tab` moves the keys to the queue,
 //! where a task is marked for the next start.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
@@ -2525,6 +2525,30 @@ impl App {
         Line::from(out)
     }
 
+    /// A read's error with the reason first: the catalogue names the tool, then
+    /// why it failed (`{tool} failed: {why}`), so a long tool path would push
+    /// the reason past the popup's edge. The tool follows the reason, its
+    /// program cut to its file name.
+    fn reason_first(error: &str) -> String {
+        let split = error
+            .split_once(" failed: ")
+            .map(|(tool, why)| (format!("failed: {why}"), tool))
+            .or_else(|| {
+                error
+                    .strip_suffix(" failed")
+                    .map(|tool| ("failed".to_string(), tool))
+            })
+            .or_else(|| {
+                error
+                    .split_once(": ")
+                    .map(|(tool, why)| (why.to_string(), tool))
+            });
+        match split {
+            Some((reason, tool)) => format!("{reason} · {}", tool_name(tool)),
+            None => error.to_string(),
+        }
+    }
+
     /// The choice: a small list centred over the window, with its title on the
     /// agent's role.
     ///
@@ -2546,7 +2570,7 @@ impl App {
             ChoiceState::Failed(error) => {
                 let lead = vec![
                     row(CATALOG_UNREADABLE, self.theme.text.normal),
-                    row(error, self.theme.semantic.error),
+                    row(&Self::reason_first(error), self.theme.semantic.error),
                 ];
                 let entries = if choice.field == Field::Model {
                     self.entry_rows(choice)
@@ -2858,6 +2882,21 @@ impl App {
         }
         chrome::footer(&actions, &closing, width, rows, &self.theme)
     }
+}
+
+/// The tool an error names: its program cut to the file name, its arguments
+/// kept.
+fn tool_name(command: &str) -> String {
+    let mut words = command.split(' ');
+    let program = words.next().unwrap_or_default();
+    let name = Path::new(program)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| program.to_string());
+    std::iter::once(name.as_str())
+        .chain(words)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// The index a click at `at` picks, from the regions a frame drew.
@@ -4828,6 +4867,51 @@ mod tests {
         window.on_key(press(KeyCode::Esc));
         assert!(window.choice.is_none());
         let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
+    }
+
+    #[test]
+    fn a_reads_reason_leads_its_tool() {
+        assert_eq!(
+            App::reason_first("/tmp/a/b/a-tool failed: no harness here"),
+            "failed: no harness here · a-tool"
+        );
+        assert_eq!(
+            App::reason_first("/tmp/a/b/a-tool failed"),
+            "failed · a-tool"
+        );
+        assert_eq!(
+            App::reason_first("/tmp/a/b/a-tool: timed out after 5s"),
+            "timed out after 5s · a-tool"
+        );
+        assert_eq!(
+            App::reason_first("opencode is not on PATH"),
+            "opencode is not on PATH"
+        );
+    }
+
+    #[test]
+    fn a_long_tool_path_does_not_hide_why_the_catalogue_failed() {
+        // The macOS temp path fills the choice's line: the reason leads, so
+        // `failed:` and the tool's own words stay on screen.
+        let base = std::env::temp_dir().join(format!("hugo-catalog-long-{}", "x".repeat(80)));
+        let tool = crate::catalog::scratch_tool_under(
+            &base,
+            "app-long",
+            "#!/bin/sh\necho 'no harness here' >&2\nexit 9\n",
+        );
+        assert!(tool.to_string_lossy().len() > 100, "the path is not long");
+        let mut window = on_orchestrator_with(&tool);
+        window.on_key(press(KeyCode::Enter));
+        wait_for_catalog(&mut window);
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        assert!(text.contains(CATALOG_UNREADABLE), "{text}");
+        assert!(text.contains("failed:"), "the reason is cut: {text}");
+        assert!(
+            text.contains("no harness here"),
+            "the tool's words are cut: {text}"
+        );
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]

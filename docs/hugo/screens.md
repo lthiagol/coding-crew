@@ -283,8 +283,10 @@ bounded: the choice opens at once and says `reading the model catalog` while
 the tool runs, and the window keeps drawing and taking its keys meanwhile. A
 tool that takes longer than 5 seconds is given up, and one that is missing or
 fails names its error in the choice — `the model catalog cannot be read` and
-the reason — so no key waits on a harness tool. The choice still lists
-`type an id…` under the reason, so a model can be typed in by hand.
+the reason — so no key waits on a harness tool. The reason leads the line and
+the tool follows it, cut to its name, so a long path cannot push the reason out
+of the popup. The choice still lists `type an id…` under the reason, so a model
+can be typed in by hand.
 
 **The effort choice.** The list is the levels of the agent's model, lowest
 first, with the level in force under the cursor. The levels come from the model,
