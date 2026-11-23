@@ -1531,6 +1531,18 @@ locking the shared `/tmp/.talita.lock`; round two found two more test files
 doing it. Round three's review was clean. Limits are in THE FOLLOW-UPS. Commit
 `5c5628e`.
 
+Unit closed: Review A · core lifecycle, claims, ownership (plan 88). One build
+round and one review, clean. Four findings of the full review's batch A, each
+with a test. `owner(Review, …)` is phase-dependent: the runner in `executing`
+and `remediating` (its self round, per ADR 0017 "Rules at filing"), the
+reviewer otherwise. The section is not split. A re-review writes its record in
+the same move, and approval sets `planned_by`, per ADR 0015. A lease that would
+end after year 9999 is refused with `ClaimError::LeaseTooLong`, not wrapped.
+The ownership test's name says what it asserts. No new ruling. The finding's
+example `9999999999999h` never wrapped; it was born expired, because its end
+does not parse back, and the fix covers both. Limits are in THE FOLLOW-UPS.
+Commit `0489893`.
+
 ---
 
 ## Lessons

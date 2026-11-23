@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after unit 87.
+Updated 2026-11-23 by the orchestrator, after unit 88.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,8 +50,15 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–87, 63b and 70b are closed; their record is in
-`DONE.md`. Every row of the plan's Ready table is ✓.
+Queued in `docs/plan.md`, in order. Units 0–88, 63b and 70b are closed; their record is in
+`DONE.md`. Open, in order:
+
+- 89 · Review B · core store — S
+- 90 · Review C · raul — M
+- 91 · Review D · hugo — M
+- 92 · Review E · fixtures — S
+- 93 · Review F · engine, theme, tooling — S
+- 94 · Review G · docs — S
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
@@ -167,6 +174,13 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 ## THE FOLLOW-UPS
 
 None blocking. Carried from the closed units.
+
+- **2026-11-23, unit 88:** the new tests were not run against the pre-fix code.
+  The reviewer checked each by reading, not by running it, so none is shown to
+  fail without its fix. Recorded, not ruled.
+- **2026-11-23, unit 88:** `Section::Review` keeps one owner name, phase-dependent,
+  and is not split into two sections. The reviewer accepted it. Recorded, not
+  ruled.
 
 - **2026-11-23, unit 87:** the journal refuses a write while it holds events it
   cannot read (`StoreError::JournalUnreadable`), because `Activity` drops them
