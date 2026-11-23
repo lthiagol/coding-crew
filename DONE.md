@@ -1810,6 +1810,14 @@ review state, lane and `--lane`/`--needs-you` are a follow-up, since their
 rules live in raul or nowhere; Conventions still made questions creator-owned
 (D3, fixed). Two rounds. Commit `1279624`.
 
+### 2026-11-23 · macOS CI fixes
+
+Store tests canonicalize their scratch paths (`/var` → `/private/var`);
+`crates/engine/sync.sh` runs on bash 3.2 (no associative arrays); hugo's
+catalogue error leads with the reason, `failed: <why> · <tool>`, the tool cut
+to its file name, so a long temp path no longer hides it. The last by the
+opencode crew, one round, clean. Commit `18e75f0`.
+
 ---
 
 ## Lessons

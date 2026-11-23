@@ -56,8 +56,8 @@ Queued in `docs/plan.md`, in order. Units 0–100, 63b and 70b are closed; their
 record is in `DONE.md`. Nothing is in flight; the tree is clean. The crew
 wound down at 13:55 on 2026-11-23 for the weekly limits reset. The talita
 queue (T5 → T6 → T7 → T10 → T11 → T13, then the `examples/` dogfood) stopped
-after T6: T5 and T6 are closed. Next: the macOS catalogue follow-up below
-(CI green on both runners), then T7. Unit 101 waits for green CI and the human's `v0.1.0`
+after T6: T5 and T6 are closed. Since then the opencode crew (deepseek-v4.1-flash builder, glm-5.3
+reviewer, slug `oc`) fixed the macOS catalogue failure. Next: T7. Unit 101 waits for green CI and the human's `v0.1.0`
 tag.
 
 | phase | units | needs |
@@ -208,13 +208,9 @@ themes and a theme file on disk (`docs/plan.md` § Deferred).
 
 ## THE FOLLOW-UPS
 
-- 2026-11-23 · macOS CI: hugo's `a_catalogue_that_cannot_be_read_is_named_in_the_choice`
-  fails (run 45215295287): the choice shows "the model catalog cannot be
-  read" but not the `failed:` line. Confirmed: the error names the tool by
-  its long macOS temp path (`/var/folders/…`), so the fitted line is cut
-  before `failed:`. Repro on Linux: `TMPDIR=<a long dir> cargo test -p
-  coding-crew-hugo --bin hugo a_catalogue_that_cannot_be_read`. Decide whether the reason should lead the line, then fix and pin.
-  Ubuntu is green; the bash 3.2 fix in `sync.sh` passed on macOS.
+- 2026-11-23 · hugo's `enter_picks_nothing_while_the_catalogue_is_read`
+  sleeps 0.5 s against a spawned tool and flaked once on a cold run (CATALOG
+  review). Make it wait on the state, not the clock.
 - 2026-11-23 · talita `task show` `derived.review_state`, `derived.lane`
   and `task list --lane`, `--needs-you` are not built (T6 review D2). The
   rules live in raul (`crates/raul/src/data.rs` `needs_you`) or nowhere
