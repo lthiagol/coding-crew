@@ -61,7 +61,7 @@ queue (T5 → T6 → T7 → T10 → T11 → T13, then the `examples/` dogfood) s
 after T6: T5 and T6 are closed. Since then the opencode crew (deepseek-v4.1-flash builder, glm-5.3
 reviewer, slug `oc`) fixed the macOS catalogue failure and built T7. The long-path sweep is closed. T13 is closed too: a MiniMax orchestrator on branch
 `mm/talita` (a trial of an opencode orchestrator) ran the opencode crew again — deepseek-v4.1-flash builder,
-glm-5.3 reviewer, slug `mm` — and the review was clean in one round. T10 is closed too, on the same branch and the same crew, one clean round. T11 is closed as well: the journal writer, two rounds — the review found the two-file window a failed journal write leaves, now on the record in ADR 0018, and the cancel row of `commands.md`. Next: the `examples/` dogfood, which the human will brief. Unit 101 waits for green CI and the human's `v0.1.0`
+glm-5.3 reviewer, slug `mm` — and the review was clean in one round. T10 is closed too, on the same branch and the same crew, one clean round. T11 is closed as well: the journal writer, two rounds — the review found the two-file window a failed journal write leaves, now on the record in ADR 0018, and the cancel row of `commands.md`. T8 is closed: the claims, one clean round; the crew-row side effects wait for T12. Next: T9, the steps at work and the evidence. Unit 101 waits for green CI and the human's `v0.1.0`
 tag.
 
 | phase | units | needs |

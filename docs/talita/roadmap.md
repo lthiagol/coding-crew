@@ -17,7 +17,7 @@ The nouns then come in the order the flow uses them. Each unit ends with
 | T5 | ✓ **talita skeleton**: noun–verb parser, result envelope, error-code enum with exit codes, identity resolution, `session new|show`, `project init|show|check`; old `create|list|show` removed | M | `talita session show` resolves flag over env; every error path prints the envelope with its exit code; a test pins the code table to commands.md |
 | T6 | ✓ **Task content**: `task create|show|list|retitle|describe|prioritize|estimate|tag|depend|undepend`, `scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`, `note` | M | a task is groomed end to end through talita; a write to a frozen section returns `section.frozen` with the child-task remedy |
 | T7 | ✓ **Task lifecycle**: every `Event` as a `task` verb, overlays, `planned_by` at approve, `--instructed-by` on resume/reopen, `--grant-rounds` | M | each fixture's status is reachable from `draft` through talita alone; each refusal names its gates |
-| T8 | **Claim**: `claim take|renew|release|show` | S | a runner claims, starts, lets the lease expire, and another runner takes over |
+| T8 | ✓ **Claim**: `claim take|renew|release|show` | S | a runner claims, starts, lets the lease expire, and another runner takes over |
 | T9 | **Steps at work and evidence**: `step begin|done|skip|fail`, `criterion defer|undefer|explain`, `evidence run|override` | M | `evidence run` records the real exit code and summary; a timeout records `unproven`; an override shows `manual` in raul |
 | T10 | ✓ **Review**: `round file` (flags and `--input`), `finding open|resolve|dismiss`, `comment add`, `re_reviews[]` on `task re-review` | M | the unit in README's sequence diagram runs through talita; the verdict rules refuse both mismatches; `refs` maps D-numbers to FIND ids |
 | T11 | ✓ **Journal writer**: every task verb appends its kind; `journal show` | S | raul's activity shows each move of the T10 run, in order, none unreadable |
@@ -35,6 +35,7 @@ Follow-ups from the core units, placed where they are built:
 - **T9:** a mirror with neither evidence nor deferral writes `pending`, so a cleared deferral cannot stick; settle it with the criterion verbs.
 - **T10:** `round file` refuses a round filed by the claim's own session (ADR 0017), calling core's check; a fixture holds a code-review task before its first external round.
 - **T8:** `claim take` journals `claimed` — on a takeover the note is `took over from <actor>` — and `claim release` journals `released` with its required reason. T11 wrote the writer; the verbs are T8's.
+- **T12:** the crew rows the claim verbs touch — `claim take` holds the task and is `executing`, `claim release` releases the row — and the derived fields the runtime record recomputes on every write. T8 built the verbs; the rows are T12's.
 - **T11:** `release` stores its required reason in the journal; `item promote` appends the `created` event for the task it creates, with the note `from ITM<nn>`; the review verbs append `round_filed`, `finding_raised`, `finding_resolved` and `commented`.
 
 T6–T10 can each ship alone once T5 is in. T11 and T12 can start after T7,

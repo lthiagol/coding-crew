@@ -1885,6 +1885,22 @@ record in ADR 0018's consequences, and the cancel row of `commands.md`, which
 now names the `released` event. By the opencode crew (deepseek-v4.1-flash
 builder, glm-5.3 reviewer, slug `mm`), two rounds. Commit `934bb52`.
 
+### 2026-11-23 · talita T8, the claims
+
+`claim take|renew|release|show`: the verbs call core's claim operations
+(ADR 0020), so the rule is core's and so are the errors — `claim.held`,
+`claim.not_claimable` with the failing condition named, `claim.not_holder`,
+`status.wrong`, `role.wrong`, `actor.not_agent`, `identity.missing` — mapped
+to talita's codes, with no new code in the table. A take in `approved` needs
+the plan, read from the store under the lock; a takeover in `executing`
+replaces the holder and the session and journals `claimed` with the note
+`took over from <actor>`; a release journals `released` with its required
+reason. The lease takes `30s`, `5m`, `2h`, `1d`, and the parser is shared, so
+T9's `--timeout` uses it too. A runner claims, starts, lets the lease expire,
+and another runner takes over. The crew-row side effects are T12's. By the
+opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug `mm`),
+review 1 clean, one round. Commit `6e2e6f9`.
+
 ---
 
 ## Lessons
