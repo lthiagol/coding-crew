@@ -1128,7 +1128,7 @@ fresh Haiku builder per job, at most five build/review rounds a job.
 eight batches. All closed except two recorded follow-ups (F4, and the
 reviewer-session gap). The highs: saving a task deleted other tasks whose
 ids it prefixed, and `load` could return the wrong record. Commits
-`e2c663c`…`e803908`.
+`ca4e475`…`42ddda2`.
 
 **The redesign** (`docs/tui/redesign.md`, units 52–57): an icon table with
 Nerd Font and unicode glyphs (`--icons`, `CODING_CREW_ICONS`); rounded panes
@@ -1150,7 +1150,7 @@ every screen in both icon sets and found 12 (2 medium, 10 low): Backlog
 columns drifting within a group, a narrow table starving its prose column,
 glyphs written outside the icon table, a broken Path spine, hugo's flow pane
 always wearing the running icon, no status pill, and an orchestrator start
-that could wedge `s`. All closed, `ffb81bd`…`4d01ff8`. Two rulings: the
+that could wedge `s`. All closed, `0840c05`…`b1b5241`. Two rulings: the
 header card is one item per field (the border title carries the status icon),
 and only the Overview's cards are padded — a list pane draws against its
 border, because its columns are spent on words.
@@ -1162,7 +1162,7 @@ and `O` cycle and reverse the six sort keys. Round one found that a category
 sort announced a hidden count without naming its groups, and that the suffix
 drew a link icon where the spec writes `↑`. Both are fixed. Ruling: the
 parent suffix gets a parent icon, and the spec is not changed. Commit
-`e36b62c`.
+`668a837`.
 
 Unit closed: the Tasks filter (plan 61). Three build and review rounds. `/`
 narrows the Tasks rows as it is typed: words, and `key:value` tokens with AND
@@ -1171,7 +1171,7 @@ one found the filter line dropped whole at 40 columns; round two found the
 error hidden by the count. The line is now cut from the left, and the error
 takes precedence over the count. Ruling: `priority:medium` reads as `normal`,
 the model's own word, and the spec row is left for the human to correct.
-Commit `b01891b`.
+Commit `2d74aba`.
 
 Unit closed: one configuration, written without loss (plan 62). Three build
 and review rounds. `config.toml` is read and written through `toml_edit`, so
@@ -1182,7 +1182,7 @@ stop raul. It starts on the defaults, names the file and the error, and
 leaves the file byte-identical, as hugo does. A save refuses when the file
 changed on disk. Round one found a save into an inline table silently
 dropped; round two found a refused save leaving its edits in memory. Both
-fixed. Commit `e4f4da7`.
+fixed. Commit `030b556`.
 
 Unit closed: Settings is the file (plan 63). Three build and review rounds.
 The Settings tab draws `config.toml` as TOML and edits each value in it:
@@ -1192,14 +1192,14 @@ reloads, and quitting with unsaved changes asks. Round one found that a file
 without `[raul]` offered nothing to change and that a refused save from the
 quit question said nothing; both fixed. Ruling, from review round two:
 inline tables and dotted keys are shown as text, not stops, until a design
-call is made. It is recorded in TODO.md. Commit `26fcd50`.
+call is made. It is recorded in TODO.md. Commit `a066b41`.
 
 Unit closed: lighter debug builds (plan 63b). One build round and one review
 round, the review clean. `[profile.dev]` keeps line tables only, and
 dependencies carry no debug info. From a clean `target/`, `make check` went
 from 138.1 s to 108.3 s, max RSS from 868 MiB to 774 MiB, and `target/` from
 3.0 G to 1.3 G. No test reads backtrace or location content. Commit
-`0790adb`.
+`f644c1e`.
 
 Unit closed: the harness table, and a harness per role (plan 64). Two build
 and review rounds. `crates/core/src/harness.rs` is the one table of harnesses:
@@ -1214,7 +1214,7 @@ was refused as lost, because its model line kept `#effort`; the fix rewrites
 the model of a changed agent, and both cases are read back in tests. Left for
 the human, in TODO.md: the opencode effort levels, the flow files' claude
 pins, and whether an unknown harness should make a file unreadable, as it
-does now. Commit `a251073`.
+does now. Commit `d3a55af`.
 
 Unit closed: hugo picks harness, model and effort from lists (plan 65). Three
 build and review rounds: the build, then two fix rounds, the last review clean.
@@ -1228,7 +1228,7 @@ absent effort read `default` while `s` refused it, a model catalogue that
 failed left no way to type an id, and the doc named the wrong id shape. The
 human ruled that an absent effort is a gap, shown as `pick an effort` on the
 warning slot. The other two were fixed. Ruled on the way, in the design record:
-every agent is configured from hugo. Commit `27cd7df`.
+every agent is configured from hugo. Commit `2cab508`.
 
 Unit closed: the footer: centred, dotted, only what matters (plan 66). Three
 build and review rounds: the build, then two fix rounds, the last review
@@ -1241,7 +1241,7 @@ doc mockups still showed the old footer; both fixed. Round two found the
 detail pane kept its scroll keys in the footer. Ruling: the detail pane
 follows item 2 of the job, so its footer is `esc close · ? help · q quit` and
 `?` opens an overlay that lists the scroll keys. No one was there to ask, so
-the build took it; TODO.md asks the human to confirm. Commit `52f6d33`.
+the build took it; TODO.md asks the human to confirm. Commit `c674884`.
 
 Unit closed: hugo has depth, and selection is soft (plan 67). One build round
 and five fix rounds, the sixth review clean. Four new slots - `chrome.surface`,
@@ -1256,7 +1256,7 @@ The surface is the base mixed 30% toward black and the tint is the surface mixed
 10% toward the accent, which clears the floor in every colour preset. The brief
 said "about 25%"; 25% could not meet both the floor and the step. The
 `palettes.md` rules 2 and 9 were amended to allow this. The unit ran on the
-herdr-crew skill. Commit `9f60719`.
+herdr-crew skill. Commit `6d7d4ef`.
 
 Unit closed: the document in colour (plan 68). Five build and review rounds.
 The document's headings take three hues, list depths 1 and 2 take green and
@@ -1271,7 +1271,7 @@ The human ruled on 2026-11-22: list depths 1 and 2 may share a hue with a
 heading or an alert, depth 3 stays grey, and `document.quote` is role 27,
 carrying out the approved coloured design. The ruling went in as the fourth
 fix round. The unit ran on the herdr-crew skill, which stopped it with
-NO_PROGRESS when the ruling was needed. Commit `82cfe86`.
+NO_PROGRESS when the ruling was needed. Commit `6dff7a4`.
 
 Unit closed: raul's Settings picks, the Path spine, no freeze (plan 69). One
 build round and one fix round; the second review clean. `←→` switches tabs on
@@ -1283,7 +1283,7 @@ icons, and the loop drains queued keys before one redraw. Round one found that
 `enter` on a pick opened on an unset effort kept nothing; fixed, with a test.
 Left in TODO.md: the fork's column, which the spec sketch had one column
 right, and the freeze, measured but not reproduced in a terminal. Commit
-`54b325f`.
+`be0b070`.
 
 Unit closed: one table per role, and the builder is the builder (plan 70). One
 build round, one fix round; the second review clean. The configuration is
@@ -1296,7 +1296,7 @@ human and that the runtime role is `runner`; the orchestrator skill forbade
 building and reviewing; and the cursor opened past the agents with a crew of
 one. All four were fixed, with tests. Ruling: the orchestrator is always
 present. A file without one is unreadable, which the builder chose and the
-human has not confirmed. Commit `485d3f5`.
+human has not confirmed. Commit `50b473f`.
 
 Unit closed: hugo's crew size, and choices for this session only (plan 70b).
 One build round, one fix round; the second review clean. hugo never writes
@@ -1307,7 +1307,7 @@ from the file with a dim `session`; `s` and `hugo --skill` start the session's
 crew. Round one found two tests that did not cover what the job named: crew
 sizes 2 and 3 were never checked for the roles shown and started, and the
 no-write test made no pick at all. Both were fixed with tests. Ruling
-(2026-11-22): hugo's picks are session-only. Commit `aa30ab4`.
+(2026-11-22): hugo's picks are session-only. Commit `a6a911e`.
 
 Unit closed: effort comes from the model, and raul picks from lists (plan 71).
 Four build rounds and four reviews; the second build round changed nothing,
@@ -1324,7 +1324,7 @@ could never start. The orchestrator ruled: its levels are the harness's known
 levels, then `none`, then `type a level…`. The builder stores `none` as
 `effort = ""`, not `"none"`, to keep clear of real `none` variants; the
 orchestrator confirms it. The last review's one finding, a stale agent-table
-row in task-model, is in the commit. Commit `80787ec`.
+row in task-model, is in the commit. Commit `7da52cf`.
 
 Unit closed: hugo shows where the flow is, and picks the tasks (plan 72). One
 build round, one fix round; the second review clean. Every block has a dim
@@ -1335,7 +1335,7 @@ runtime tells one story: five tasks, two done, one in flight in round two with
 the reviewer working, two waiting. Round one found one low: screens.md kept
 the old queue, budget and findings wording beside the new. Fixed to match the
 code and the pinned screens. Choices the builder made are open for the
-orchestrator to confirm (see THE FOLLOW-UPS). Commit `3ac76e5`.
+orchestrator to confirm (see THE FOLLOW-UPS). Commit `1b29940`.
 
 Unit closed: the mouse works in both TUIs (plan 73). Two review rounds; the
 second clean. The wheel scrolls what is under the pointer, three rows a notch,
@@ -1347,7 +1347,7 @@ every wake, Settings' clicks were untested though the test said they were, and
 hugo's queue lines were a guessed offset, not recorded from the draw. The fix
 round closed all three with tests. No ruling was made. One choice stays open:
 a click on a Settings table header selects the value below it, and the two
-reviews disagree on the answer (see THE FOLLOW-UPS). Commit `77cda41`.
+reviews disagree on the answer (see THE FOLLOW-UPS). Commit `bd41972`.
 
 Unit closed: the review reads in layers (plan 74). One build round, one fix
 round; the second review clean. Each round is a heading with its kind, number,
@@ -1357,7 +1357,7 @@ findings get their own group. TSK19 renders at 60 and 100 are in the report.
 Round one found one low: a comment's id overflows a 14-column pane at its
 depth, so the width floor moved to 16, and the known-issue line in TODO.md was
 corrected to match. No ruling was made. The comment depth and the floor are
-open (see THE FOLLOW-UPS). Commit `d17eb39`.
+open (see THE FOLLOW-UPS). Commit `ec52a51`.
 
 Unit closed: backlog items have documents (plan 75). One clean build and
 review round. An item opens the detail pane from its own projection,
@@ -1366,7 +1366,7 @@ body and the history. The "has no document yet" notice is gone; the notice for
 an id outside the work folder stays. Eight tests pin the projection, the
 injection rule and a snapshot, and a render at 40 and 100 columns checks the
 pane. No ruling was made. The header's omitted tags and the always-present
-history are the builder's choices (see THE FOLLOW-UPS). Commit `85c5757`.
+history are the builder's choices (see THE FOLLOW-UPS). Commit `f305aad`.
 
 Unit closed: Settings in colour (plan 76). Three build rounds and three
 reviews; the third clean. The Settings TOML is painted by the document's
@@ -1377,7 +1377,7 @@ Round one asked whether that attribute table should stand, because theme.md and
 palettes.md said the terminal keeps no distinctions beyond the engine's own
 modifiers. Ruling: keep the table, since the done-when says the terminal preset
 uses attributes; both docs now record it. The key-role and colour choices wait
-for the human (see THE FOLLOW-UPS). Commit `f245f20`.
+for the human (see THE FOLLOW-UPS). Commit `0175d28`.
 
 Unit closed: Path counts the finished work (plan 77). Four build rounds and four
 reviews; the fourth clean. Path ends with one FINISHED row, `N tasks finished`,
@@ -1390,7 +1390,7 @@ FINISHED row that still did not fit, and a scroll on every cursor move once
 every row fits. All four are fixed, with tests. No ruling was made. FINISHED
 closes the scroll and is not announced while off screen: option (a), the
 reviewers' recommendation, taken in round two and written into
-`docs/tui/screens.md` § Path (see THE FOLLOW-UPS). Commit `4f82a56`.
+`docs/tui/screens.md` § Path (see THE FOLLOW-UPS). Commit `d8f7058`.
 
 ---
 
