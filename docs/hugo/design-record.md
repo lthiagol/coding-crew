@@ -264,6 +264,8 @@ defaults, and raul's Settings edits them. The file is read at launch and by
 - **A session tag marks the difference from the file**: the agent that differs
   carries it, and the agents group does when its roles differ.
 
+Renamed `HUGO_CREW`, 2026-11-23, ADR 0015: the variable holds the crew, not a session.
+
 ~~Not ruled: whether `r` keeps the session's picks.~~ Ruled 2026-11-22: kept as
 built. `r` drops the session's picks, and the file is what the session starts
 over from.

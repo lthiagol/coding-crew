@@ -357,14 +357,15 @@ the error on the failure slot, as raul names a file it cannot read.
 `s` starts the orchestrator. hugo opens a herdr tab in the current workspace,
 starts the agent the orchestrator row names, on that row's harness and model,
 and prompts it to run `hugo --skill orchestrator` over the queue's tasks, in
-order. The tab's environment carries the session's crew, in `HUGO_SESSION`, so
+order. The tab's environment carries the session's crew, in `HUGO_CREW`, so
 the skill prints the crew the session runs. The loop is the orchestrator's:
 hugo starts it and does not run it.
 
-`HUGO_SESSION` is one line of JSON: an object with `agents` (the crew's agents,
+`HUGO_CREW` is one line of JSON: an object with `agents` (the crew's agents,
 in order), `round_limit`, `order` (the steps, in order) and `raul`, each as the
 configuration holds it. Text that is not a configuration is no
-session, and the skill reads the file instead.
+crew, and the skill reads the file instead. The variable is named for what it
+holds: the crew, not an actor's session (ADR 0015).
 
 The queue `s` starts is the claimable waiting work, in queue order.
 When some of it is marked, `s` hands over the marked tasks alone, still in queue
@@ -479,7 +480,7 @@ hugo --skill orchestrator|builder|reviewer
 `--skill` prints text and exits; no window is set up. A bare `--skill` lists
 the three roles. A role prints that role's skill, opened by a **crew** section
 built from the crew in force: the session's, when the orchestrator's tab sets
-`HUGO_SESSION`, else the file's. Each agent's role, harness, model and effort
+`HUGO_CREW`, else the file's. Each agent's role, harness, model and effort
 with the arguments and environment that start it, and the review-round limit,
 are named; a role the crew leaves out is named `none`. A configuration that cannot be read prints the defaults and says so in
 one line. The texts live in `crates/hugo/skills/` and are embedded with

@@ -36,15 +36,33 @@ fn config_file(home: &Path) -> PathBuf {
 
 fn run(home: Option<&Path>, args: &[&str]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_hugo"));
-    // Run from a folder that is no project, so the runtime is never read.
+    // Run from a folder that is no project, so the runtime is never read. The
+    // crew variables are cleared: the file's crew is what these tests pin.
     command
         .current_dir(std::env::temp_dir())
         .env_remove("CODING_CREW_ICONS")
+        .env_remove("HUGO_CREW")
+        .env_remove("HUGO_SESSION")
         .args(args);
     match home {
         Some(home) => command.env("HOME", home),
         None => command.env_remove("HOME"),
     };
+    command.output().expect("running hugo")
+}
+
+/// Run the binary with one environment variable set, the crew variables
+/// otherwise cleared, so the case is the only crew in force.
+fn run_with_crew(home: &Path, name: &str, value: &str, args: &[&str]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_hugo"));
+    command
+        .current_dir(std::env::temp_dir())
+        .env_remove("CODING_CREW_ICONS")
+        .env_remove("HUGO_CREW")
+        .env_remove("HUGO_SESSION")
+        .env("HOME", home)
+        .env(name, value)
+        .args(args);
     command.output().expect("running hugo")
 }
 
@@ -143,6 +161,54 @@ fn a_machine_with_no_home_prints_the_defaults_and_says_so() {
         "{text}"
     );
     assert!(text.contains("Review-round limit: 5."), "{text}");
+}
+
+#[test]
+fn the_crew_is_read_from_hugo_crew_and_hugo_session_is_ignored() {
+    // The orchestrator's tab carries the session's crew in HUGO_CREW (ADR
+    // 0015). The old name is not read: a tab that still sets it gets the
+    // file's crew, not the stale one.
+    let home = fresh_home("crew-env");
+    let mut crew = Config::default();
+    crew.agents.truncate(1);
+    crew.round_limit = 2;
+    let text = serde_json::json!({
+        "agents": crew.agents,
+        "round_limit": crew.round_limit,
+        "order": crew.order,
+        "raul": crew.raul,
+    })
+    .to_string();
+
+    let from_crew = stdout_of(&run_with_crew(
+        &home,
+        "HUGO_CREW",
+        &text,
+        &["--skill", "builder"],
+    ));
+    assert!(
+        from_crew.contains("Review-round limit: 2."),
+        "HUGO_CREW is not read:\n{from_crew}"
+    );
+    assert!(
+        from_crew.contains("- builder: none; the orchestrator builds it"),
+        "the crew's roles are not the tab's:\n{from_crew}"
+    );
+
+    let from_session = stdout_of(&run_with_crew(
+        &home,
+        "HUGO_SESSION",
+        &text,
+        &["--skill", "builder"],
+    ));
+    assert!(
+        from_session.contains("Review-round limit: 5."),
+        "HUGO_SESSION is still read:\n{from_session}"
+    );
+    assert!(
+        from_session.contains("- builder: harness claude"),
+        "the stale variable replaced the file's crew:\n{from_session}"
+    );
 }
 
 #[test]

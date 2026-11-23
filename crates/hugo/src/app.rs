@@ -1582,10 +1582,7 @@ impl App {
         // The orchestrator's `hugo --skill` prints the crew this session runs,
         // so the session's picks reach the agents it starts.
         let mut env = start.env;
-        env.push((
-            config::SESSION_ENV.to_string(),
-            config::encode_session(config),
-        ));
+        env.push((config::CREW_ENV.to_string(), config::encode_crew(config)));
         Ok(LaunchRequest {
             kind: harness.kind.to_string(),
             args: start.args,
@@ -5477,7 +5474,8 @@ mod tests {
     #[test]
     fn the_session_crew_is_what_s_hands_the_orchestrator_and_its_skill_prints() {
         // The orchestrator's tab carries the session's crew, so its skill
-        // prints the crew the session runs, not the file's.
+        // prints the crew the session runs, not the file's. The variable is
+        // HUGO_CREW, and the tab sets no HUGO_SESSION (ADR 0015).
         let home = scratch("crew-launch");
         let mut window = on_orchestrator(Some(home.clone()));
         window.queued = vec!["TSK29".to_string()];
@@ -5490,11 +5488,16 @@ mod tests {
         let value = request
             .env
             .iter()
-            .find(|(key, _)| key == config::SESSION_ENV)
+            .find(|(key, _)| key == "HUGO_CREW")
             .map(|(_, value)| value.clone())
-            .expect("the session travels in the environment");
-        let session = config::decode_session(&value).expect("the session decodes");
-        assert_eq!(session.agents.len(), 1, "{session:?}");
+            .expect("the crew travels in HUGO_CREW");
+        assert!(
+            request.env.iter().all(|(key, _)| key != "HUGO_SESSION"),
+            "the tab sets HUGO_SESSION: {:?}",
+            request.env
+        );
+        let crew = config::decode_crew(&value).expect("the crew decodes");
+        assert_eq!(crew.agents.len(), 1, "{crew:?}");
         let _ = fs::remove_dir_all(&home);
     }
 
@@ -5559,10 +5562,15 @@ mod tests {
             let value = requests[0]
                 .env
                 .iter()
-                .find(|(key, _)| key == config::SESSION_ENV)
+                .find(|(key, _)| key == config::CREW_ENV)
                 .map(|(_, value)| value.clone())
-                .expect("the session travels in the environment");
-            let started = config::decode_session(&value).expect("the session decodes");
+                .expect("the crew travels in the environment");
+            assert!(
+                requests[0].env.iter().all(|(key, _)| key != "HUGO_SESSION"),
+                "size {size}: the tab sets HUGO_SESSION: {:?}",
+                requests[0].env
+            );
+            let started = config::decode_crew(&value).expect("the crew decodes");
             let started_roles: Vec<FlowRole> =
                 started.agents.iter().map(|agent| agent.role).collect();
             assert_eq!(started_roles, roles, "size {size}: the roles s starts");
@@ -5835,7 +5843,12 @@ mod tests {
             requests[0]
                 .env
                 .iter()
-                .all(|(key, _)| key == config::SESSION_ENV),
+                .all(|(key, _)| key == config::CREW_ENV),
+            "{:?}",
+            requests[0].env
+        );
+        assert!(
+            requests[0].env.iter().any(|(key, _)| key == "HUGO_CREW"),
             "{:?}",
             requests[0].env
         );

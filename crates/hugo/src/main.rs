@@ -119,7 +119,7 @@ struct Options {
 fn print_skill(request: SkillRequest, home: Option<&Path>) -> Result<()> {
     let text = match request {
         SkillRequest::List => skill::list(),
-        SkillRequest::Role(role) => skill::for_role(role, config::session_or_load(home)),
+        SkillRequest::Role(role) => skill::for_role(role, config::crew_or_load(home)),
     };
     let mut stdout = std::io::stdout();
     stdout.write_all(text.as_bytes())?;

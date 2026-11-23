@@ -135,15 +135,16 @@ pub fn load(home: Option<&Path>) -> ConfigRead {
     }
 }
 
-/// The environment variable a session's crew travels in. `s` sets it on the
-/// orchestrator's tab, so the `hugo --skill` that tab runs prints the crew the
-/// session runs rather than the file's.
-pub const SESSION_ENV: &str = "HUGO_SESSION";
+/// The environment variable a session's crew travels in. It holds the crew,
+/// not an actor's session (ADR 0015): `s` sets it on the orchestrator's tab, so
+/// the `hugo --skill` that tab runs prints the crew the session runs rather
+/// than the file's.
+pub const CREW_ENV: &str = "HUGO_CREW";
 
 /// The crew a session runs, as the text the environment variable holds: the
 /// configuration's four parts, as JSON. The file's own reader expects the
 /// file's shape, so the parts are written and read one by one.
-pub fn encode_session(config: &Config) -> String {
+pub fn encode_crew(config: &Config) -> String {
     serde_json::json!({
         "agents": config.agents,
         "round_limit": config.round_limit,
@@ -154,8 +155,8 @@ pub fn encode_session(config: &Config) -> String {
 }
 
 /// The crew a session runs, read from the environment variable's text. Text
-/// that is not a configuration is no session.
-pub fn decode_session(text: &str) -> Option<Config> {
+/// that is not a configuration is no crew.
+pub fn decode_crew(text: &str) -> Option<Config> {
     let value: serde_json::Value = serde_json::from_str(text).ok()?;
     let part = |key: &str| value.get(key).cloned();
     Some(Config {
@@ -168,10 +169,10 @@ pub fn decode_session(text: &str) -> Option<Config> {
 
 /// The configuration a skill is printed under: the session's crew when this
 /// process runs in a session's tab, else the file as [`load`] reads it.
-pub fn session_or_load(home: Option<&Path>) -> ConfigRead {
-    match std::env::var(SESSION_ENV)
+pub fn crew_or_load(home: Option<&Path>) -> ConfigRead {
+    match std::env::var(CREW_ENV)
         .ok()
-        .and_then(|text| decode_session(&text))
+        .and_then(|text| decode_crew(&text))
     {
         Some(config) => ConfigRead::of(ConfigState::Config(config)),
         None => load(home),
@@ -433,20 +434,24 @@ mod tests {
     }
 
     #[test]
+    fn the_crews_environment_variable_is_hugo_crew_and_not_a_session() {
+        // The variable holds the crew, not an actor's session (ADR 0015), so
+        // its name says crew.
+        assert_eq!(CREW_ENV, "HUGO_CREW");
+        assert_ne!(CREW_ENV, "HUGO_SESSION");
+    }
+
+    #[test]
     fn a_session_crew_travels_in_the_environment_and_reads_back_whole() {
         // The orchestrator's tab carries the session's crew as text; the skill
         // it prints reads the same crew back, with the roles it has.
         let mut crew = Config::default();
         crew.agents.truncate(2);
         crew.round_limit = 3;
-        let text = encode_session(&crew);
+        let text = encode_crew(&crew);
         assert!(!text.contains('\n'), "the value spans lines: {text}");
-        assert_eq!(decode_session(&text), Some(crew));
-        assert_eq!(
-            decode_session("round_limit = 3"),
-            None,
-            "TOML is no session"
-        );
+        assert_eq!(decode_crew(&text), Some(crew));
+        assert_eq!(decode_crew("round_limit = 3"), None, "TOML is no crew");
     }
 
     #[test]
