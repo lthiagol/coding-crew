@@ -97,6 +97,12 @@ A unit without one is not ready, and belongs under **Grooming** instead.
 | 75 | **Backlog items have documents** ✓ | done | an item opens a detail pane from its own projection, instead of "no document yet" |
 | 76 | **Settings in colour** ✓ | done | the Settings TOML is painted by the syntax roles: headers, keys, strings, numbers, booleans, comments |
 | 77 | **Path counts the finished work** ✓ | done | a FINISHED branch at the end of Path is one summary row, the number of done tasks; finished tasks live in the Tasks tab |
+| 78 | **raul's loose ends** | M | the Overview counts unreadable files, Backlog announces through announce.rs, stale comments fixed, the copy scan covers all six text helpers |
+| 79 | **hugo and theme loose ends** | M | esc keeps the catalogue error, skill.rs drops `effort default`, hugo sweeps 40–120, sharper queue/sidebar/apartness/count tests |
+| 80 | **Docs and the gate** | S | the design record states the 3/2/1 crew and the effort ruling, stale round counts fixed, the retired flow suites leave the Makefile |
+| 81 | **The triage's hugo and config rulings** | M | odd config tables warn, flow files drop the model pin, agents can be blocked, the queue offers only claimable tasks |
+| 82 | **The triage's raul changes** | S | effort typed after a failed read, `?` grows to its content, `r` asks when unsaved, Settings headers are inert, spec notes |
+| 83 | **TOML in colour, and one story for TSK14** | S | the engine highlights toml; TSK14 carries round 1's findings in both TUIs |
 
 ## Grooming
 
