@@ -1643,6 +1643,7 @@ fn hidden_groups(
                 label: block.section.clone(),
                 style: theme.text.strong,
                 count: 1,
+                dropped: false,
             }),
         }
     }

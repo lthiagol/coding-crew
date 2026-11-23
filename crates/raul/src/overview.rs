@@ -253,9 +253,10 @@ fn render_stacked(
         panels.push(errors_panel(work, theme));
     }
     panels.push(kinds_panel(work, area.width, icons, theme));
-    // The activity block is the last to give up its rows: a short pane keeps
-    // the counts and the next task, and the block says how many events it
-    // left out.
+    // The activity block is the first to give up its rows: it is pushed last,
+    // and the layout reduces from the last block. A short pane keeps the
+    // counts and the next task, and the block says how many events it left
+    // out.
     panels.push(activity_panel(work, area.width, icons, theme));
     let width = area.width.saturating_sub(CARD_COLUMNS);
     let fits = column_fits(&panels, width, area.height);
@@ -618,15 +619,20 @@ fn marker(panel: &Panel, width: u16, theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(cut_to(&text, usize::from(width)), style))
 }
 
-/// What the marker of the unreadable block says: the files it holds and
-/// what is wrong with them.
+/// What the marker of the unreadable block says: how many files it holds,
+/// then the files and what is wrong with them.
 fn hidden_files(work: &Work) -> String {
     let files: Vec<String> = work
         .errors
         .iter()
         .map(|error| format!("{}: {}", error.file, error.error))
         .collect();
-    format!("unreadable not shown: {}", files.join(", "))
+    let count = files.len();
+    let word = if count == 1 { "file" } else { "files" };
+    format!(
+        "unreadable not shown: {count} {word} ({})",
+        files.join(", ")
+    )
 }
 
 /// The rows the blocks take, borders included.
@@ -1902,7 +1908,9 @@ mod tests {
         .expect("writing a task");
         fs::write(dir.join("TSK98-broken.json"), "{ not json").expect("writing a broken file");
         let work = Work::load(&dir);
-        let text = draw(&work, 100, 12).join("\n");
+        // The marker names the count as well, and at 100 columns it gets half
+        // the pane: a wider pane keeps the error in view.
+        let text = draw(&work, 140, 12).join("\n");
         let marker = text
             .lines()
             .find(|line| line.contains("unreadable not shown"))
@@ -1910,6 +1918,33 @@ mod tests {
         // The name of the file and the error, not only the name.
         assert!(marker.contains("TSK98-broken.json"), "{marker}");
         assert!(marker.contains("key must"), "{marker}");
+    }
+
+    #[test]
+    fn the_unreadable_marker_counts_its_files() {
+        // The marker names the files it holds and says how many there are,
+        // as every block that is left out does.
+        let dir = scratch_dir("unreadable-count");
+        fs::write(dir.join("TSK97-broken.json"), "{ not json").expect("writing a broken file");
+        fs::write(dir.join("TSK98-broken.json"), "{ not json").expect("writing a broken file");
+        let work = Work::load(&dir);
+        assert_eq!(work.errors.len(), 2, "{:?}", work.errors);
+        let marker = hidden_files(&work);
+        assert!(
+            marker.starts_with("unreadable not shown: 2 files ("),
+            "{marker}"
+        );
+        assert!(marker.contains("TSK97-broken.json"), "{marker}");
+        assert!(marker.contains("TSK98-broken.json"), "{marker}");
+
+        let single = scratch_dir("unreadable-count-one");
+        fs::write(single.join("TSK98-broken.json"), "{ not json").expect("writing a broken file");
+        let work = Work::load(&single);
+        let marker = hidden_files(&work);
+        assert!(
+            marker.starts_with("unreadable not shown: 1 file ("),
+            "{marker}"
+        );
     }
 
     #[test]

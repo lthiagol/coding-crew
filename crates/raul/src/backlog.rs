@@ -12,6 +12,7 @@ use ratatui::widgets::{Paragraph, Wrap};
 
 use coding_crew_core::{Item, ItemKind, ItemStatus, Status, Task};
 
+use crate::announce;
 use crate::data::Work;
 use crate::tabs::Tab;
 use crate::view::{self, Lines, View};
@@ -426,9 +427,10 @@ fn window(
             && let Some((index, mut rows)) = cursor_lines(groups, width, icons, theme, id)
         {
             // The pane is too short for the cursor's row and the layout: the
-            // row is drawn, and what is left says what the pane hides. Only a
-            // pane of one line shows the row alone, and there its body gives
-            // way with the pane: the row is drawn in the one line it is
+            // row is drawn, and what is left says what the pane hides. A pane
+            // of two lines shows a two-line row whole, with nothing left to
+            // say. A pane of one line shows the row alone, and there its body
+            // gives way with the pane: the row is drawn in the one line it is
             // counted as.
             rows.truncate(height);
             let room = height - rows.len();
@@ -984,6 +986,11 @@ fn body_line(
     selected: Option<&str>,
 ) -> Option<Line<'static>> {
     let body = row.body.as_deref()?;
+    // A pane with no content columns draws the body as a blank line, as the
+    // columns line does: the row is still counted as two lines.
+    if width == 0 {
+        return Some(Line::from(""));
+    }
     let indent = body_indent(layout, metrics, width);
     let room = width - indent;
     let mut spans: Vec<Span<'static>> = Vec::new();
@@ -1062,51 +1069,9 @@ fn header(group: &Group, width: usize, theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(cut_to(label, width), style))
 }
 
-/// How a piece of the announcement is painted.
-#[derive(Debug, Clone, Copy)]
-enum Paint {
-    /// A group name: the same slot its header uses.
-    Group(GroupKind),
-    /// A count, as every count in raul.
-    Strong,
-    /// The bracket, the word `hidden`, the separator, the lead-in.
-    Dim,
-}
-
-/// A piece of the announcement: its text and how it is painted.
-#[derive(Debug, Clone)]
-struct Said {
-    spans: Vec<(String, Paint)>,
-}
-
-impl Said {
-    fn new(text: impl Into<String>, paint: Paint) -> Self {
-        Said {
-            spans: vec![(text.into(), paint)],
-        }
-    }
-
-    fn width(&self) -> usize {
-        self.spans.iter().map(|(text, _)| text_width(text)).sum()
-    }
-}
-
-/// The lines that say what is not shown.
-///
-/// The count here is the number of *rows left out of view*, not the group's
-/// total — the header owns that — so an entry has a shape of its own: the
-/// group, then the count in brackets with the word `hidden`. It never takes
-/// the header's `group · total` shape, and every group is named, including
-/// a group with nothing hidden.
-///
-/// A group whose header was dropped for room is announced as hidden even
-/// when it holds no rows: its `0 hidden` shape would say the group was on
-/// screen. A group that has a row on screen is not dropped: its entry says
-/// zero are hidden rather than claiming the whole group is gone. When the
-/// packed entries do not fit in `room`, the compact shape names every group
-/// and count over the rows there are; when even that does not fit, the
-/// entries give way whole from the last one and the last row is marked with
-/// `…`. An entry is never cut in half: a name and its count stay together.
+/// What the tab does not show, announced through the shared rule: each group
+/// with the rows of it that are left out. A group whose header was dropped for
+/// room is named as hidden, not as zero.
 fn announcement(
     omitted: &[usize; 3],
     headers: &[bool; 3],
@@ -1115,366 +1080,17 @@ fn announcement(
     room: usize,
     theme: &Theme,
 ) -> (Vec<Line<'static>>, bool) {
-    let entries: Vec<Said> = GroupKind::ALL
+    let groups: Vec<announce::Group> = GroupKind::ALL
         .iter()
         .enumerate()
-        .map(|(index, kind)| {
-            if omitted[index] == 0 && !headers[index] && !present[index] {
-                dropped_header(*kind, width)
-            } else {
-                entry(*kind, omitted[index], width)
-            }
+        .map(|(index, kind)| announce::Group {
+            label: kind.label().to_string(),
+            style: group_style(*kind, theme),
+            count: omitted[index],
+            dropped: omitted[index] == 0 && !headers[index] && !present[index],
         })
         .collect();
-    let rows = pack(&entries, width);
-    if rows.len() <= room {
-        return (paint(rows, theme), false);
-    }
-    if let Some((mut rows, complete)) = compact(omitted, headers, present, width, room) {
-        if complete {
-            return (paint(rows, theme), false);
-        }
-        // The word or the lead-in did not fit: the row is not whole. The
-        // marker says so when there is room for it beside the last entry;
-        // every group is named, so no entry is dropped for the marker.
-        if let Some(last) = rows.last_mut()
-            && last.width() < width
-        {
-            last.spans.push(("…".to_string(), Paint::Dim));
-        }
-        return (paint(rows, theme), true);
-    }
-    if room == 0 {
-        return (Vec::new(), true);
-    }
-    for keep in (0..entries.len()).rev() {
-        let mut rows = pack(&entries[..keep], width);
-        if !mark_last(&mut rows, width) {
-            break;
-        }
-        if rows.len() <= room {
-            return (paint(rows, theme), true);
-        }
-    }
-    let marker = cut_to("…", width);
-    if marker.is_empty() {
-        (Vec::new(), true)
-    } else {
-        (vec![Line::from(Span::styled(marker, theme.text.dim))], true)
-    }
-}
-
-/// Mark the last row that has room for the marker, dropping whole rows to
-/// make room.
-///
-/// A row is never cut: a group name and its count stay together, and so do
-/// the rows of the compact shape. The flag says a row was marked.
-fn mark_last(rows: &mut Vec<Said>, width: usize) -> bool {
-    while let Some(last) = rows.last_mut() {
-        if last.width() < width {
-            last.spans.push(("…".to_string(), Paint::Dim));
-            return true;
-        }
-        rows.pop();
-    }
-    false
-}
-
-/// A group and the number of its rows that are hidden.
-///
-/// The full entry is `label (count hidden)`. On a narrow row the label gives
-/// way first, but the count and the word stay with it; only a row narrower
-/// than `count hidden` loses the label, and only a row narrower than
-/// `hidden` itself loses the count.
-fn entry(kind: GroupKind, count: usize, width: usize) -> Said {
-    let label = kind.label();
-    let count = count.to_string();
-    let full = format!("{label} ({count} hidden)");
-    if text_width(&full) <= width {
-        return Said {
-            spans: vec![
-                (label.to_string(), Paint::Group(kind)),
-                (" (".to_string(), Paint::Dim),
-                (count, Paint::Strong),
-                (" hidden)".to_string(), Paint::Dim),
-            ],
-        };
-    }
-    // The parentheses are the first thing to give way: the whole label is
-    // kept when it can be.
-    let bare = format!("{label} {count} hidden");
-    if text_width(&bare) <= width {
-        return Said {
-            spans: vec![
-                (label.to_string(), Paint::Group(kind)),
-                (" ".to_string(), Paint::Dim),
-                (count, Paint::Strong),
-                (" hidden".to_string(), Paint::Dim),
-            ],
-        };
-    }
-    let tail = format!(" {count} hidden");
-    if text_width(&tail) < width {
-        let room = width - text_width(&tail);
-        return Said {
-            spans: vec![
-                (cut_to(label, room), Paint::Group(kind)),
-                (" ".to_string(), Paint::Dim),
-                (count, Paint::Strong),
-                (" hidden".to_string(), Paint::Dim),
-            ],
-        };
-    }
-    let counted = format!("{count} hidden");
-    if text_width(&counted) <= width {
-        return Said {
-            spans: vec![(count, Paint::Strong), (" hidden".to_string(), Paint::Dim)],
-        };
-    }
-    Said::new(cut_to("hidden", width), Paint::Dim)
-}
-
-/// A group whose header was dropped for room.
-///
-/// It says the group is hidden rather than `0 hidden`: the group is not on
-/// screen, even when it holds no rows.
-fn dropped_header(kind: GroupKind, width: usize) -> Said {
-    let label = kind.label();
-    let full = format!("{label} (hidden)");
-    if text_width(&full) <= width {
-        return Said {
-            spans: vec![
-                (label.to_string(), Paint::Group(kind)),
-                (" (hidden)".to_string(), Paint::Dim),
-            ],
-        };
-    }
-    let bare = format!("{label} hidden");
-    if text_width(&bare) <= width {
-        return Said {
-            spans: vec![
-                (label.to_string(), Paint::Group(kind)),
-                (" hidden".to_string(), Paint::Dim),
-            ],
-        };
-    }
-    let tail = " hidden";
-    if text_width(tail) < width {
-        let room = width - text_width(tail);
-        return Said {
-            spans: vec![
-                (cut_to(label, room), Paint::Group(kind)),
-                (" hidden".to_string(), Paint::Dim),
-            ],
-        };
-    }
-    Said::new(cut_to("hidden", width), Paint::Dim)
-}
-
-/// The compact shape: every group and its count, packed over at most `room`
-/// rows.
-///
-/// The shape is `group count, group count … hidden`: distinct from the
-/// header's `group · total`, and it names the groups even when a row is too
-/// narrow for `group (count hidden)`. The lead-in and the word are dropped
-/// only when they do not fit; the flag says whether one of them is present.
-fn compact(
-    omitted: &[usize; 3],
-    headers: &[bool; 3],
-    present: &[bool; 3],
-    width: usize,
-    room: usize,
-) -> Option<(Vec<Said>, bool)> {
-    let tokens: Vec<Said> = GroupKind::ALL
-        .iter()
-        .enumerate()
-        .map(|(index, kind)| {
-            if omitted[index] == 0 && !headers[index] && !present[index] {
-                Said::new(cut_to(kind.label(), width), Paint::Group(*kind))
-            } else {
-                token(*kind, omitted[index], width)
-            }
-        })
-        .collect();
-    let mut fallback: Option<(Vec<Said>, bool)> = None;
-    for prefix in [true, false] {
-        for separator in [", ", ","] {
-            for suffix in [Suffix::Last, Suffix::Own, Suffix::None] {
-                let (rows, complete) = compact_rows(&tokens, width, prefix, separator, suffix);
-                if rows.len() > room {
-                    continue;
-                }
-                if complete {
-                    return Some((rows, true));
-                }
-                if fallback.is_none() {
-                    fallback = Some((rows, false));
-                }
-            }
-        }
-    }
-    fallback
-}
-
-/// Where the word `hidden` sits in a compact block.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Suffix {
-    /// At the end of the last row, when it fits there.
-    Last,
-    /// On a row of its own.
-    Own,
-    /// Not at all: the groups and counts are the whole announcement.
-    None,
-}
-
-/// A group's token in the compact shape: its name and its hidden count.
-///
-/// The name is cut only when the row cannot hold it whole; the count stays
-/// whole while there is room for it. When there is no room for both, the
-/// name takes the row, cut to the marker — the count is never shown without
-/// the group it counts.
-fn token(kind: GroupKind, count: usize, width: usize) -> Said {
-    let label = kind.label();
-    let count = count.to_string();
-    let full = format!("{label} {count}");
-    if text_width(&full) <= width {
-        return Said {
-            spans: vec![
-                (label.to_string(), Paint::Group(kind)),
-                (" ".to_string(), Paint::Dim),
-                (count, Paint::Strong),
-            ],
-        };
-    }
-    let tail = format!(" {count}");
-    if text_width(&tail) < width {
-        let room = width - text_width(&tail);
-        return Said {
-            spans: vec![
-                (cut_to(label, room), Paint::Group(kind)),
-                (" ".to_string(), Paint::Dim),
-                (count, Paint::Strong),
-            ],
-        };
-    }
-    Said::new(cut_to(label, width), Paint::Group(kind))
-}
-
-/// The compact tokens in rows, with the lead-in and the word placed.
-///
-/// The flag reports whether the rows say the counts are hidden: the lead-in
-/// or the word `hidden` is present.
-fn compact_rows(
-    tokens: &[Said],
-    width: usize,
-    prefix: bool,
-    separator: &str,
-    suffix: Suffix,
-) -> (Vec<Said>, bool) {
-    let lead = Said::new("not shown: ", Paint::Dim);
-    let leading = prefix && lead.width() <= width;
-    let mut rows: Vec<Said> = Vec::new();
-    let mut current = Said { spans: Vec::new() };
-    if leading {
-        current.spans.extend(lead.spans.clone());
-    }
-    let mut has_token = false;
-    for token in tokens {
-        let gap = if has_token { text_width(separator) } else { 0 };
-        if current.width() + gap + token.width() <= width {
-            if has_token {
-                current.spans.push((separator.to_string(), Paint::Dim));
-            }
-            current.spans.extend(token.spans.clone());
-            has_token = true;
-        } else {
-            if current.width() > 0 {
-                rows.push(std::mem::replace(&mut current, Said { spans: Vec::new() }));
-            }
-            current.spans.extend(token.spans.clone());
-            has_token = true;
-        }
-    }
-    if current.width() > 0 {
-        rows.push(current);
-    }
-    let word = Said::new(" hidden", Paint::Dim);
-    let mut said_it = false;
-    match suffix {
-        Suffix::Last => {
-            if let Some(last) = rows.last_mut()
-                && last.width() + word.width() <= width
-            {
-                last.spans.extend(word.spans);
-                said_it = true;
-            }
-        }
-        Suffix::Own => {
-            if word.width() <= width {
-                rows.push(Said::new("hidden", Paint::Dim));
-                said_it = true;
-            }
-        }
-        Suffix::None => {}
-    }
-    (rows, leading || said_it)
-}
-
-/// The entries, packed into rows of at most `width` columns.
-///
-/// An entry is never broken over two rows, so a group is never cut from its
-/// count.
-fn pack(entries: &[Said], width: usize) -> Vec<Said> {
-    let prefix = Said::new("not shown: ", Paint::Dim);
-    let mut rows: Vec<Said> = Vec::new();
-    let mut current = Said { spans: Vec::new() };
-    for entry in entries {
-        if entry.width() == 0 {
-            continue;
-        }
-        if current.width() == 0 {
-            let lead = rows.is_empty() && prefix.width() + entry.width() <= width;
-            if lead {
-                current.spans.extend(prefix.spans.clone());
-            }
-            current.spans.extend(entry.spans.clone());
-            continue;
-        }
-        if current.width() + 2 + entry.width() <= width {
-            current.spans.push((", ".to_string(), Paint::Dim));
-            current.spans.extend(entry.spans.clone());
-        } else {
-            rows.push(Said {
-                spans: std::mem::take(&mut current.spans),
-            });
-            current.spans.extend(entry.spans.clone());
-        }
-    }
-    if current.width() > 0 {
-        rows.push(current);
-    }
-    rows
-}
-
-/// The announcement's lines, each span painted by its role.
-fn paint(rows: Vec<Said>, theme: &Theme) -> Vec<Line<'static>> {
-    rows.into_iter()
-        .map(|said| {
-            Line::from(
-                said.spans
-                    .into_iter()
-                    .map(|(text, paint)| {
-                        let style = match paint {
-                            Paint::Group(kind) => group_style(kind, theme),
-                            Paint::Strong => theme.text.strong,
-                            Paint::Dim => theme.text.dim,
-                        };
-                        Span::styled(text, style)
-                    })
-                    .collect::<Vec<Span<'static>>>(),
-            )
-        })
-        .collect()
+    announce::lines(&groups, width, room, theme)
 }
 
 #[cfg(test)]
@@ -2261,6 +1877,67 @@ mod tests {
         assert!(
             text.contains(&format!("SMALL TASKS ({small} hidden)")),
             "{text}"
+        );
+    }
+
+    #[test]
+    fn a_two_line_row_is_drawn_whole_from_any_first_row() {
+        // Scrolled to any first row, a shown two-line row is drawn with its
+        // body under its columns, and the lines drawn fit the pane.
+        let work = mock_work();
+        let groups = groups(&work);
+        let theme = theme();
+        let rows: Vec<&Row> = groups.iter().flat_map(|group| group.rows.iter()).collect();
+        assert!(
+            rows.iter().any(|row| row.body.is_some()),
+            "the mock holds no two-line row"
+        );
+        for first in 0..rows.len() {
+            for height in 2..=12 {
+                let (built, _, shown, _) =
+                    window(&groups, 98, height, &theme, IconSet::Nerd, None, first);
+                assert!(
+                    built.len() <= height,
+                    "{first}/{height}: {} lines in the pane",
+                    built.len()
+                );
+                let drawn: Vec<String> = built.lines.iter().map(line_text).collect();
+                for index in &shown {
+                    let row = rows[*index];
+                    let metrics = metrics_of(&groups, &row.id, 98);
+                    let mut from = 0;
+                    for line in row_lines(row, 98, metrics, IconSet::Nerd, &theme, None) {
+                        let text = line_text(&line);
+                        let at = drawn[from..].iter().position(|other| *other == text);
+                        assert!(
+                            at.is_some(),
+                            "{first}/{height}: {} is drawn in half: {drawn:?}",
+                            row.id
+                        );
+                        from += at.unwrap_or(0) + 1;
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_zero_width_body_is_a_blank_line_as_the_columns_are() {
+        // A pane with no content columns draws both lines of a two-line row
+        // blank, so the row is counted as the two lines it takes.
+        let work = mock_work();
+        let groups = groups(&work);
+        let row = groups
+            .iter()
+            .flat_map(|group| group.rows.iter())
+            .find(|row| row.body.is_some())
+            .expect("a two-line row");
+        let metrics = metrics_of(&groups, &row.id, 98);
+        let lines = row_lines(row, 0, metrics, IconSet::Nerd, &theme(), None);
+        assert_eq!(lines.len(), 2, "the row is not counted as two lines");
+        assert!(
+            lines.iter().all(|line| line_text(line).is_empty()),
+            "{lines:?}"
         );
     }
 

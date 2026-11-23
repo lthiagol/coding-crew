@@ -505,6 +505,7 @@ fn foot(
                 label: group.value.to_uppercase(),
                 style: group_style(group, theme),
                 count: group.rows.len() - shown_here,
+                dropped: false,
             }
         })
         .collect();

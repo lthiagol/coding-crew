@@ -786,6 +786,7 @@ fn announcement(
             label: reason.label().to_string(),
             style: reason_style(theme, *reason),
             count: *count,
+            dropped: false,
         })
         .collect();
     announce::lines(&groups, width, room, theme)

@@ -646,30 +646,40 @@ mod tests {
 
     #[test]
     fn the_shared_text_helpers_have_one_implementation() {
-        // The helpers live in the theme crate. A private copy here is a
-        // second rule for cutting and padding, and the two drift.
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        // The helpers live in the theme crate. A private copy in raul or hugo
+        // is a second rule for measuring, cutting and padding, and the two
+        // drift. The names are joined at run time so this file does not match
+        // its own scan.
+        let crates = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("the crates folder");
         let names = [
-            format!("fn {}_to(", "cut"),
-            format!("fn {}(", "pad"),
-            format!("fn {}(", "first_grapheme"),
-        ];
+            "text_width",
+            "cut_to",
+            "tail_to",
+            "head_to",
+            "first_grapheme",
+            "pad",
+        ]
+        .map(|name| format!("fn {name}("));
         let mut copies: Vec<String> = Vec::new();
-        let mut pending = vec![root.to_path_buf()];
-        while let Some(dir) = pending.pop() {
-            for entry in fs::read_dir(&dir).expect("the raul tree") {
-                let path = entry.expect("a source file").path();
-                if path.is_dir() {
-                    pending.push(path);
-                    continue;
-                }
-                if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
-                    continue;
-                }
-                let text = fs::read_to_string(&path).expect("a raul source");
-                for name in &names {
-                    if text.contains(name) {
-                        copies.push(format!("{}: {name}", path.display()));
+        for krate in ["raul", "hugo"] {
+            let mut pending = vec![crates.join(krate)];
+            while let Some(dir) = pending.pop() {
+                for entry in fs::read_dir(&dir).expect("a crate's tree") {
+                    let path = entry.expect("a source file").path();
+                    if path.is_dir() {
+                        pending.push(path);
+                        continue;
+                    }
+                    if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
+                        continue;
+                    }
+                    let text = fs::read_to_string(&path).expect("a crate source");
+                    for name in &names {
+                        if text.contains(name.as_str()) {
+                            copies.push(format!("{}: {name}", path.display()));
+                        }
                     }
                 }
             }

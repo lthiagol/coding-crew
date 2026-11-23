@@ -537,6 +537,10 @@ fn lines(
 /// The task that happens next is never lost without a word: when the spine
 /// does not fit, the trunk is named in the announcement.
 ///
+/// FINISHED is the one exception: it is not announced. It is cut only from a
+/// window that has to reach the end of the tree, so it is off screen only
+/// while the window has not reached the end (`screens.md` § Path).
+///
 /// A pane too short for the announcement and the cursor's row draws the row
 /// alone: the selection is never on nothing. The returned flag says whether
 /// the pane painted the announcement itself; when it did not, the window's

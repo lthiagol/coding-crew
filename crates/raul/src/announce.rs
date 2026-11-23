@@ -19,6 +19,9 @@ pub struct Group {
     pub label: String,
     pub style: Style,
     pub count: usize,
+    /// The group's header was dropped for room. It is named as hidden, not as
+    /// `0 hidden`, even when it holds no rows: the group is not on screen.
+    pub dropped: bool,
 }
 
 /// How a piece of the announcement is painted.
@@ -231,6 +234,9 @@ fn paint(rows: Vec<Said>, theme: &Theme) -> Vec<Line<'static>> {
 /// replaced: when it cannot sit beside its count, it takes a row of its own
 /// and the count follows.
 fn entry(group: &Group, width: usize) -> Entry {
+    if group.dropped {
+        return dropped_entry(group, width);
+    }
     let name = group.label.as_str();
     let counted = group.count.to_string();
     let full = format!("{name} ({counted} hidden)");
@@ -278,6 +284,45 @@ fn entry(group: &Group, width: usize) -> Entry {
     Entry {
         rows: vec![name_row, count_row],
     }
+}
+
+/// The entry of a group whose header was dropped for room, always one row:
+/// `LABEL (hidden)`, then `LABEL hidden`, then the label cut to leave room for
+/// ` hidden`, and the word alone when even that does not fit.
+///
+/// It says the group is hidden rather than `0 hidden`.
+fn dropped_entry(group: &Group, width: usize) -> Entry {
+    if width == 0 {
+        return Entry { rows: Vec::new() };
+    }
+    let name = group.label.as_str();
+    let full = format!("{name} (hidden)");
+    let row = if full.chars().count() <= width {
+        Said {
+            spans: vec![
+                (name.to_string(), Paint::Name(group.style)),
+                (" (hidden)".to_string(), Paint::Dim),
+            ],
+        }
+    } else if format!("{name} hidden").chars().count() <= width {
+        Said {
+            spans: vec![
+                (name.to_string(), Paint::Name(group.style)),
+                (" hidden".to_string(), Paint::Dim),
+            ],
+        }
+    } else if " hidden".chars().count() < width {
+        let room = width - " hidden".chars().count();
+        Said {
+            spans: vec![
+                (cut_to(name, room), Paint::Name(group.style)),
+                (" hidden".to_string(), Paint::Dim),
+            ],
+        }
+    } else {
+        Said::new(cut_to("hidden", width), Paint::Dim)
+    };
+    Entry { rows: vec![row] }
 }
 
 /// The compact shape: every group and its count, packed over at most `room`
@@ -329,6 +374,10 @@ enum Suffix {
 /// and a count is never shown without it.
 fn token(group: &Group, width: usize) -> Said {
     let name = group.label.as_str();
+    if group.dropped {
+        // A dropped group has no count to show: its label names it.
+        return Said::new(cut_to(name, width), Paint::Name(group.style));
+    }
     let counted = group.count.to_string();
     let full = format!("{name} {counted}");
     if full.chars().count() <= width {
@@ -434,7 +483,34 @@ mod tests {
             label: label.to_string(),
             style: Style::default(),
             count,
+            dropped: false,
         }
+    }
+
+    #[test]
+    fn a_dropped_group_is_named_as_hidden_not_as_zero() {
+        // A dropped header holds no count on screen: it says the group is
+        // hidden, and says so even when it holds no rows.
+        let groups = [
+            Group {
+                dropped: true,
+                ..group("SMALL TASKS", 0)
+            },
+            group("DRAFTS", 0),
+        ];
+        let (rows, cut) = lines(&groups, 60, 3, &theme());
+        assert!(!cut);
+        let text = rows
+            .iter()
+            .map(|row| {
+                row.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<String>>()
+            .join(" ");
+        assert_eq!(text, "not shown: SMALL TASKS (hidden), DRAFTS (0 hidden)");
     }
 
     #[test]
