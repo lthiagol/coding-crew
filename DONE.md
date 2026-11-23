@@ -1787,6 +1787,17 @@ version. `scripts/test-pty-sweep.sh` drops GNU `timeout`, `sed -i`, padded
 cut; the README links it. Not verified here: CI on macOS, and that
 setup-python offers 3.15.2 on both runners. One round, clean. Commit `22c89fd`.
 
+### 2026-11-23 · talita T5, the skeleton
+
+The noun–verb parser, the result envelope, the error codes with their exit
+codes (pinned to `docs/talita/commands.md` by a test), identity resolution,
+`session new|show` (flag over env) and `project init|show|check`
+(`Store::duplicate_ids()`); the flat `create|list|show` are gone. Choices the
+builder made within the docs: `project init` requires an identity (ADR 0015,
+every write); a `--role builder` session is minted as `ses-runner-…`;
+`--expect-revision` waits for the first unit that writes tasks. One round,
+clean. Commit `2ec464f`.
+
 ---
 
 ## Lessons
