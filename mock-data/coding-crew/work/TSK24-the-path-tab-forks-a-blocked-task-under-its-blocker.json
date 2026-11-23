@@ -54,7 +54,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-07T17:30Z",
           "by": "runner-06",
-          "session": "session-runner-06"
+          "session": "session-runner-06",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -72,7 +73,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-07T17:35Z",
           "by": "runner-06",
-          "session": "session-runner-06"
+          "session": "session-runner-06",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -124,7 +126,8 @@
         "verdict": "ok",
         "at": "2026-11-07T17:45Z",
         "notes": "The pre-screen is clean; the work leaves for the external round.",
-        "findings": []
+        "findings": [],
+        "session": "session-runner-06"
       },
       {
         "n": 1,
@@ -136,7 +139,8 @@
         "notes": "The fork parent moved when a dependency was added.",
         "findings": [
           "FIND-01"
-        ]
+        ],
+        "session": "session-reviewer-07"
       },
       {
         "n": 2,
@@ -148,7 +152,8 @@
         "notes": "The fork parent moved when a dependency was added.",
         "findings": [
           "FIND-02"
-        ]
+        ],
+        "session": "session-reviewer-07"
       },
       {
         "n": 3,
@@ -160,7 +165,8 @@
         "notes": "The fork parent moved when a dependency was added.",
         "findings": [
           "FIND-03"
-        ]
+        ],
+        "session": "session-reviewer-07"
       },
       {
         "n": 4,
@@ -170,7 +176,8 @@
         "verdict": "ok",
         "at": "2026-11-07T18:45Z",
         "notes": "The fork is stable and the row names both dependencies.",
-        "findings": []
+        "findings": [],
+        "session": "session-reviewer-07"
       }
     ],
     "verdict": "ok",
@@ -205,6 +212,26 @@
         "resolution": "The fork parent is found from the first open dependency.",
         "comments": []
       }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-07T18:07Z",
+        "after_round": 1,
+        "by": "runner-06",
+        "session": "session-runner-06-remediation-1"
+      },
+      {
+        "at": "2026-11-07T18:22Z",
+        "after_round": 2,
+        "by": "runner-06",
+        "session": "session-runner-06-remediation-2"
+      },
+      {
+        "at": "2026-11-07T18:37Z",
+        "after_round": 3,
+        "by": "runner-06",
+        "session": "session-runner-06-remediation-3"
+      }
     ]
   },
   "questions": [],
@@ -225,5 +252,6 @@
   "depends_on": [
     "TSK22",
     "TSK23"
-  ]
+  ],
+  "revision": 21
 }

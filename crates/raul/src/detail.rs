@@ -1260,6 +1260,7 @@ mod tests {
                 at: "2026-11-14T09:00:00Z".to_string(),
                 by: "runner-1".to_string(),
                 session: None,
+                manual: false,
             }],
             ..coding_crew_core::AcceptanceCriterion::default()
         }];

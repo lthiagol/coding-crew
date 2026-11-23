@@ -10,7 +10,7 @@
   "kind": "task",
   "promoted_from": null,
   "status": "code-review",
-  "status_since": "2026-11-11T16:40Z",
+  "status_since": "2026-11-11T17:30Z",
   "overlays": {},
   "claim": {
     "by": "runner-02",
@@ -54,7 +54,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-11T14:00Z",
           "by": "runner-02",
-          "session": "session-runner-02"
+          "session": "session-runner-02",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -72,7 +73,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-11T14:05Z",
           "by": "runner-02",
-          "session": "session-runner-02"
+          "session": "session-runner-02",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -124,7 +126,8 @@
         "verdict": "ok",
         "at": "2026-11-11T16:00Z",
         "notes": "The pre-screen found nothing to fix before the external round.",
-        "findings": []
+        "findings": [],
+        "session": "session-runner-02"
       },
       {
         "n": 1,
@@ -138,7 +141,8 @@
           "FIND-01",
           "FIND-02",
           "FIND-03"
-        ]
+        ],
+        "session": "session-reviewer-02"
       }
     ],
     "verdict": null,
@@ -180,6 +184,14 @@
         "resolution": "The pin now builds its title from combining marks.",
         "comments": []
       }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-11T17:30Z",
+        "after_round": 1,
+        "by": "runner-02",
+        "session": "session-runner-02-remediation-1"
+      }
     ]
   },
   "questions": [],
@@ -194,5 +206,6 @@
   "depends_on": [
     "TSK23",
     "TSK24"
-  ]
+  ],
+  "revision": 15
 }

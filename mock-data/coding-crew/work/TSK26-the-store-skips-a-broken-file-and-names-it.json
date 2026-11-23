@@ -54,7 +54,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-08T10:00Z",
           "by": "runner-08",
-          "session": "session-runner-08"
+          "session": "session-runner-08",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -72,7 +73,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-08T10:05Z",
           "by": "runner-08",
-          "session": "session-runner-08"
+          "session": "session-runner-08",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -124,7 +126,8 @@
         "verdict": "ok",
         "at": "2026-11-08T11:00Z",
         "notes": "The pre-screen is clean; the work leaves for the external round.",
-        "findings": []
+        "findings": [],
+        "session": "session-runner-08"
       },
       {
         "n": 1,
@@ -134,7 +137,8 @@
         "verdict": "ok",
         "at": "2026-11-08T12:00Z",
         "notes": "The folder is never hidden and the error is named.",
-        "findings": []
+        "findings": [],
+        "session": "session-reviewer-09"
       }
     ],
     "verdict": "ok",
@@ -156,7 +160,8 @@
           }
         ]
       }
-    ]
+    ],
+    "re_reviews": []
   },
   "questions": [],
   "notes": [
@@ -177,5 +182,6 @@
     "TSK23",
     "TSK24",
     "TSK25"
-  ]
+  ],
+  "revision": 12
 }

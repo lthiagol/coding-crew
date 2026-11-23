@@ -72,7 +72,18 @@ fn status_transition_event(task: &Task) -> String {
         Status::Groomed => transition_note_at(task, "Groomed by"),
         Status::Approved => transition_note_at(task, "Approved by"),
         Status::Executing => task.claim.as_ref().expect("a claim").at.clone(),
-        Status::CodeReview | Status::Remediating | Status::NeedsHuman | Status::Done => task
+        Status::CodeReview => {
+            // A hand-back to review is the latest move into code-review, when
+            // it comes after the round it answers.
+            let round = &task.review.rounds.last().expect("a review round").at;
+            match task.review.re_reviews.last() {
+                Some(hand_back) if parse_rfc3339(&hand_back.at) > parse_rfc3339(round) => {
+                    hand_back.at.clone()
+                }
+                _ => round.clone(),
+            }
+        }
+        Status::Remediating | Status::NeedsHuman | Status::Done => task
             .review
             .rounds
             .last()
@@ -100,8 +111,17 @@ fn lifecycle_events(task: &Task) -> Vec<String> {
             events.push(evidence.at.clone());
         }
     }
+    // A hand-back follows the round whose findings it answers.
     for round in &task.review.rounds {
         events.push(round.at.clone());
+        for hand_back in task
+            .review
+            .re_reviews
+            .iter()
+            .filter(|h| h.after_round == round.n)
+        {
+            events.push(hand_back.at.clone());
+        }
     }
     events
 }
@@ -124,6 +144,39 @@ fn the_lifecycle_events_of_every_fixture_happen_in_order() {
             previous = Some(at);
         }
     }
+}
+
+#[test]
+fn tsk14_is_handed_back_after_its_findings_are_fixed() {
+    // TSK14's one external round raised three findings. The runner fixed
+    // them, and the task went back to review: the hand-back is stamped after
+    // the last fix and names the remediating session, which is not the
+    // session that executed the task.
+    let task = tasks()
+        .into_iter()
+        .find(|task| task.id == "TSK14")
+        .expect("TSK14");
+    let [hand_back] = task.review.re_reviews.as_slice() else {
+        panic!("TSK14 has one hand-back: {:?}", task.review.re_reviews);
+    };
+    assert_eq!(hand_back.after_round, 1);
+    assert_eq!(
+        hand_back.session.as_deref(),
+        Some("session-runner-02-remediation-1")
+    );
+    assert_ne!(
+        hand_back.session,
+        task.claim.as_ref().and_then(|claim| claim.session.clone())
+    );
+    let last_fix = task
+        .review
+        .findings
+        .iter()
+        .filter_map(|finding| parse_rfc3339(&finding.resolved))
+        .max()
+        .expect("TSK14's findings are fixed");
+    assert!(parse_rfc3339(&hand_back.at).expect("a stamp") > last_fix);
+    assert_eq!(task.status_since, hand_back.at);
 }
 
 #[test]

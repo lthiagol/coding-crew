@@ -100,7 +100,8 @@
     "max_rounds": 5,
     "rounds": [],
     "verdict": null,
-    "findings": []
+    "findings": [],
+    "re_reviews": []
   },
   "questions": [],
   "notes": [
@@ -119,5 +120,6 @@
   ],
   "depends_on": [
     "TSK23"
-  ]
+  ],
+  "revision": 5
 }

@@ -4,11 +4,13 @@
     {
       "role": "orchestrator",
       "model": "claude-opus-5-5",
+      "actor": "orchestrator-01",
       "state": "idle"
     },
     {
       "role": "builder",
       "model": "claude-haiku-5-5",
+      "actor": "runner-02",
       "holds": "TSK14",
       "since": "2026-11-11T09:00Z",
       "state": "idle"
@@ -16,8 +18,9 @@
     {
       "role": "reviewer",
       "model": "claude-opus-5-5",
+      "actor": "reviewer-02",
       "holds": "TSK14",
-      "since": "2026-11-11T16:40Z",
+      "since": "2026-11-11T17:30Z",
       "state": "reviewing"
     }
   ],

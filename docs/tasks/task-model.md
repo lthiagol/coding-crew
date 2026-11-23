@@ -70,6 +70,7 @@ A role may not write another role's section.
   "children": [],
   "created": "2026-11-13T10:00:00Z",
   "updated": "2026-11-13T12:30:00Z",
+  "revision": 4,
   "kind": "task",
   "promoted_from": null,
   "status": "groomed",
@@ -93,7 +94,8 @@ A role may not write another role's section.
     "max_rounds": 5,
     "rounds": [],
     "verdict": null,
-    "findings": []
+    "findings": [],
+    "re_reviews": []
   },
   "questions": [],
   "notes": [],
@@ -112,6 +114,7 @@ A role may not write another role's section.
 | `parent` | id or null | the task this one refines |
 | `children[]` | ids | the tasks this one spawned |
 | `created`, `updated` | timestamp | RFC 3339. `updated` moves on every write |
+| `revision` | `u32` | a write counter, moved on by every write. A caller that read revision `n` and writes with `--expect-revision n` is refused when the file has moved on ([ADR 0016](../decisions/0016-concurrency.md)). `0` on a file written before the field existed |
 | `kind` | `task` \| `bug` \| `feature` | `bug`/`feature` is a **small task**: the step rules do not apply to it. See [smaller-tasks.md](smaller-tasks.md) |
 | `promoted_from` | id or null | the smaller task this task became |
 | `status` | enum | one canonical status. Never a combined string |
@@ -332,13 +335,33 @@ different lenses instead of repeating the same check.
 | `n` | the round number |
 | `kind` | `self` \| `external` |
 | `focus` | `spec-compliance` \| `edge-cases` \| `security` \| `empirical` \| `design` |
-| `reviewer` | who reviewed |
+| `reviewer` | who reviewed: the actor id |
+| `session` | the session that filed the round, or null on a file written before the field existed ([ADR 0017](../decisions/0017-review-record.md)) |
 | `verdict` | `ok` \| `changes-needed` |
 | `at` | timestamp |
 | `notes` | free text |
 | `findings[]` | the finding ids opened in this round |
 
 `review.verdict` is the **latest** round's verdict. It is what the gates read.
+
+### 4.4 Hand-backs
+
+`review.re_reviews[]` is the dated record of each return to review. `task
+re-review` appends one entry in the same write as the move, so a `code-review`
+task after an external round shows whether it was remediated, and when.
+
+```json
+{ "at": "2026-11-11T17:30Z", "after_round": 1, "by": "runner-02", "session": "session-runner-02-remediation-1" }
+```
+
+| field | rule |
+|---|---|
+| `at` | when the task went back to `code-review` |
+| `after_round` | the external round whose findings were worked |
+| `by`, `session` | the remediating actor and session. The session is the one `remediation.session_distinct` checks: it differs from `claim.session` |
+
+Append-only: one entry per hand-back, oldest first. Each entry's `at` is the
+latest move into `code-review`.
 
 ### 4.2 Findings
 
@@ -374,17 +397,17 @@ Evidence is attached to a criterion and is the only thing that proves it.
 
 ```json
 { "command": "cargo test --workspace", "exit_code": 0, "summary": "10 passed; 0 failed",
-  "at": "2026-11-10T12:00Z", "by": "runner-01", "session": "session-runner-01" }
+  "at": "2026-11-10T12:00Z", "by": "runner-01", "session": "session-runner-01", "manual": false }
 ```
 
 | rule | detail |
 |---|---|
-| **Attached, never prose** | `{command, exit_code, summary, at, by, session}` |
+| **Attached, never prose** | `{command, exit_code, summary, at, by, session, manual}` |
 | **Append-only** | Re-running appends. It never overwrites |
 | **Exit code is the truth** | `exit 0` with a non-empty summary is a pass; any other exit code is a failure; no exit code at all is `unproven` |
 | **Status is derived** | A criterion's status is the outcome of its **latest** evidence: `passed` \| `failed` \| `unproven`. No evidence ⇒ the stored `status` stands (`pending`) |
 | **A failure needs a reason** | `failure_reason` is required when a criterion is `failed`; `criteria.proven` refuses a failure without one |
-| **A manual override is evidence** | An agent may override a derived status, and the override is recorded as an evidence entry. A bypass is **explicit debt**, never a silent one |
+| **A manual override is evidence** | An agent may override a derived status, and the override is recorded as an evidence entry with `manual: true`. A bypass is **explicit debt**, never a silent one |
 | **Evidence is per criterion** | The command proves one thing; it does not prove the next criterion |
 
 `exit 0` with an **empty** summary is a failure, not a pass: a command that ran
@@ -535,22 +558,33 @@ The file is one object with an `events` array, oldest first.
 | `at` | when it happened, RFC 3339 |
 | `kind` | one of the kinds below |
 | `task` | the task id it happened to — `TSK01` |
-| `by` | who did it: the actor's role or kind — `runner`, `reviewer`, `human`, `orchestrator` |
+| `by` | who did it: the actor's role or kind — `creator`, `runner`, `reviewer`, `human`, `orchestrator` |
 | `note` | optional, one line of free text |
 
-The kinds are **provisional**: nothing writes the journal yet, and the writer
-settles them.
+The kinds are settled by [ADR 0018](../decisions/0018-runtime-and-journal-writers.md).
+Nothing writes the journal yet; talita will, as a side effect of each verb.
 
 | kind | what happened |
 |---|---|
 | `created` | a task was created |
+| `groomed` | a creator wrote the task's intent, scope and criteria |
 | `approved` | a task left the human lane and became claimable |
 | `claimed` | an agent took a task |
+| `released` | a claim was released, or the task cancelled while claimed |
+| `started` | the runner began executing the claimed task |
+| `round_filed` | a review round was filed, self or external |
 | `review_requested` | a runner sent the work to review |
 | `finding_raised` | a reviewer raised a finding |
+| `finding_resolved` | a runner fixed or dismissed a finding |
+| `changes_requested` | a reviewer sent the work back with `changes-needed` |
 | `remediated` | a runner answered a finding and sent the work back |
 | `escalated` | the work needs a human again |
 | `completed` | the task is done |
+| `resumed` | a `needs-human` task went back to work, instructed by a human |
+| `reopened` | a `done` task went back to work |
+| `blocked` · `unblocked` | the blocked overlay was set or cleared |
+| `deferred` · `undeferred` | the deferred overlay was set or cleared |
+| `cancelled` | the cancelled overlay was set |
 | `commented` | someone left a note on the task |
 
 Each event names a task and covers a step the lifecycle already has; the kinds
@@ -595,6 +629,7 @@ A crew entry:
 |---|---|
 | `role` | `orchestrator`, `builder` or `reviewer`; `runner` reads as `builder` |
 | `model` | the model the agent runs |
+| `actor` | the actor id it acts as in task files, when known. A task verb finds the caller's row by it. hugo does not read it |
 | `holds` | the task it holds, or none |
 | `since` | when it took it, RFC 3339 |
 | `state` | `idle`, `executing`, `reviewing` or `blocked`. A blocked agent holds its task and cannot go on; it is not working |
@@ -865,3 +900,4 @@ work is in `TODO.md`.
 | the rename cleanup | `Store::save` removes the file the task had under an older name |
 | the work folder path | the store reads `coding-crew/work/`, as [ADR 0002](../../decisions/0002-work-folder.md) decides; [ADR 0010](../../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-crew/` folder |
 | smaller tasks (`ITM*`) | `crates/core/src/item.rs` — shaping, dismissal, promotion; `Store::promote_item` writes the item first |
+| the schema additions: `revision`, `review.re_reviews[]`, `Round.session`, `Evidence.manual`, crew `actor`, the journal kinds | `crates/core/src/task.rs`, `runtime.rs`, `activity.rs`. Optional on read; the fixtures carry them; no verb writes them yet |

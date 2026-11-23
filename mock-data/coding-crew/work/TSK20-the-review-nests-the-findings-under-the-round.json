@@ -54,7 +54,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-15T03:00Z",
           "by": "runner-04",
-          "session": "session-runner-04"
+          "session": "session-runner-04",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -72,7 +73,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-15T03:10Z",
           "by": "runner-04",
-          "session": "session-runner-04"
+          "session": "session-runner-04",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -124,7 +126,8 @@
         "verdict": "ok",
         "at": "2026-11-15T05:00Z",
         "notes": "The pre-screen is clean; the work is ready for an external round.",
-        "findings": []
+        "findings": [],
+        "session": "session-runner-04"
       },
       {
         "n": 1,
@@ -136,7 +139,8 @@
         "notes": "The round found the next defect and the budget moved one round closer to spent.",
         "findings": [
           "FIND-01"
-        ]
+        ],
+        "session": "session-reviewer-01"
       },
       {
         "n": 2,
@@ -148,7 +152,8 @@
         "notes": "The round found the next defect and the budget moved one round closer to spent.",
         "findings": [
           "FIND-02"
-        ]
+        ],
+        "session": "session-reviewer-02"
       },
       {
         "n": 3,
@@ -160,7 +165,8 @@
         "notes": "The round found the next defect and the budget moved one round closer to spent.",
         "findings": [
           "FIND-03"
-        ]
+        ],
+        "session": "session-reviewer-03"
       },
       {
         "n": 4,
@@ -172,7 +178,8 @@
         "notes": "The round found the next defect and the budget moved one round closer to spent.",
         "findings": [
           "FIND-04"
-        ]
+        ],
+        "session": "session-reviewer-04"
       },
       {
         "n": 5,
@@ -184,7 +191,8 @@
         "notes": "The round found the next defect and the budget moved one round closer to spent.",
         "findings": [
           "FIND-05"
-        ]
+        ],
+        "session": "session-reviewer-05"
       }
     ],
     "verdict": "changes-needed",
@@ -239,6 +247,32 @@
         "resolution": "",
         "comments": []
       }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-15T06:30Z",
+        "after_round": 1,
+        "by": "runner-04",
+        "session": "session-runner-04-remediation-1"
+      },
+      {
+        "at": "2026-11-15T07:30Z",
+        "after_round": 2,
+        "by": "runner-04",
+        "session": "session-runner-04-remediation-2"
+      },
+      {
+        "at": "2026-11-15T08:30Z",
+        "after_round": 3,
+        "by": "runner-04",
+        "session": "session-runner-04-remediation-3"
+      },
+      {
+        "at": "2026-11-15T09:30Z",
+        "after_round": 4,
+        "by": "runner-04",
+        "session": "session-runner-04-remediation-4"
+      }
     ]
   },
   "questions": [
@@ -264,5 +298,6 @@
   "depends_on": [
     "TSK23",
     "TSK25"
-  ]
+  ],
+  "revision": 26
 }

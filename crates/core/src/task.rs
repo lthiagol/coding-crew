@@ -29,6 +29,10 @@ pub struct Task {
     pub created: String,
     #[serde(default)]
     pub updated: String,
+    /// A counter the writer increments on every write. Optimistic checks
+    /// compare against it (ADR 0016).
+    #[serde(default)]
+    pub revision: u32,
     #[serde(default)]
     pub status: Status,
     /// When the task entered the status it is in.
@@ -82,6 +86,7 @@ impl Task {
             promoted_from: None,
             created: now.clone(),
             updated: now.clone(),
+            revision: 0,
             status_since: now,
             status: Status::Draft,
             overlays: Overlays::default(),
@@ -386,6 +391,10 @@ pub struct Evidence {
     pub by: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<String>,
+    /// Written by `evidence override`: the outcome is a judgement, not a
+    /// command's exit code. raul marks it.
+    #[serde(default)]
+    pub manual: bool,
 }
 
 impl Evidence {
@@ -448,6 +457,9 @@ pub struct Review {
     pub verdict: Option<Verdict>,
     #[serde(default)]
     pub findings: Vec<Finding>,
+    /// Each hand-back to review, oldest first. Append-only.
+    #[serde(default)]
+    pub re_reviews: Vec<ReReview>,
 }
 
 fn default_max_rounds() -> u32 {
@@ -461,8 +473,25 @@ impl Default for Review {
             rounds: Vec::new(),
             verdict: None,
             findings: Vec::new(),
+            re_reviews: Vec::new(),
         }
     }
+}
+
+/// A dated record of one hand-back: the task went back to `code-review` after
+/// its runner answered the findings of an external round.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReReview {
+    /// When the task went back to `code-review`, RFC 3339.
+    pub at: String,
+    /// The external round whose findings were worked.
+    pub after_round: u32,
+    /// The remediating actor.
+    pub by: String,
+    /// The remediating session. The `remediation.session_distinct` gate checks
+    /// it is not the execution session (`claim.session`).
+    #[serde(default)]
+    pub session: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -472,6 +501,9 @@ pub struct Round {
     pub focus: Focus,
     #[serde(default)]
     pub reviewer: String,
+    /// The session that filed the round. `reviewer` stays the actor id.
+    #[serde(default)]
+    pub session: Option<String>,
     pub verdict: Verdict,
     #[serde(default)]
     pub at: String,
@@ -649,5 +681,26 @@ mod tests {
     fn a_malformed_now_leaves_the_lease_live() {
         assert!(!claim("2026-11-07T13:00:00Z").lease_expired("not a stamp"));
         assert!(!claim("2026-11-07T13:00:00Z").lease_expired(""));
+    }
+
+    #[test]
+    fn a_task_written_before_the_new_fields_reads_with_defaults() {
+        let text = r#"{
+          "id": "TSK01",
+          "title": "an older task",
+          "review": {
+            "rounds": [{"n": 1, "kind": "external", "focus": "security", "verdict": "ok"}],
+            "findings": []
+          },
+          "acceptance_criteria": [{
+            "id": "ACCEPT-01",
+            "evidence": [{"command": "cargo test", "exit_code": 0, "summary": "3 passed"}]
+          }]
+        }"#;
+        let task: Task = serde_json::from_str(text).expect("an older task");
+        assert_eq!(task.revision, 0);
+        assert!(task.review.re_reviews.is_empty());
+        assert_eq!(task.review.rounds[0].session, None);
+        assert!(!task.acceptance_criteria[0].evidence[0].manual);
     }
 }

@@ -54,7 +54,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-07T20:40Z",
           "by": "runner-07",
-          "session": "session-runner-07"
+          "session": "session-runner-07",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -72,7 +73,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-07T20:45Z",
           "by": "runner-07",
-          "session": "session-runner-07"
+          "session": "session-runner-07",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -124,7 +126,8 @@
         "verdict": "ok",
         "at": "2026-11-07T20:50Z",
         "notes": "The pre-screen is clean; the work leaves for the external round.",
-        "findings": []
+        "findings": [],
+        "session": "session-runner-07"
       },
       {
         "n": 1,
@@ -134,11 +137,13 @@
         "verdict": "ok",
         "at": "2026-11-07T21:00Z",
         "notes": "The work is reviewed clean and the criteria are proven.",
-        "findings": []
+        "findings": [],
+        "session": "session-reviewer-08"
       }
     ],
     "verdict": "ok",
-    "findings": []
+    "findings": [],
+    "re_reviews": []
   },
   "questions": [
     {
@@ -168,5 +173,6 @@
   ],
   "depends_on": [
     "TSK24"
-  ]
+  ],
+  "revision": 11
 }

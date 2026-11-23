@@ -49,6 +49,7 @@ fn minimal(id: &str) -> Task {
         questions: Vec::new(),
         notes: Vec::new(),
         depends_on: Vec::new(),
+        revision: 0,
     }
 }
 
@@ -60,6 +61,7 @@ fn evidence(command: &str, exit_code: Option<i32>, summary: &str, at: &str) -> E
         at: at.to_string(),
         by: "runner-1".to_string(),
         session: Some("s-runner".to_string()),
+        manual: false,
     }
 }
 
@@ -209,6 +211,7 @@ fn fixture() -> Task {
                     at: "2026-11-16T16:30:00Z".to_string(),
                     notes: "Read the diff against the criteria.".to_string(),
                     findings: Vec::new(),
+                    session: None,
                 },
                 Round {
                     n: 2,
@@ -219,6 +222,7 @@ fn fixture() -> Task {
                     at: "2026-11-16T17:00:00Z".to_string(),
                     notes: "The empty lane is counted before the filter.".to_string(),
                     findings: vec!["FIND-01".to_string()],
+                    session: None,
                 },
             ],
             verdict: Some(Verdict::ChangesNeeded),
@@ -249,6 +253,7 @@ fn fixture() -> Task {
                     comments: Vec::new(),
                 },
             ],
+            re_reviews: Vec::new(),
         },
         questions: vec![
             Question {
@@ -280,6 +285,7 @@ fn fixture() -> Task {
             at: "2026-11-16T12:30:00Z".to_string(),
         }],
         depends_on: vec!["TSK01".to_string()],
+        revision: 0,
     }
 }
 
@@ -1049,6 +1055,7 @@ fn round(n: u32, kind: RoundKind, findings: &[&str]) -> Round {
         at: format!("2026-11-14T1{n}:00:00Z"),
         notes: format!("The notes of round {n}."),
         findings: findings.iter().map(|id| id.to_string()).collect(),
+        session: None,
     }
 }
 
@@ -1063,6 +1070,7 @@ fn the_review_nests_a_finding_under_the_round_that_raised_it() {
         ],
         verdict: Some(Verdict::ChangesNeeded),
         findings: vec![finding("FIND-01", Severity::High)],
+        re_reviews: Vec::new(),
     };
 
     let document = task_to_markdown(&task, &[]);
@@ -1576,6 +1584,7 @@ fn backslashes_before_pipes_never_split_a_table_row() {
                     at: "2026-11-14T09:00:00Z".to_string(),
                     by: "runner-1".to_string(),
                     session: None,
+                    manual: false,
                 }],
                 ..AcceptanceCriterion::default()
             },
@@ -1595,6 +1604,7 @@ fn backslashes_before_pipes_never_split_a_table_row() {
                 at: "2026-11-16T12:00:00Z".to_string(),
                 notes: format!("notes {value}"),
                 findings: vec![value.clone()],
+                session: None,
             }],
             ..Review::default()
         };
@@ -1647,6 +1657,7 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
             at: ATTACK.to_string(),
             by: ATTACK.to_string(),
             session: Some(ATTACK.to_string()),
+            manual: false,
         }],
         deferral: Some(Deferral {
             reason: "**bold** deferral".to_string(),
@@ -1676,6 +1687,7 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
             at: ATTACK.to_string(),
             notes: "**bold** notes".to_string(),
             findings: vec![ATTACK.to_string()],
+            session: None,
         }],
         verdict: Some(Verdict::ChangesNeeded),
         findings: vec![Finding {
@@ -1693,6 +1705,7 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
                 at: ATTACK.to_string(),
             }],
         }],
+        re_reviews: Vec::new(),
     };
     task.questions = vec![Question {
         id: ATTACK.to_string(),

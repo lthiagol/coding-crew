@@ -54,7 +54,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-11T12:00Z",
           "by": "runner-03",
-          "session": "session-runner-03"
+          "session": "session-runner-03",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -111,7 +112,8 @@
     "max_rounds": 5,
     "rounds": [],
     "verdict": null,
-    "findings": []
+    "findings": [],
+    "re_reviews": []
   },
   "questions": [],
   "notes": [
@@ -124,5 +126,6 @@
   ],
   "depends_on": [
     "TSK24"
-  ]
+  ],
+  "revision": 5
 }

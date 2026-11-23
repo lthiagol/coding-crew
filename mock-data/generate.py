@@ -1123,6 +1123,12 @@ def transition_note(index, author, body, at, note_id="NOTE-01"):
 def transition_moment(item):
     """The moment the fixture entered the status it is in."""
     status = item["status"]
+    if status == "code-review" and item["review"]["re_reviews"]:
+        # A hand-back to review is the latest move into code-review.
+        return max(
+            item["review"]["rounds"][-1]["at"],
+            item["review"]["re_reviews"][-1]["at"],
+        )
     if status == "draft":
         return item["created"]
     if status in ("groomed", "approved"):
@@ -1158,6 +1164,8 @@ def event_stamps(item):
             stamps.append(comment["at"])
     for round in review.get("rounds", []):
         stamps.append(round["at"])
+    for entry in review.get("re_reviews", []):
+        stamps.append(entry["at"])
     for question in item.get("questions", []):
         stamps.append(question["raised_at"])
         if question["resolved_at"]:
@@ -1242,12 +1250,52 @@ def planned(task_id, index, status, **overrides):
     return item
 
 
+def re_reviews(item):
+    """The hand-backs to review: one for each external round the runner answered.
+
+    A hand-back sits between the two external rounds it answers. TSK14 is
+    the task in flight: its one external round raised findings, the runner
+    fixed them by 17:25, and the task went back to review after that.
+    """
+    external = [r for r in item["review"]["rounds"] if r["kind"] == "external"]
+    moments = [
+        (first["n"], between(first["at"], second["at"]))
+        for first, second in zip(external, external[1:])
+    ]
+    if item["id"] == IN_FLIGHT:
+        moments.append((external[-1]["n"], ts(11, 17, 30)))
+    entries = []
+    for after_round, at in moments:
+        claim = item["claim"]
+        assert claim, item["id"]
+        # Remediation runs in a session other than the one that executed the
+        # task: `remediation.session_distinct` refuses the same session.
+        entries.append(
+            {
+                "at": at,
+                "after_round": after_round,
+                "by": claim["by"],
+                "session": f"session-{claim['by']}-remediation-{after_round}",
+            }
+        )
+    return entries
+
+
 def finalize(item):
     """Stamp the status from the history and move the last write with it."""
+    for round_ in item["review"]["rounds"]:
+        # A round is filed by the session its reviewer acts in.
+        round_["session"] = f"session-{round_['reviewer']}"
+    for criterion_ in item["acceptance_criteria"]:
+        for evidence in criterion_["evidence"]:
+            evidence["manual"] = False
+    item["review"]["re_reviews"] = re_reviews(item)
     item["status_since"] = transition_moment(item)
     # The last write is the latest event in the fixture's history.
     item["updated"] = max(event_stamps(item))
     assert item["created"] <= item["status_since"] <= item["updated"], item["id"]
+    # The revision counts the writes the history records: one per dated event.
+    item["revision"] = len(event_stamps(item))
     return item
 
 
@@ -1279,12 +1327,19 @@ def check_claims_follow_dependencies(tasks):
 # they share an instant. The kinds are provisional: the writer settles them.
 EVENT_KINDS = [
     "created",
+    "groomed",
     "approved",
     "claimed",
+    "round_filed",
     "review_requested",
     "finding_raised",
+    "finding_resolved",
+    "changes_requested",
     "remediated",
     "commented",
+    "blocked",
+    "deferred",
+    "cancelled",
     "escalated",
     "completed",
 ]
@@ -1329,6 +1384,14 @@ def approval_at(item):
     return None
 
 
+def role_word(actor):
+    """The journal's `by` for an actor id: its role word, or human."""
+    for role in ("creator", "runner", "reviewer", "orchestrator"):
+        if actor.startswith(role):
+            return role
+    return "human"
+
+
 def activity_events(tasks):
     """The journal of the tasks' own histories, oldest first."""
     events = []
@@ -1350,6 +1413,25 @@ def activity_events(tasks):
             events.append(
                 event(rounds[0]["at"], "review_requested", task_id, "runner", "sent to review")
             )
+        for candidate in item.get("notes", []):
+            if candidate["body"].startswith("Groomed by"):
+                events.append(event(candidate["at"], "groomed", task_id, "creator"))
+        for position, round_ in enumerate(rounds):
+            if round_["kind"] == "self":
+                by = "runner"
+                note = f"self, {round_['focus']}, {round_['verdict']}"
+            else:
+                by = "reviewer"
+                note = f"external {round_['n']}, {round_['focus']}, {round_['verdict']}"
+            events.append(event(round_["at"], "round_filed", task_id, by, note))
+            # The last round of a task that needs a human was escalated, not
+            # sent back.
+            escalated_here = item["status"] == "needs-human" and position == len(rounds) - 1
+            if round_["kind"] == "external" and round_["verdict"] == "changes-needed":
+                if not escalated_here:
+                    events.append(
+                        event(round_["at"], "changes_requested", task_id, "reviewer")
+                    )
         for finding in item.get("review", {}).get("findings", []):
             events.append(
                 event(
@@ -1360,19 +1442,34 @@ def activity_events(tasks):
                     f"raised {finding['id']}",
                 )
             )
-        # A re-review is the runner answering a finding and sending the work
-        # back: it sits between two external rounds.
-        external = [round for round in rounds if round["kind"] == "external"]
-        for first, second in zip(external, external[1:]):
+            if finding["resolved"]:
+                events.append(
+                    event(
+                        finding["resolved"],
+                        "finding_resolved",
+                        task_id,
+                        "runner",
+                        f"{finding['status']} {finding['id']}",
+                    )
+                )
+        # A hand-back to review is the runner answering the findings and
+        # sending the work back.
+        for entry in item.get("review", {}).get("re_reviews", []):
             events.append(
                 event(
-                    between(first["at"], second["at"]),
+                    entry["at"],
                     "remediated",
                     task_id,
                     "runner",
                     "answered the findings",
                 )
             )
+        for kind in ("blocked", "deferred", "cancelled"):
+            overlay = item.get("overlays", {}).get(kind)
+            if overlay:
+                events.append(
+                    event(overlay["at"], kind, task_id, role_word(overlay["by"]), overlay["reason"])
+                )
         if item["status"] == "needs-human":
             events.append(
                 event(
@@ -1431,6 +1528,11 @@ def check_activity(tasks, events):
             assert "completed" in kinds, task_id
         if item["status"] == "needs-human":
             assert "escalated" in kinds, task_id
+        assert kinds.count("round_filed") == len(item["review"]["rounds"]), task_id
+        remediated = [r["at"] for r in task_events if r["kind"] == "remediated"]
+        assert remediated == [e["at"] for e in item["review"]["re_reviews"]], task_id
+        for entry in item["review"]["re_reviews"]:
+            assert entry["session"] != item["claim"]["session"], (task_id, entry)
     # The dependency rule holds in time as it does in the fixtures: a claim
     # comes after the completion of every done task it waits on.
     for record in events:
@@ -1514,11 +1616,13 @@ def runtime_record(tasks):
             {
                 "role": "orchestrator",
                 "model": ORCHESTRATOR_MODEL,
+                "actor": "orchestrator-01",
                 "state": "idle",
             },
             {
                 "role": "builder",
                 "model": RUNNER_MODEL,
+                "actor": flight["claim"]["by"],
                 "holds": IN_FLIGHT,
                 "since": flight["claim"]["at"],
                 "state": "idle",
@@ -1526,6 +1630,7 @@ def runtime_record(tasks):
             {
                 "role": "reviewer",
                 "model": REVIEWER_MODEL,
+                "actor": flight["review"]["rounds"][-1]["reviewer"],
                 "holds": IN_FLIGHT,
                 "since": flight["status_since"],
                 "state": "reviewing",
@@ -1594,9 +1699,8 @@ def check_runtime(record, tasks):
 
     # The round is the task in flight's: the next external round, after the
     # rounds it has had. The budget counts those rounds of its own limit.
-    # TSK14 reaches round 2 through a re_review the fixture cannot stamp: the
-    # model has no re-review record yet (talita's design adds one). So its
-    # open high and the fix times are the runtime's story, not the fixture's.
+    # TSK14 reaches round 2 through its re_review, stamped in
+    # review.re_reviews; the task's status_since is that hand-back.
     round_ = record["round"]
     assert round_["task"] == IN_FLIGHT, round_
     assert by_id[IN_FLIGHT]["status"] == "code-review", IN_FLIGHT
@@ -1630,6 +1734,9 @@ def check_runtime(record, tasks):
     assert sorted(roles) == ["builder", "orchestrator", "reviewer"], roles
     builder = next(m for m in record["crew"] if m["role"] == "builder")
     assert builder["since"] == by_id[IN_FLIGHT]["claim"]["at"], builder
+    # Each row names the actor it acts as: the claim holder, the reviewer.
+    assert builder["actor"] == by_id[IN_FLIGHT]["claim"]["by"], builder
+    assert reviewer["actor"] == by_id[IN_FLIGHT]["review"]["rounds"][-1]["reviewer"], reviewer
 
     # The run began before the first hold.
     started = stamp(record["started_at"])

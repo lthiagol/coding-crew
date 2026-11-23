@@ -93,6 +93,10 @@ pub struct CrewMember {
     pub role: FlowRole,
     /// The model it runs, as its configuration names it.
     pub model: String,
+    /// The actor id it acts as in task files, so a task verb finds the row.
+    /// hugo does not read it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
     /// The task it holds, when it holds one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub holds: Option<String>,
@@ -275,6 +279,7 @@ mod tests {
         CrewMember {
             role,
             model: "opencode-go/model#high".to_string(),
+            actor: None,
             holds: holds.map(str::to_string),
             since: holds.map(|_| "2026-11-16T12:00Z".to_string()),
             state,

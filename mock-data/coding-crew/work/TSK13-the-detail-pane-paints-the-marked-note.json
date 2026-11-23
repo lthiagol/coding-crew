@@ -54,7 +54,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-10T14:00Z",
           "by": "runner-01",
-          "session": "session-runner-01"
+          "session": "session-runner-01",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -72,7 +73,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-10T14:05Z",
           "by": "runner-01",
-          "session": "session-runner-01"
+          "session": "session-runner-01",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -127,7 +129,8 @@
         "findings": [
           "FIND-01",
           "FIND-02"
-        ]
+        ],
+        "session": "session-runner-01"
       }
     ],
     "verdict": null,
@@ -159,7 +162,8 @@
           }
         ]
       }
-    ]
+    ],
+    "re_reviews": []
   },
   "questions": [],
   "notes": [
@@ -173,5 +177,6 @@
   "depends_on": [
     "TSK22",
     "TSK23"
-  ]
+  ],
+  "revision": 11
 }

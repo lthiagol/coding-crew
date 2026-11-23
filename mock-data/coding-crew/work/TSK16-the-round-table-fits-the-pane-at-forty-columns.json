@@ -54,7 +54,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-13T13:00Z",
           "by": "runner-02",
-          "session": "session-runner-02"
+          "session": "session-runner-02",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -72,7 +73,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-13T13:05Z",
           "by": "runner-02",
-          "session": "session-runner-02"
+          "session": "session-runner-02",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -124,7 +126,8 @@
         "verdict": "ok",
         "at": "2026-11-13T15:00Z",
         "notes": "The pre-screen found nothing to fix before the external round.",
-        "findings": []
+        "findings": [],
+        "session": "session-runner-02"
       },
       {
         "n": 1,
@@ -137,7 +140,8 @@
         "findings": [
           "FIND-01",
           "FIND-02"
-        ]
+        ],
+        "session": "session-reviewer-01"
       }
     ],
     "verdict": "changes-needed",
@@ -169,11 +173,13 @@
         "resolution": "",
         "comments": []
       }
-    ]
+    ],
+    "re_reviews": []
   },
   "questions": [],
   "notes": [],
   "depends_on": [
     "TSK23"
-  ]
+  ],
+  "revision": 11
 }

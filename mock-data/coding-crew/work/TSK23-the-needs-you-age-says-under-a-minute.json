@@ -54,7 +54,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-06T17:00Z",
           "by": "runner-05",
-          "session": "session-runner-05"
+          "session": "session-runner-05",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -72,7 +73,8 @@
           "summary": "12 passed; 0 failed",
           "at": "2026-11-06T17:05Z",
           "by": "runner-05",
-          "session": "session-runner-05"
+          "session": "session-runner-05",
+          "manual": false
         }
       ],
       "deferral": null,
@@ -124,7 +126,8 @@
         "verdict": "ok",
         "at": "2026-11-06T18:00Z",
         "notes": "The pre-screen is clean; the work leaves for the external round.",
-        "findings": []
+        "findings": [],
+        "session": "session-runner-05"
       },
       {
         "n": 1,
@@ -136,7 +139,8 @@
         "notes": "The under-a-minute case was not exercised.",
         "findings": [
           "FIND-01"
-        ]
+        ],
+        "session": "session-reviewer-06"
       },
       {
         "n": 2,
@@ -146,7 +150,8 @@
         "verdict": "ok",
         "at": "2026-11-06T20:00Z",
         "notes": "The words and the row agree.",
-        "findings": []
+        "findings": [],
+        "session": "session-reviewer-06"
       }
     ],
     "verdict": "ok",
@@ -168,6 +173,14 @@
           }
         ]
       }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-06T19:30Z",
+        "after_round": 1,
+        "by": "runner-05",
+        "session": "session-runner-05-remediation-1"
+      }
     ]
   },
   "questions": [],
@@ -187,5 +200,6 @@
   ],
   "depends_on": [
     "TSK22"
-  ]
+  ],
+  "revision": 14
 }

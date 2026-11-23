@@ -665,6 +665,7 @@ mod tests {
         let member = |state| CrewMember {
             role: FlowRole::Builder,
             model: "m".to_string(),
+            actor: None,
             holds: None,
             since: None,
             state,

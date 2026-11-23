@@ -67,7 +67,8 @@
     "max_rounds": 5,
     "rounds": [],
     "verdict": null,
-    "findings": []
+    "findings": [],
+    "re_reviews": []
   },
   "questions": [],
   "notes": [
@@ -84,5 +85,6 @@
       "at": "2026-11-08T14:00Z"
     }
   ],
-  "depends_on": []
+  "depends_on": [],
+  "revision": 5
 }

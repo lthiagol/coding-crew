@@ -35,6 +35,6 @@
 │ 󰐕 feature     2                      │
 │ 󰃤 bug         2                      │
 ╰──────────────────────────────────────╯
-activity not shown: 160 events
+activity not shown: 250 events
 ────────────────────────────────────────
              ? help · q quit

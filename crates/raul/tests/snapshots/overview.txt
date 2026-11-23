@@ -12,9 +12,9 @@
 │ 󰀦 needs-human 3 ███████████████░░░░░░░░░░░░░░░ │ │ approved, free, dependencies done             │
 │ 󰄬 done        5 █████████████████████████░░░░░ │ ╰───────────────────────────────────────────────╯
 ╰────────────────────────────────────────────────╯ ╭─ 󰥔 activity ──────────────────────────────────╮
-╭─ 󰚇 smaller tasks ──────────────────────────────╮ │ +155 earlier events                           │
+╭─ 󰚇 smaller tasks ──────────────────────────────╮ │ +245 earlier events                           │
 │ smaller tasks by kind                          │ │ ── 2026-11-16 ──                              │
-│ 󰌵 idea        1                                │ │ 09:30 󰖷 TSK21 remediated answered the findin… │
+│ 󰌵 idea        1                                │ │ 10:00 󰈈 TSK21 round_filed external 5, spec-c… │
 │ 󰐕 feature     2                                │ │ 10:00 󰅚 TSK21 finding_raised raised FIND-05   │
 │ 󰃤 bug         2                                │ │ 10:00 󰀦 TSK21 escalated the review budget is… │
 ╰────────────────────────────────────────────────╯ │ 12:00 󰄲 TSK29 approved left the human lane    │

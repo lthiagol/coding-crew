@@ -1096,13 +1096,26 @@ fn day_and_time(at: &str) -> (&str, &str) {
 fn event_icon(kind: EventKind) -> Icon {
     match kind {
         EventKind::Created => Icon::StatusDraft,
+        EventKind::Groomed => Icon::StatusGroomed,
         EventKind::Approved => Icon::StatusApproved,
         EventKind::Claimed => Icon::RoleRunner,
+        EventKind::Released => Icon::StatusApproved,
+        EventKind::Started => Icon::StatusExecuting,
+        EventKind::RoundFiled => Icon::StatusReview,
         EventKind::ReviewRequested => Icon::StatusReview,
         EventKind::FindingRaised => Icon::Finding,
+        EventKind::FindingResolved => Icon::Finding,
+        EventKind::ChangesRequested => Icon::RoleReviewer,
         EventKind::Remediated => Icon::StatusRemediating,
         EventKind::Escalated => Icon::StatusNeedsHuman,
         EventKind::Completed => Icon::StatusDone,
+        EventKind::Resumed => Icon::StatusExecuting,
+        EventKind::Reopened => Icon::StatusExecuting,
+        EventKind::Blocked => Icon::Blocked,
+        EventKind::Unblocked => Icon::Next,
+        EventKind::Deferred => Icon::Clock,
+        EventKind::Undeferred => Icon::Next,
+        EventKind::Cancelled => Icon::Stopped,
         EventKind::Commented => Icon::RoleHuman,
     }
 }

@@ -239,6 +239,7 @@ fn finish_needs_evidence_and_a_self_round() {
         at: "now".to_string(),
         by: "runner-1".to_string(),
         session: Some("s-runner".to_string()),
+        manual: false,
     });
     assert!(
         transition(
@@ -255,6 +256,7 @@ fn finish_needs_evidence_and_a_self_round() {
         kind: RoundKind::SelfReview,
         focus: Focus::SpecCompliance,
         reviewer: "runner-1".to_string(),
+        session: None,
         verdict: Verdict::Ok,
         at: "now".to_string(),
         notes: String::new(),
@@ -281,6 +283,7 @@ fn criterion_status_comes_from_evidence() {
             at: "now".to_string(),
             by: "runner-1".to_string(),
             session: None,
+            manual: false,
         }],
         ..AcceptanceCriterion::default()
     };
@@ -304,6 +307,7 @@ fn five_external_rounds_escalate_to_a_human() {
             kind: RoundKind::External,
             focus: Focus::EdgeCases,
             reviewer: "reviewer-1".to_string(),
+            session: None,
             verdict: Verdict::ChangesNeeded,
             at: "now".to_string(),
             notes: String::new(),
@@ -518,6 +522,7 @@ fn self_round() -> Round {
         kind: RoundKind::SelfReview,
         focus: Focus::SpecCompliance,
         reviewer: "runner-1".to_string(),
+        session: None,
         verdict: Verdict::Ok,
         at: "now".to_string(),
         notes: String::new(),
@@ -533,6 +538,7 @@ fn passed_evidence() -> Evidence {
         at: "now".to_string(),
         by: "runner-1".to_string(),
         session: Some("s-runner".to_string()),
+        manual: false,
     }
 }
 
@@ -727,6 +733,7 @@ fn escalate_needs_the_reviewer_session_apart_from_the_planner() {
                 kind: RoundKind::External,
                 focus: Focus::EdgeCases,
                 reviewer: "reviewer-1".to_string(),
+                session: None,
                 verdict: Verdict::ChangesNeeded,
                 at: "now".to_string(),
                 notes: String::new(),

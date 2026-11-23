@@ -34,6 +34,6 @@ pub use runtime::{
 pub use store::{Store, StoreError};
 pub use task::{
     AcceptanceCriterion, Claim, Comment, CriterionStatus, Deferral, Evidence, Finding,
-    FindingStatus, Focus, Intent, Meta, Note, Question, QuestionStatus, Review, Round, RoundKind,
-    Scope, Severity, Step, StepStatus, Task, TaskKind, Verdict,
+    FindingStatus, Focus, Intent, Meta, Note, Question, QuestionStatus, ReReview, Review, Round,
+    RoundKind, Scope, Severity, Step, StepStatus, Task, TaskKind, Verdict,
 };

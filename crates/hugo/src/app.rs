@@ -3124,6 +3124,7 @@ mod tests {
         CrewMember {
             role,
             model: model.to_string(),
+            actor: None,
             holds: holds.map(str::to_string),
             since: since.map(str::to_string),
             state,
