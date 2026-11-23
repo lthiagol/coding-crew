@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after unit 92.
+Updated 2026-11-23 by the orchestrator, after unit 93.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–92, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–93, 63b and 70b are closed; their record is in
 `DONE.md`. Open, in order:
 
-- 93 · Review F · engine, theme, tooling — S
 - 94 · Review G · docs — S
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
@@ -171,6 +170,14 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
+- **2026-11-23, unit 93:** `mock-data/generate.py:2779` (the TSK22 note) still says
+  the gate regenerates the column table. Fixing it needs a generator change and a
+  regenerate. Recorded, not ruled.
+- **2026-11-23, unit 93:** `make columns` writes nothing and has no regenerate
+  target. The finding's fix line was the help text alone; a `columns-write`
+  target was not added. Recorded, not ruled.
+- **2026-11-23, unit 93:** `TocEntry.title` in the engine still carries a heading
+  link's URL. Only the paint changed (F23). Recorded, not ruled.
 - **2026-11-23, unit 92:** the fixtures hold no code-review task before its first
   external round, since the one-review-round shape is gone. A fixture would be
   needed if raul or hugo must read that state. Not done: it changes the fixture

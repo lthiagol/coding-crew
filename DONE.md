@@ -1587,6 +1587,16 @@ FIND-02, fixed in code review by the claim's session, is open. F22: the mock REA
 recomputes them. The generator reproduces the tree byte for byte. Limits are in
 THE FOLLOW-UPS. Commit `fc6006c`.
 
+Unit closed: Review F · engine, theme, tooling (plan 93). One build round and
+one review, clean. Four findings of the full review's batch F. F23: a link's URL
+inside a heading paints dim; `blocks.rs` changed, so its sha256 and deviation 21
+are in `VENDORED.md`, with a test. F24 (ruled by the human, 2026-11-23: the code
+follows the doc): the terminal preset's footer keys are bold and reversed, as
+`docs/tui/theme.md` says, with a test. F25: the pty sweep's fake raul takes
+`--tab` and the suite asserts it is forwarded, with a test. F26: `make columns`
+says it writes nothing; no regenerate target was added, no test. Limits are in
+THE FOLLOW-UPS. Commit `024ea01`.
+
 ---
 
 ## Lessons
