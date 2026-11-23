@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use coding_crew_core::lifecycle::{Event, TransitionContext, TransitionError, check, transition};
 use coding_crew_core::task::{
     AcceptanceCriterion, Deferral, Evidence, Finding, FindingStatus, Focus, Round, RoundKind,
@@ -1124,4 +1126,68 @@ fn check_reports_every_failing_gate() {
         gate_names(&failures),
         vec!["evidence.attached", "evidence.attached", "self_round.filed"]
     );
+}
+
+fn run(exit_code: i32, summary: &str) -> Evidence {
+    Evidence {
+        command: "cargo test".to_string(),
+        exit_code: Some(exit_code),
+        summary: summary.to_string(),
+        ..Evidence::default()
+    }
+}
+
+#[test]
+fn a_stored_criterion_status_mirrors_the_evidence_and_the_deferral() {
+    let mut criterion = AcceptanceCriterion {
+        id: "ACCEPT-01".to_string(),
+        ..AcceptanceCriterion::default()
+    };
+    assert_eq!(criterion.status, CriterionStatus::Pending);
+
+    criterion.push_evidence(run(1, "2 failed"));
+    assert_eq!(criterion.status, CriterionStatus::Failed);
+
+    criterion.push_evidence(run(0, "3 passed"));
+    assert_eq!(criterion.status, CriterionStatus::Passed);
+
+    criterion.set_deferral(Some(Deferral {
+        reason: "needs a device".to_string(),
+        follow_up: "TSK09".to_string(),
+    }));
+    assert_eq!(criterion.status, CriterionStatus::Deferred);
+
+    // Clearing the deferral gives the status back to the evidence.
+    criterion.set_deferral(None);
+    assert_eq!(criterion.status, CriterionStatus::Passed);
+    assert_eq!(criterion.status, criterion.effective_status());
+}
+
+#[test]
+fn an_unrun_criterion_mirrors_unproven() {
+    let mut criterion = AcceptanceCriterion::default();
+    criterion.push_evidence(Evidence {
+        command: "cargo test".to_string(),
+        exit_code: None,
+        ..Evidence::default()
+    });
+    assert_eq!(criterion.status, CriterionStatus::Unproven);
+}
+
+#[test]
+fn every_fixture_criterion_stores_the_status_it_derives() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("mock-data/coding-crew/work");
+    for task in Store::new(root).list().expect("the mock tasks") {
+        for criterion in &task.acceptance_criteria {
+            assert_eq!(
+                criterion.status,
+                criterion.effective_status(),
+                "{} {} stores a status it does not derive",
+                task.id,
+                criterion.id
+            );
+        }
+    }
 }

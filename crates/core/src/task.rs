@@ -364,6 +364,28 @@ impl AcceptanceCriterion {
             None => self.status,
         }
     }
+
+    /// Writes the stored status from the derived one (ADR 0019). A criterion
+    /// with neither evidence nor a deferral is `pending`.
+    pub fn mirror_status(&mut self) {
+        self.status = match (&self.deferral, self.evidence.last()) {
+            (Some(_), _) => CriterionStatus::Deferred,
+            (None, Some(evidence)) => evidence.outcome(),
+            (None, None) => CriterionStatus::Pending,
+        };
+    }
+
+    /// Appends evidence and mirrors the status it leaves.
+    pub fn push_evidence(&mut self, evidence: Evidence) {
+        self.evidence.push(evidence);
+        self.mirror_status();
+    }
+
+    /// Sets or clears the deferral and mirrors the status it leaves.
+    pub fn set_deferral(&mut self, deferral: Option<Deferral>) {
+        self.deferral = deferral;
+        self.mirror_status();
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

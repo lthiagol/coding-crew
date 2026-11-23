@@ -57,9 +57,11 @@ sequenceDiagram
 |---|---|
 | `intent`, `scope`, `acceptance_criteria`, `questions`, `meta` | creator |
 | `steps` | creator while grooming, runner while executing |
-| `claim`, `status`, evidence | runner |
+| `claim`, evidence | runner |
 | `review` | reviewer |
 | `notes` | any role |
+
+`status` is written by transitions only; no role writes it directly.
 
 The reviewer opens findings; the runner resolves them. A role may not write
 another role's section.

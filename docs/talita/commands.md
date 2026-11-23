@@ -36,9 +36,10 @@ talita [global flags] <noun> <verb> <ids…> [flags]
 - **Who.** `creator`, `runner`, `reviewer`, `orchestrator` are agent roles;
   `any` includes humans. Role-gated verbs refuse a human (`actor.not_agent`).
 - **Ownership** (roles.md): intent, scope, criteria, questions, meta =
-  creator; steps = creator before approval, runner after; claim, status,
-  evidence = runner; review = reviewer, except a finding's outcome = runner;
-  notes = any. A write outside the role's section is `section.not_owned`.
+  creator; steps = creator before approval, runner after; claim, evidence =
+  runner; review = reviewer, except a finding's outcome = runner; notes =
+  any; status = transitions only. A write outside the role's section is
+  `section.not_owned`.
 - **Working runner.** In `executing`: the runner holding the claim (same
   actor and session; `claim.not_holder` otherwise). In `remediating`: a runner
   whose session is not `claim.session` (`remediation.session_distinct`).

@@ -8,12 +8,14 @@ pub mod activity;
 pub mod actor;
 pub mod bounded;
 pub mod catalog;
+pub mod claim;
 pub mod clock;
 pub mod config;
 pub mod harness;
 pub mod item;
 pub mod lifecycle;
 pub mod markdown;
+pub mod ownership;
 pub mod runtime;
 pub mod screen;
 pub mod store;
@@ -21,6 +23,7 @@ pub mod task;
 
 pub use activity::{Activity, ActivityError, ActivityEvent, EventKind};
 pub use actor::{Actor, ActorKind, FlowRole, Role};
+pub use claim::{ClaimError, DEFAULT_LEASE};
 pub use clock::{age_text, now_rfc3339, parse_rfc3339};
 pub use config::{Agent, CONFIG_FILE, Config, ConfigError, Gate, OrderStep};
 pub use harness::{Harness, Invocation, Models};
@@ -29,6 +32,7 @@ pub use lifecycle::{
     Event, GateFailure, Overlay, Overlays, Reason, Status, TransitionContext, TransitionError,
 };
 pub use markdown::{escape_literal, item_to_markdown, task_to_markdown};
+pub use ownership::{Owner, OwnershipError, Section};
 pub use runtime::{
     AgentState, Budget, Composition, CrewMember, QueueItem, Runtime, RuntimeError, RuntimeRound,
     Severities, Stamp,

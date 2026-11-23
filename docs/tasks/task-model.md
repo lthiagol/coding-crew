@@ -166,6 +166,10 @@ not plain numbers and are skipped by the scan.
 | `meta` | Mutable, pre-approval | creator |
 | `overlays` | Mutable, each with a reason, a `by` and an `at` | any actor |
 
+Who writes each section is the ownership table in
+[roles.md](../roles/roles.md#ownership-by-section), held as code in
+`crates/core/src/ownership.rs`.
+
 ## 3. The lifecycle
 
 ### 3.1 States
@@ -278,6 +282,13 @@ fails; a refused transition carries that whole list ([ADR 0014](../decisions/001
 | `review.independent` | the acting session is neither `planned_by` nor `claim.session`; all three are recorded | `pass_review`, `request_changes`, `escalate` |
 | `remediation.session_distinct` | the acting session is not `claim.session`; both are recorded | `re_review` |
 | `overlay.reason_present` | a non-empty reason | `block`, `defer`, `cancel` |
+| `claim.status` | the task is `approved` (a take) | `claim take`, `claimable` |
+| `claim.held` | no live claim (the holder renews its own) | `claim take`, `claimable` |
+| `claim.takeover` | a claim exists to take over, and its lease has expired | `claim take` in `executing` |
+| `overlay.clear` | no `blocked`, `deferred` or `cancelled` overlay | `claim take`, `claimable` |
+
+The claim gates are the operation's, not an edge's: a refused take names each
+failing one. See § 3.6.
 
 **The budget is asymmetric on purpose.** `pass_review` accepts exactly
 `max_rounds`; `request_changes` needs one round left. So the fifth
@@ -314,6 +325,32 @@ The task records the planning session in `planned_by`; the claim records the
 execution session in `claim.session`. A reviewer is ideally a different
 *model*, not only a different session — the diversity is what surfaces
 uncorrelated bugs.
+
+### 3.6 Claims
+
+A claim changes no status, so it is an operation, not an event
+([ADR 0020](../decisions/0020-claims-and-leases.md)). Its holder is a runner
+in a session; its lease is an RFC 3339 instant.
+
+- **Claimable** (the queue's one rule): `approved`, no `blocked`, `deferred`
+  or `cancelled` overlay, every `depends_on` task `done`, and no live claim.
+  An expired claim does not hold the task.
+- **Live**: the lease has not passed. An empty lease never expires; the
+  operation always writes one.
+
+| Operation | Who | Allowed when | Writes |
+|---|---|---|---|
+| `take` | runner, in a session | claimable; or `executing` with an expired lease (takeover) | `claim {by, session, at, lease_expires_at}`, lease 2 h by default |
+| `renew` | the holder: same actor, same session | `approved` or `executing`, claim present | `lease_expires_at` |
+| `release` | the holder | `approved` or `executing`; a reason | removes the claim |
+
+- A takeover replaces `by` and `session`. The new session is the execution
+  session from then on: it may not remediate, the old one may.
+- The holder of an expired claim renews before `start`; `start` refuses an
+  expired lease. An expired claim with no taker still belongs to its holder,
+  so `finish` checks the holder and session, not the lease.
+- A claim stays through `code-review`, `remediating` and `done`, and is not
+  renewed there.
 
 ## 4. Review
 
@@ -900,7 +937,10 @@ work is in `TODO.md`.
 |---|---|
 | `kind` and `promoted_from` on the task | `crates/core/src/task.rs` — `TaskKind`, `Task::is_small_task` |
 | the small-task step exemption | `crates/core/src/lifecycle.rs` — `criteria.covered`, `steps.done_when_present` and `steps.settled` are skipped for a small task |
-| the claim lease | `Claim::lease_expired` compares RFC 3339 instants; an empty lease never expires, a valid lease expires at or after its instant, and a malformed nonempty lease is treated as expired. The `approved → executing` gate refuses an expired lease |
+| the claim lease | `Claim::lease_expired` compares RFC 3339 instants; an empty lease never expires, a valid lease expires at or after its instant, and a malformed nonempty lease is treated as expired. The `approved → executing` gate refuses an expired lease; an expired claim is claimable by others, and its holder renews before `start` (§ 3.6) |
+| the claim operations and the claimable rule | `crates/core/src/claim.rs` — `take`, `renew`, `release`, `claimable`; § 3.6 |
+| the section ownership table | `crates/core/src/ownership.rs` — `owner`, `authorize`; a section with no owner refuses every writer. `status` has none |
+| the stored criterion status | `AcceptanceCriterion::push_evidence` and `set_deferral` write the mirror from the derived status (ADR 0019) |
 | the rename cleanup | `Store::save` removes the file the task had under an older name |
 | the work folder path | the store reads `coding-crew/work/`, as [ADR 0002](../../decisions/0002-work-folder.md) decides; [ADR 0010](../../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-crew/` folder |
 | smaller tasks (`ITM*`) | `crates/core/src/item.rs` — shaping, dismissal, promotion; `Store::promote_item` writes the item first |
