@@ -115,7 +115,8 @@ reports every failing gate, not only the first ([decision 6](decisions.md)).
 
 `review.round_current` and `review.round_owner` are defined in
 [ADR 0017](../decisions/0017-review-record.md): the latest external round was
-filed after the task last entered `code-review`, and by the acting session.
+filed at or after the task's last entry into `code-review`, and by the acting
+session.
 `task.claimed` on `finish` is defined in
 [ADR 0020](../decisions/0020-claims-and-leases.md). `human.instructed` is in
 TM § 3.2 but not in LC; talita checks it as "the flag names a human".

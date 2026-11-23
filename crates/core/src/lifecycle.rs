@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::actor::{Actor, ActorKind, Role};
-use crate::task::{CriterionStatus, StepStatus, Task, Verdict};
+use crate::task::{
+    AcceptanceCriterion, CriterionStatus, Round, RoundKind, StepStatus, Task, Verdict,
+};
 
 /// The canonical status of a task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -135,6 +137,14 @@ pub struct TransitionContext<'a> {
     pub reason: Option<&'a str>,
 }
 
+/// A gate an event fails: its name in the task model (§ 3.3) and what was
+/// found.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GateFailure {
+    pub gate: &'static str,
+    pub message: String,
+}
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum TransitionError {
     #[error("{event:?} needs the {role:?} role")]
@@ -143,11 +153,25 @@ pub enum TransitionError {
     NotAnAgent,
     #[error("cannot {event:?} from status {status:?}")]
     WrongStatus { event: Event, status: Status },
-    #[error("gate failed: {0}")]
-    Gate(String),
+    #[error("task is cancelled")]
+    Cancelled,
+    /// Every gate the event fails, in the order the task model lists them.
+    #[error("gate failed: {}", gate_messages(.0))]
+    Gates(Vec<GateFailure>),
+}
+
+fn gate_messages(failures: &[GateFailure]) -> String {
+    failures
+        .iter()
+        .map(|failure| failure.message.as_str())
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// Apply an event to a task, enforcing the gates.
+///
+/// The role, the cancellation and the status are checked first. Then every
+/// gate runs, and a refusal carries all the failing ones (see [`check`]).
 pub fn transition(
     task: &mut Task,
     event: Event,
@@ -165,284 +189,482 @@ pub fn transition(
 
     // A cancelled task refuses every event, overlays included: the
     // cancellation is a record of a decision, and nothing overwrites it.
-    gate(task.overlays.cancelled.is_none(), "task is cancelled")?;
-
-    match event {
-        Event::Block => return set_overlay(task, actor, ctx, OverlayKind::Blocked),
-        Event::Unblock => return clear_overlay(task, OverlayKind::Blocked),
-        Event::Defer => return set_overlay(task, actor, ctx, OverlayKind::Deferred),
-        Event::Undefer => return clear_overlay(task, OverlayKind::Deferred),
-        Event::Cancel => return set_overlay(task, actor, ctx, OverlayKind::Cancelled),
-        _ => {}
+    if task.overlays.cancelled.is_some() {
+        return Err(TransitionError::Cancelled);
     }
 
-    let before = task.status;
-    match event {
-        Event::Groom => {
-            expect_status(task, Status::Draft, event)?;
-            gate(
-                !task.intent.outcome.trim().is_empty(),
-                "intent.outcome is required",
-            )?;
-            gate(
-                !task.acceptance_criteria.is_empty(),
-                "at least one acceptance criterion is required",
-            )?;
-            gate(
-                !task.scope.out_of_scope.is_empty(),
-                "at least one out_of_scope entry is required",
-            )?;
-            task.status = Status::Groomed;
+    let Some((from, to)) = edge(event) else {
+        // An overlay holds or releases the task and moves no status.
+        let failures = check(task, event, actor, ctx);
+        if !failures.is_empty() {
+            return Err(TransitionError::Gates(failures));
         }
-        Event::Approve => {
-            expect_status(task, Status::Groomed, event)?;
-            gate(
-                task.open_questions() == 0,
-                "open questions must be resolved",
-            )?;
-            // The step rules do not apply to a small task.
-            if !task.is_small_task() {
-                gate(
-                    task.criteria_covered(),
-                    "every criterion needs a covering step",
-                )?;
-                gate(task.steps_have_done_when(), "every step needs a done_when")?;
-            }
-            task.status = Status::Approved;
-        }
-        Event::Start => {
-            expect_status(task, Status::Approved, event)?;
-            let claim = task
-                .claim
-                .as_ref()
-                .ok_or_else(|| TransitionError::Gate("task is not claimed".into()))?;
-            gate(claim.by == actor.id, "the task is claimed by someone else")?;
-            gate(
-                !claim.lease_expired(crate::now_rfc3339().as_str()),
-                "the claim's lease has expired",
-            )?;
-            check_dependencies(task, ctx)?;
-            task.status = Status::Executing;
-        }
-        Event::Finish => {
-            expect_status(task, Status::Executing, event)?;
-            // The step rules do not apply to a small task.
-            if !task.is_small_task() {
-                gate(
-                    task.steps
-                        .iter()
-                        .all(|s| matches!(s.status, StepStatus::Done | StepStatus::Skipped)),
-                    "every step must be settled",
-                )?;
-            }
-            for criterion in &task.acceptance_criteria {
-                if criterion.status == CriterionStatus::Deferred {
-                    gate(
-                        criterion.deferral.is_some(),
-                        &format!("{} is deferred without a deferral", criterion.id),
-                    )?;
-                }
-                // A deferred criterion is parked on purpose: it needs no evidence.
-                if criterion.deferral.is_some() {
-                    continue;
-                }
-                gate(
-                    !criterion.evidence.is_empty(),
-                    &format!("{} has no evidence", criterion.id),
-                )?;
-                match criterion.effective_status() {
-                    CriterionStatus::Passed => {}
-                    CriterionStatus::Failed => gate(
-                        !criterion.failure_reason.trim().is_empty(),
-                        &format!("{} failed without a reason", criterion.id),
-                    )?,
-                    _ => {
-                        return Err(TransitionError::Gate(format!(
-                            "{} is {}",
-                            criterion.id,
-                            criterion.effective_status().as_str()
-                        )));
-                    }
-                }
-            }
-            gate(task.self_rounds() > 0, "a self-review round is required")?;
-            task.status = Status::CodeReview;
-        }
-        Event::PassReview => {
-            expect_status(task, Status::CodeReview, event)?;
-            gate(
-                task.review.verdict == Some(Verdict::Ok),
-                "the review verdict is not ok",
-            )?;
-            gate(task.open_findings() == 0, "open findings remain")?;
-            gate(
-                task.external_rounds() as u32 <= task.review.max_rounds,
-                "the review round budget is exhausted",
-            )?;
-            check_review_independence(task, actor)?;
-            task.status = Status::Done;
-        }
-        Event::RequestChanges => {
-            expect_status(task, Status::CodeReview, event)?;
-            gate(
-                task.review.verdict == Some(Verdict::ChangesNeeded),
-                "the review verdict is not changes-needed",
-            )?;
-            gate(task.open_findings() > 0, "no findings were opened")?;
-            gate(
-                (task.external_rounds() as u32) < task.review.max_rounds,
-                "the review round budget is exhausted",
-            )?;
-            check_review_independence(task, actor)?;
-            task.status = Status::Remediating;
-        }
-        Event::ReReview => {
-            expect_status(task, Status::Remediating, event)?;
-            gate(task.open_findings() == 0, "open findings remain")?;
-            check_remediation_session(task, actor)?;
-            task.status = Status::CodeReview;
-        }
-        Event::Escalate => {
-            expect_status(task, Status::CodeReview, event)?;
-            gate(
-                task.review.verdict == Some(Verdict::ChangesNeeded),
-                "the review verdict is not changes-needed",
-            )?;
-            gate(
-                task.external_rounds() as u32 >= task.review.max_rounds,
-                "the review round budget is not exhausted",
-            )?;
-            check_review_independence(task, actor)?;
-            task.status = Status::NeedsHuman;
-        }
-        Event::ResumeWork => {
-            expect_status(task, Status::NeedsHuman, event)?;
-            task.status = Status::Executing;
-        }
-        Event::Reopen => {
-            expect_status(task, Status::Done, event)?;
-            task.status = Status::Executing;
-        }
-        Event::Block | Event::Unblock | Event::Defer | Event::Undefer | Event::Cancel => {
-            unreachable!("handled above")
-        }
+        apply_overlay(task, event, actor, ctx);
+        return Ok(());
+    };
+
+    if task.status != from {
+        return Err(TransitionError::WrongStatus {
+            event,
+            status: task.status,
+        });
+    }
+    let failures = check(task, event, actor, ctx);
+    if !failures.is_empty() {
+        return Err(TransitionError::Gates(failures));
     }
 
+    // The task enters its new status now: the wait in it begins now.
     let now = crate::now_rfc3339();
-    if task.status != before {
-        // The task entered another status: the wait in this one begins now.
-        task.status_since = now.clone();
-    }
+    task.status = to;
+    task.status_since = now.clone();
     task.updated = now;
     Ok(())
 }
 
-#[derive(Clone, Copy)]
-enum OverlayKind {
-    Blocked,
-    Deferred,
-    Cancelled,
-}
-
-fn set_overlay(
-    task: &mut Task,
+/// Every gate `event` fails on `task`, named as the task model names them
+/// (§ 3.3). An empty list passes.
+///
+/// The role, the cancellation and the status are `transition`'s to check: this
+/// assumes the task is in the status the event leaves.
+pub fn check(
+    task: &Task,
+    event: Event,
     actor: &Actor,
     ctx: &TransitionContext<'_>,
-    kind: OverlayKind,
-) -> Result<(), TransitionError> {
-    let reason = ctx.reason.unwrap_or_default();
-    gate(!reason.trim().is_empty(), "a reason is required")?;
+) -> Vec<GateFailure> {
+    let mut failures = Vec::new();
+    match event {
+        Event::Groom => {
+            gate(
+                &mut failures,
+                "intent.outcome_present",
+                !task.intent.outcome.trim().is_empty(),
+                "intent.outcome is required",
+            );
+            gate(
+                &mut failures,
+                "criteria.present",
+                !task.acceptance_criteria.is_empty(),
+                "at least one acceptance criterion is required",
+            );
+            gate(
+                &mut failures,
+                "scope.out_of_scope_declared",
+                !task.scope.out_of_scope.is_empty(),
+                "at least one out_of_scope entry is required",
+            );
+        }
+        Event::Approve => {
+            gate(
+                &mut failures,
+                "questions.resolved",
+                task.open_questions() == 0,
+                "open questions must be resolved",
+            );
+            // The step rules do not apply to a small task.
+            if !task.is_small_task() {
+                gate(
+                    &mut failures,
+                    "criteria.covered",
+                    task.criteria_covered(),
+                    "every criterion needs a covering step",
+                );
+                gate(
+                    &mut failures,
+                    "steps.done_when_present",
+                    task.steps_have_done_when(),
+                    "every step needs a done_when",
+                );
+            }
+        }
+        Event::Start => {
+            let now = crate::now_rfc3339();
+            gate(
+                &mut failures,
+                "task.claimed",
+                task.claim.is_some(),
+                "task is not claimed",
+            );
+            if let Some(claim) = &task.claim {
+                gate(
+                    &mut failures,
+                    "task.claimed",
+                    claim.by == actor.id,
+                    "the task is claimed by someone else",
+                );
+                gate(
+                    &mut failures,
+                    "task.claimed",
+                    !claim.lease_expired(&now),
+                    "the claim's lease has expired",
+                );
+            }
+            check_dependencies(&mut failures, task, ctx);
+        }
+        Event::Finish => {
+            // The step rules do not apply to a small task.
+            if !task.is_small_task() {
+                gate(
+                    &mut failures,
+                    "steps.settled",
+                    task.steps
+                        .iter()
+                        .all(|s| matches!(s.status, StepStatus::Done | StepStatus::Skipped)),
+                    "every step must be settled",
+                );
+            }
+            for criterion in &task.acceptance_criteria {
+                check_criterion(&mut failures, criterion);
+            }
+            gate(
+                &mut failures,
+                "self_round.filed",
+                task.self_rounds() > 0,
+                "a self-review round is required",
+            );
+            check_holder(&mut failures, task, actor);
+        }
+        Event::PassReview => {
+            gate(
+                &mut failures,
+                "review.verdict_ok",
+                task.review.verdict == Some(Verdict::Ok),
+                "the review verdict is not ok",
+            );
+            gate(
+                &mut failures,
+                "review.no_open_findings",
+                task.open_findings() == 0,
+                "open findings remain",
+            );
+            gate(
+                &mut failures,
+                "review.within_budget",
+                task.external_rounds() as u32 <= task.review.max_rounds,
+                "the review round budget is exhausted",
+            );
+            check_review(&mut failures, task, actor);
+        }
+        Event::RequestChanges => {
+            gate(
+                &mut failures,
+                "review.verdict_changes_needed",
+                task.review.verdict == Some(Verdict::ChangesNeeded),
+                "the review verdict is not changes-needed",
+            );
+            gate(
+                &mut failures,
+                "review.findings_exist",
+                task.open_findings() > 0,
+                "no findings were opened",
+            );
+            gate(
+                &mut failures,
+                "review.budget_left",
+                (task.external_rounds() as u32) < task.review.max_rounds,
+                "the review round budget is exhausted",
+            );
+            check_review(&mut failures, task, actor);
+        }
+        Event::ReReview => {
+            gate(
+                &mut failures,
+                "review.findings_closed",
+                task.open_findings() == 0,
+                "open findings remain",
+            );
+            check_remediation(&mut failures, task, actor);
+        }
+        Event::Escalate => {
+            gate(
+                &mut failures,
+                "review.verdict_changes_needed",
+                task.review.verdict == Some(Verdict::ChangesNeeded),
+                "the review verdict is not changes-needed",
+            );
+            gate(
+                &mut failures,
+                "review.budget_exhausted",
+                task.external_rounds() as u32 >= task.review.max_rounds,
+                "the review round budget is not exhausted",
+            );
+            check_review(&mut failures, task, actor);
+        }
+        Event::ResumeWork | Event::Reopen => {}
+        Event::Block | Event::Defer | Event::Cancel => gate(
+            &mut failures,
+            "overlay.reason_present",
+            !ctx.reason.unwrap_or_default().trim().is_empty(),
+            "a reason is required",
+        ),
+        Event::Unblock | Event::Undefer => {}
+    }
+    failures
+}
 
+/// The status an event leaves and the status it enters. `None` for an
+/// overlay, which moves no status.
+fn edge(event: Event) -> Option<(Status, Status)> {
+    Some(match event {
+        Event::Groom => (Status::Draft, Status::Groomed),
+        Event::Approve => (Status::Groomed, Status::Approved),
+        Event::Start => (Status::Approved, Status::Executing),
+        Event::Finish => (Status::Executing, Status::CodeReview),
+        Event::PassReview => (Status::CodeReview, Status::Done),
+        Event::RequestChanges => (Status::CodeReview, Status::Remediating),
+        Event::ReReview => (Status::Remediating, Status::CodeReview),
+        Event::Escalate => (Status::CodeReview, Status::NeedsHuman),
+        Event::ResumeWork => (Status::NeedsHuman, Status::Executing),
+        Event::Reopen => (Status::Done, Status::Executing),
+        Event::Block | Event::Unblock | Event::Defer | Event::Undefer | Event::Cancel => {
+            return None;
+        }
+    })
+}
+
+fn apply_overlay(task: &mut Task, event: Event, actor: &Actor, ctx: &TransitionContext<'_>) {
+    let now = crate::now_rfc3339();
     let overlay = Overlay {
-        reason: reason.to_string(),
+        reason: ctx.reason.unwrap_or_default().to_string(),
         by: actor.id.clone(),
-        at: crate::now_rfc3339(),
+        at: now.clone(),
     };
-    match kind {
-        OverlayKind::Blocked => task.overlays.blocked = Some(overlay),
-        OverlayKind::Deferred => task.overlays.deferred = Some(overlay),
-        OverlayKind::Cancelled => task.overlays.cancelled = Some(overlay),
+    match event {
+        Event::Block => task.overlays.blocked = Some(overlay),
+        Event::Unblock => task.overlays.blocked = None,
+        Event::Defer => task.overlays.deferred = Some(overlay),
+        Event::Undefer => task.overlays.deferred = None,
+        Event::Cancel => task.overlays.cancelled = Some(overlay),
+        _ => unreachable!("only overlay events hold a task without a status"),
     }
-    task.updated = crate::now_rfc3339();
-    Ok(())
+    task.updated = now;
 }
 
-fn clear_overlay(task: &mut Task, kind: OverlayKind) -> Result<(), TransitionError> {
-    match kind {
-        OverlayKind::Blocked => task.overlays.blocked = None,
-        OverlayKind::Deferred => task.overlays.deferred = None,
-        OverlayKind::Cancelled => task.overlays.cancelled = None,
+/// A criterion at finish: parked on purpose, or proven by its evidence.
+fn check_criterion(failures: &mut Vec<GateFailure>, criterion: &AcceptanceCriterion) {
+    let id = criterion.id.as_str();
+    // A deferred criterion is parked on purpose: it needs no evidence.
+    if criterion.deferral.is_some() {
+        return;
     }
-    task.updated = crate::now_rfc3339();
-    Ok(())
+    if criterion.status == CriterionStatus::Deferred {
+        fail(
+            failures,
+            "criteria.proven",
+            &format!("{id} is deferred without a deferral"),
+        );
+        return;
+    }
+    if criterion.evidence.is_empty() {
+        fail(
+            failures,
+            "evidence.attached",
+            &format!("{id} has no evidence"),
+        );
+        return;
+    }
+    match criterion.effective_status() {
+        CriterionStatus::Passed => {}
+        CriterionStatus::Failed => gate(
+            failures,
+            "criteria.proven",
+            !criterion.failure_reason.trim().is_empty(),
+            &format!("{id} failed without a reason"),
+        ),
+        other => fail(
+            failures,
+            "criteria.proven",
+            &format!("{id} is {}", other.as_str()),
+        ),
+    }
 }
 
-fn check_dependencies(task: &Task, ctx: &TransitionContext<'_>) -> Result<(), TransitionError> {
+/// Only the claim holder, in the session that claimed, hands work to review.
+/// The lease is not read here: an expired claim still belongs to its holder.
+fn check_holder(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
+    gate(
+        failures,
+        "task.claimed",
+        task.claim.is_some(),
+        "task is not claimed",
+    );
+    if let Some(claim) = &task.claim {
+        gate(
+            failures,
+            "task.claimed",
+            claim.by == actor.id,
+            "the task is claimed by someone else",
+        );
+        gate(
+            failures,
+            "task.claimed",
+            same_session(claim.session.as_deref(), actor.session.as_deref()),
+            "only the claiming session may finish the task",
+        );
+    }
+}
+
+fn check_dependencies(failures: &mut Vec<GateFailure>, task: &Task, ctx: &TransitionContext<'_>) {
     if task.depends_on.is_empty() {
-        return Ok(());
+        return;
     }
-    let check = ctx.dependency_done.ok_or_else(|| {
-        TransitionError::Gate("dependencies cannot be checked without the plan".into())
-    })?;
+    let Some(is_done) = ctx.dependency_done else {
+        fail(
+            failures,
+            "dependencies.satisfied",
+            "dependencies cannot be checked without the plan",
+        );
+        return;
+    };
     for dependency in &task.depends_on {
         gate(
-            check(dependency),
+            failures,
+            "dependencies.satisfied",
+            is_done(dependency),
             &format!("dependency {dependency} is not done"),
-        )?;
+        );
     }
-    Ok(())
 }
 
-/// The session that planned a task never reviews it. Both sessions must be
-/// recorded: a check that cannot name a session does not pass.
-fn check_review_independence(task: &Task, actor: &Actor) -> Result<(), TransitionError> {
+/// The reviewer's gates: the session apart from the planner and the executor,
+/// and a verdict that the latest external round still holds.
+fn check_review(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
+    check_independence(failures, task, actor);
+    check_round_current(failures, task);
+    check_round_owner(failures, task, actor);
+}
+
+/// The planning and the executing session never review the task. All three
+/// sessions must be recorded: a check that cannot name one does not pass.
+fn check_independence(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
     let planned = task.planned_by.as_deref();
-    gate(planned.is_some(), "the planning session is not recorded")?;
+    let executed = claim_session(task);
+    let acting = actor.session.as_deref();
     gate(
-        actor.session.is_some(),
+        failures,
+        "review.independent",
+        planned.is_some(),
+        "the planning session is not recorded",
+    );
+    gate(
+        failures,
+        "review.independent",
+        executed.is_some(),
+        "the executing session is not recorded",
+    );
+    gate(
+        failures,
+        "review.independent",
+        acting.is_some(),
         "the reviewing session is not recorded",
-    )?;
+    );
     gate(
-        actor.session.as_deref() != planned,
+        failures,
+        "review.independent",
+        !same_session(acting, planned),
         "the session that planned the task cannot review it",
-    )
+    );
+    gate(
+        failures,
+        "review.independent",
+        !same_session(acting, executed),
+        "the session that executed the task cannot review it",
+    );
+}
+
+/// The latest external round was filed at or after the task entered
+/// `code-review`. A verdict filed before that entry is a stale one.
+fn check_round_current(failures: &mut Vec<GateFailure>, task: &Task) {
+    let Some(round) = latest_external(task) else {
+        fail(
+            failures,
+            "review.round_current",
+            "no external round is filed",
+        );
+        return;
+    };
+    let entered = crate::parse_rfc3339(&task.status_since);
+    let filed = crate::parse_rfc3339(&round.at);
+    gate(
+        failures,
+        "review.round_current",
+        matches!((entered, filed), (Some(entered), Some(filed)) if filed >= entered),
+        "the latest external round was not filed since the task entered code-review",
+    );
+}
+
+/// The session that filed the latest external round makes the move.
+fn check_round_owner(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
+    let Some(round) = latest_external(task) else {
+        fail(failures, "review.round_owner", "no external round is filed");
+        return;
+    };
+    gate(
+        failures,
+        "review.round_owner",
+        same_session(round.session.as_deref(), actor.session.as_deref()),
+        "only the session that filed the latest external round may move the task",
+    );
 }
 
 /// The session that executed a task never remediates its findings. Both
 /// sessions must be recorded: a check that cannot name a session does not pass.
-fn check_remediation_session(task: &Task, actor: &Actor) -> Result<(), TransitionError> {
-    let executed = task
-        .claim
-        .as_ref()
-        .and_then(|claim| claim.session.as_deref());
-    gate(executed.is_some(), "the executing session is not recorded")?;
+fn check_remediation(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
+    let executed = claim_session(task);
+    let acting = actor.session.as_deref();
     gate(
-        actor.session.is_some(),
+        failures,
+        "remediation.session_distinct",
+        executed.is_some(),
+        "the executing session is not recorded",
+    );
+    gate(
+        failures,
+        "remediation.session_distinct",
+        acting.is_some(),
         "the remediating session is not recorded",
-    )?;
+    );
     gate(
-        actor.session.as_deref() != executed,
+        failures,
+        "remediation.session_distinct",
+        !same_session(acting, executed),
         "the session that executed the task cannot remediate it",
-    )
+    );
 }
 
-fn expect_status(task: &Task, expected: Status, event: Event) -> Result<(), TransitionError> {
-    if task.status == expected {
-        Ok(())
-    } else {
-        Err(TransitionError::WrongStatus {
-            event,
-            status: task.status,
-        })
+/// The latest external round: the verdict the reviewer's move rests on.
+fn latest_external(task: &Task) -> Option<&Round> {
+    task.review
+        .rounds
+        .iter()
+        .filter(|round| round.kind == RoundKind::External)
+        .max_by_key(|round| round.n)
+}
+
+fn claim_session(task: &Task) -> Option<&str> {
+    task.claim
+        .as_ref()
+        .and_then(|claim| claim.session.as_deref())
+}
+
+/// Two recorded sessions that are the same. An unrecorded session is never the
+/// same as anything, so a check that cannot name a session fails its own gate.
+fn same_session(a: Option<&str>, b: Option<&str>) -> bool {
+    a.is_some() && a == b
+}
+
+fn gate(failures: &mut Vec<GateFailure>, gate: &'static str, holds: bool, message: &str) {
+    if !holds {
+        fail(failures, gate, message);
     }
 }
 
-fn gate(condition: bool, message: &str) -> Result<(), TransitionError> {
-    if condition {
-        Ok(())
-    } else {
-        Err(TransitionError::Gate(message.to_string()))
-    }
+fn fail(failures: &mut Vec<GateFailure>, gate: &'static str, message: &str) {
+    failures.push(GateFailure {
+        gate,
+        message: message.to_string(),
+    });
 }
 
 impl CriterionStatus {

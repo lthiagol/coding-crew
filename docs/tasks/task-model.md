@@ -197,11 +197,11 @@ stateDiagram-v2
     draft --> groomed : groom<br/>intent.outcome_present · criteria.present · scope.out_of_scope_declared
     groomed --> approved : approve<br/>questions.resolved · criteria.covered · steps.done_when_present
     approved --> executing : start<br/>task.claimed · dependencies.satisfied
-    executing --> code-review : finish<br/>steps.settled · evidence.attached · criteria.proven · self_round.filed
-    code-review --> done : pass_review<br/>review.verdict_ok · review.no_open_findings · review.within_budget · review.independent
-    code-review --> remediating : request_changes<br/>review.verdict_changes_needed · review.findings_exist · review.budget_left · review.independent
+    executing --> code-review : finish<br/>steps.settled · evidence.attached · criteria.proven · self_round.filed · task.claimed
+    code-review --> done : pass_review<br/>review.verdict_ok · review.no_open_findings · review.within_budget · review.independent · review.round_current · review.round_owner
+    code-review --> remediating : request_changes<br/>review.verdict_changes_needed · review.findings_exist · review.budget_left · review.independent · review.round_current · review.round_owner
     remediating --> code-review : re_review<br/>review.findings_closed · remediation.session_distinct
-    code-review --> needs-human : escalate<br/>review.verdict_changes_needed · review.budget_exhausted
+    code-review --> needs-human : escalate<br/>review.verdict_changes_needed · review.budget_exhausted · review.independent · review.round_current · review.round_owner
     needs-human --> executing : resume_work<br/>human.instructed
     done --> executing : reopen
 
@@ -227,11 +227,11 @@ defined once, in [§ 3.3](#33-gates).
 | `draft` → `groomed` | `groom` | creator | `intent.outcome` set, ≥1 acceptance criterion, ≥1 `out_of_scope` entry |
 | `groomed` → `approved` | `approve` | creator | no open questions, every criterion covered by a step, every step has `done_when` — **the step rules do not apply to a small task** (`kind` `bug` or `feature`) |
 | `approved` → `executing` | `start` | runner | task claimed, dependencies satisfied |
-| `executing` → `code-review` | `finish` | runner | all steps settled, every criterion proven, failed with a reason, or deferred; evidence attached to every criterion not deferred; ≥1 `self` round filed — **a small task has no steps to settle** |
-| `code-review` → `done` | `pass_review` | reviewer | verdict `ok`, no open findings, within the external-round budget, reviewer session is not the planning session |
-| `code-review` → `remediating` | `request_changes` | reviewer | verdict `changes-needed`, ≥1 finding opened, budget not exhausted, reviewer session is not the planning session |
+| `executing` → `code-review` | `finish` | runner, claim holder | all steps settled, every criterion proven, failed with a reason, or deferred; evidence attached to every criterion not deferred; ≥1 `self` round filed; acting in the claiming session — **a small task has no steps to settle** |
+| `code-review` → `done` | `pass_review` | reviewer | verdict `ok`, no open findings, within the external-round budget, the latest external round is current and filed by this session, and this session is neither the planning nor the executing session |
+| `code-review` → `remediating` | `request_changes` | reviewer | verdict `changes-needed`, ≥1 finding opened, budget not exhausted, the latest external round is current and filed by this session, and this session is neither the planning nor the executing session |
 | `remediating` → `code-review` | `re_review` | runner | all open findings fixed, and the remediation session differs from the execution session |
-| `code-review` → `needs-human` | `escalate` | reviewer | 5 external rounds exhausted and still `changes-needed`, reviewer session is not the planning session |
+| `code-review` → `needs-human` | `escalate` | reviewer | 5 external rounds exhausted and still `changes-needed`, the latest external round is current and filed by this session, and this session is neither the planning nor the executing session |
 | `needs-human` → `executing` | `resume_work` | creator | a human instructed it |
 | `done` → `executing` | `reopen` | creator | — |
 
@@ -248,7 +248,8 @@ of a decision, not a state to be walked back from.
 
 One table, one definition each. The gates live in `crates/core/src/lifecycle.rs`;
 the transitions run them internally, so a transition and its guards cannot be
-applied apart.
+applied apart. `check()` runs every gate of an event and returns each one that
+fails; a refused transition carries that whole list ([ADR 0014](../decisions/0014-output-and-errors.md)).
 
 | Gate | Checks | Applies to |
 |---|---|---|
@@ -258,7 +259,7 @@ applied apart.
 | `questions.resolved` | no open question | `approve` |
 | `criteria.covered` | every criterion has ≥1 covering step | `approve` |
 | `steps.done_when_present` | every step has a non-empty `done_when` | `approve` |
-| `task.claimed` | a claim exists and `claim.by` is the acting runner | `start` |
+| `task.claimed` | a claim exists and `claim.by` is the acting runner; at `start`, its lease is live. At `finish`, the acting session is `claim.session` ([ADR 0020](../decisions/0020-claims-and-leases.md)) | `start`, `finish` |
 | `dependencies.satisfied` | every `depends_on` task is `done` | `start` |
 | `steps.settled` | every step is `done` or `skipped` | `finish` |
 | `evidence.attached` | every criterion not deferred carries ≥1 evidence entry | `finish` |
@@ -272,7 +273,9 @@ applied apart.
 | `review.within_budget` | external rounds ≤ `max_rounds` | `pass_review` |
 | `review.budget_left` | external rounds < `max_rounds` | `request_changes` |
 | `review.budget_exhausted` | external rounds ≥ `max_rounds` | `escalate` |
-| `review.independent` | the acting session is not `planned_by`; both are recorded | `pass_review`, `request_changes`, `escalate` |
+| `review.round_current` | the latest external round was filed at or after the task's `status_since` (its entry into `code-review`) | `pass_review`, `request_changes`, `escalate` |
+| `review.round_owner` | the acting session is the one that filed the latest external round | `pass_review`, `request_changes`, `escalate` |
+| `review.independent` | the acting session is neither `planned_by` nor `claim.session`; all three are recorded | `pass_review`, `request_changes`, `escalate` |
 | `remediation.session_distinct` | the acting session is not `claim.session`; both are recorded | `re_review` |
 | `overlay.reason_present` | a non-empty reason | `block`, `defer`, `cancel` |
 
@@ -299,11 +302,12 @@ Any actor may set one; a reason is always required.
 
 ### 3.5 Session boundaries
 
-Two rules, both enforced as gates:
+Three rules, each enforced as a gate:
 
 | Rule | Gate |
 |---|---|
 | The session that **planned** a task never **reviews** it | `review.independent` |
+| The session that **executed** a task never **reviews** it | `review.independent` |
 | The session that **executed** a task never **remediates** its findings | `remediation.session_distinct` |
 
 The task records the planning session in `planned_by`; the claim records the

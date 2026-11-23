@@ -1,4 +1,4 @@
-use coding_crew_core::lifecycle::{Event, TransitionContext, TransitionError, transition};
+use coding_crew_core::lifecycle::{Event, TransitionContext, TransitionError, check, transition};
 use coding_crew_core::task::{
     AcceptanceCriterion, Deferral, Evidence, Finding, FindingStatus, Focus, Round, RoundKind,
     Verdict,
@@ -292,27 +292,12 @@ fn criterion_status_comes_from_evidence() {
 
 #[test]
 fn five_external_rounds_escalate_to_a_human() {
-    let mut task = groomed_task();
-    task.status = coding_crew_core::Status::CodeReview;
-    task.planned_by = Some("s-creator".to_string());
-    task.review.verdict = Some(Verdict::ChangesNeeded);
-    task.review.findings.push(Finding {
-        id: "FIND-01".to_string(),
-        status: FindingStatus::Open,
-        ..Finding::default()
-    });
-    for n in 1..=5 {
-        task.review.rounds.push(Round {
-            n,
-            kind: RoundKind::External,
-            focus: Focus::EdgeCases,
-            reviewer: "reviewer-1".to_string(),
-            session: None,
-            verdict: Verdict::ChangesNeeded,
-            at: "now".to_string(),
-            notes: String::new(),
-            findings: vec!["FIND-01".to_string()],
-        });
+    let mut task = code_review_task();
+    changes_needed(&mut task);
+    for n in 2..=5 {
+        task.review
+            .rounds
+            .push(external_round(n, Verdict::ChangesNeeded));
     }
 
     transition(
@@ -542,21 +527,47 @@ fn passed_evidence() -> Evidence {
     }
 }
 
-/// A task in code review: planned by `s-creator`, executed by `s-runner`.
-fn code_review_task() -> Task {
-    let mut task = groomed_task();
-    task.status = coding_crew_core::Status::CodeReview;
-    task.planned_by = Some("s-creator".to_string());
-    task.claim = Some(coding_crew_core::Claim {
+fn claim_by_runner(lease: &str) -> coding_crew_core::Claim {
+    coding_crew_core::Claim {
         by: "runner-1".to_string(),
         session: Some("s-runner".to_string()),
         at: "now".to_string(),
-        lease_expires_at: String::new(),
-    });
+        lease_expires_at: lease.to_string(),
+    }
+}
+
+/// A task in code review: planned by `s-creator`, executed by `s-runner`. It
+/// entered review on 2026-11-01, so its external rounds are filed after that.
+fn code_review_task() -> Task {
+    let mut task = groomed_task();
+    task.status = coding_crew_core::Status::CodeReview;
+    task.status_since = "2026-11-01T00:00:00Z".to_string();
+    task.planned_by = Some("s-creator".to_string());
+    task.claim = Some(claim_by_runner(""));
     task.review.verdict = Some(Verdict::Ok);
     task
 }
 
+/// An external round filed by `s-reviewer` on 2026-11-02, in review.
+fn external_round(n: u32, verdict: Verdict) -> Round {
+    Round {
+        n,
+        kind: RoundKind::External,
+        focus: Focus::EdgeCases,
+        reviewer: "reviewer-1".to_string(),
+        session: Some("s-reviewer".to_string()),
+        verdict,
+        at: "2026-11-02T00:00:00Z".to_string(),
+        notes: String::new(),
+        findings: match verdict {
+            Verdict::Ok => Vec::new(),
+            Verdict::ChangesNeeded => vec!["FIND-01".to_string()],
+        },
+    }
+}
+
+/// The latest round asks for changes: the verdict, one open finding, and the
+/// external round that filed both.
 fn changes_needed(task: &mut Task) {
     task.review.verdict = Some(Verdict::ChangesNeeded);
     task.review.findings.push(Finding {
@@ -564,6 +575,9 @@ fn changes_needed(task: &mut Task) {
         status: FindingStatus::Open,
         ..Finding::default()
     });
+    task.review
+        .rounds
+        .push(external_round(1, Verdict::ChangesNeeded));
 }
 
 fn unrecorded() -> Actor {
@@ -581,6 +595,7 @@ fn cancel_reason(reason: &str) -> TransitionContext<'_> {
 fn a_deferred_criterion_finishes_without_evidence() {
     let mut task = groomed_task();
     task.status = coding_crew_core::Status::Executing;
+    task.claim = Some(claim_by_runner(""));
     task.steps[0].status = StepStatus::Done;
     task.review.rounds.push(self_round());
     task.acceptance_criteria[0].evidence.push(passed_evidence());
@@ -640,7 +655,7 @@ fn a_deferred_status_needs_its_deferral() {
 #[test]
 fn pass_review_needs_the_reviewer_session_apart_from_the_planner() {
     let mut task = code_review_task();
-    task.review.rounds.push(self_round());
+    task.review.rounds.push(external_round(1, Verdict::Ok));
     transition(
         &mut task,
         Event::PassReview,
@@ -651,6 +666,7 @@ fn pass_review_needs_the_reviewer_session_apart_from_the_planner() {
     assert_eq!(task.status, coding_crew_core::Status::Done);
 
     let mut task = code_review_task();
+    task.review.rounds.push(external_round(1, Verdict::Ok));
     let error = transition(
         &mut task,
         Event::PassReview,
@@ -661,6 +677,7 @@ fn pass_review_needs_the_reviewer_session_apart_from_the_planner() {
     assert!(error.to_string().contains("not recorded"), "{error}");
 
     let mut task = code_review_task();
+    task.review.rounds.push(external_round(1, Verdict::Ok));
     let planner = Actor::agent("creator-1", Role::Reviewer).in_session("s-creator");
     let error = transition(
         &mut task,
@@ -675,6 +692,7 @@ fn pass_review_needs_the_reviewer_session_apart_from_the_planner() {
 #[test]
 fn a_planner_left_unrecorded_cannot_be_checked() {
     let mut task = code_review_task();
+    task.review.rounds.push(external_round(1, Verdict::Ok));
     task.planned_by = None;
     let error = transition(
         &mut task,
@@ -727,18 +745,10 @@ fn request_changes_needs_the_reviewer_session_apart_from_the_planner() {
 fn escalate_needs_the_reviewer_session_apart_from_the_planner() {
     let spent = |task: &mut Task| {
         changes_needed(task);
-        for n in 1..=5 {
-            task.review.rounds.push(Round {
-                n,
-                kind: RoundKind::External,
-                focus: Focus::EdgeCases,
-                reviewer: "reviewer-1".to_string(),
-                session: None,
-                verdict: Verdict::ChangesNeeded,
-                at: "now".to_string(),
-                notes: String::new(),
-                findings: vec!["FIND-01".to_string()],
-            });
+        for n in 2..=5 {
+            task.review
+                .rounds
+                .push(external_round(n, Verdict::ChangesNeeded));
         }
     };
 
@@ -879,4 +889,239 @@ fn cancel_needs_a_reason() {
     .expect_err("a cancellation without a reason");
     assert!(error.to_string().contains("reason"), "{error}");
     assert_eq!(task.overlays.cancelled, None);
+}
+
+fn gate_names(failures: &[coding_crew_core::GateFailure]) -> Vec<&'static str> {
+    failures.iter().map(|failure| failure.gate).collect()
+}
+
+#[test]
+fn a_verdict_from_before_review_cannot_move_the_task() {
+    // The task entered review on 2026-11-01. A round filed before that is a
+    // verdict on an earlier review, and it passes nothing.
+    let mut task = code_review_task();
+    let mut stale = external_round(1, Verdict::Ok);
+    stale.at = "2026-10-30T00:00:00Z".to_string();
+    task.review.rounds.push(stale);
+
+    let failures = check(
+        &task,
+        Event::PassReview,
+        &reviewer(),
+        &TransitionContext::default(),
+    );
+    assert_eq!(gate_names(&failures), vec!["review.round_current"]);
+    assert!(
+        transition(
+            &mut task,
+            Event::PassReview,
+            &reviewer(),
+            &TransitionContext::default()
+        )
+        .is_err()
+    );
+
+    // A round filed the moment the task entered review is current.
+    task.review.rounds[0].at = "2026-11-01T00:00:00Z".to_string();
+    transition(
+        &mut task,
+        Event::PassReview,
+        &reviewer(),
+        &TransitionContext::default(),
+    )
+    .unwrap();
+    assert_eq!(task.status, coding_crew_core::Status::Done);
+}
+
+#[test]
+fn a_review_move_needs_an_external_round_behind_it() {
+    let task = code_review_task();
+    let failures = check(
+        &task,
+        Event::PassReview,
+        &reviewer(),
+        &TransitionContext::default(),
+    );
+    assert_eq!(
+        gate_names(&failures),
+        vec!["review.round_current", "review.round_owner"]
+    );
+}
+
+#[test]
+fn only_the_session_that_filed_the_round_moves_it() {
+    let mut task = code_review_task();
+    let mut round = external_round(1, Verdict::Ok);
+    round.session = Some("s-other-reviewer".to_string());
+    task.review.rounds.push(round);
+
+    let failures = check(
+        &task,
+        Event::PassReview,
+        &reviewer(),
+        &TransitionContext::default(),
+    );
+    assert_eq!(gate_names(&failures), vec!["review.round_owner"]);
+    let error = transition(
+        &mut task,
+        Event::PassReview,
+        &reviewer(),
+        &TransitionContext::default(),
+    )
+    .expect_err("a session that did not file the round");
+    assert!(
+        error.to_string().contains("latest external round"),
+        "{error}"
+    );
+    assert_eq!(task.status, coding_crew_core::Status::CodeReview);
+
+    let filer = Actor::agent("reviewer-1", Role::Reviewer).in_session("s-other-reviewer");
+    transition(
+        &mut task,
+        Event::PassReview,
+        &filer,
+        &TransitionContext::default(),
+    )
+    .unwrap();
+    assert_eq!(task.status, coding_crew_core::Status::Done);
+}
+
+#[test]
+fn the_executing_session_never_reviews_its_task() {
+    // The executing session filed the external round itself, so it owns the
+    // round; the session apart from the executor is the only one that reviews.
+    let mut task = code_review_task();
+    let mut round = external_round(1, Verdict::Ok);
+    round.session = Some("s-runner".to_string());
+    task.review.rounds.push(round);
+
+    let executor = Actor::agent("reviewer-1", Role::Reviewer).in_session("s-runner");
+    let failures = check(
+        &task,
+        Event::PassReview,
+        &executor,
+        &TransitionContext::default(),
+    );
+    assert_eq!(gate_names(&failures), vec!["review.independent"]);
+    assert!(failures[0].message.contains("executed"), "{failures:?}");
+}
+
+fn executing_with_claim(claim: coding_crew_core::Claim) -> Task {
+    let mut task = groomed_task();
+    task.status = coding_crew_core::Status::Executing;
+    task.claim = Some(claim);
+    task.steps[0].status = StepStatus::Done;
+    task.review.rounds.push(self_round());
+    task.acceptance_criteria[0].evidence.push(passed_evidence());
+    task
+}
+
+#[test]
+fn only_the_claim_holder_hands_the_work_to_review() {
+    let mut task = executing_with_claim(claim_by_runner(""));
+
+    // The same session under another actor, and the holder under another session.
+    let other_actor = Actor::agent("runner-2", Role::Runner).in_session("s-runner");
+    let failures = check(
+        &task,
+        Event::Finish,
+        &other_actor,
+        &TransitionContext::default(),
+    );
+    assert_eq!(gate_names(&failures), vec!["task.claimed"]);
+
+    let other_session = Actor::agent("runner-1", Role::Runner).in_session("s-other");
+    let failures = check(
+        &task,
+        Event::Finish,
+        &other_session,
+        &TransitionContext::default(),
+    );
+    assert_eq!(gate_names(&failures), vec!["task.claimed"]);
+    assert_eq!(task.status, coding_crew_core::Status::Executing);
+
+    transition(
+        &mut task,
+        Event::Finish,
+        &runner(),
+        &TransitionContext::default(),
+    )
+    .unwrap();
+    assert_eq!(task.status, coding_crew_core::Status::CodeReview);
+}
+
+#[test]
+fn an_expired_lease_still_belongs_to_its_holder_at_finish() {
+    // The lease guards the time before `finish`; the holder still hands over.
+    let mut task = executing_with_claim(claim_by_runner("2020-01-01T01:00:00Z"));
+    transition(
+        &mut task,
+        Event::Finish,
+        &runner(),
+        &TransitionContext::default(),
+    )
+    .unwrap();
+    assert_eq!(task.status, coding_crew_core::Status::CodeReview);
+}
+
+#[test]
+fn check_reports_every_failing_gate() {
+    // A review with no planner, no external round, an open finding and a
+    // reviewer who names no session: each failing gate is listed.
+    let mut task = code_review_task();
+    task.planned_by = None;
+    task.review.verdict = Some(Verdict::ChangesNeeded);
+    task.review.findings.push(Finding {
+        id: "FIND-01".to_string(),
+        status: FindingStatus::Open,
+        ..Finding::default()
+    });
+    let expected = vec![
+        "review.verdict_ok",
+        "review.no_open_findings",
+        "review.independent",
+        "review.independent",
+        "review.round_current",
+        "review.round_owner",
+    ];
+
+    let failures = check(
+        &task,
+        Event::PassReview,
+        &unrecorded(),
+        &TransitionContext::default(),
+    );
+    assert_eq!(gate_names(&failures), expected);
+
+    match transition(
+        &mut task,
+        Event::PassReview,
+        &unrecorded(),
+        &TransitionContext::default(),
+    )
+    .expect_err("every gate fails")
+    {
+        TransitionError::Gates(refused) => assert_eq!(gate_names(&refused), expected),
+        other => panic!("expected every failing gate, got {other:?}"),
+    }
+    assert_eq!(task.status, coding_crew_core::Status::CodeReview);
+
+    // Finish reports each criterion without evidence, and the missing self round.
+    let mut task = executing_with_claim(claim_by_runner(""));
+    task.review.rounds.clear();
+    task.acceptance_criteria[0].evidence.clear();
+    task.acceptance_criteria.push(AcceptanceCriterion {
+        id: "ACCEPT-02".to_string(),
+        ..AcceptanceCriterion::default()
+    });
+    let failures = check(
+        &task,
+        Event::Finish,
+        &runner(),
+        &TransitionContext::default(),
+    );
+    assert_eq!(
+        gate_names(&failures),
+        vec!["evidence.attached", "evidence.attached", "self_round.filed"]
+    );
 }

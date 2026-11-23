@@ -1,5 +1,5 @@
 use coding_crew_core::lifecycle::{Event, TransitionContext, transition};
-use coding_crew_core::{Actor, Role, Status, Store, Task, parse_rfc3339};
+use coding_crew_core::{Actor, Role, RoundKind, Status, Store, Task, parse_rfc3339};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -460,6 +460,15 @@ fn phase_counts_match_the_fixtures() {
 fn must_pass(task: &Task, from: Status, event: Event, actor: &Actor, done: &HashSet<String>) {
     let mut replayed = task.clone();
     replayed.status = from;
+    if from == Status::CodeReview {
+        // The fixture's stamp dates the phase it is in now, not the review it
+        // replays. A task in review entered it no later than its latest
+        // external round was filed, so the replay dates it there.
+        replayed.status_since = latest_external(task)
+            .expect("a task in review has a filed external round")
+            .at
+            .clone();
+    }
     let is_done = |id: &str| done.contains(id);
     let ctx = TransitionContext {
         dependency_done: Some(&is_done),
@@ -474,8 +483,20 @@ fn creator() -> Actor {
     Actor::agent("creator", Role::Creator).in_session("session-creator")
 }
 
-fn reviewer() -> Actor {
-    Actor::agent("reviewer", Role::Reviewer).in_session("session-reviewer")
+/// The reviewer who filed the task's latest external round: the review move
+/// rests on that round, so its reviewer and session make the move.
+fn reviewer_of(task: &Task) -> Actor {
+    let round = latest_external(task).expect("a filed external round");
+    let session = round.session.as_deref().expect("a recorded round session");
+    Actor::agent(round.reviewer.as_str(), Role::Reviewer).in_session(session)
+}
+
+fn latest_external(task: &Task) -> Option<&coding_crew_core::Round> {
+    task.review
+        .rounds
+        .iter()
+        .filter(|round| round.kind == RoundKind::External)
+        .max_by_key(|round| round.n)
 }
 
 fn runner_of(task: &Task) -> Actor {
@@ -528,7 +549,7 @@ fn fixtures_keep_their_gates() {
             &task,
             Status::CodeReview,
             Event::RequestChanges,
-            &reviewer(),
+            &reviewer_of(&task),
             &done,
         );
     }
@@ -538,7 +559,7 @@ fn fixtures_keep_their_gates() {
             &task,
             Status::CodeReview,
             Event::Escalate,
-            &reviewer(),
+            &reviewer_of(&task),
             &done,
         );
     }
@@ -548,7 +569,7 @@ fn fixtures_keep_their_gates() {
             &task,
             Status::CodeReview,
             Event::PassReview,
-            &reviewer(),
+            &reviewer_of(&task),
             &done,
         );
     }
@@ -956,8 +977,8 @@ fn smaller_tasks_are_fixtures_too() {
 fn every_field_the_model_defines_is_populated_by_a_fixture() {
     use coding_crew_core::task::{Effort, Priority};
     use coding_crew_core::{
-        CriterionStatus, FindingStatus, Focus, ItemKind, ItemStatus, QuestionStatus, RoundKind,
-        Severity, StepStatus, TaskKind, Verdict,
+        CriterionStatus, FindingStatus, Focus, ItemKind, ItemStatus, QuestionStatus, Severity,
+        StepStatus, TaskKind, Verdict,
     };
 
     let tasks = tasks();
