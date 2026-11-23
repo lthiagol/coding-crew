@@ -1839,6 +1839,20 @@ now read `<reason> · <path>`, each pinned under a long path. A core lib test
 failed once and passed on reruns; not reproduced. By the opencode crew, two
 rounds. Commit `50549be`.
 
+### 2026-11-23 · talita T13, the items
+
+`item create|show|list|shape|dismiss|promote`: an idea is shaped into a small
+task, dismissed with its reason, or promoted into a task in `draft` with
+`promoted_from`. The item is written before the task, so a crash cannot
+produce two tasks from one item; the new task carries a note reading
+`from ITM<nn>`. The verbs are the creator's, and each refusal names its
+rule and its remedy — `item.not_open`, `item.is_idea` (shape it first),
+`item.already_shaped`, `item.not_found` (the last two are new codes, in
+`commands.md`'s table and its error line). No journal event is written: the
+journal is T11's, and the event for the promoted task is carried there. By
+the opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug `mm`),
+review 1 clean, one round. Commit `1dd7ea1`.
+
 ---
 
 ## Lessons
