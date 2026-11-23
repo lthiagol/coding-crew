@@ -58,7 +58,7 @@ sequenceDiagram
 | `intent`, `scope`, `acceptance_criteria`, `questions`, `meta` | creator |
 | `steps` | creator while grooming, runner while executing |
 | `claim`, evidence | runner |
-| `review` | reviewer |
+| `review` | reviewer; the runner for its self round, in `executing` and `remediating` |
 | `notes` | any role |
 
 `status` is written by transitions only; no role writes it directly.

@@ -842,6 +842,56 @@ fn re_review_needs_a_remediating_session_apart_from_the_executor() {
 }
 
 #[test]
+fn re_review_records_the_hand_back_in_the_same_move() {
+    let mut task = code_review_task();
+    task.status = coding_crew_core::Status::Remediating;
+    task.review.verdict = Some(Verdict::ChangesNeeded);
+    task.review
+        .rounds
+        .push(external_round(1, Verdict::ChangesNeeded));
+    task.review.findings.push(Finding {
+        id: "FIND-01".to_string(),
+        status: FindingStatus::Fixed,
+        ..Finding::default()
+    });
+    let fixer = Actor::agent("runner-2", Role::Runner).in_session("s-fixer");
+    transition(
+        &mut task,
+        Event::ReReview,
+        &fixer,
+        &TransitionContext::default(),
+    )
+    .unwrap();
+
+    let [hand_back] = task.review.re_reviews.as_slice() else {
+        panic!("one hand-back: {:?}", task.review.re_reviews);
+    };
+    assert_eq!(
+        hand_back.at, task.status_since,
+        "the same instant as the move"
+    );
+    assert_eq!(hand_back.after_round, 1);
+    assert_eq!(hand_back.by, "runner-2");
+    assert_eq!(hand_back.session.as_deref(), Some("s-fixer"));
+}
+
+#[test]
+fn approve_records_the_planning_session() {
+    let mut task = groomed_task();
+    task.status = coding_crew_core::Status::Groomed;
+    task.planned_by = None;
+    transition(
+        &mut task,
+        Event::Approve,
+        &creator(),
+        &TransitionContext::default(),
+    )
+    .unwrap();
+    assert_eq!(task.status, coding_crew_core::Status::Approved);
+    assert_eq!(task.planned_by.as_deref(), Some("s-creator"));
+}
+
+#[test]
 fn a_cancellation_keeps_its_first_reason() {
     let mut task = code_review_task();
     transition(

@@ -27,7 +27,8 @@ pub enum Section {
     FindingOutcome,
     Notes,
     Overlays,
-    /// `status`, `status_since` and `planned_by`: written by transitions only.
+    /// `status`, `status_since` and `planned_by` (set at approval): written by
+    /// transitions only.
     Status,
 }
 
@@ -78,9 +79,12 @@ impl Owner {
 /// The owner of `section` in `status`, or `None` when no verb writes it.
 ///
 /// The steps change hands at approval: the creator writes them while the task
-/// is being groomed, and the runner once it is approved. Frozen content
-/// (intent, scope, criteria) is a phase rule, not an owner rule; it is checked
-/// by the verbs that write it.
+/// is being groomed, and the runner once it is approved. The review changes
+/// hands the same way: the runner files its self round while it works
+/// (`executing`, `remediating`), and the reviewer files the external rounds
+/// and findings in `code-review` (ADR 0017). Frozen content (intent, scope,
+/// criteria) is a phase rule, not an owner rule; it is checked by the verbs
+/// that write it.
 pub fn owner(section: Section, status: Status) -> Option<Owner> {
     match section {
         Section::Intent
@@ -94,7 +98,10 @@ pub fn owner(section: Section, status: Status) -> Option<Owner> {
             _ => Owner::Runner,
         }),
         Section::Claim | Section::Evidence => Some(Owner::Runner),
-        Section::Review => Some(Owner::Reviewer),
+        Section::Review => Some(match status {
+            Status::Executing | Status::Remediating => Owner::Runner,
+            _ => Owner::Reviewer,
+        }),
         Section::FindingOutcome => Some(Owner::Runner),
         Section::Notes | Section::Overlays => Some(Owner::Any),
         Section::Status => None,
@@ -170,6 +177,49 @@ mod tests {
     }
 
     #[test]
+    fn the_review_passes_from_the_runner_to_the_reviewer_at_finish() {
+        assert_eq!(
+            owner(Section::Review, Status::Executing),
+            Some(Owner::Runner)
+        );
+        assert_eq!(
+            owner(Section::Review, Status::Remediating),
+            Some(Owner::Runner)
+        );
+        assert_eq!(
+            owner(Section::Review, Status::CodeReview),
+            Some(Owner::Reviewer)
+        );
+    }
+
+    #[test]
+    fn the_runner_files_its_self_round_while_it_works() {
+        let runner = Actor::agent("runner-1", Role::Runner).in_session("s");
+        assert!(authorize(Section::Review, &runner, Status::Executing).is_ok());
+        assert!(authorize(Section::Review, &runner, Status::Remediating).is_ok());
+        assert_eq!(
+            authorize(Section::Review, &runner, Status::CodeReview),
+            Err(OwnershipError::NotOwned {
+                section: Section::Review,
+                role: Role::Reviewer,
+            })
+        );
+    }
+
+    #[test]
+    fn the_reviewer_writes_the_review_only_in_code_review() {
+        let reviewer = Actor::agent("reviewer-1", Role::Reviewer).in_session("s");
+        assert!(authorize(Section::Review, &reviewer, Status::CodeReview).is_ok());
+        assert_eq!(
+            authorize(Section::Review, &reviewer, Status::Executing),
+            Err(OwnershipError::NotOwned {
+                section: Section::Review,
+                role: Role::Runner,
+            })
+        );
+    }
+
+    #[test]
     fn the_status_has_no_owner_so_no_verb_writes_it() {
         let runner = Actor::agent("runner-1", Role::Runner).in_session("s");
         assert_eq!(
@@ -215,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn an_orchestrator_writes_no_task_section() {
+    fn an_orchestrator_writes_only_what_any_role_may() {
         let orchestrator = Actor::agent("orch-1", Role::Orchestrator).in_session("s");
         assert!(authorize(Section::Notes, &orchestrator, Status::Done).is_ok());
         assert!(matches!(

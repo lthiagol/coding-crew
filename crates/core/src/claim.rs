@@ -43,6 +43,10 @@ pub enum ClaimError {
     ReasonMissing,
     #[error("{0:?} is not an RFC 3339 stamp")]
     BadStamp(String),
+    /// The lease ends after the last instant an RFC 3339 stamp can name
+    /// (9999-12-31T23:59:59Z), or after the clock can count.
+    #[error("the lease is too long to record")]
+    LeaseTooLong,
 }
 
 fn failures_text(failures: &[GateFailure]) -> String {
@@ -240,10 +244,20 @@ fn live_claim<'a>(task: &'a Task, now: &str) -> Option<&'a Claim> {
         .filter(|claim| !claim.lease_expired(now))
 }
 
-/// `now` plus the lease, as an RFC 3339 stamp.
+/// The last instant a four-digit-year RFC 3339 stamp names.
+const LAST_STAMP: i64 = 253_402_300_799;
+
+/// `now` plus the lease, as an RFC 3339 stamp. A lease that ends past
+/// [`LAST_STAMP`] is refused: its stamp would not read back, and an unread
+/// stamp reads as expired.
 fn lease_end(now: &str, lease: Duration) -> Result<String, ClaimError> {
     let start = parse_rfc3339(now).ok_or_else(|| ClaimError::BadStamp(now.to_string()))?;
-    Ok(format_rfc3339(start + lease.as_secs() as i64))
+    let secs = i64::try_from(lease.as_secs()).map_err(|_| ClaimError::LeaseTooLong)?;
+    let end = start
+        .checked_add(secs)
+        .filter(|end| *end <= LAST_STAMP)
+        .ok_or(ClaimError::LeaseTooLong)?;
+    Ok(format_rfc3339(end))
 }
 
 fn gate(gate: &'static str, message: String) -> GateFailure {
@@ -265,6 +279,42 @@ mod tests {
         let mut task = Task::new("TSK01", "a task");
         task.status = Status::Approved;
         task
+    }
+
+    #[test]
+    fn a_lease_too_long_to_record_is_refused_not_wrapped() {
+        let mut task = approved();
+        // 2^63 seconds wraps to a negative count under `as i64`.
+        let wraps = Duration::from_secs(1 << 63);
+        assert_eq!(
+            take(&mut task, &runner(), wraps, None, NOW),
+            Err(ClaimError::LeaseTooLong)
+        );
+        // 9999999999999h: its stamp would name year ~1.1 billion.
+        let huge = Duration::from_secs(9_999_999_999_999 * 3_600);
+        assert_eq!(
+            take(&mut task, &runner(), huge, None, NOW),
+            Err(ClaimError::LeaseTooLong)
+        );
+        assert!(task.claim.is_none());
+    }
+
+    #[test]
+    fn a_lease_that_ends_on_the_last_stamp_is_recorded() {
+        let mut task = approved();
+        // NOW is 1_795_075_200; the lease runs from it to the last stamp.
+        let to_the_end = Duration::from_secs((LAST_STAMP - 1_795_075_200) as u64);
+        take(&mut task, &runner(), to_the_end, None, NOW).unwrap();
+        assert_eq!(
+            task.claim.expect("the claim").lease_expires_at,
+            "9999-12-31T23:59:59Z"
+        );
+        let mut task = approved();
+        let past = Duration::from_secs((LAST_STAMP - 1_795_075_200 + 1) as u64);
+        assert_eq!(
+            take(&mut task, &runner(), past, None, NOW),
+            Err(ClaimError::LeaseTooLong)
+        );
     }
 
     #[test]

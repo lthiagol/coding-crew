@@ -3,7 +3,7 @@ use thiserror::Error;
 
 use crate::actor::{Actor, ActorKind, Role};
 use crate::task::{
-    AcceptanceCriterion, CriterionStatus, Round, RoundKind, StepStatus, Task, Verdict,
+    AcceptanceCriterion, CriterionStatus, ReReview, Round, RoundKind, StepStatus, Task, Verdict,
 };
 
 /// The canonical status of a task.
@@ -214,8 +214,19 @@ pub fn transition(
         return Err(TransitionError::Gates(failures));
     }
 
-    // The task enters its new status now: the wait in it begins now.
+    // The task enters its new status now: the wait in it begins now. The
+    // records the move owes are written with it, under the same instant.
     let now = crate::now_rfc3339();
+    match event {
+        Event::Approve => task.planned_by = actor.session.clone(),
+        Event::ReReview => task.review.re_reviews.push(ReReview {
+            at: now.clone(),
+            after_round: latest_external(task).map_or(0, |round| round.n),
+            by: actor.id.clone(),
+            session: actor.session.clone(),
+        }),
+        _ => {}
+    }
     task.status = to;
     task.status_since = now.clone();
     task.updated = now;

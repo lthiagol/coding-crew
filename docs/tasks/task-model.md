@@ -161,7 +161,7 @@ not plain numbers and are skipped by the scan.
 | `acceptance_criteria[].status` | Derived from the latest evidence; the stored value mirrors it | runner (mirrors), domain (derives) |
 | `steps` | Mutable, always. A different path is recorded, not hidden | runner |
 | `claim`, `status`, `status_since` | Written by transitions only | domain |
-| `review` | Append-only for rounds and findings; `verdict` moves | reviewer |
+| `review` | Append-only for rounds and findings; `verdict` moves | reviewer; the runner files its self round in `executing` and `remediating` ([ADR 0017](../decisions/0017-review-record.md)) |
 | `notes`, `questions` | Append-only | any role |
 | `meta` | Mutable, pre-approval | creator |
 | `overlays` | Mutable, each with a reason, a `by` and an `at` | any actor |
