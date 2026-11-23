@@ -370,7 +370,7 @@ fn store_round_trips_tasks() {
     assert_eq!(task.id, "TSK01");
     assert_eq!(task.status, coding_crew_core::Status::Draft);
     task.status_since = "2026-11-13T12:00:00Z".to_string();
-    store.save(&task).unwrap();
+    store.lock().unwrap().save(&mut task).unwrap();
 
     let second = store.create("Second task").unwrap();
     assert_eq!(second.id, "TSK02");

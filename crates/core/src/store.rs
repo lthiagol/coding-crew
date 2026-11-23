@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::iter::Peekable;
@@ -73,6 +74,8 @@ pub enum StoreError {
     Locked,
     #[error("the journal holds {0} event(s) this reader cannot read; it is not rewritten")]
     JournalUnreadable(usize),
+    #[error("task revision {expected} is stale; the file holds {found}. Re-read the task")]
+    Revision { expected: u32, found: u32 },
 }
 
 /// The work files of one project.
@@ -175,29 +178,79 @@ impl Store {
                 Err(_) => continue,
             }
         }
+        let mut newest: BTreeMap<String, Task> = BTreeMap::new();
+        for task in tasks {
+            if newest
+                .get(&task.id)
+                .is_none_or(|held| is_newer(&task, held))
+            {
+                newest.insert(task.id.clone(), task);
+            }
+        }
+        let mut tasks: Vec<Task> = newest.into_values().collect();
         tasks.sort_by(|a, b| by_number(&a.id, &b.id));
         Ok(tasks)
     }
 
-    /// One task by id.
+    /// One task by id. Where two files hold the id, the newer record is
+    /// returned (see [`Store::list`]).
     pub fn load(&self, id: &str) -> Result<Task, StoreError> {
         let dir = self.root.clone();
         if !dir.is_dir() {
             return Err(StoreError::NotFound(id.to_string()));
         }
+        let mut newest: Option<Task> = None;
+        let mut failure: Option<StoreError> = None;
         for entry in fs::read_dir(&dir)? {
             let path = entry?.path();
             if path.extension().and_then(|e| e.to_str()) != Some("json") {
                 continue;
             }
             if file_id(&path) == Some(id) && file_starts_with(&path, "TSK") {
-                let task = load_task_path(&path)?;
-                if task.id == id {
-                    return Ok(task);
+                match load_task_path(&path) {
+                    Ok(task) if task.id == id => {
+                        if newest.as_ref().is_none_or(|held| is_newer(&task, held)) {
+                            newest = Some(task);
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(error) => failure = failure.or(Some(error)),
                 }
             }
         }
-        Err(StoreError::NotFound(id.to_string()))
+        match (newest, failure) {
+            (Some(task), _) => Ok(task),
+            (None, Some(error)) => Err(error),
+            (None, None) => Err(StoreError::NotFound(id.to_string())),
+        }
+    }
+
+    /// Ids that more than one work file holds, ordered by number.
+    ///
+    /// One id never has two files (TM § 11). A crash between a rename's
+    /// write and its cleanup leaves two; readers keep the newer record, and
+    /// A check reports these ids.
+    pub fn duplicate_ids(&self) -> Result<Vec<String>, StoreError> {
+        if !self.root.is_dir() {
+            return Ok(Vec::new());
+        }
+        let mut files: BTreeMap<String, usize> = BTreeMap::new();
+        for entry in fs::read_dir(&self.root)? {
+            let path = entry?.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            if let Some(id) = file_id(&path) {
+                *files.entry(id.to_string()).or_insert(0) += 1;
+            }
+        }
+        let mut ids: Vec<String> = files
+            .into_iter()
+            .filter(|(_, count)| *count > 1)
+            .map(|(id, _)| id)
+            .collect();
+        ids.sort_by(|a, b| by_number(a, b));
+        Ok(ids)
     }
 
     /// Take the project's write lock, waiting up to [`LOCK_WAIT`].
@@ -213,10 +266,13 @@ impl Store {
         })
     }
 
-    /// Write a task file under the lock. A file the same task had under
-    /// another name is removed, so one task is one file.
-    pub fn save(&self, task: &Task) -> Result<(), StoreError> {
-        self.lock()?.save(task)
+    /// The revision the file under `id` holds; 0 when there is none.
+    fn revision_on_disk(&self, id: &str) -> Result<u32, StoreError> {
+        match self.load(id) {
+            Ok(task) => Ok(task.revision),
+            Err(StoreError::NotFound(_)) => Ok(0),
+            Err(error) => Err(error),
+        }
     }
 
     /// Remove files of the same id left under an older name.
@@ -240,18 +296,6 @@ impl Store {
     /// are one step, so two creators cannot take the same id.
     pub fn create(&self, title: &str) -> Result<Task, StoreError> {
         self.lock()?.create(title)
-    }
-
-    /// Write the journal under the lock, atomically. See
-    /// [`ProjectLock::write_activity`].
-    pub fn write_activity(&self, activity: &Activity) -> Result<(), StoreError> {
-        self.lock()?.write_activity(activity)
-    }
-
-    /// Write the runtime record under the lock, atomically. See
-    /// [`ProjectLock::write_runtime`].
-    pub fn write_runtime(&self, runtime: &Runtime) -> Result<(), StoreError> {
-        self.lock()?.write_runtime(runtime)
     }
 
     /// All smaller tasks, ordered by id.
@@ -297,12 +341,6 @@ impl Store {
             }
         }
         Err(StoreError::NotFound(id.to_string()))
-    }
-
-    /// Write a smaller task file under the lock. A file the same item had
-    /// under another name is removed, so one item is one file.
-    pub fn save_item(&self, item: &Item) -> Result<(), StoreError> {
-        self.lock()?.save_item(item)
     }
 
     /// Create a smaller task. The kind starts as an idea.
@@ -353,10 +391,12 @@ impl Store {
 
 /// The project's write lock, held for one read–check–write.
 ///
-/// The writes here do not take the lock again: they are the writes a held
-/// lock covers. [`Store`]'s own writes take it, then call these. Reads go
-/// through `Deref` to the store and take no lock. The `flock` is released when
-/// the guard drops.
+/// Every write goes through this guard, so the read it checks against is the
+/// one it writes over (ADR 0016). [`Store::create`], [`Store::create_item`]
+/// and [`Store::promote_item`] take it themselves; a caller that changes a
+/// record it loaded takes the guard with [`Store::lock`] and writes through
+/// it. Reads go through `Deref` to the store and take no lock. The `flock` is
+/// released when the guard drops.
 pub struct ProjectLock<'a> {
     store: &'a Store,
     _file: fs::File,
@@ -371,22 +411,38 @@ impl Deref for ProjectLock<'_> {
 }
 
 impl ProjectLock<'_> {
-    /// Write a task file, atomically. See [`Store::save`].
-    pub fn save(&self, task: &Task) -> Result<(), StoreError> {
+    /// Write a task file, atomically, and move its revision on.
+    ///
+    /// `task.revision` must be the one the file holds (a new task holds 0),
+    /// or the write is refused with [`StoreError::Revision`]. On success the
+    /// file holds the revision plus one, and so does `task`. A file the same
+    /// task had under another name is removed, so one task is one file.
+    pub fn save(&self, task: &mut Task) -> Result<(), StoreError> {
+        let found = self.revision_on_disk(&task.id)?;
+        if task.revision != found {
+            return Err(StoreError::Revision {
+                expected: task.revision,
+                found,
+            });
+        }
         fs::create_dir_all(&self.root)?;
-        let path = self.task_path(task);
-        write_atomic(&path, &json_text(task)?)?;
+        let mut next = task.clone();
+        next.revision = found + 1;
+        let path = self.task_path(&next);
+        write_atomic(&path, &json_text(&next)?)?;
+        task.revision = next.revision;
         self.remove_other_copies(&task.id, &path)
     }
 
     /// Create a task in `draft`: the id scan and the write, under this lock.
     pub fn create(&self, title: &str) -> Result<Task, StoreError> {
-        let task = Task::new(self.next_id()?, title);
-        self.save(&task)?;
+        let mut task = Task::new(self.next_id()?, title);
+        self.save(&mut task)?;
         Ok(task)
     }
 
-    /// Write a smaller task file, atomically. See [`Store::save_item`].
+    /// Write a smaller task file, atomically. A file the same item had under
+    /// another name is removed, so one item is one file.
     pub fn save_item(&self, item: &Item) -> Result<(), StoreError> {
         fs::create_dir_all(&self.root)?;
         let path = self.root.join(format!("{}-{}.json", item.id, item.slug));
@@ -408,11 +464,11 @@ impl ProjectLock<'_> {
     pub fn promote_item(&self, id: &str) -> Result<Task, StoreError> {
         let mut item = self.load_item(id)?;
         let task_id = self.next_id()?;
-        let task = item
+        let mut task = item
             .promote(task_id)
             .map_err(|error| StoreError::Item(error.to_string()))?;
         self.save_item(&item)?;
-        self.save(&task)?;
+        self.save(&mut task)?;
         Ok(task)
     }
 
@@ -475,6 +531,13 @@ fn write_atomic(path: &Path, text: &str) -> Result<(), StoreError> {
     }
     fs::rename(&tmp, path)?;
     Ok(())
+}
+
+/// Whether `a` is the newer record of one id: the higher revision, then the
+/// later `updated`, then the slug. The order is total, so the pick never
+/// depends on directory order.
+fn is_newer(a: &Task, b: &Task) -> bool {
+    (a.revision, &a.updated, &a.slug) > (b.revision, &b.updated, &b.slug)
 }
 
 /// Orders ids by their numbers, not their text: `TSK99` before `TSK100`,
@@ -705,6 +768,49 @@ mod tests {
         drop(held);
         acquire(&path, Duration::ZERO).expect("the lock is free again");
         let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A work folder inside a scratch project, so the lock sits beside it.
+    fn work_folder(name: &str) -> PathBuf {
+        let work = scratch(name).join(DATA_DIR).join(WORK_DIR);
+        fs::create_dir_all(&work).expect("a work folder");
+        work
+    }
+
+    #[test]
+    fn a_crash_mid_rename_leaves_one_task_for_readers() {
+        // A rename writes the new file, then removes the old. A crash between
+        // the two leaves both: readers keep the newer record, and the next
+        // save removes the stale copy.
+        let work = work_folder("crash-rename");
+        let store = Store::new(&work);
+        let task = store.create("first").expect("a task");
+        assert_eq!(task.revision, 1);
+
+        let mut renamed = task.clone();
+        renamed.slug = "second".to_string();
+        renamed.revision = 2;
+        write_atomic(
+            &work.join("TSK01-second.json"),
+            &json_text(&renamed).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(store.duplicate_ids().expect("the ids"), ["TSK01"]);
+        let listed = store.list().expect("the tasks");
+        assert_eq!(listed.len(), 1, "readers see the id twice");
+        assert_eq!(listed[0].slug, "second");
+        assert_eq!(store.load("TSK01").expect("the task").slug, "second");
+
+        let mut newest = store.load("TSK01").expect("the task");
+        store
+            .lock()
+            .expect("the lock")
+            .save(&mut newest)
+            .expect("a save");
+        assert!(store.duplicate_ids().expect("the ids").is_empty());
+        assert!(!work.join("TSK01-first.json").exists());
+        let _ = fs::remove_dir_all(work.parent().and_then(Path::parent).unwrap());
     }
 
     #[test]

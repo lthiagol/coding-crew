@@ -100,7 +100,7 @@ fn promotion_through_the_store_records_the_trail() {
 
     let mut item = store.create_item("Fix the lorem pane").unwrap();
     item.shape(ItemKind::Bug, vec![]).unwrap();
-    store.save_item(&item).unwrap();
+    store.lock().unwrap().save_item(&item).unwrap();
 
     let task = store.promote_item("ITM01").expect("promotion");
 

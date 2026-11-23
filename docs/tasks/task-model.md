@@ -573,7 +573,7 @@ lives in the project it describes, next to the code it is about.
 | **JSON, one object per file** | pretty-printed, one trailing newline |
 | **Atomic writes** | the writer writes `<file>.json.tmp`, syncs it, and renames it over the target. A crash leaves the old file intact. The journal and the runtime record follow the same rule |
 | **One lock per project** | every write holds `coding-crew/.talita.lock` (`flock`) across its read, check and write. Reads take no lock. A writer waits 10 s, then refuses. The OS frees it if the writer dies ([ADR 0016](../decisions/0016-concurrency.md)) |
-| **The file name is `<id>-<slug>.json`** | a rename writes a new file; the writer removes the old one, so one id never has two files |
+| **The file name is `<id>-<slug>.json`** | a rename writes a new file; the writer removes the old one, so one id never has two files. A reader that finds two keeps the higher `revision`; `Store::duplicate_ids` lists the id |
 | **Ids come from a scan** | the highest `TSK` number present plus one, taken under the lock. Never `len()+1` |
 | **Ids sort by number** | `TSK99` comes before `TSK100`; a child follows its parent. Text order is never used |
 | **The reader is tolerant of a broken file** | a file that does not parse is skipped, not fatal — one corrupt file does not hide the folder |
@@ -943,9 +943,9 @@ work is in `TODO.md`.
 | the claim operations and the claimable rule | `crates/core/src/claim.rs` — `take`, `renew`, `release`, `claimable`; § 3.6 |
 | the section ownership table | `crates/core/src/ownership.rs` — `owner`, `authorize`; a section with no owner refuses every writer. `status` has none |
 | the stored criterion status | `AcceptanceCriterion::push_evidence` and `set_deferral` write the mirror from the derived status (ADR 0019) |
-| the rename cleanup | `Store::save` and `Store::save_item` remove the file the id had under an older name |
-| the project lock | `crates/core/src/store.rs` — `Store::lock` returns a `ProjectLock`, which holds the writes; `Store`'s own writes take it. A journal read with unreadable events is not rewritten (`StoreError::JournalUnreadable`) |
-| the journal and runtime writers | `crates/core/src/store.rs` — `write_activity`, `write_runtime`; atomic, under the lock |
+| the rename cleanup | `ProjectLock::save` and `save_item` remove the file the id had under an older name |
+| the project lock | `crates/core/src/store.rs` — `Store::lock` returns a `ProjectLock`, which holds the writes. Only it writes a caller's record; `Store::create`, `create_item` and `promote_item` take the lock themselves. A journal read with unreadable events is not rewritten (`StoreError::JournalUnreadable`) |
+| the journal and runtime writers | `crates/core/src/store.rs` — `ProjectLock::write_activity`, `write_runtime`; atomic, under the lock |
 | the work folder path | the store reads `coding-crew/work/`, as [ADR 0002](../../decisions/0002-work-folder.md) decides; [ADR 0010](../../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-crew/` folder |
 | smaller tasks (`ITM*`) | `crates/core/src/item.rs` — shaping, dismissal, promotion; `Store::promote_item` writes the item first |
 | the schema additions: `revision`, `review.re_reviews[]`, `Round.session`, `Evidence.manual`, crew `actor`, the journal kinds | `crates/core/src/task.rs`, `runtime.rs`, `activity.rs`. Optional on read; the fixtures carry them; no verb writes them yet |

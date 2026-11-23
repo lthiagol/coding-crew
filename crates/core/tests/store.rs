@@ -23,6 +23,15 @@ fn work_scratch(name: &str) -> PathBuf {
     work
 }
 
+/// A task write under the project lock, as every write is made (ADR 0016).
+fn save(store: &Store, task: &mut Task) {
+    store
+        .lock()
+        .expect("the project lock")
+        .save(task)
+        .expect("the task");
+}
+
 /// Changing the process cwd is global, so cwd-owning tests take this lock and
 /// restore the cwd when the guard drops. No other test in this file reads the
 /// cwd; every fixture here is built from an absolute path.
@@ -223,15 +232,9 @@ fn dots_and_a_missing_tail_still_find_the_project() {
 fn saving_a_task_keeps_tasks_whose_ids_only_start_with_its_id() {
     // TSK03.1 and TSK030 start with TSK03 but are other tasks.
     let store = Store::new(work_scratch("prefix-save"));
-    store
-        .save(&Task::new("TSK03.1", "child"))
-        .expect("the child");
-    store
-        .save(&Task::new("TSK030", "other"))
-        .expect("the other task");
-    store
-        .save(&Task::new("TSK03", "parent"))
-        .expect("the parent");
+    save(&store, &mut Task::new("TSK03.1", "child"));
+    save(&store, &mut Task::new("TSK030", "other"));
+    save(&store, &mut Task::new("TSK03", "parent"));
 
     let ids: Vec<String> = store
         .list()
@@ -245,9 +248,7 @@ fn saving_a_task_keeps_tasks_whose_ids_only_start_with_its_id() {
 #[test]
 fn load_returns_only_the_task_it_names() {
     let store = Store::new(work_scratch("prefix-load"));
-    store
-        .save(&Task::new("TSK03.1", "child"))
-        .expect("the child");
+    save(&store, &mut Task::new("TSK03.1", "child"));
 
     assert!(matches!(store.load("TSK03"), Err(StoreError::NotFound(_))));
     assert_eq!(store.load("TSK03.1").expect("the child").id, "TSK03.1");
@@ -257,8 +258,8 @@ fn load_returns_only_the_task_it_names() {
 fn load_checks_the_id_inside_the_file() {
     // A file named for TSK03 whose record says TSK03.1 is not TSK03.
     let store = Store::new(work_scratch("load-content"));
-    let child = Task::new("TSK03.1", "child");
-    store.save(&child).expect("the child");
+    let mut child = Task::new("TSK03.1", "child");
+    save(&store, &mut child);
     fs::rename(
         store.task_path(&child),
         store.root().join("TSK03-child.json"),
@@ -379,10 +380,14 @@ fn ids_sort_by_number_not_by_text() {
     // TSK100 is after TSK99, and TSK03.1 after TSK03; text order says otherwise.
     let store = Store::new(work_scratch("numeric-order"));
     for id in ["TSK100", "TSK99", "TSK03.1", "TSK03"] {
-        store.save(&Task::new(id, id)).expect("a task");
+        save(&store, &mut Task::new(id, id));
     }
     for id in ["ITM100", "ITM99"] {
-        store.save_item(&item(id)).expect("an item");
+        store
+            .lock()
+            .expect("the project lock")
+            .save_item(&item(id))
+            .expect("an item");
     }
 
     let tasks: Vec<String> = store
@@ -408,7 +413,11 @@ fn saving_a_renamed_item_removes_its_old_file() {
     let store = Store::new(work_scratch("item-rename"));
     let mut item = store.create_item("first").expect("an item");
     item.slug = "second".to_string();
-    store.save_item(&item).expect("the renamed item");
+    store
+        .lock()
+        .expect("the project lock")
+        .save_item(&item)
+        .expect("the renamed item");
 
     let files: Vec<String> = fs::read_dir(store.root())
         .expect("the work folder")
@@ -432,8 +441,10 @@ fn the_journal_and_the_runtime_record_round_trip_through_their_writers() {
 
     let project = scratch("round-trip");
     let store = Store::new(project.join(DATA_DIR).join(WORK_DIR));
-    store.write_activity(&journal).expect("the journal");
-    store.write_runtime(&runtime).expect("the record");
+    let lock = store.lock().expect("the project lock");
+    lock.write_activity(&journal).expect("the journal");
+    lock.write_runtime(&runtime).expect("the record");
+    drop(lock);
 
     assert_eq!(
         Activity::read(&store.activity_path()).expect("the journal"),
@@ -461,10 +472,76 @@ fn a_journal_with_events_it_cannot_read_is_not_rewritten() {
     let journal = Activity::read(&path).expect("the journal");
     assert_eq!(journal.unreadable, 1);
     assert!(matches!(
-        store.write_activity(&journal),
+        store
+            .lock()
+            .expect("the project lock")
+            .write_activity(&journal),
         Err(StoreError::JournalUnreadable(1))
     ));
     assert_eq!(fs::read_to_string(&path).expect("the journal"), text);
+    let _ = fs::remove_dir_all(&project);
+}
+
+#[test]
+fn a_writer_holding_a_stale_revision_is_refused() {
+    // Two writers read revision 1. The first write moves the file to 2; the
+    // second, still holding 1, is refused and the file keeps the first's text.
+    let store = Store::new(work_scratch("stale-revision"));
+    let created = store.create("first").expect("a task");
+    assert_eq!(created.revision, 1);
+
+    let mut first = store.load(&created.id).expect("the task");
+    let mut second = first.clone();
+    first.title = "first, revised".to_string();
+    second.title = "second, revised".to_string();
+
+    save(&store, &mut first);
+    assert_eq!(first.revision, 2, "the write moves the revision on");
+
+    let error = store
+        .lock()
+        .expect("the project lock")
+        .save(&mut second)
+        .expect_err("the stale write");
+    assert!(matches!(
+        error,
+        StoreError::Revision {
+            expected: 1,
+            found: 2
+        }
+    ));
+    assert_eq!(second.revision, 1, "a refused write changes nothing");
+    let stored = store.load(&created.id).expect("the task");
+    assert_eq!(stored.title, "first, revised");
+    assert_eq!(stored.revision, 2);
+}
+
+#[test]
+fn two_writers_editing_one_task_lose_no_change() {
+    // Each edit loads the task under the lock, adds a tag and saves. Loading
+    // before the lock would let two edits read the same task, and one tag
+    // would be lost.
+    let project = scratch("two-editors");
+    let store = Store::new(project.join(DATA_DIR).join(WORK_DIR));
+    store.create("shared").expect("a task");
+
+    std::thread::scope(|scope| {
+        for writer in 0..2 {
+            let store = store.clone();
+            scope.spawn(move || {
+                for n in 0..25 {
+                    let lock = store.lock().expect("the project lock");
+                    let mut task = lock.load("TSK01").expect("the task");
+                    task.meta.tags.push(format!("writer-{writer}-{n}"));
+                    lock.save(&mut task).expect("the task");
+                }
+            });
+        }
+    });
+
+    let task = store.load("TSK01").expect("the task");
+    assert_eq!(task.meta.tags.len(), 50, "an edit was lost");
+    assert_eq!(task.revision, 51, "every write moved the revision on");
     let _ = fs::remove_dir_all(&project);
 }
 
