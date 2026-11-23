@@ -57,7 +57,8 @@ record is in `DONE.md`. Nothing is in flight; the tree is clean. The crew
 wound down at 13:55 on 2026-11-23 for the weekly limits reset. The talita
 queue (T5 → T6 → T7 → T10 → T11 → T13, then the `examples/` dogfood) stopped
 after T6: T5 and T6 are closed. Since then the opencode crew (deepseek-v4.1-flash builder, glm-5.3
-reviewer, slug `oc`) fixed the macOS catalogue failure. Next: T7. Unit 101 waits for green CI and the human's `v0.1.0`
+reviewer, slug `oc`) fixed the macOS catalogue failure and built T7. Next: a long-path sweep
+(macOS CI still cuts raul's Settings reason), then T10. Unit 101 waits for green CI and the human's `v0.1.0`
 tag.
 
 | phase | units | needs |

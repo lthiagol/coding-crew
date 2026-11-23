@@ -1818,6 +1818,18 @@ catalogue error leads with the reason, `failed: <why> · <tool>`, the tool cut
 to its file name, so a long temp path no longer hides it. The last by the
 opencode crew, one round, clean. Commit `18e75f0`.
 
+### 2026-11-23 · talita T7, the task lifecycle
+
+Every core `Event` is a `task` verb (`resume` for `ResumeWork`), with the
+overlays `block|unblock|defer|undefer|cancel`. Each runs core's `transition()`
+under the project lock and reports every failing gate. `planned_by` was
+already set by core at approve; `--instructed-by` is the `human.instructed`
+gate; `--grant-rounds` raises `max_rounds` on a resume; `cancel` releases a
+live claim; `transition()` takes `now`. Every status the fixtures hold is
+reached through talita alone (claims set through core until T8). Reasons on
+resume and reopen are validated now and journalled in T11. By the opencode
+crew; review 1 found a remedy naming the wrong role. Two rounds. Commit `61d1fe2`.
+
 ---
 
 ## Lessons
