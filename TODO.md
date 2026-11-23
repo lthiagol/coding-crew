@@ -1,11 +1,10 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 79.
+Updated 2026-11-22 by the orchestrator, after unit 80.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
-`bash scripts/test-pty-sweep.sh`, the flow suites in the global skill (skipped
-when the skill is not installed).
+`bash scripts/test-pty-sweep.sh`.
 
 **What is built is in [`DONE.md`](DONE.md).** This file is the live state: what
 is open, what is next, and what has been decided.
@@ -51,10 +50,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–79, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–80, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- **80** Docs and the gate (S)
 - **81** The triage's hugo and config rulings (M)
 - **82** The triage's raul changes (S)
 - **83** TOML in colour, and one story for TSK14 (S)
@@ -174,7 +172,7 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
-- Loose ends from the triage: units 80–83 in `docs/plan.md`.
+- Loose ends from the triage: units 81–83 in `docs/plan.md`.
 - **2026-11-22, unit 78:** `needs.rs:338` is unchanged. The done-when named
   it; the review found Needs rows are one line, so "Only a pane of one line
   shows the row alone" is accurate. Confirm it, or reopen to name the case.

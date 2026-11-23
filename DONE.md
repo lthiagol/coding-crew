@@ -1424,6 +1424,19 @@ from `2 + index`, so the done-when's runtime form cannot be met. A behaviour
 change outside the brief: esc from the id input on an empty model choice now
 returns to Empty, not Listed. Limits are in THE FOLLOW-UPS. Commit `14c81d5`.
 
+Unit closed: docs and the gate (plan 80). Two build rounds and two review
+rounds; the second clean. The design record states the 3/2/1 crew: one agent
+means the orchestrator builds and reviews (`docs/hugo/design-record.md:25-27`).
+The effort rule is recorded: a switch clears the effort unless the model takes
+it, and an absent effort is a gap unless the model takes none. The old text
+said the effort stays, which the code did not do. Round one's review found the
+gap sentence missed the model that takes no effort; round two fixed it.
+`docs/tui/redesign.md` uses the current counts (`2 of 5`, the task in flight's
+open findings), as `docs/hugo/screens.md` § counts does. The Makefile drops
+`test-flow` and `SKILL_SCRIPTS`; the gate no longer runs the retired flow
+suites. No ruling was made; the rule is the one of units 65 and 71. Commit
+`a73b873`.
+
 ---
 
 ## Lessons
