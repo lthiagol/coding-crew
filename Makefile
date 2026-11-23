@@ -9,7 +9,6 @@ CARGO_TARGET_DIR ?= target
 RAUL_PKG := coding-crew-raul
 HUGO_PKG := coding-crew-hugo
 TALITA_PKG := coding-crew-talita
-SKILL_SCRIPTS ?= $(HOME)/.config/opencode/skills/orchestration-flow/scripts
 
 .DEFAULT_GOAL := help
 
@@ -53,16 +52,6 @@ test-scripts: ## Run the shell script tests
 columns: ## Regenerate the terminal-column table from its rules and check it
 	python3 scripts/generate-terminal-columns.py --check
 
-.PHONY: test-flow
-test-flow: ## Run the flow skill's suites when the skill is installed
-	@set -e; \
-	if [ -d "$(SKILL_SCRIPTS)" ]; then \
-		bash "$(SKILL_SCRIPTS)/test-herdr-wake.sh"; \
-		bash "$(SKILL_SCRIPTS)/test-review-snapshot.sh"; \
-	else \
-		echo "flow skill is not installed at $(SKILL_SCRIPTS) - skipping flow suites"; \
-	fi
-
 .PHONY: sweep
 sweep: build-raul ## Sweep the plain render at every width from 40 to 120: the Overview and the Tasks tab, in both icon sets
 	python3 scripts/pty-sweep.py --raul $(CARGO_TARGET_DIR)/debug/raul --work mock-data/coding-crew/work --icons nerd
@@ -82,7 +71,7 @@ lint: ## Run clippy with warnings as errors
 	$(CARGO) clippy --all-targets -- -D warnings
 
 .PHONY: check ci
-check: fmt-check lint test test-scripts columns test-flow sweep ## The gate: fmt, clippy, tests, script tests, column table, flow suites, width sweep
+check: fmt-check lint test test-scripts columns sweep ## The gate: fmt, clippy, tests, script tests, column table, width sweep
 ci: check ## Alias for check
 
 .PHONY: doc

@@ -23,8 +23,8 @@ Autopilot tab was a tab. hugo splits them instead:
   the stamp at the foot says whether the automation runs.** Policy above,
   progress below, and **the same fact never twice**.
 - **The agent count is a composition, not a number.** Three agents means one
-  per role; two means the orchestrator reviews; one means the human
-  reviews, because an agent cannot review itself.
+  per role; two means the orchestrator reviews; one means the orchestrator
+  builds and reviews.
 - **The stamp prints no number it cannot compute.**
 - **The order lives on the tool's side**, not in the project's data.
 - **The crew is runtime state**, and only the runtime has it.
@@ -237,9 +237,11 @@ The rule that the builder's and the reviewer's rows open nothing is overruled.
 Each agent's harness, model and effort opens a choice, as the orchestrator's
 model did, so hugo is the one place the automation is governed from. A pick
 saves in place. A harness switch keeps the model only when the new harness
-lists it, and the effort only when the new harness takes it; the rest is
-cleared or reset, and the row says so. `s` refuses while any agent lacks a
-harness, a model or an effort, and names which.
+lists it. A switch clears the effort unless the model takes it (unit 71),
+since an effort is a level of a model. Whatever is cleared, the row says so.
+An absent effort is a gap, not a default, unless the model takes none: `s`
+refuses while any agent lacks a harness, a model, or an effort its model
+takes, and names which.
 
 The ruling above says a pick saves in place. That is amended by the ruling
 below: a pick is the session's, and nothing is written to the file.

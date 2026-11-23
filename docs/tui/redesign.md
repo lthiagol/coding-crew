@@ -104,7 +104,7 @@ take the slot of the word they sit beside.
   that, whole keys drop from the right of the context's keys, the hidden count
   kept, and the closing keys are never the ones cut.
 - **A progress bar** is `█` filled and `░` empty in the value's slot and
-  `text.dim`, followed by the numbers in words: `██████░░░░ 18 of 45`.
+  `text.dim`, followed by the numbers in words: `████░░░░░░ 2 of 5`.
 - **A spinner** (hugo only, for `working` agents) cycles `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` on the
   tick; the plain render shows the first frame, so it stays deterministic.
 - **The sidebar recesses.** hugo's sidebar sits on `chrome.surface`, a step
@@ -154,9 +154,11 @@ raul's rows, on the tint.
 - **crew** is a table: icon + role, model, task, hold (`󰥔 10d`), state; a
   `working` state carries the spinner, `idle` is dim. The composition line
   is under it in `text.dim`.
-- **budget** is a progress bar: `external rounds ██████░░░░ 18 of 45`.
-- **findings** names the severities: `17 open findings · 3 high · 9 medium ·
-  5 low`, each count on its severity's slot, when the record holds them.
+- **budget** is a progress bar: `rounds ████░░░░░░ 2 of 5`, the rounds the task
+  in flight has used of its own limit.
+- **findings** is the task in flight's open findings: `1 open finding · 1 high ·
+  0 medium · 0 low`, each count on its severity's slot, when the record holds
+  them.
 - **the stamp** is a pill at the foot: `󰑮 running since 2026-11-09T08:30Z` on
   `semantic.ok`, `󰏤 not running: why` on `semantic.warn`.
 
