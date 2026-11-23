@@ -602,18 +602,18 @@ fn recomputed_shape(phase: &str, tasks: &[Task]) -> String {
             "external round, `changes-needed`, findings open".to_string()
         }
         "needs-human" => {
-            let rounds = fixtures[0].external_rounds();
+            // The gate's `budget_exhausted` is `external >= max_rounds`. A
+            // resumed task can run past the limit (TSK21's sixth round).
+            let rounds = fixtures[0].review.max_rounds as usize;
             for task in &fixtures {
-                assert_eq!(
-                    task.external_rounds(),
-                    task.review.max_rounds as usize,
+                assert!(
+                    task.external_rounds() >= rounds,
                     "{} has not exhausted its budget",
                     task.id
                 );
                 assert_eq!(
-                    task.external_rounds(),
-                    rounds,
-                    "{} spent a different budget",
+                    task.review.max_rounds as usize, rounds,
+                    "{} has a different limit",
                     task.id
                 );
             }

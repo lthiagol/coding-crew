@@ -147,3 +147,21 @@ fn a_claim_comes_after_the_completion_of_what_the_task_waits_on() {
         }
     }
 }
+
+#[test]
+fn the_journal_holds_the_moves_a_history_can_tell() {
+    // Every move the history can hold is in the committed journal.
+    let kinds: Vec<EventKind> = journal().events.iter().map(|event| event.kind).collect();
+    for kind in [
+        EventKind::Started,
+        EventKind::Released,
+        EventKind::Blocked,
+        EventKind::Unblocked,
+        EventKind::Deferred,
+        EventKind::Undeferred,
+        EventKind::Reopened,
+        EventKind::Resumed,
+    ] {
+        assert!(kinds.contains(&kind), "the journal holds no {kind:?}");
+    }
+}

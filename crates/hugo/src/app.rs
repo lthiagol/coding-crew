@@ -7183,6 +7183,40 @@ mod tests {
     }
 
     #[test]
+    fn a_click_lands_on_its_task_past_a_waiting_row_that_is_not_claimable_at_40_and_100() {
+        // A waiting task the record does not call claimable is drawn with no
+        // pick, so the claimable rows below it sit a line lower than a fixed
+        // offset from the count line would put them. Each click answers to the
+        // row drawn: the one on TSK07 selects and marks TSK07, not the row a
+        // fixed offset would name.
+        for width in [40u16, 100] {
+            let mut window = app();
+            let mut runtime = queued_runtime();
+            let mut parked = queue_item("TSK27", Status::Approved);
+            parked.claimable = false;
+            runtime.queue.insert(2, parked);
+            let rows = render_app(&mut window, width, 40, &RuntimeRead::Record(runtime)).0;
+            let (column, row) = at(&rows, "TSK07");
+            click(&mut window, column, row);
+            assert_eq!(
+                window.focus,
+                Focus::Queue,
+                "{width}: the click did not take the queue"
+            );
+            assert_eq!(
+                window.queue_cursor, 1,
+                "{width}: the click on TSK07 selected another task"
+            );
+            click(&mut window, column, row);
+            assert_eq!(
+                window.marked,
+                vec!["TSK07".to_string()],
+                "{width}: the second click did not mark TSK07"
+            );
+        }
+    }
+
+    #[test]
     fn a_caption_moves_every_pick_down_by_its_own_lines_not_a_fixed_offset() {
         // The queue's picks sit one count line below the caption. A block with
         // two count lines puts its rows one line lower, so a pick that kept the

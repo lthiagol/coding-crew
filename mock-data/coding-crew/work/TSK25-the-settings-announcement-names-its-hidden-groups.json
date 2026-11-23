@@ -6,17 +6,17 @@
   "parent": null,
   "children": [],
   "created": "2026-11-02T09:00Z",
-  "updated": "2026-11-07T21:10Z",
+  "updated": "2026-11-07T23:10Z",
   "kind": "task",
   "promoted_from": null,
   "status": "done",
-  "status_since": "2026-11-07T21:00Z",
+  "status_since": "2026-11-07T23:00Z",
   "overlays": {},
   "claim": {
     "by": "runner-07",
     "session": "session-runner-07",
     "at": "2026-11-07T20:30Z",
-    "lease_expires_at": "2026-11-07T21:00Z"
+    "lease_expires_at": "2026-11-08T00:00Z"
   },
   "planned_by": "session-creator-07",
   "meta": {
@@ -139,6 +139,17 @@
         "notes": "The work is reviewed clean and the criteria are proven.",
         "findings": [],
         "session": "session-reviewer-08"
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "reviewer-08",
+        "verdict": "ok",
+        "at": "2026-11-07T23:00Z",
+        "notes": "The count and its label agree after the second look.",
+        "findings": [],
+        "session": "session-reviewer-08"
       }
     ],
     "verdict": "ok",
@@ -168,11 +179,11 @@
       "id": "NOTE-02",
       "author": "reviewer-08",
       "body": "Reviewed clean: the criteria are proven and no finding is open.",
-      "at": "2026-11-07T21:10Z"
+      "at": "2026-11-07T23:10Z"
     }
   ],
   "depends_on": [
     "TSK24"
   ],
-  "revision": 11
+  "revision": 12
 }

@@ -1,5 +1,5 @@
 use coding_crew_core::lifecycle::{Event, TransitionContext, transition};
-use coding_crew_core::{Actor, Role, RoundKind, Status, Store, Task, parse_rfc3339};
+use coding_crew_core::{Actor, Role, RoundKind, Status, Store, Task, Verdict, parse_rfc3339};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -1586,4 +1586,59 @@ fn the_fixtures_keep_the_constructs_the_document_is_pinned_to_show() {
         .filter(|construct| !found.contains(*construct))
         .collect();
     assert!(missing.is_empty(), "no note carries {missing:?}");
+}
+
+/// The fixtures' clock, as the generator states it (`FIXTURE_NOW`).
+const FIXTURE_CLOCK: &str = "2026-11-19T08:00Z";
+
+#[test]
+fn the_fixtures_hold_one_manual_override() {
+    let manual = tasks()
+        .iter()
+        .flat_map(|t| &t.acceptance_criteria)
+        .flat_map(|c| &c.evidence)
+        .filter(|e| e.manual)
+        .count();
+    assert_eq!(manual, 1, "the fixtures hold {manual} manual overrides");
+}
+
+#[test]
+fn the_fixtures_hold_an_approved_task_that_has_waited_long() {
+    // Approved at least a fortnight before the fixtures' clock, and still
+    // waiting: its status is approved, so the wait runs from its approval.
+    let now = parse_rfc3339(FIXTURE_CLOCK).expect("the fixtures' clock");
+    let task = tasks()
+        .into_iter()
+        .find(|t| t.id == "TSK29")
+        .expect("the claimable fixture");
+    assert_eq!(task.status, Status::Approved);
+    let waited = now - parse_rfc3339(&task.status_since).expect("its approval");
+    assert!(
+        waited >= 14 * 24 * 60 * 60,
+        "{} has waited {waited} seconds",
+        task.id
+    );
+}
+
+#[test]
+fn the_reopened_fixture_closes_twice_on_two_clean_rounds() {
+    // TSK25 closed at its first external round, went back to work, and closed
+    // again at its second. The journal tells the reopen between them.
+    let task = tasks()
+        .into_iter()
+        .find(|t| t.id == "TSK25")
+        .expect("the reopened fixture");
+    assert_eq!(task.status, Status::Done);
+    let external: Vec<Verdict> = task
+        .review
+        .rounds
+        .iter()
+        .filter(|r| r.kind == RoundKind::External)
+        .map(|r| r.verdict)
+        .collect();
+    assert_eq!(
+        external,
+        [Verdict::Ok, Verdict::Ok],
+        "TSK25's external rounds"
+    );
 }

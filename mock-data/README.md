@@ -86,6 +86,26 @@ and a claim comes after the completion of the work it waits on. The set is
 longer than the Overview's activity block shows, so the left-out count is
 real. The kinds are provisional; nothing writes the journal yet.
 
+The journal also holds the moves a file does not record, since a file keeps
+its current claim, overlays and rounds, not how it got there. Each sits
+before the state its file holds:
+
+| kind | fixture | the move |
+|---|---|---|
+| `started` | every task claimed past `approved` | the runner began the claim, five minutes after it |
+| `released` | `TSK09` | runner-08 released the claim, before runner-09 took it |
+| `blocked` · `unblocked` | `TSK11` | blocked and cleared before its claim |
+| `deferred` · `undeferred` | `TSK13` | deferred and cleared before its claim |
+| `reopened` | `TSK25` | reopened after its first close, then started, sent to review and closed on a second external round |
+| `resumed` | `TSK21` | escalated at its fifth external round, resumed by a human, started, sent to review, and escalated again on a sixth round |
+
+A resumed task keeps its escalated rounds and the budget does not reset, so
+the sixth round can only escalate. `TSK21` runs past its limit for that reason.
+
+The set holds more. `TSK10` carries the manual override, the only evidence
+with `manual: true`. `TSK29` is claimable, and its approval is the oldest in
+the set.
+
 ## The runtime record
 
 `coding-crew/runtime.json` is the flow's runtime record, beside the journal.

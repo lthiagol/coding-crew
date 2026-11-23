@@ -10,7 +10,7 @@
   "kind": "task",
   "promoted_from": null,
   "status": "needs-human",
-  "status_since": "2026-11-16T10:00Z",
+  "status_since": "2026-11-16T11:00Z",
   "overlays": {},
   "claim": {
     "by": "runner-05",
@@ -193,6 +193,19 @@
           "FIND-05"
         ],
         "session": "session-reviewer-05"
+      },
+      {
+        "n": 6,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "reviewer-06",
+        "verdict": "changes-needed",
+        "at": "2026-11-16T11:00Z",
+        "notes": "The round found the next defect after the resume; the budget was already spent.",
+        "findings": [
+          "FIND-06"
+        ],
+        "session": "session-reviewer-06"
       }
     ],
     "verdict": "changes-needed",
@@ -253,6 +266,16 @@
         "resolved": "",
         "resolution": "",
         "comments": []
+      },
+      {
+        "id": "FIND-06",
+        "severity": "high",
+        "status": "open",
+        "description": "The mark is rendered but no slot paints it, so two equals signs sit in the sentence.",
+        "created": "2026-11-16T11:00Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
       }
     ],
     "re_reviews": [
@@ -295,5 +318,5 @@
     "TSK24",
     "TSK26"
   ],
-  "revision": 22
+  "revision": 24
 }

@@ -947,6 +947,10 @@ FOCUS_BY_ROUND = ["spec-compliance", "edge-cases", "security", "empirical", "des
 # still live.
 FIXTURE_NOW = "2026-11-19T08:00:00Z"
 
+# Reopened after its review closed: TSK25 went back to work at this instant,
+# and its second external round closed it again. The file holds both rounds.
+REOPENED = {"TSK25": "2026-11-07T22:00Z"}
+
 DONE_IDS = [f"TSK{number:02d}" for number in range(22, 27)]
 
 
@@ -1269,14 +1273,19 @@ def planned(task_id, index, status, **overrides):
 def re_reviews(item):
     """The hand-backs to review: one for each external round the runner answered.
 
-    A hand-back sits between the two external rounds it answers. TSK14 is
-    the task in flight: its one external round raised findings, the runner
-    fixed them by 17:25, and the task went back to review after that.
+    A hand-back sits between the two external rounds it answers, and only
+    when the first one raised findings and sent the work back. A clean round
+    has nothing to answer, and a round that escalated sent the task to
+    needs-human, not to remediation. TSK14 is the task in flight: its one
+    external round raised findings, the runner fixed them by 17:25, and the
+    task went back to review after that.
     """
     external = [r for r in item["review"]["rounds"] if r["kind"] == "external"]
+    max_rounds = item["review"]["max_rounds"]
     moments = [
         (first["n"], between(first["at"], second["at"]))
         for first, second in zip(external, external[1:])
+        if first["verdict"] == "changes-needed" and first["n"] < max_rounds
     ]
     if item["id"] == IN_FLIGHT:
         moments.append((external[-1]["n"], ts(11, 17, 30)))
@@ -1346,6 +1355,8 @@ EVENT_KINDS = [
     "groomed",
     "approved",
     "claimed",
+    "released",
+    "started",
     "round_filed",
     "review_requested",
     "finding_raised",
@@ -1354,9 +1365,13 @@ EVENT_KINDS = [
     "remediated",
     "commented",
     "blocked",
+    "unblocked",
     "deferred",
+    "undeferred",
     "cancelled",
     "escalated",
+    "resumed",
+    "reopened",
     "completed",
 ]
 EVENT_RANK = {kind: rank for rank, kind in enumerate(EVENT_KINDS)}
@@ -1408,9 +1423,71 @@ def role_word(actor):
     return "human"
 
 
+def journal_only(by_id):
+    """Moves the journal alone tells, which the fixtures' files do not hold.
+
+    A file holds its current claim, its current overlays and its rounds, not
+    how it got there. Each move below ends before the state its file holds,
+    so the journal and the files agree.
+    """
+    events = []
+    # TSK09 was claimed by runner-08 and released before runner-09 took it.
+    events.append(event(ts(8, 10), "claimed", "TSK09", "runner", "claimed by runner-08"))
+    events.append(
+        event(ts(8, 11), "released", "TSK09", "runner", "claim released by runner-08")
+    )
+    # TSK11 was blocked, and TSK13 deferred, and each was cleared before its claim.
+    for task_id, held, cleared in (
+        ("TSK11", "blocked", "unblocked"),
+        ("TSK13", "deferred", "undeferred"),
+    ):
+        claim_at = by_id[task_id]["claim"]["at"]
+        events.append(
+            event(minutes_before(claim_at, 180), held, task_id, "human", "waits on the human's pick")
+        )
+        events.append(
+            event(minutes_before(claim_at, 60), cleared, task_id, "human", "the pick is made")
+        )
+    # TSK25 closed at its first external round, went back to work, and closed
+    # again at its second. Its first close is the last round before the reopen.
+    reopened_at = REOPENED["TSK25"]
+    rounds = by_id["TSK25"]["review"]["rounds"]
+    closed = max(round_["at"] for round_ in rounds if round_["at"] < reopened_at)
+    events.append(event(closed, "completed", "TSK25", "reviewer", "reviewed clean"))
+    events.append(
+        event(reopened_at, "reopened", "TSK25", "creator", "reopened for a second look at the count")
+    )
+    events.append(
+        event(plus_minutes(reopened_at, 10), "started", "TSK25", "runner", "began the reopened task")
+    )
+    events.append(
+        event(plus_minutes(reopened_at, 40), "review_requested", "TSK25", "runner", "sent to review")
+    )
+    # TSK21 was escalated at its fifth external round. A human resumed it, the
+    # runner sent it back to review, and a sixth round escalated it again.
+    # The budget does not reset on resume, so that round can only escalate.
+    fifth = next(
+        round_["at"]
+        for round_ in by_id["TSK21"]["review"]["rounds"]
+        if round_["kind"] == "external" and round_["n"] == 5
+    )
+    events.append(event(fifth, "escalated", "TSK21", "reviewer", "the review budget is spent"))
+    events.append(
+        event(plus_minutes(fifth, 30), "resumed", "TSK21", "human", "instructed to continue")
+    )
+    events.append(
+        event(plus_minutes(fifth, 35), "started", "TSK21", "runner", "began the resumed task")
+    )
+    events.append(
+        event(plus_minutes(fifth, 40), "review_requested", "TSK21", "runner", "sent to review")
+    )
+    return events
+
+
 def activity_events(tasks):
     """The journal of the tasks' own histories, oldest first."""
     events = []
+    by_id = {item["id"]: item for item in tasks}
     for item in tasks:
         task_id = item["id"]
         events.append(event(item["created"], "created", task_id, "human"))
@@ -1424,6 +1501,17 @@ def activity_events(tasks):
             events.append(
                 event(claim["at"], "claimed", task_id, "runner", f"claimed by {claim['by']}")
             )
+            # A claim held past approved was started by its runner.
+            if item["status"] != "approved":
+                events.append(
+                    event(
+                        plus_minutes(claim["at"], 5),
+                        "started",
+                        task_id,
+                        "runner",
+                        "began the claimed task",
+                    )
+                )
         rounds = item.get("review", {}).get("rounds", [])
         if rounds:
             events.append(
@@ -1432,7 +1520,7 @@ def activity_events(tasks):
         for candidate in item.get("notes", []):
             if candidate["body"].startswith("Groomed by"):
                 events.append(event(candidate["at"], "groomed", task_id, "creator"))
-        for position, round_ in enumerate(rounds):
+        for round_ in rounds:
             if round_["kind"] == "self":
                 by = "runner"
                 note = f"self, {round_['focus']}, {round_['verdict']}"
@@ -1442,7 +1530,11 @@ def activity_events(tasks):
             events.append(event(round_["at"], "round_filed", task_id, by, note))
             # The last round of a task that needs a human was escalated, not
             # sent back.
-            escalated_here = item["status"] == "needs-human" and position == len(rounds) - 1
+            escalated_here = (
+                item["status"] == "needs-human"
+                and round_["kind"] == "external"
+                and round_["n"] >= item["review"]["max_rounds"]
+            )
             if round_["kind"] == "external" and round_["verdict"] == "changes-needed":
                 if not escalated_here:
                     events.append(
@@ -1516,6 +1608,7 @@ def activity_events(tasks):
             else:
                 by = "human"
             events.append(event(candidate["at"], "commented", task_id, by, body))
+    events.extend(journal_only(by_id))
     events.sort(key=lambda record: (record["at"], EVENT_RANK[record["kind"]], record["task"]))
     return events
 
@@ -1549,6 +1642,63 @@ def check_activity(tasks, events):
         assert remediated == [e["at"] for e in item["review"]["re_reviews"]], task_id
         for entry in item["review"]["re_reviews"]:
             assert entry["session"] != item["claim"]["session"], (task_id, entry)
+            answered = [r for r in item["review"]["rounds"] if r["n"] == entry["after_round"]]
+            assert answered and answered[0]["verdict"] == "changes-needed", (task_id, entry)
+    # A release follows a claim of the task and precedes the claim its file holds.
+    for record in events:
+        if record["kind"] != "released":
+            continue
+        claims = [
+            other["at"]
+            for other in events
+            if other["task"] == record["task"] and other["kind"] == "claimed"
+        ]
+        assert any(at < record["at"] for at in claims), record
+        assert any(at > record["at"] for at in claims), record
+    # A start follows the claim it starts.
+    for record in events:
+        if record["kind"] != "started":
+            continue
+        claims = [
+            other["at"]
+            for other in events
+            if other["task"] == record["task"] and other["kind"] == "claimed"
+        ]
+        assert any(at < record["at"] for at in claims), record
+    # A cleared overlay follows its own mark, and the task holds none now.
+    for held, cleared in (("blocked", "unblocked"), ("deferred", "undeferred")):
+        for record in events:
+            if record["kind"] != cleared:
+                continue
+            marks = [
+                other["at"]
+                for other in events
+                if other["task"] == record["task"] and other["kind"] == held
+            ]
+            assert marks and marks[0] < record["at"], record
+            assert not by_id[record["task"]]["overlays"].get(held), record
+    # A reopened task closed twice: once before the reopen, once after it.
+    for record in events:
+        if record["kind"] != "reopened":
+            continue
+        assert by_id[record["task"]]["status"] == "done", record
+        closes = [
+            other["at"]
+            for other in events
+            if other["task"] == record["task"] and other["kind"] == "completed"
+        ]
+        assert len(closes) == 2 and closes[0] < record["at"] < closes[1], closes
+    # A resumed task was escalated first, and a human resumed it.
+    for record in events:
+        if record["kind"] != "resumed":
+            continue
+        escalations = [
+            other["at"]
+            for other in events
+            if other["task"] == record["task"] and other["kind"] == "escalated"
+        ]
+        assert escalations and escalations[0] < record["at"], record
+        assert by_id[record["task"]]["status"] == "needs-human", record
     # The dependency rule holds in time as it does in the fixtures: a claim
     # comes after the completion of every done task it waits on.
     for record in events:
@@ -2351,7 +2501,8 @@ def build():
             )
         ]
         findings = []
-        for n in range(1, 6):
+        # TSK21 runs a sixth round after a human resumes it (see journal_only).
+        for n in range(1, 7 if tid == "TSK21" else 6):
             at = ts(claim_day, 5 + n)
             status = "open"
             resolved = ""
@@ -2398,7 +2549,7 @@ def build():
                 finding(
                     n,
                     at,
-                    severity=["medium", "high", "low", "medium", "high"][n - 1],
+                    severity=["medium", "high", "low", "medium", "high", "high"][n - 1],
                     status=status,
                     description=pick(FINDING_TEXT, i + n),
                     resolved=resolved,
@@ -2414,7 +2565,9 @@ def build():
                     f"reviewer-{n:02d}",
                     "changes-needed",
                     at,
-                    "The round found the next defect and the budget moved one round closer to spent.",
+                    "The round found the next defect and the budget moved one round closer to spent."
+                    if n < 6
+                    else "The round found the next defect after the resume; the budget was already spent.",
                     [f"FIND-{n:02d}"],
                 )
             )
@@ -2739,6 +2892,20 @@ def build():
                     "The work is reviewed clean and the criteria are proven.",
                 )
             )
+        if tid in REOPENED:
+            # The reopened task passes its second external round; the self
+            # round stays the one it filed before the first close.
+            rounds.append(
+                round_(
+                    2,
+                    "external",
+                    pick(FOCUS_BY_ROUND, 1),
+                    f"reviewer-{i + 5:02d}",
+                    "ok",
+                    ts(7, 23),
+                    "The count and its label agree after the second look.",
+                )
+            )
         questions = []
         if tid in ("TSK22", "TSK25"):
             questions.append(
@@ -2852,6 +3019,9 @@ def build():
             notes=notes,
             depends_on=done_dependencies[i],
         )
+        if tid in REOPENED:
+            # The claim was renewed at the reopen, so `start` finds it live.
+            item["claim"]["lease_expires_at"] = plus_minutes(REOPENED[tid], 120)
         tasks.append(item)
 
     done_ids = ids["done"]
@@ -2953,8 +3123,8 @@ def build():
     child_task["parent"] = ids["approved"][0]
     tasks.append(child_task)
 
-    # approved after the last cycle finished: its dependencies are done, so
-    # an agent can claim it right now. It is generated before the second
+    # approved long ago and still waiting: its one dependency, TSK22, is done,
+    # so an agent can claim it right now. It is generated before the second
     # child, so the claimable fixture keeps its id.
     tid = next_id()
     assert tid == "TSK29", tid
@@ -2992,14 +3162,13 @@ def build():
                     5,
                     "session-creator-05",
                     "Groomed by session-creator-05: intent, scope and criteria written.",
-                    ts(13, 10),
+                    ts(3, 10),
                 ),
                 transition_note(
                     6,
                     "session-creator-05",
                     "Approved by session-creator-05: criteria covered, steps planned.",
-                    # After the dependency it waits for is done (TSK22).
-                    ts(16, 12),
+                    ts(4, 12),
                     note_id="NOTE-02",
                 ),
             ],

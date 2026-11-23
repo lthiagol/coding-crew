@@ -330,7 +330,7 @@ pub fn live_claim(task: &Task, now: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use coding_crew_core::{Claim, Overlay};
+    use coding_crew_core::{Claim, EventKind, Overlay};
 
     fn mock_work() -> Work {
         Work::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mock-data/coding-crew/work"))
@@ -389,6 +389,30 @@ mod tests {
             "the journal is inside the work folder"
         );
         assert!(work.errors.is_empty(), "{:?}", work.errors);
+    }
+
+    #[test]
+    fn the_mock_journal_reads_every_move_it_holds() {
+        // The moves the history tells are events the journal reads back, and
+        // none is unreadable: the Overview counts what the journal holds.
+        let work = mock_work();
+        let activity = work.activity.as_ref().expect("the mock journal");
+        assert_eq!(
+            activity.unreadable, 0,
+            "the mock journal has unreadable events"
+        );
+        let kinds: Vec<EventKind> = activity.events.iter().map(|event| event.kind).collect();
+        for kind in [
+            EventKind::Started,
+            EventKind::Released,
+            EventKind::Blocked,
+            EventKind::Unblocked,
+            EventKind::Deferred,
+            EventKind::Undeferred,
+            EventKind::Reopened,
+        ] {
+            assert!(kinds.contains(&kind), "the mock journal holds no {kind:?}");
+        }
     }
 
     #[test]

@@ -3062,7 +3062,7 @@ mod tests {
         );
         assert_eq!(
             review_state::text(entry_of(&tree, "TSK21").review.as_deref().expect("a state")),
-            "5 open findings (2 high, 2 medium, 1 low) · 5/5 rounds"
+            "6 open findings (3 high, 2 medium, 1 low) · 6/5 rounds"
         );
     }
 

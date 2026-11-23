@@ -49,6 +49,12 @@
       "by": "human"
     },
     {
+      "at": "2026-11-03T10:00Z",
+      "kind": "groomed",
+      "task": "TSK29",
+      "by": "creator"
+    },
+    {
       "at": "2026-11-03T12:00Z",
       "kind": "created",
       "task": "TSK20",
@@ -89,6 +95,13 @@
       "kind": "created",
       "task": "TSK28",
       "by": "human"
+    },
+    {
+      "at": "2026-11-04T12:00Z",
+      "kind": "approved",
+      "task": "TSK29",
+      "by": "human",
+      "note": "left the human lane"
     },
     {
       "at": "2026-11-04T13:00Z",
@@ -145,6 +158,13 @@
       "task": "TSK22",
       "by": "runner",
       "note": "claimed by runner-04"
+    },
+    {
+      "at": "2026-11-05T15:05Z",
+      "kind": "started",
+      "task": "TSK22",
+      "by": "runner",
+      "note": "began the claimed task"
     },
     {
       "at": "2026-11-05T16:00Z",
@@ -256,6 +276,13 @@
       "task": "TSK23",
       "by": "runner",
       "note": "claimed by runner-05"
+    },
+    {
+      "at": "2026-11-06T16:05Z",
+      "kind": "started",
+      "task": "TSK23",
+      "by": "runner",
+      "note": "began the claimed task"
     },
     {
       "at": "2026-11-06T17:00Z",
@@ -384,6 +411,13 @@
       "task": "TSK24",
       "by": "runner",
       "note": "claimed by runner-06"
+    },
+    {
+      "at": "2026-11-07T17:05Z",
+      "kind": "started",
+      "task": "TSK24",
+      "by": "runner",
+      "note": "began the claimed task"
     },
     {
       "at": "2026-11-07T17:35Z",
@@ -551,6 +585,13 @@
       "note": "claimed by runner-07"
     },
     {
+      "at": "2026-11-07T20:35Z",
+      "kind": "started",
+      "task": "TSK25",
+      "by": "runner",
+      "note": "began the claimed task"
+    },
+    {
       "at": "2026-11-07T20:45Z",
       "kind": "commented",
       "task": "TSK25",
@@ -586,7 +627,42 @@
       "note": "reviewed clean"
     },
     {
-      "at": "2026-11-07T21:10Z",
+      "at": "2026-11-07T22:00Z",
+      "kind": "reopened",
+      "task": "TSK25",
+      "by": "creator",
+      "note": "reopened for a second look at the count"
+    },
+    {
+      "at": "2026-11-07T22:10Z",
+      "kind": "started",
+      "task": "TSK25",
+      "by": "runner",
+      "note": "began the reopened task"
+    },
+    {
+      "at": "2026-11-07T22:40Z",
+      "kind": "review_requested",
+      "task": "TSK25",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-07T23:00Z",
+      "kind": "round_filed",
+      "task": "TSK25",
+      "by": "reviewer",
+      "note": "external 2, edge-cases, ok"
+    },
+    {
+      "at": "2026-11-07T23:00Z",
+      "kind": "completed",
+      "task": "TSK25",
+      "by": "reviewer",
+      "note": "reviewed clean"
+    },
+    {
+      "at": "2026-11-07T23:10Z",
       "kind": "commented",
       "task": "TSK25",
       "by": "reviewer",
@@ -605,6 +681,13 @@
       "task": "TSK26",
       "by": "runner",
       "note": "claimed by runner-08"
+    },
+    {
+      "at": "2026-11-08T09:05Z",
+      "kind": "started",
+      "task": "TSK26",
+      "by": "runner",
+      "note": "began the claimed task"
     },
     {
       "at": "2026-11-08T09:30Z",
@@ -627,11 +710,25 @@
       "by": "creator"
     },
     {
+      "at": "2026-11-08T10:00Z",
+      "kind": "claimed",
+      "task": "TSK09",
+      "by": "runner",
+      "note": "claimed by runner-08"
+    },
+    {
       "at": "2026-11-08T10:05Z",
       "kind": "commented",
       "task": "TSK26",
       "by": "runner",
       "note": "The work is done and the evidence is attached; the review is closed."
+    },
+    {
+      "at": "2026-11-08T11:00Z",
+      "kind": "released",
+      "task": "TSK09",
+      "by": "runner",
+      "note": "claim released by runner-08"
     },
     {
       "at": "2026-11-08T11:00Z",
@@ -697,6 +794,13 @@
       "note": "claimed by runner-01"
     },
     {
+      "at": "2026-11-09T09:05Z",
+      "kind": "started",
+      "task": "TSK10",
+      "by": "runner",
+      "note": "began the claimed task"
+    },
+    {
       "at": "2026-11-09T10:00Z",
       "kind": "deferred",
       "task": "TSK03",
@@ -709,6 +813,34 @@
       "task": "TSK10",
       "by": "runner",
       "note": "The first criterion is proven. The second is waiting on the fixture the next unit writes."
+    },
+    {
+      "at": "2026-11-10T06:00Z",
+      "kind": "blocked",
+      "task": "TSK11",
+      "by": "human",
+      "note": "waits on the human's pick"
+    },
+    {
+      "at": "2026-11-10T06:00Z",
+      "kind": "deferred",
+      "task": "TSK13",
+      "by": "human",
+      "note": "waits on the human's pick"
+    },
+    {
+      "at": "2026-11-10T08:00Z",
+      "kind": "unblocked",
+      "task": "TSK11",
+      "by": "human",
+      "note": "the pick is made"
+    },
+    {
+      "at": "2026-11-10T08:00Z",
+      "kind": "undeferred",
+      "task": "TSK13",
+      "by": "human",
+      "note": "the pick is made"
     },
     {
       "at": "2026-11-10T08:30Z",
@@ -737,6 +869,20 @@
       "task": "TSK13",
       "by": "runner",
       "note": "claimed by runner-01"
+    },
+    {
+      "at": "2026-11-10T09:05Z",
+      "kind": "started",
+      "task": "TSK11",
+      "by": "runner",
+      "note": "began the claimed task"
+    },
+    {
+      "at": "2026-11-10T09:05Z",
+      "kind": "started",
+      "task": "TSK13",
+      "by": "runner",
+      "note": "began the claimed task"
     },
     {
       "at": "2026-11-10T11:00Z",
@@ -826,6 +972,20 @@
       "task": "TSK13",
       "by": "runner",
       "note": "The first criterion is proven and the second follows the same command."
+    },
+    {
+      "at": "2026-11-11T09:05Z",
+      "kind": "started",
+      "task": "TSK12",
+      "by": "runner",
+      "note": "began the claimed task"
+    },
+    {
+      "at": "2026-11-11T09:05Z",
+      "kind": "started",
+      "task": "TSK14",
+      "by": "runner",
+      "note": "began the claimed task"
     },
     {
       "at": "2026-11-11T13:00Z",
@@ -925,6 +1085,13 @@
       "note": "The first criterion is proven and the second follows the same command."
     },
     {
+      "at": "2026-11-12T09:05Z",
+      "kind": "started",
+      "task": "TSK15",
+      "by": "runner",
+      "note": "began the claimed task"
+    },
+    {
       "at": "2026-11-12T16:00Z",
       "kind": "round_filed",
       "task": "TSK15",
@@ -987,6 +1154,13 @@
       "note": "The first criterion is proven and the second follows the same command."
     },
     {
+      "at": "2026-11-13T09:05Z",
+      "kind": "started",
+      "task": "TSK16",
+      "by": "runner",
+      "note": "began the claimed task"
+    },
+    {
       "at": "2026-11-13T09:30Z",
       "kind": "approved",
       "task": "TSK17",
@@ -995,16 +1169,17 @@
     },
     {
       "at": "2026-11-13T10:00Z",
-      "kind": "groomed",
-      "task": "TSK29",
-      "by": "creator"
-    },
-    {
-      "at": "2026-11-13T10:00Z",
       "kind": "claimed",
       "task": "TSK17",
       "by": "runner",
       "note": "claimed by runner-03"
+    },
+    {
+      "at": "2026-11-13T10:05Z",
+      "kind": "started",
+      "task": "TSK17",
+      "by": "runner",
+      "note": "began the claimed task"
     },
     {
       "at": "2026-11-13T15:00Z",
@@ -1115,6 +1290,13 @@
       "task": "TSK19",
       "by": "runner",
       "note": "claimed by runner-03"
+    },
+    {
+      "at": "2026-11-14T01:05Z",
+      "kind": "started",
+      "task": "TSK19",
+      "by": "runner",
+      "note": "began the claimed task"
     },
     {
       "at": "2026-11-14T05:00Z",
@@ -1274,6 +1456,13 @@
       "by": "reviewer"
     },
     {
+      "at": "2026-11-14T09:05Z",
+      "kind": "started",
+      "task": "TSK18",
+      "by": "runner",
+      "note": "began the claimed task"
+    },
+    {
       "at": "2026-11-14T09:30Z",
       "kind": "remediated",
       "task": "TSK19",
@@ -1369,6 +1558,13 @@
       "task": "TSK20",
       "by": "runner",
       "note": "claimed by runner-04"
+    },
+    {
+      "at": "2026-11-15T01:05Z",
+      "kind": "started",
+      "task": "TSK20",
+      "by": "runner",
+      "note": "began the claimed task"
     },
     {
       "at": "2026-11-15T05:00Z",
@@ -1556,6 +1752,13 @@
       "note": "claimed by runner-05"
     },
     {
+      "at": "2026-11-16T01:05Z",
+      "kind": "started",
+      "task": "TSK21",
+      "by": "runner",
+      "note": "began the claimed task"
+    },
+    {
       "at": "2026-11-16T05:00Z",
       "kind": "round_filed",
       "task": "TSK21",
@@ -1699,11 +1902,46 @@
       "note": "the review budget is spent"
     },
     {
-      "at": "2026-11-16T12:00Z",
-      "kind": "approved",
-      "task": "TSK29",
+      "at": "2026-11-16T10:30Z",
+      "kind": "resumed",
+      "task": "TSK21",
       "by": "human",
-      "note": "left the human lane"
+      "note": "instructed to continue"
+    },
+    {
+      "at": "2026-11-16T10:35Z",
+      "kind": "started",
+      "task": "TSK21",
+      "by": "runner",
+      "note": "began the resumed task"
+    },
+    {
+      "at": "2026-11-16T10:40Z",
+      "kind": "review_requested",
+      "task": "TSK21",
+      "by": "runner",
+      "note": "sent to review"
+    },
+    {
+      "at": "2026-11-16T11:00Z",
+      "kind": "round_filed",
+      "task": "TSK21",
+      "by": "reviewer",
+      "note": "external 6, edge-cases, changes-needed"
+    },
+    {
+      "at": "2026-11-16T11:00Z",
+      "kind": "finding_raised",
+      "task": "TSK21",
+      "by": "reviewer",
+      "note": "raised FIND-06"
+    },
+    {
+      "at": "2026-11-16T11:00Z",
+      "kind": "escalated",
+      "task": "TSK21",
+      "by": "reviewer",
+      "note": "the review budget is spent"
     },
     {
       "at": "2026-11-16T12:00Z",

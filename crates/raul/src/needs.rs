@@ -2129,7 +2129,7 @@ mod tests {
         assert!(row("TSK04").review.is_none(), "an approval has no state");
         assert_eq!(
             review_state::text(row("TSK21").review.as_deref().expect("a state")),
-            "5 open findings (2 high, 2 medium, 1 low) · 5/5 rounds"
+            "6 open findings (3 high, 2 medium, 1 low) · 6/5 rounds"
         );
         assert_eq!(
             review_state::text(row("TSK13").review.as_deref().expect("a state")),
@@ -2151,7 +2151,7 @@ mod tests {
             "{row}"
         );
         assert!(
-            row.contains("5 open findings (2 high, 2 medium, 1 low) · 5/5 rounds"),
+            row.contains("6 open findings (3 high, 2 medium, 1 low) · 6/5 rounds"),
             "{row}"
         );
         // The age stays right-aligned at the end of the row.
@@ -2170,7 +2170,7 @@ mod tests {
             .iter()
             .find(|row| row.contains("TSK21"))
             .unwrap_or_else(|| panic!("no row for TSK21: {rows:?}"));
-        assert!(row.contains("5/5 rounds"), "{row}");
+        assert!(row.contains("6/5 rounds"), "{row}");
         assert!(!row.contains(clock), "{row}");
         let row = rows
             .iter()
@@ -2218,7 +2218,7 @@ mod tests {
             .iter()
             .find(|row| row.contains("TSK21"))
             .unwrap_or_else(|| panic!("no row for TSK21: {rows:?}"));
-        assert!(row.contains("5 open findings…"), "{row}");
+        assert!(row.contains("6 open findings…"), "{row}");
         assert!(!row.contains("(2 high"), "{row}");
         // A findings-only state is cut the same way.
         let row = rows
@@ -2235,7 +2235,7 @@ mod tests {
         let strong = theme.text.strong.fg.expect("the strong colour");
         let dim = theme.text.dim.fg.expect("the dim colour");
         let cells = draw_cells(&mock_work(), 100, 40);
-        assert_eq!(colour_of(&cells, "5/5 rounds"), Some(strong), "a count");
+        assert_eq!(colour_of(&cells, "6/5 rounds"), Some(strong), "a count");
         assert_eq!(colour_of(&cells, "rounds"), Some(dim), "a word");
     }
 

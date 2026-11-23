@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 use std::sync::{Mutex, MutexGuard};
+use std::time::Duration;
 
 use coding_crew_core::store::{DATA_DIR, WORK_DIR};
 use coding_crew_core::{
@@ -307,31 +309,49 @@ fn a_file_that_does_not_parse_still_holds_its_id() {
 
 #[test]
 fn two_writers_creating_at_once_take_no_duplicate_id() {
-    // Each create scans the folder for the next id, then writes. Unlocked,
-    // two writers can scan the same folder and take the same id.
+    // Each create scans the folder for the next id, then writes. The scan and
+    // the write are one locked step, so a second creator waits for the first
+    // to finish. The first writer holds the lock after its scan. A create that
+    // did not wait would scan the same folder, take the same id and write it
+    // while the first writer still holds it. No timing is involved: the
+    // second create is either blocked by the lock or it finishes at once.
     let project = scratch("two-creators");
     let store = Store::new(project.join(DATA_DIR).join(WORK_DIR));
 
-    std::thread::scope(|scope| {
-        for _ in 0..2 {
-            let store = store.clone();
-            scope.spawn(move || {
-                for n in 0..25 {
-                    store.create(&format!("task {n}")).expect("a task");
-                }
-            });
-        }
-    });
+    let first = store.lock().expect("the project lock");
+    let scanned = first.next_id().expect("the next id");
+    assert_eq!(scanned, "TSK01");
 
-    let mut ids: Vec<String> = store
+    let (finished, racing) = mpsc::channel();
+    let racer = {
+        let store = store.clone();
+        std::thread::spawn(move || {
+            let task = store.create("racer").expect("a task");
+            let _ = finished.send(());
+            task.id
+        })
+    };
+    // The racer may not finish while the first writer holds the lock. A
+    // racer that does finish here took its id from the scan above.
+    assert!(
+        racing.recv_timeout(Duration::from_secs(5)).is_err(),
+        "a create finished while another writer held the project lock"
+    );
+
+    let mut claimed = Task::new(scanned, "first");
+    first.save(&mut claimed).expect("the first task");
+    drop(first);
+
+    let racer_id = racer.join().expect("the racer");
+    assert_eq!(racer_id, "TSK02", "the racer took the first writer's id");
+
+    let ids: Vec<String> = store
         .list()
         .expect("the tasks")
         .into_iter()
         .map(|task| task.id)
         .collect();
-    assert_eq!(ids.len(), 50, "a task was lost or written twice");
-    ids.dedup();
-    assert_eq!(ids.len(), 50, "two tasks share an id");
+    assert_eq!(ids, ["TSK01", "TSK02"], "two tasks share an id");
 
     let _ = fs::remove_dir_all(&project);
 }

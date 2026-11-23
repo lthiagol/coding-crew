@@ -952,11 +952,11 @@ fn a_subtask_row_names_its_parent_at_one_hundred_columns() {
 
 #[test]
 fn the_row_tabs_carry_the_review_state() {
-    // Needs you at 100: the escalated task with the budget spent and five
+    // Needs you at 100: the escalated task with the budget spent and six
     // findings open says both facts, severities and all.
     let needs = render_tab("needs-you", 100);
     assert!(
-        needs.contains("5 open findings (2 high, 2 medium, 1 low) · 5/5 rounds"),
+        needs.contains("6 open findings (3 high, 2 medium, 1 low) · 6/5 rounds"),
         "{needs}"
     );
     // Path at 100: a review row says the findings open and their severity.
