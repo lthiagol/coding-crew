@@ -1763,6 +1763,18 @@ at round 5, is resumed, and escalates again at round 6, so raul shows
 `6/5 rounds` (a human-resumed round can only escalate; task-model §3.2 holds).
 Two rounds. Commit `591c743`.
 
+### 2026-11-23 · Unit 99, rulings in the UI
+
+ADR 0018 is followed: the generator writes no "Approved by" notes, the
+journal's `approved` events carry the moment, and `remediated` reads
+`after round <n>`, matching `review.re_reviews[]`; talita decisions row 12 is
+resolved. raul and hugo share the footer's `+N keys` mark through
+`chrome::footer`. `docs/tui/screens.md` specifies the `?` overlay (size,
+scroll keys, the wheel) and it draws a scroll indicator when it overflows.
+raul's Settings shows a missing `harness` or `effort` as an empty row that can
+be set and saved; an unchanged empty row writes nothing. One round, clean.
+Commit `964bec6`.
+
 ---
 
 ## Lessons
