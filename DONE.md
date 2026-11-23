@@ -1609,6 +1609,13 @@ screens match the code. F31: Settings names the order the window starts in.
 Doc and comment changes only; no test owed, no ruling. Limits are in
 THE FOLLOW-UPS. Commit `f29fec8`.
 
+Unit closed: HUGO_CREW (the opencode trial). hugo's crew variable is
+`HUGO_CREW`, per ADR 0015; `HUGO_SESSION` is no longer read, with a test. Built
+by opencode, not Claude: builder `opencode-go/deepseek-v4.1-flash` on max,
+reviewer `opencode-go/glm-5.3` on high, through herdr-crew unchanged — the
+model and effort travel in `OPENCODE_CONFIG_CONTENT`. One build round, one
+review, clean. Built in a worktree and cherry-picked. Commit `d05bb29`.
+
 ---
 
 ## Lessons

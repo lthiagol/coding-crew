@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after unit 94.
+Updated 2026-11-23 by the orchestrator, after unit 94 and the HUGO_CREW rename.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -281,8 +281,6 @@ None blocking. Carried from the closed units.
   ADRs 0012–0020; `docs/talita/roadmap.md` holds the build order, units
   T1–T14. T1–T4 are built in core (units 84–87), with no talita code. T5
   onward waits on the human's word.
-- **hugo renames `HUGO_SESSION` to `HUGO_CREW`** (2026-11-22, ADR 0015). It
-  holds the crew's configuration, not an actor's session. A small hugo unit.
 - **2026-11-22, unit 84:** `mock-data/README.md:115` still says TSK14's
   re-review cannot be stamped. It can now, through `review.re_reviews[]`.
 - **2026-11-22, unit 84:** the `assert_ne!` added to
