@@ -308,9 +308,9 @@ dependencies = [
 name = "coding-crew-talita"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
  "coding-crew-core",
+ "serde",
  "serde_json",
 ]
 

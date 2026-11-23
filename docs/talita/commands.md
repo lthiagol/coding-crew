@@ -1,6 +1,6 @@
 # talita — command reference
 
-Accepted 2026-11-22; nothing is built. The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
+Accepted 2026-11-22. Built: `session`, `project` (T5). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
 the output and errors [ADR 0014](../decisions/0014-output-and-errors.md);
 identity [ADR 0015](../decisions/0015-identity.md). Gate names are task-model
 § 3.3's. "TM" is `docs/tasks/task-model.md`, "LC" `crates/core/src/lifecycle.rs`.
@@ -48,6 +48,19 @@ talita [global flags] <noun> <verb> <ids…> [flags]
   `acceptance_criteria` refuse content writes with `section.frozen`; the
   remedy is a child task (`task create --parent`). Deferral, failure reason
   and evidence stay writable (ADR 0013).
+
+Error codes and exit codes ([ADR 0014](../decisions/0014-output-and-errors.md)).
+Pinned to talita's code enum by a test:
+
+| Exit | Class | Codes |
+|---:|---|---|
+| 1 | internal | `internal` |
+| 2 | usage or input | `usage.invalid`, `input.invalid` |
+| 3 | not found | `project.not_found`, `task.not_found`, `part.not_found`, `run.absent`, `crew.unknown` |
+| 4 | refused by a rule | `status.wrong`, `gate.refused`, `section.frozen`, `task.cancelled`, `review.verdict_mismatch`, `review.budget_spent`, `finding.closed`, `question.resolved`, `claim.held`, `claim.not_claimable`, `criterion.covered`, `criterion.not_failed`, `criterion.deferred`, `depends.cycle`, `overlay.absent`, `item.not_open`, `item.is_idea`, `evidence.timeout`, `project.exists`, `run.active`, `crew.exists` |
+| 5 | identity | `identity.missing`, `role.wrong`, `actor.not_agent`, `section.not_owned`, `claim.not_holder` |
+| 6 | conflict | `conflict.lock`, `conflict.revision` |
+| 7 | damaged store | `store.unreadable` |
 
 Common errors, on every verb: `usage.invalid` (2), `input.invalid` (2),
 `project.not_found` (3), `task.not_found` (3), `part.not_found` (3),
