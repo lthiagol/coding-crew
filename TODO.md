@@ -50,13 +50,13 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–97, 63b and 70b are closed; their
+Queued in `docs/plan.md`, in order. Units 0–98, 63b and 70b are closed; their
 record is in `DONE.md`. Nothing is in flight: the human said to prepare, not
-build (2026-11-23); the human then started phase 1; 95–97 are closed, and the crew stopped for a VM reboot. Next: 98, then 99.
+build (2026-11-23); the human then started phase 1; 95–98 are closed. Next: 99, then 100.
 
 | phase | units | needs |
 |---|---|---|
-| 1 · cleanup | ~~95 hugo on PATH~~ · ~~96 docs drift~~ · ~~97 consistency~~ · 98 test hardening · 99 rulings in the UI | nothing; ready |
+| 1 · cleanup | ~~95 hugo on PATH~~ · ~~96 docs drift~~ · ~~97 consistency~~ · ~~98 test hardening~~ · 99 rulings in the UI | nothing; ready |
 | 2 · distribution | 100 version and releases · 101 Homebrew formulae | 100 is ready; 101 needs 100 and a first tag. The taps exist: `lthiagol/homebrew-tap`, `lthiagol/homebrew-dev`; the `homebrew` project skill publishes to them |
 | 3 · talita | T5–T12 in `docs/talita/roadmap.md` | the human's word to build talita |
 | 3 · the orchestrator | O1 its job, designed · O2 its job, built | O1 any time (docs only); O2 needs T12 |

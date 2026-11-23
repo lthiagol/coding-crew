@@ -1749,6 +1749,20 @@ paints TOML with the engine grammar, `toml_spans` removed (D2) — keys now take
 `executing` task under gate `overlay.clear`, and `task-model.md` and
 `docs/talita/commands.md` say so (D3). Two rounds. Commit `22446c0`.
 
+### 2026-11-23 · Unit 98, test hardening
+
+hugo's queue pick test fails when a fixed `2 + index` offset is restored; the
+two-creators store test forces the race instead of relying on timing; the
+journal and runtime byte checks were already in `generate.rs`. The fixtures
+hold `started`, `released`, `resumed`, `reopened`, `unblocked` and
+`undeferred`, an `Evidence.manual` override and a long-waiting approval.
+Review 1: TSK25 carried a re-review after a clean round (D1) — `re_reviews()`
+now hands back only after a non-escalating `changes-needed` round, and
+`check_activity` asserts it; `resumed` was missing (D2) — TSK21 now escalates
+at round 5, is resumed, and escalates again at round 6, so raul shows
+`6/5 rounds` (a human-resumed round can only escalate; task-model §3.2 holds).
+Two rounds. Commit `591c743`.
+
 ---
 
 ## Lessons
