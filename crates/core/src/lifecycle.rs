@@ -558,7 +558,10 @@ fn check_review(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
 
 /// The planning and the executing session never review the task. All three
 /// sessions must be recorded: a check that cannot name one does not pass.
-fn check_independence(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
+///
+/// `round file` calls this at filing, as ADR 0017 requires; it is the same
+/// rule the reviewer's transitions run.
+pub fn check_independence(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
     let planned = task.planned_by.as_deref();
     let executed = claim_session(task);
     let acting = actor.session.as_deref();
@@ -616,7 +619,7 @@ fn check_round_current(failures: &mut Vec<GateFailure>, task: &Task) {
 }
 
 /// The session that filed the latest external round makes the move.
-fn check_round_owner(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
+pub fn check_round_owner(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
     let Some(round) = latest_external(task) else {
         fail(failures, "review.round_owner", "no external round is filed");
         return;
@@ -631,7 +634,7 @@ fn check_round_owner(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor
 
 /// The session that executed a task never remediates its findings. Both
 /// sessions must be recorded: a check that cannot name a session does not pass.
-fn check_remediation(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
+pub fn check_remediation(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor) {
     let executed = claim_session(task);
     let acting = actor.session.as_deref();
     gate(
@@ -655,7 +658,7 @@ fn check_remediation(failures: &mut Vec<GateFailure>, task: &Task, actor: &Actor
 }
 
 /// The latest external round: the verdict the reviewer's move rests on.
-fn latest_external(task: &Task) -> Option<&Round> {
+pub fn latest_external(task: &Task) -> Option<&Round> {
     task.review
         .rounds
         .iter()

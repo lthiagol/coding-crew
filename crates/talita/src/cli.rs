@@ -12,8 +12,9 @@ use crate::error::{Code, Failure};
 use crate::identity::{Flags, Resolved};
 use crate::parts::{self, StepFields};
 use crate::project::{self, Project};
+use crate::review::RoundFlags;
 use crate::write::Call;
-use crate::{item, lifecycle, session, task};
+use crate::{item, lifecycle, review, session, task};
 
 /// Task Administration, Lifecycle & Interaction Terminal Application — the CLI
 /// tool of coding-crew. Every call prints one JSON object on stdout.
@@ -85,6 +86,21 @@ enum Noun {
     Note {
         #[command(subcommand)]
         verb: NoteVerb,
+    },
+    /// A review round: the self pre-screen or the reviewer's external round.
+    Round {
+        #[command(subcommand)]
+        verb: RoundVerb,
+    },
+    /// A defect a round raised.
+    Finding {
+        #[command(subcommand)]
+        verb: FindingVerb,
+    },
+    /// Discussion under a finding.
+    Comment {
+        #[command(subcommand)]
+        verb: CommentVerb,
     },
     /// A smaller task: an idea, a bug or a small feature (ITM*).
     Item {
@@ -353,6 +369,68 @@ enum NoteVerb {
 }
 
 #[derive(Debug, Subcommand)]
+enum RoundVerb {
+    /// File the round whole: the self pre-screen or the external review.
+    File {
+        id: String,
+        /// self or external.
+        #[arg(long, required_unless_present = "input", conflicts_with = "input")]
+        kind: Option<String>,
+        /// spec-compliance, edge-cases, security, empirical or design.
+        #[arg(long, required_unless_present = "input", conflicts_with = "input")]
+        focus: Option<String>,
+        /// ok or changes-needed.
+        #[arg(long, required_unless_present = "input", conflicts_with = "input")]
+        verdict: Option<String>,
+        #[arg(long, conflicts_with = "input")]
+        notes: Option<String>,
+        /// A JSON file holding the whole round; - reads stdin.
+        #[arg(long, value_name = "PATH")]
+        input: Option<String>,
+    },
+    /// The rounds, or the one numbered N, each with its findings.
+    Show { id: String, n: Option<u32> },
+}
+
+#[derive(Debug, Subcommand)]
+enum FindingVerb {
+    /// A new FIND-nn in the latest external round. The reviewer that filed it.
+    Open {
+        id: String,
+        /// low, medium or high.
+        #[arg(long)]
+        severity: String,
+        #[arg(long)]
+        description: String,
+    },
+    /// Mark it fixed. The remediating runner.
+    Resolve {
+        id: String,
+        finding: String,
+        #[arg(long)]
+        resolution: String,
+    },
+    /// Mark it dismissed, keeping the reason.
+    Dismiss {
+        id: String,
+        finding: String,
+        #[arg(long)]
+        reason: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CommentVerb {
+    /// A new CMT-nn under a finding, open or closed. Any agent role; a human.
+    Add {
+        id: String,
+        finding: String,
+        #[arg(long)]
+        body: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum ItemVerb {
     /// A new ITMnn, open.
     Create {
@@ -565,6 +643,76 @@ fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
             let run = writer(project_flag, identity, talita.expect_revision);
             match verb {
                 NoteVerb::Add { id, body } => ("note add", run(&|c| parts::note(c, id, body))),
+            }
+        }
+        Noun::Round { verb } => {
+            let run = writer(project_flag, identity, talita.expect_revision);
+            match verb {
+                RoundVerb::File {
+                    id,
+                    kind,
+                    focus,
+                    verdict,
+                    notes,
+                    input,
+                } => (
+                    "round file",
+                    run(&|c| {
+                        review::round_file(
+                            c,
+                            id,
+                            RoundFlags {
+                                kind: kind.as_deref(),
+                                focus: focus.as_deref(),
+                                verdict: verdict.as_deref(),
+                                notes: notes.as_deref(),
+                                input: input.as_deref(),
+                            },
+                        )
+                    }),
+                ),
+                RoundVerb::Show { id, n } => (
+                    "round show",
+                    project::locate(project_flag).and_then(|p| review::round_show(&p, id, *n)),
+                ),
+            }
+        }
+        Noun::Finding { verb } => {
+            let run = writer(project_flag, identity, talita.expect_revision);
+            match verb {
+                FindingVerb::Open {
+                    id,
+                    severity,
+                    description,
+                } => (
+                    "finding open",
+                    run(&|c| review::finding_open(c, id, severity, description)),
+                ),
+                FindingVerb::Resolve {
+                    id,
+                    finding,
+                    resolution,
+                } => (
+                    "finding resolve",
+                    run(&|c| review::finding_resolve(c, id, finding, resolution)),
+                ),
+                FindingVerb::Dismiss {
+                    id,
+                    finding,
+                    reason,
+                } => (
+                    "finding dismiss",
+                    run(&|c| review::finding_dismiss(c, id, finding, reason)),
+                ),
+            }
+        }
+        Noun::Comment { verb } => {
+            let run = writer(project_flag, identity, talita.expect_revision);
+            match verb {
+                CommentVerb::Add { id, finding, body } => (
+                    "comment add",
+                    run(&|c| review::comment_add(c, id, finding, body)),
+                ),
             }
         }
         Noun::Item { verb } => item_verb(verb, project_flag, identity),

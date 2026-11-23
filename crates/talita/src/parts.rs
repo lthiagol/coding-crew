@@ -202,13 +202,14 @@ fn step_writer(task: &Task, actor: &Actor) -> Result<bool, Failure> {
     if pre_approval(task) {
         return Ok(false);
     }
-    working_runner(task, actor)?;
+    working_runner(task, actor, "steps")?;
     Ok(true)
 }
 
 /// The working runner (commands.md, Conventions): in `executing`, the claim's
-/// holder; in `remediating`, a session that is not the claim's.
-fn working_runner(task: &Task, actor: &Actor) -> Result<(), Failure> {
+/// holder; in `remediating`, a session that is not the claim's. `subject` names
+/// what the caller writes, for the refusal's message.
+pub(crate) fn working_runner(task: &Task, actor: &Actor, subject: &str) -> Result<(), Failure> {
     match task.status {
         Status::Executing => {
             let holds = task
@@ -219,7 +220,7 @@ fn working_runner(task: &Task, actor: &Actor) -> Result<(), Failure> {
                 return Err(Failure::new(
                     Code::ClaimNotHolder,
                     format!(
-                        "only the claim's holder, in its session, writes {}'s steps",
+                        "only the claim's holder, in its session, writes {}'s {subject}",
                         task.id
                     ),
                 )
@@ -248,7 +249,7 @@ fn working_runner(task: &Task, actor: &Actor) -> Result<(), Failure> {
         other => Err(Failure::new(
             Code::StatusWrong,
             format!(
-                "after approval, steps are written in executing or remediating; {} is {}",
+                "after approval, {subject} are written in executing or remediating; {} is {}",
                 task.id,
                 other.as_str()
             ),

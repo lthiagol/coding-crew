@@ -10,6 +10,7 @@ mod item;
 mod lifecycle;
 mod parts;
 mod project;
+mod review;
 mod session;
 mod task;
 mod write;
