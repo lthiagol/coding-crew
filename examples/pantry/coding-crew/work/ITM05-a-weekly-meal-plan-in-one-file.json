@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "ITM05",
+  "title": "A weekly meal plan in one file",
+  "slug": "a-weekly-meal-plan-in-one-file",
+  "kind": "feature",
+  "status": "promoted",
+  "body": "A cook hands the week to a phone over the table.",
+  "scope": [
+    "the plan file",
+    "the week view"
+  ],
+  "tags": [],
+  "created": "2026-11-23T21:21:31Z",
+  "updated": "2026-11-23T21:21:32Z",
+  "promoted_to": "TSK13",
+  "dismissed_reason": ""
+}

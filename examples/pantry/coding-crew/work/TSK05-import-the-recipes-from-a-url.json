@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "id": "TSK05",
+  "title": "Import the recipes from a URL",
+  "slug": "import-the-recipes-from-a-url",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:19:10Z",
+  "updated": "2026-11-23T21:19:44Z",
+  "revision": 34,
+  "status": "needs-human",
+  "status_since": "2026-11-23T21:19:44Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-pantry",
+    "at": "2026-11-23T21:19:19Z",
+    "lease_expires_at": "2026-11-23T23:19:19Z"
+  },
+  "planned_by": "ses-mara-pantry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A cook imports a recipe from a page without typing it",
+    "problem": "every imported recipe was typed by hand"
+  },
+  "scope": {
+    "in_scope": [
+      "the importer",
+      "the recipe parser"
+    ],
+    "out_of_scope": [
+      "importing a whole cookbook"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "an imported recipe lands in the pantry with its photo",
+      "verification": "grep -c '\"source\"' data/recipes.json && echo \"the recipes have sources\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"source\"' data/recipes.json && echo \"the recipes have sources\"",
+          "exit_code": 0,
+          "summary": "the recipes have sources",
+          "at": "2026-11-23T21:19:22Z",
+          "by": "ravi",
+          "session": "ses-ravi-pantry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "fetch and parse the page",
+      "done_when": "the recipe lands with its fields",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "ravi",
+        "session": "ses-ravi-pantry",
+        "verdict": "ok",
+        "at": "2026-11-23T21:19:24Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "spec-compliance",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:19:26Z",
+        "notes": "The importer is not what the criterion asked for.",
+        "findings": [
+          "FIND-01"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:19:30Z",
+        "notes": "A page without everything the importer wants.",
+        "findings": [
+          "FIND-02"
+        ]
+      },
+      {
+        "n": 3,
+        "kind": "external",
+        "focus": "security",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:19:35Z",
+        "notes": "The importer fetches whatever the page names.",
+        "findings": [
+          "FIND-03"
+        ]
+      },
+      {
+        "n": 4,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:19:39Z",
+        "notes": "Measured on the sample pages.",
+        "findings": [
+          "FIND-04"
+        ]
+      },
+      {
+        "n": 5,
+        "kind": "external",
+        "focus": "design",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:19:43Z",
+        "notes": "The imported recipe cannot be found again.",
+        "findings": [
+          "FIND-05"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] The importer ignores the page's yield\n\n**where:** `pantry-core/src/import.rs`\n\n**defect:** the recipe has a yield field and the parser never fills it.\n\n**scenario:** import a recipe that says \"serves four\".\n\n**fix:** read the yield and store it.",
+        "created": "2026-11-23T21:19:26Z",
+        "resolved": "2026-11-23T21:19:28Z",
+        "resolution": "the yield is read from the page and stored on the recipe",
+        "comments": []
+      },
+      {
+        "id": "FIND-02",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] A page without a photo leaves the import half-written\n\n**where:** `pantry-core/src/import.rs`\n\n**defect:** the photo is written before the recipe, and a missing photo aborts the import.\n\n**scenario:** import a page with no image.\n\n**fix:** write the recipe first and treat the photo as optional.",
+        "created": "2026-11-23T21:19:30Z",
+        "resolved": "2026-11-23T21:19:33Z",
+        "resolution": "the recipe is written first; a missing photo is skipped",
+        "comments": []
+      },
+      {
+        "id": "FIND-03",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] The importer follows a link into the house network\n\n**where:** `pantry-core/src/import.rs`\n\n**defect:** a page can point the fetcher at an address inside the local network.\n\n**scenario:** import a page whose recipe link is `http://192.168.1.1/`.\n\n**fix:** refuse private addresses.",
+        "created": "2026-11-23T21:19:35Z",
+        "resolved": "2026-11-23T21:19:37Z",
+        "resolution": "private and link-local addresses are refused before the fetch",
+        "comments": []
+      },
+      {
+        "id": "FIND-04",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] The importer takes a minute on a long page\n\n**where:** `pantry-core/src/import.rs`\n\n**defect:** the parser re-reads the whole document per ingredient.\n\n**scenario:** import a page with forty ingredients.\n\n**fix:** read the document once.",
+        "created": "2026-11-23T21:19:39Z",
+        "resolved": "2026-11-23T21:19:41Z",
+        "resolution": "the document is parsed once; forty ingredients import in two seconds",
+        "comments": []
+      },
+      {
+        "id": "FIND-05",
+        "severity": "high",
+        "status": "open",
+        "description": "## D1 [high] The imported recipe lands with no source\n\n**where:** `pantry-web/src/import.rs`\n\n**defect:** the source is dropped when the import is confirmed.\n\n**scenario:** import a recipe, open it, look for its source.\n\n**fix:** carry the source through the import.",
+        "created": "2026-11-23T21:19:43Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-23T21:19:29Z",
+        "after_round": 1,
+        "by": "jo",
+        "session": "ses-jo-pantry"
+      },
+      {
+        "at": "2026-11-23T21:19:34Z",
+        "after_round": 2,
+        "by": "jo",
+        "session": "ses-jo-pantry"
+      },
+      {
+        "at": "2026-11-23T21:19:38Z",
+        "after_round": 3,
+        "by": "jo",
+        "session": "ses-jo-pantry"
+      },
+      {
+        "at": "2026-11-23T21:19:42Z",
+        "after_round": 4,
+        "by": "jo",
+        "session": "ses-jo-pantry"
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

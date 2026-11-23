@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "id": "TSK13",
+  "title": "A weekly meal plan in one file",
+  "slug": "a-weekly-meal-plan-in-one-file",
+  "children": [],
+  "kind": "feature",
+  "promoted_from": "ITM05",
+  "created": "2026-11-23T21:21:32Z",
+  "updated": "2026-11-23T21:21:32Z",
+  "revision": 1,
+  "status": "draft",
+  "status_since": "2026-11-23T21:21:32Z",
+  "overlays": {},
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A weekly meal plan in one file",
+    "problem": "A cook hands the week to a phone over the table."
+  },
+  "scope": {
+    "in_scope": [
+      "the plan file",
+      "the week view"
+    ],
+    "out_of_scope": []
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A weekly meal plan in one file",
+      "verification": "",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "mara",
+      "body": "from ITM05",
+      "at": "2026-11-23T21:21:32Z"
+    }
+  ],
+  "depends_on": []
+}

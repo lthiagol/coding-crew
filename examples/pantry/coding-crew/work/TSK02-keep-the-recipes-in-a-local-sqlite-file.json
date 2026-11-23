@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "id": "TSK02",
+  "title": "Keep the recipes in a local SQLite file",
+  "slug": "keep-the-recipes-in-a-local-sqlite-file",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-23T21:18:14Z",
+  "updated": "2026-11-23T21:18:31Z",
+  "revision": 18,
+  "status": "done",
+  "status_since": "2026-11-23T21:18:31Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-pantry",
+    "at": "2026-11-23T21:18:23Z",
+    "lease_expires_at": "2026-11-23T23:18:23Z"
+  },
+  "planned_by": "ses-mara-pantry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The recipes live in one local file the cook can back up",
+    "problem": "The recipes were kept in a JSON file that grew unreadable"
+  },
+  "scope": {
+    "in_scope": [
+      "the storage layer",
+      "the migration from the old JSON file"
+    ],
+    "out_of_scope": [
+      "a server database"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "the recipes survive a restart",
+      "verification": "grep -c '\"title\"' data/recipes.json && echo \"the recipes are readable\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"title\"' data/recipes.json && echo \"the recipes are readable\"",
+          "exit_code": 0,
+          "summary": "the recipes are readable",
+          "at": "2026-11-23T21:18:26Z",
+          "by": "ravi",
+          "session": "ses-ravi-pantry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "move the store into SQLite",
+      "done_when": "the demo recipes load from the new file",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "ravi",
+        "session": "ses-ravi-pantry",
+        "verdict": "ok",
+        "at": "2026-11-23T21:18:28Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "ok",
+        "at": "2026-11-23T21:18:30Z",
+        "notes": "",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

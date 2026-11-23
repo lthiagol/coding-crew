@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "id": "TSK07",
+  "title": "Show the shopping list by aisle",
+  "slug": "show-the-shopping-list-by-aisle",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:20:22Z",
+  "updated": "2026-11-23T21:20:34Z",
+  "revision": 13,
+  "status": "executing",
+  "status_since": "2026-11-23T21:20:32Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-pantry",
+    "at": "2026-11-23T21:20:31Z",
+    "lease_expires_at": "2026-11-23T23:20:31Z"
+  },
+  "planned_by": "ses-mara-pantry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The shopping list is grouped the way the shop is laid out",
+    "problem": "the list was alphabetical, which is not how a shop is walked"
+  },
+  "scope": {
+    "in_scope": [
+      "the aisle grouping",
+      "the list screen"
+    ],
+    "out_of_scope": [
+      "the shop's own layout data"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "the list groups the items by aisle",
+      "verification": "grep -c '\"aisle\"' data/shopping.json && echo \"the list has aisles\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"aisle\"' data/shopping.json && echo \"the list has aisles\"",
+          "exit_code": 0,
+          "summary": "the list has aisles",
+          "at": "2026-11-23T21:20:34Z",
+          "by": "ravi",
+          "session": "ses-ravi-pantry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "group the items by aisle",
+      "done_when": "the list shows one group per aisle",
+      "files": [],
+      "status": "in-progress",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

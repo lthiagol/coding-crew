@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "id": "TSK04",
+  "title": "Plan the meals for the week",
+  "slug": "plan-the-meals-for-the-week",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:18:51Z",
+  "updated": "2026-11-23T21:19:09Z",
+  "revision": 19,
+  "status": "remediating",
+  "status_since": "2026-11-23T21:19:08Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-pantry",
+    "at": "2026-11-23T21:19:00Z",
+    "lease_expires_at": "2026-11-23T23:19:00Z"
+  },
+  "planned_by": "ses-mara-pantry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A cook picks the meals of a week in one place",
+    "problem": "the meals were planned on paper"
+  },
+  "scope": {
+    "in_scope": [
+      "the week view",
+      "the meal plan file"
+    ],
+    "out_of_scope": [
+      "nutrition advice"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "the week holds seven meals",
+      "verification": "grep -c '\"meal\"' data/meal-plan.json && echo \"the plan has meals\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"meal\"' data/meal-plan.json && echo \"the plan has meals\"",
+          "exit_code": 0,
+          "summary": "the plan has meals",
+          "at": "2026-11-23T21:19:03Z",
+          "by": "ravi",
+          "session": "ses-ravi-pantry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "write the week's plan",
+      "done_when": "the plan lists seven meals",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "ravi",
+        "session": "ses-ravi-pantry",
+        "verdict": "ok",
+        "at": "2026-11-23T21:19:05Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:19:07Z",
+        "notes": "The week holds seven meals; the edges of the week do not.",
+        "findings": [
+          "FIND-01",
+          "FIND-02"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] Saturday's meal overwrites Sunday's\n\n**where:** `pantry-core/src/week.rs`\n\n**defect:** the day index is off by one at the end of the week.\n\n**scenario:** plan seven meals and open the week again.\n\n**fix:** index the days from zero.",
+        "created": "2026-11-23T21:19:07Z",
+        "resolved": "2026-11-23T21:19:09Z",
+        "resolution": "the day index is fixed and the week has seven rows",
+        "comments": []
+      },
+      {
+        "id": "FIND-02",
+        "severity": "medium",
+        "status": "open",
+        "description": "## D2 [medium] The week view shows the old plan after a save\n\n**where:** `pantry-web/src/week.rs`\n\n**defect:** the rendered week is cached and not invalidated.\n\n**scenario:** change Wednesday and return to the week.\n\n**fix:** refresh the view on save.",
+        "created": "2026-11-23T21:19:07Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

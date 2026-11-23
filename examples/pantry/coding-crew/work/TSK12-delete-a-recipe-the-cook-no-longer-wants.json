@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "id": "TSK12",
+  "title": "Delete a recipe the cook no longer wants",
+  "slug": "delete-a-recipe-the-cook-no-longer-wants",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-23T21:21:15Z",
+  "updated": "2026-11-23T21:21:24Z",
+  "revision": 10,
+  "status": "approved",
+  "status_since": "2026-11-23T21:21:23Z",
+  "overlays": {
+    "blocked": {
+      "reason": "the delete copy is not agreed yet; wait for the design review",
+      "by": "hannah",
+      "at": "2026-11-23T21:21:24Z"
+    }
+  },
+  "planned_by": "ses-mara-pantry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A cook can remove a recipe and its history",
+    "problem": "a mistyped recipe stayed in the pantry forever"
+  },
+  "scope": {
+    "in_scope": [
+      "the delete action",
+      "the confirmation"
+    ],
+    "out_of_scope": [
+      "an undo"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "the recipe is gone from the list",
+      "verification": "grep -c '\"deleted\"' data/recipes.json && echo \"the recipes can be deleted\"",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "delete the recipe",
+      "done_when": "the recipe is gone from the list",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

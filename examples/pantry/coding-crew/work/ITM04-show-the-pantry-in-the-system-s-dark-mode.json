@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "ITM04",
+  "title": "Show the pantry in the system's dark mode",
+  "slug": "show-the-pantry-in-the-system-s-dark-mode",
+  "kind": "bug",
+  "status": "dismissed",
+  "body": "The screen is white at night.",
+  "scope": [],
+  "tags": [],
+  "created": "2026-11-23T21:21:29Z",
+  "updated": "2026-11-23T21:21:30Z",
+  "dismissed_reason": "not now: the theme work is bigger than this bug"
+}

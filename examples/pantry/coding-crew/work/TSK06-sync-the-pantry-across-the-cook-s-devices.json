@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "id": "TSK06",
+  "title": "Sync the pantry across the cook's devices",
+  "slug": "sync-the-pantry-across-the-cook-s-devices",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:19:45Z",
+  "updated": "2026-11-23T21:20:21Z",
+  "revision": 36,
+  "status": "executing",
+  "status_since": "2026-11-23T21:20:20Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-pantry",
+    "at": "2026-11-23T21:19:54Z",
+    "lease_expires_at": "2026-11-23T23:19:54Z"
+  },
+  "planned_by": "ses-mara-pantry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The cook's recipes are the same on every device",
+    "problem": "the pantry lived on one laptop"
+  },
+  "scope": {
+    "in_scope": [
+      "the sync protocol",
+      "the conflict rules"
+    ],
+    "out_of_scope": [
+      "offline editing"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "a change on one device reaches the other",
+      "verification": "grep -c '\"device\"' data/accounts.json && echo \"the accounts know their devices\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"device\"' data/accounts.json && echo \"the accounts know their devices\"",
+          "exit_code": 0,
+          "summary": "the accounts know their devices",
+          "at": "2026-11-23T21:19:57Z",
+          "by": "ravi",
+          "session": "ses-ravi-pantry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "sync the changes",
+      "done_when": "both devices hold the same pantry",
+      "files": [],
+      "status": "in-progress",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "ravi",
+        "session": "ses-ravi-pantry",
+        "verdict": "ok",
+        "at": "2026-11-23T21:19:59Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "spec-compliance",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:20:01Z",
+        "notes": "The protocol is written down; the client does not follow it.",
+        "findings": [
+          "FIND-01"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:20:05Z",
+        "notes": "Two devices, one recipe.",
+        "findings": [
+          "FIND-02"
+        ]
+      },
+      {
+        "n": 3,
+        "kind": "external",
+        "focus": "security",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:20:09Z",
+        "notes": "A device that signed out still writes.",
+        "findings": [
+          "FIND-03"
+        ]
+      },
+      {
+        "n": 4,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:20:13Z",
+        "notes": "Measured through a dropping tunnel.",
+        "findings": [
+          "FIND-04"
+        ]
+      },
+      {
+        "n": 5,
+        "kind": "external",
+        "focus": "design",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:20:18Z",
+        "notes": "The conflict dialogue takes the whole screen.",
+        "findings": [
+          "FIND-05"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] The sync sends the whole pantry on every change\n\n**where:** `pantry-core/src/sync.rs`\n\n**defect:** the protocol says diffs and the client sends the whole file.\n\n**scenario:** change one recipe on a full pantry.\n\n**fix:** send the changed records.",
+        "created": "2026-11-23T21:20:01Z",
+        "resolved": "2026-11-23T21:20:03Z",
+        "resolution": "the client sends only the records that changed",
+        "comments": []
+      },
+      {
+        "id": "FIND-02",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] Two devices editing the same recipe lose one edit\n\n**where:** `pantry-core/src/sync.rs`\n\n**defect:** the later write wins with no record.\n\n**scenario:** edit the same recipe on both devices offline.\n\n**fix:** keep a version and surface the conflict.",
+        "created": "2026-11-23T21:20:05Z",
+        "resolved": "2026-11-23T21:20:07Z",
+        "resolution": "each recipe carries a version; the conflict is shown beside it",
+        "comments": []
+      },
+      {
+        "id": "FIND-03",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] A stale device token still syncs\n\n**where:** `pantry-core/src/sync.rs`\n\n**defect:** the token is checked at sign-in only.\n\n**scenario:** sign out on one device, sync from another old one.\n\n**fix:** check the token on every sync.",
+        "created": "2026-11-23T21:20:09Z",
+        "resolved": "2026-11-23T21:20:11Z",
+        "resolution": "the device token is checked on every sync",
+        "comments": []
+      },
+      {
+        "id": "FIND-04",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] The sync retries forever on a dropped connection\n\n**where:** `pantry-core/src/sync.rs`\n\n**defect:** the retry loop has no backoff and no cap.\n\n**scenario:** sync through a tunnel that drops.\n\n**fix:** back off and stop after five tries.",
+        "created": "2026-11-23T21:20:13Z",
+        "resolved": "2026-11-23T21:20:16Z",
+        "resolution": "the retry backs off and stops after five tries",
+        "comments": []
+      },
+      {
+        "id": "FIND-05",
+        "severity": "high",
+        "status": "open",
+        "description": "## D1 [high] The conflict dialogue blocks the pantry screen\n\n**where:** `pantry-web/src/sync.rs`\n\n**defect:** the dialogue is modal over the whole app.\n\n**scenario:** a conflict while planning a week.\n\n**fix:** put the choice beside the recipe.",
+        "created": "2026-11-23T21:20:18Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-23T21:20:04Z",
+        "after_round": 1,
+        "by": "jo",
+        "session": "ses-jo-pantry"
+      },
+      {
+        "at": "2026-11-23T21:20:08Z",
+        "after_round": 2,
+        "by": "jo",
+        "session": "ses-jo-pantry"
+      },
+      {
+        "at": "2026-11-23T21:20:12Z",
+        "after_round": 3,
+        "by": "jo",
+        "session": "ses-jo-pantry"
+      },
+      {
+        "at": "2026-11-23T21:20:17Z",
+        "after_round": 4,
+        "by": "jo",
+        "session": "ses-jo-pantry"
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

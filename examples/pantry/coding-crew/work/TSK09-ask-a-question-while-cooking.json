@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "id": "TSK09",
+  "title": "Ask a question while cooking",
+  "slug": "ask-a-question-while-cooking",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:20:44Z",
+  "updated": "2026-11-23T21:20:52Z",
+  "revision": 9,
+  "status": "groomed",
+  "status_since": "2026-11-23T21:20:51Z",
+  "overlays": {},
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A cook can ask what to do next while the screen is messy",
+    "problem": "the cook had to leave the recipe to look something up"
+  },
+  "scope": {
+    "in_scope": [
+      "the ask box",
+      "the answer drawer"
+    ],
+    "out_of_scope": [
+      "voice input"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "an answer opens beside the recipe",
+      "verification": "grep -c '\"question\"' data/recipes.json && echo \"the recipes carry questions\"",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "put the ask box on the cooking screen",
+      "done_when": "the answer opens beside the step",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Should the answer drawer remember the last three answers?",
+      "status": "open",
+      "answer": "",
+      "raised_by": "mara",
+      "raised_at": "2026-11-23T21:20:52Z",
+      "resolved_by": "",
+      "resolved_at": ""
+    }
+  ],
+  "notes": [],
+  "depends_on": []
+}

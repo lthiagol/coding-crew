@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "ITM01",
+  "title": "Cook a recipe hands-free with voice commands",
+  "slug": "cook-a-recipe-hands-free-with-voice-commands",
+  "kind": "idea",
+  "status": "open",
+  "body": "The hands are busy when the oven is on.",
+  "scope": [],
+  "tags": [],
+  "created": "2026-11-23T21:21:25Z",
+  "updated": "2026-11-23T21:21:25Z",
+  "dismissed_reason": ""
+}

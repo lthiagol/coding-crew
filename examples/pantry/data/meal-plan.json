@@ -1,0 +1,12 @@
+{
+  "week": "2026-11-16",
+  "meals": [
+    { "day": "monday", "meal": "roast chicken with lemon and thyme" },
+    { "day": "tuesday", "meal": "cold cucumber soup" },
+    { "day": "wednesday", "meal": "apple and blackberry crumble" },
+    { "day": "thursday", "meal": "roast chicken with lemon and thyme" },
+    { "day": "friday", "meal": "cold cucumber soup" },
+    { "day": "saturday", "meal": "apple and blackberry crumble" },
+    { "day": "sunday", "meal": "roast chicken with lemon and thyme" }
+  ]
+}

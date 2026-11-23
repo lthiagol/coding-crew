@@ -1,0 +1,32 @@
+[
+  {
+    "title": "Roast chicken with lemon and thyme",
+    "ingredients": ["a whole chicken", "two lemons", "thyme", "olive oil", "sea salt"],
+    "source": "https://example.com/recipes/roast-chicken",
+    "rating": 5,
+    "season": "autumn",
+    "print": true,
+    "question": "",
+    "deleted": false
+  },
+  {
+    "title": "Cold cucumber soup",
+    "ingredients": ["cucumbers", "yoghurt", "dill", "garlic"],
+    "source": "https://example.com/recipes/cucumber-soup",
+    "rating": 4,
+    "season": "summer",
+    "print": false,
+    "question": "Can it be made a day ahead?",
+    "deleted": false
+  },
+  {
+    "title": "Apple and blackberry crumble",
+    "ingredients": ["apples", "blackberries", "butter", "flour", "sugar"],
+    "source": "",
+    "rating": 0,
+    "season": "autumn",
+    "print": true,
+    "question": "",
+    "deleted": false
+  }
+]

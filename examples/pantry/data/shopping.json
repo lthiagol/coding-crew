@@ -1,0 +1,11 @@
+{
+  "for_week": "2026-11-16",
+  "items": [
+    { "name": "a whole chicken", "amount": "1", "aisle": "meat" },
+    { "name": "two lemons", "amount": "2", "aisle": "produce" },
+    { "name": "cucumbers", "amount": "3", "aisle": "produce" },
+    { "name": "yoghurt", "amount": "500 g", "aisle": "dairy" },
+    { "name": "blackberries", "amount": "300 g", "aisle": "frozen" },
+    { "name": "flour", "amount": "1 kg", "aisle": "baking" }
+  ]
+}

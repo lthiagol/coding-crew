@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "id": "TSK11",
+  "title": "Print a recipe card",
+  "slug": "print-a-recipe-card",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:20:55Z",
+  "updated": "2026-11-23T21:21:14Z",
+  "revision": 19,
+  "status": "executing",
+  "status_since": "2026-11-23T21:21:14Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-pantry",
+    "at": "2026-11-23T21:21:05Z",
+    "lease_expires_at": "2026-11-23T23:21:05Z"
+  },
+  "planned_by": "ses-mara-pantry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A cook prints one card to stick on the fridge",
+    "problem": "printing the page printed the whole site"
+  },
+  "scope": {
+    "in_scope": [
+      "the print view",
+      "the card layout"
+    ],
+    "out_of_scope": [
+      "a PDF export"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "the print view holds one recipe",
+      "verification": "grep -c '\"print\"' data/recipes.json && echo \"the recipes can be printed\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"print\"' data/recipes.json && echo \"the recipes can be printed\"",
+          "exit_code": 0,
+          "summary": "the recipes can be printed",
+          "at": "2026-11-23T21:21:08Z",
+          "by": "ravi",
+          "session": "ses-ravi-pantry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "build the print view",
+      "done_when": "the page shows one card",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "ravi",
+        "session": "ses-ravi-pantry",
+        "verdict": "ok",
+        "at": "2026-11-23T21:21:10Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "ok",
+        "at": "2026-11-23T21:21:12Z",
+        "notes": "",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

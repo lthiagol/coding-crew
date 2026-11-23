@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "id": "TSK01",
+  "title": "Sign in with an email link",
+  "slug": "sign-in-with-an-email-link",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-23T21:17:45Z",
+  "updated": "2026-11-23T21:18:13Z",
+  "revision": 28,
+  "status": "done",
+  "status_since": "2026-11-23T21:18:13Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-pantry",
+    "at": "2026-11-23T21:17:59Z",
+    "lease_expires_at": "2026-11-23T23:17:59Z"
+  },
+  "planned_by": "ses-mara-pantry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A cook signs in with a one-time link and lands on their pantry",
+    "problem": "Every recipe was public, so a cook could not keep a private list"
+  },
+  "scope": {
+    "in_scope": [
+      "the sign-in screen",
+      "the one-time link token"
+    ],
+    "out_of_scope": [
+      "social logins",
+      "passwords"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "a cook who follows the link is signed in",
+      "verification": "grep -c '\"email\"' data/accounts.json && echo \"the accounts have emails\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"email\"' data/accounts.json && echo \"the accounts have emails\"",
+          "exit_code": 0,
+          "summary": "the accounts have emails",
+          "at": "2026-11-23T21:18:02Z",
+          "by": "ravi",
+          "session": "ses-ravi-pantry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "issue the one-time link",
+      "done_when": "the link is in the outbox",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "ravi",
+        "session": "ses-ravi-pantry",
+        "verdict": "ok",
+        "at": "2026-11-23T21:18:04Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:18:06Z",
+        "notes": "Two defects in the sign-in flow; D1 stops the release.",
+        "findings": [
+          "FIND-01",
+          "FIND-02"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "ok",
+        "at": "2026-11-23T21:18:12Z",
+        "notes": "",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] The token is accepted twice\n\n**where:** `pantry-web/src/signin.rs`\n\n**defect:** the session is written before the token is consumed, so a replay signs the cook in again.\n\n**scenario:** follow the link, press back, follow it again.\n\n**fix:** consume the token before writing the session.",
+        "created": "2026-11-23T21:18:06Z",
+        "resolved": "2026-11-23T21:18:08Z",
+        "resolution": "the token is consumed before the session is written",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "nadia",
+            "body": "re-checked the replay in a second browser: the token is consumed on the first follow",
+            "at": "2026-11-23T21:18:10Z"
+          }
+        ]
+      },
+      {
+        "id": "FIND-02",
+        "severity": "low",
+        "status": "dismissed",
+        "description": "## D2 [low] The error page has no way back\n\n**where:** `pantry-web/templates/error.html`\n\n**defect:** a dead link leaves the cook on a blank page.\n\n**scenario:** open an expired link.\n\n**fix:** link back to the sign-in screen.",
+        "created": "2026-11-23T21:18:06Z",
+        "resolved": "2026-11-23T21:18:09Z",
+        "resolution": "a blank error page is the browser's, not the app's; it is out of scope",
+        "comments": []
+      }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-23T21:18:11Z",
+        "after_round": 1,
+        "by": "jo",
+        "session": "ses-jo-pantry"
+      }
+    ]
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Should the link live for fifteen minutes or an hour?",
+      "status": "resolved",
+      "answer": "fifteen minutes",
+      "raised_by": "mara",
+      "raised_at": "2026-11-23T21:17:54Z",
+      "resolved_by": "mara",
+      "resolved_at": "2026-11-23T21:17:55Z"
+    }
+  ],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "mara",
+      "body": "the outbox worker already retries twice; reuse it",
+      "at": "2026-11-23T21:17:56Z"
+    }
+  ],
+  "depends_on": []
+}

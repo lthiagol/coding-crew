@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "ITM03",
+  "title": "Pin a recipe to the top of the pantry",
+  "slug": "pin-a-recipe-to-the-top-of-the-pantry",
+  "kind": "feature",
+  "status": "open",
+  "body": "",
+  "scope": [
+    "the pinned list",
+    "the pin control"
+  ],
+  "tags": [],
+  "created": "2026-11-23T21:21:27Z",
+  "updated": "2026-11-23T21:21:28Z",
+  "dismissed_reason": ""
+}

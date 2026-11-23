@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "ITM02",
+  "title": "The shopping list loses the order of the aisles",
+  "slug": "the-shopping-list-loses-the-order-of-the-aisles",
+  "kind": "bug",
+  "status": "open",
+  "body": "The list is sorted by name after every reload.",
+  "scope": [],
+  "tags": [],
+  "created": "2026-11-23T21:21:26Z",
+  "updated": "2026-11-23T21:21:26Z",
+  "dismissed_reason": ""
+}

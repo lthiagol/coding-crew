@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "id": "TSK08",
+  "title": "Rate a recipe after cooking it",
+  "slug": "rate-a-recipe-after-cooking-it",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:20:35Z",
+  "updated": "2026-11-23T21:20:43Z",
+  "revision": 9,
+  "status": "approved",
+  "status_since": "2026-11-23T21:20:43Z",
+  "overlays": {},
+  "planned_by": "ses-mara-pantry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A cook can say how a recipe turned out",
+    "problem": "there was no way to tell a good recipe from a bad one"
+  },
+  "scope": {
+    "in_scope": [
+      "the rating control",
+      "the rating on the recipe card"
+    ],
+    "out_of_scope": [
+      "the reviews of other cooks"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "a rating shows on the recipe card",
+      "verification": "grep -c '\"rating\"' data/recipes.json && echo \"the recipes can be rated\"",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "add the rating to the recipe card",
+      "done_when": "the card shows the rating",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

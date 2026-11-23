@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "id": "TSK10",
+  "title": "Tag the recipes with a season",
+  "slug": "tag-the-recipes-with-a-season",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:20:53Z",
+  "updated": "2026-11-23T21:20:54Z",
+  "revision": 2,
+  "status": "draft",
+  "status_since": "2026-11-23T21:20:53Z",
+  "overlays": {},
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A cook finds the recipes that fit the season",
+    "problem": "the cook's own notes said 'in autumn' and nothing read them"
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": []
+  },
+  "acceptance_criteria": [],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

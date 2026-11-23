@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "id": "TSK03",
+  "title": "Search the recipes by ingredient",
+  "slug": "search-the-recipes-by-ingredient",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:18:32Z",
+  "updated": "2026-11-23T21:18:50Z",
+  "revision": 18,
+  "status": "code-review",
+  "status_since": "2026-11-23T21:18:49Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-pantry",
+    "at": "2026-11-23T21:18:42Z",
+    "lease_expires_at": "2026-11-23T23:18:42Z"
+  },
+  "planned_by": "ses-mara-pantry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A cook finds a recipe by what is in the cupboard",
+    "problem": "The search only matched titles"
+  },
+  "scope": {
+    "in_scope": [
+      "the ingredient index",
+      "the search screen"
+    ],
+    "out_of_scope": [
+      "full-text search"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "a cook finds a recipe from one ingredient",
+      "verification": "grep -c '\"index\"' data/recipes.json && echo \"the recipes are indexed\"",
+      "status": "failed",
+      "evidence": [
+        {
+          "command": "grep -c '\"index\"' data/recipes.json && echo \"the recipes are indexed\"",
+          "exit_code": 1,
+          "summary": "0",
+          "at": "2026-11-23T21:18:45Z",
+          "by": "ravi",
+          "session": "ses-ravi-pantry",
+          "manual": false
+        }
+      ],
+      "failure_reason": "the ingredient index is not built yet; the search still reads titles"
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "index the ingredients",
+      "done_when": "the search answers an ingredient",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "ravi",
+        "session": "ses-ravi-pantry",
+        "verdict": "ok",
+        "at": "2026-11-23T21:18:47Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "nadia",
+        "session": "ses-nadia-pantry",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:18:50Z",
+        "notes": "The search is not ready while the index is missing.",
+        "findings": [
+          "FIND-01"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "open",
+        "description": "## D1 [high] The ingredient search dies on an empty cupboard\n\n**where:** `pantry-core/src/search.rs`\n\n**defect:** the query joins the ingredient table with no rows and returns an error.\n\n**scenario:** search for \"lemon\" on a new pantry.\n\n**fix:** return an empty list, not an error.",
+        "created": "2026-11-23T21:18:50Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}
