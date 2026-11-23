@@ -32,6 +32,7 @@ use coding_crew_theme::{
 use crate::catalog::Catalog;
 use crate::config::{self, ConfigRead, ConfigState};
 use crate::launch::{self, LaunchRequest, Launcher, Start};
+use crate::on_path;
 use crate::pick;
 use crate::sidebar::{self, Field, role_icon};
 
@@ -400,6 +401,10 @@ pub struct App {
     /// The launcher `s` starts the orchestrator through. `None` outside herdr:
     /// the key says why, and starts nothing.
     launch: Option<Arc<dyn Launcher>>,
+    /// Whether `hugo` on PATH is the running hugo, which `s` checks before it
+    /// starts: agents run `hugo --skill <role>`. A refusal names the folder
+    /// to add to PATH.
+    hugo_on_path: fn() -> Result<(), String>,
     /// The orchestrator's start in flight. It runs off the window's thread,
     /// as the catalogue read does, so no key handling waits on herdr.
     starting: Option<JoinHandle<Result<Start, String>>>,
@@ -464,6 +469,7 @@ impl App {
             crew_cursor: None,
             crew_unsized: false,
             launch: None,
+            hugo_on_path: on_path::check_current,
             starting: None,
             queued: Vec::new(),
             waiting: 0,
@@ -1517,6 +1523,7 @@ impl App {
             && !self.queued.is_empty()
             && self.starting.is_none()
             && self.gaps().is_empty()
+            && (self.hugo_on_path)().is_ok()
     }
 
     /// Start the orchestrator over the queue, from `s`.
@@ -1545,6 +1552,10 @@ impl App {
         let gaps = self.gaps();
         if !gaps.is_empty() {
             self.note = Some(Note::Failed(format!("{START_FAILED}: {}", gaps.join(", "))));
+            return;
+        }
+        if let Err(why) = (self.hugo_on_path)() {
+            self.note = Some(Note::Failed(format!("{START_FAILED}: {why}")));
             return;
         }
         let request = match self.launch_request() {
@@ -4600,6 +4611,8 @@ mod tests {
             ALREADY_RUNNING.to_string(),
             "orchestrator started in tab".to_string(),
             START_FAILED.to_string(),
+            on_path::MISSING.to_string(),
+            on_path::SHADOWED.to_string(),
             "builder model".to_string(),
             CATALOG_READING.to_string(),
             CATALOG_UNREADABLE.to_string(),
@@ -5523,6 +5536,7 @@ mod tests {
             let fake = Arc::new(FakeLauncher::default());
             let mut window = on_orchestrator(Some(home.clone())).with_launcher(Some(fake.clone()));
             window.root = Some(PathBuf::from("/work/project"));
+            window.hugo_on_path = || Ok(());
 
             window.on_key(press(KeyCode::Char('c')));
             for _ in CREW_ORDER {
@@ -5739,7 +5753,50 @@ mod tests {
     fn in_herdr(fake: &Arc<FakeLauncher>) -> App {
         let mut window = app().with_launcher(Some(fake.clone()));
         window.root = Some(PathBuf::from("/work/project"));
+        window.hugo_on_path = || Ok(());
         window
+    }
+
+    fn hugo_not_on_path() -> Result<(), String> {
+        Err(format!("{}: add /opt/bin to PATH", on_path::MISSING))
+    }
+
+    #[test]
+    fn s_refuses_when_hugo_is_not_on_path_and_starts_nothing() {
+        // The agents run `hugo --skill`: with no hugo on PATH the orchestrator
+        // would have no skill to run, so the key names the folder and stops.
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = in_herdr(&fake);
+        window.hugo_on_path = hugo_not_on_path;
+        let runtime = RuntimeRead::Record(runtime());
+        let (rows, _) = render_app(&mut window, 100, 40, &runtime);
+        assert!(!rows.last().expect("a footer row").contains("start"));
+        window.on_key(press(KeyCode::Char('s')));
+        assert!(!window.start_pending());
+        assert_eq!(
+            window.note,
+            Some(Note::Failed(format!(
+                "{START_FAILED}: {}: add /opt/bin to PATH",
+                on_path::MISSING
+            )))
+        );
+        assert!(fake.requests.lock().expect("the requests").is_empty());
+    }
+
+    #[test]
+    fn s_refuses_when_another_hugo_comes_first_on_path() {
+        let fake = Arc::new(FakeLauncher::default());
+        let mut window = in_herdr(&fake);
+        window.hugo_on_path = || Err(format!("{}: put /opt/bin ahead of it", on_path::SHADOWED));
+        let runtime = RuntimeRead::Record(runtime());
+        let _ = render_app(&mut window, 100, 40, &runtime);
+        window.on_key(press(KeyCode::Char('s')));
+        assert!(!window.start_pending());
+        let Some(Note::Failed(text)) = &window.note else {
+            panic!("a failed start: {:?}", window.note);
+        };
+        assert!(text.contains(on_path::SHADOWED), "{text}");
+        assert!(fake.requests.lock().expect("the requests").is_empty());
     }
 
     #[test]

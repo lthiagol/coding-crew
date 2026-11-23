@@ -372,7 +372,7 @@ When some of it is marked, `s` hands over the marked tasks alone, still in queue
 order; otherwise the whole queue. A task an agent holds is that agent's, so no
 second orchestrator is given it. The footer names `s start`
 only when it can act: herdr hosts hugo, the queue has work, every agent has its
-harness, model and effort, and no start is in flight.
+harness, model and effort, no start is in flight, and `hugo` on PATH is this hugo.
 
 | state | what `s` does |
 |---|---|
@@ -381,6 +381,8 @@ harness, model and effort, and no start is in flight.
 | tasks wait, none claimable | starts nothing: `no waiting task is claimable` |
 | an agent has no harness, model or effort | starts nothing: `the orchestrator did not start:` and the gaps, named — `builder has no model` — on the failure slot |
 | herdr already names an orchestrator | starts nothing: `an orchestrator is already running in herdr` |
+| `hugo` is not on PATH | starts nothing: `the orchestrator did not start:` and `hugo is not on PATH: add <folder> to PATH`, on the failure slot. `<folder>` is the one holding the running hugo |
+| another `hugo` comes first on PATH | starts nothing: `the orchestrator did not start:` and `another hugo comes first on PATH (<path>): put <folder> ahead of it`, on the failure slot |
 | starting | `starting the orchestrator…`, dim. The herdr calls run beside the window, which keeps drawing and taking keys |
 | started | `orchestrator started in tab <id>`, on `semantic.ok` |
 | failed | `the orchestrator did not start:` and the error, on the failure slot. When the tab was already open, the error names it |

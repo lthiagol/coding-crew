@@ -42,6 +42,12 @@ run raul: ## Run raul (TUI) on the mock data
 hugo: ## Run hugo (TUI) on its mock runtime
 	$(CARGO) run -p $(HUGO_PKG)
 
+.PHONY: install
+install: ## Install hugo and raul from this checkout, then name the folder to add to PATH
+	$(CARGO) install --path crates/hugo
+	$(CARGO) install --path crates/raul
+	@echo "add $${CARGO_INSTALL_ROOT:-$${CARGO_HOME:-$$HOME/.cargo}}/bin to PATH: agents run hugo --skill <role>"
+
 .PHONY: test test-scripts columns
 test: ## Run the test suite
 	$(CARGO) test --workspace

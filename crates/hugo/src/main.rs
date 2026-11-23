@@ -8,6 +8,7 @@ mod app;
 mod catalog;
 mod config;
 mod launch;
+mod on_path;
 mod pick;
 mod sidebar;
 mod skill;

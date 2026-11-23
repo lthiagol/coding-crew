@@ -42,6 +42,17 @@ Tasks live in a managed project's own `coding-crew/` folder:
 <project>/coding-crew/work/TSK01-<slug>.json
 ```
 
+## Build from source
+
+```sh
+make install
+```
+
+`make install` installs `hugo` and `raul` with `cargo install`, then prints the
+folder to add to PATH. Agents run `hugo --skill <role>`, so `hugo` must resolve
+to this build; hugo's `s` refuses to start the orchestrator otherwise. Homebrew
+is the intended install and is not yet published.
+
 ## Develop
 
 Rust is pinned via `rust-toolchain.toml` (stable, minimal profile, with
@@ -61,6 +72,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 | `make build-raul` | build raul only |
 | `make build-talita` | build talita only |
 | `make build-release` | release binaries |
+| `make install` | install hugo and raul from this checkout, and name the folder to add to PATH |
 | `make raul` | run raul |
 | `make test` | tests |
 | `make fmt` / `make fmt-check` | format / check formatting |
