@@ -1942,6 +1942,22 @@ the note is empty, so the decision-maker's record is lost. Both want a unit.
 By the opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug
 `mm`), three units, two rounds. Commits `6bf312d`, `3ae2640`, `545e8e2`.
 
+### 2026-11-23 · talita T11a, the human's name in the journal
+
+ADR 0015: "`--instructed-by` … is recorded in the journal event's note". The
+dogfood found that `task approve --instructed-by hannah` recorded the name on
+nothing — nineteen approvals in the two sandboxes, nineteen empty notes. It
+now appends an `approved` event whose note reads `instructed by hannah`, and
+one rule builds the notes of `approve`, `resume` and `reopen`. The human's
+ruling of the same day is on the record: when the review budget is spent, the
+last round escalates to a human with its findings open — intended behaviour,
+no code change — in ADR 0017, `commands.md` and `TODO.md`'s decisions. The
+sandboxes' journals were not rewritten. One case is left open: `question
+answer --instructed-by` has no event whose note could carry the name, so
+where a question's answer names its human is a question for the human. By the
+opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug `mm`),
+review 1 clean, one round. Commit `87a5cdf`.
+
 ---
 
 ## Lessons
