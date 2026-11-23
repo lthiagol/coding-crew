@@ -2776,7 +2776,7 @@ def build():
         # keeps the column table honest is the command the note names.
         if tid == "TSK22":
             notes[0]["body"] += (
-                "\n\nThe gate regenerates the column table and fails on any drift:\n\n"
+                "\n\nThe gate checks the column table and fails on any drift:\n\n"
                 "```bash\n"
                 "make columns\n"
                 "```\n\n"

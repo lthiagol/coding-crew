@@ -1032,7 +1032,7 @@ fn style_of(preset: Preset, slot: Slot) -> Style {
 
 /// The colours of the dark palette.
 ///
-/// The palette is ours: the eighteen values are written down in
+/// The palette is ours: the seventeen values are written down in
 /// docs/tui/palettes.md, with the role each one plays. The background is
 /// the terminal's, and the palette assumes a dark one.
 mod dark {
@@ -1077,7 +1077,7 @@ mod dark {
 
 /// The style of a slot in the dark palette.
 ///
-/// The palette is ours: its eighteen values are written down in
+/// The palette is ours: its seventeen values are written down in
 /// docs/tui/palettes.md, with the role each one plays. It assumes a
 /// terminal with a dark background.
 fn dark_style(slot: Slot) -> Style {
@@ -1247,7 +1247,7 @@ mod nord {
 
 /// The style of a slot in the Nord palette.
 ///
-/// The palette is the family's: its eighteen values are written down in
+/// The palette is the family's: its fourteen values are written down in
 /// docs/tui/palettes.md, with the role each one plays. It is a dark preset:
 /// it assumes a terminal with a dark background and paints none of its own.
 fn nord_style(slot: Slot) -> Style {
@@ -1422,7 +1422,7 @@ mod catppuccin {
 
 /// The style of a slot in the Catppuccin palette.
 ///
-/// The palette is the family's mocha flavour: its eighteen values are
+/// The palette is the family's mocha flavour: its seventeen values are
 /// written down in docs/tui/palettes.md, with the role each one plays. It
 /// is a dark preset: it assumes a terminal with a dark background and
 /// paints none of its own.
@@ -1591,7 +1591,7 @@ mod dracula {
 
 /// The style of a slot in the Dracula palette.
 ///
-/// The palette is the family's: its eighteen values are written down in
+/// The palette is the family's: its twelve values are written down in
 /// docs/tui/palettes.md, with the role each one plays. It is a dark preset:
 /// it assumes a terminal with a dark background and paints none of its own.
 fn dracula_style(slot: Slot) -> Style {

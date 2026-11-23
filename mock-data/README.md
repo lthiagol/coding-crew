@@ -112,10 +112,8 @@ task's own review holds its external round, whose high finding is still open
 and whose medium findings are fixed, after the self round, which found
 nothing. The record's `raised` count is checked against that round.
 
-The held task reaches its second external round through a `re_review` the
-fixture cannot stamp: the model has no re-review record yet (talita's design
-adds that record). So the open high and the fix times are the runtime's story, not the
-fixture's.
+The held task reaches its second external round through a `re_review`, stamped
+in `review.re_reviews[]` after the first round, once its medium findings are fixed.
 
 ## Not included
 
