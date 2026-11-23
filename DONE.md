@@ -1870,6 +1870,21 @@ T8 and T9 wait for the word. By the opencode crew (deepseek-v4.1-flash
 builder, glm-5.3 reviewer, slug `mm`), review 1 clean, one round. Commit
 `a410620`.
 
+### 2026-11-23 · talita T11, the journal writer
+
+Every verb that changes a task appends its event in the same locked write:
+the journal is read first, and a journal that cannot be read refuses the
+whole call — nothing is written — then the task file, then the journal. That
+is ADR 0016's write order, so the journal never claims a move that did not
+happen. `by` is the role word; the notes are ADR 0018's; a promoted item
+journals `created` on the new task with `from ITM<nn>`. `journal show` reads
+the file, with its filters. The T10 run's moves land in the journal in
+order, nothing is unreadable, and raul's activity block shows them. Round 1
+found two lows: the two-file window a failed journal write leaves, now on the
+record in ADR 0018's consequences, and the cancel row of `commands.md`, which
+now names the `released` event. By the opencode crew (deepseek-v4.1-flash
+builder, glm-5.3 reviewer, slug `mm`), two rounds. Commit `934bb52`.
+
 ---
 
 ## Lessons

@@ -19,8 +19,8 @@ for configuration and one main pane for what is running, with no tabs. Its
 configuration is centralized under `~/.config/coding-crew/`, and that folder is
 created on demand when it does not exist.
 
-**talita is being built in part** (the human, 2026-11-23): T5, T6, T7, T10,
-T11 and T13 of `docs/talita/roadmap.md`. T8, T9, T12 and T14 still wait for
+**talita is built in part** (the human, 2026-11-23): T5, T6, T7, T10, T11 and
+T13 of `docs/talita/roadmap.md` are closed. T8, T9, T12 and T14 still wait for
 the word. Then agents dogfood it into a sandbox project under `examples/`,
 which replaces random fixtures in `mock-data/`.
 
@@ -59,7 +59,7 @@ queue (T5 → T6 → T7 → T10 → T11 → T13, then the `examples/` dogfood) s
 after T6: T5 and T6 are closed. Since then the opencode crew (deepseek-v4.1-flash builder, glm-5.3
 reviewer, slug `oc`) fixed the macOS catalogue failure and built T7. The long-path sweep is closed. T13 is closed too: a MiniMax orchestrator on branch
 `mm/talita` (a trial of an opencode orchestrator) ran the opencode crew again — deepseek-v4.1-flash builder,
-glm-5.3 reviewer, slug `mm` — and the review was clean in one round. T10 is closed too, on the same branch and the same crew, one clean round. Next: T11, the journal writer — every verb's event lands at once — then the `examples/` dogfood. Unit 101 waits for green CI and the human's `v0.1.0`
+glm-5.3 reviewer, slug `mm` — and the review was clean in one round. T10 is closed too, on the same branch and the same crew, one clean round. T11 is closed as well: the journal writer, two rounds — the review found the two-file window a failed journal write leaves, now on the record in ADR 0018, and the cancel row of `commands.md`. Next: the `examples/` dogfood, which the human will brief. Unit 101 waits for green CI and the human's `v0.1.0`
 tag.
 
 | phase | units | needs |
