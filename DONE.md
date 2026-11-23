@@ -1452,6 +1452,18 @@ is the claimable waiting task and TSK07 the one that is not, the mock already
 shows both, and no fixture was added. The done-when was amended in the job
 file, with no code change. Limits are in THE FOLLOW-UPS. Commit `876dd58`.
 
+Unit closed: the triage's raul changes (plan 82). One build round and one
+review, both clean. A failed effort read lists `type a level…`, as the model
+read lists `type an id…`. The `?` popup is as tall as its lines, capped at the
+window; when it overflows, `↑↓ j/k`, `pgup/pgdn` and `g/G` scroll it, and
+Tasks help keeps `g/G`. `r` in Settings asks before dropping unsaved edits;
+`ctrl-c` stays instant. A click on a Settings heading or comment selects and
+edits nothing (D11). Docs: the priority row reads `urgent · high · normal ·
+low`; the filter's plain words are AND'd; a resized list is written whole;
+`HUGO_SESSION` is documented as one line of JSON. Ruling, from the human: `r`
+drops the session's picks, kept as built, recorded in the design record. Limits
+are in THE FOLLOW-UPS. Commit `d566c99`.
+
 ---
 
 ## Lessons

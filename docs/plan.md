@@ -101,7 +101,7 @@ A unit without one is not ready, and belongs under **Grooming** instead.
 | 79 | **hugo and theme loose ends** ✓ | done | esc keeps the catalogue error, skill.rs drops `effort default`, hugo sweeps 40–120, sharper queue/sidebar/apartness/count tests |
 | 80 | **Docs and the gate** ✓ | done | the design record states the 3/2/1 crew and the effort ruling, stale round counts fixed, the retired flow suites leave the Makefile |
 | 81 | **The triage's hugo and config rulings** ✓ | done | an odd `[agents.<name>]` table and an odd crew load with a warning in hugo's sidebar and raul's Settings, while a missing orchestrator and an unknown harness stay unreadable; the flow files name agents only; an agent can be `blocked`; the queue offers only claimable tasks; the mock's one claimable waiting task is TSK29, by ruling |
-| 82 | **The triage's raul changes** | S | effort typed after a failed read, `?` grows to its content, `r` asks when unsaved, Settings headers are inert, spec notes |
+| 82 | **The triage's raul changes** ✓ | done | effort can be typed after a failed read, `?` grows to its content and scrolls when it overflows, `r` asks before dropping unsaved edits, a Settings heading or comment click does nothing, and the spec notes match the code |
 | 83 | **TOML in colour, and one story for TSK14** | S | the engine highlights toml; TSK14 carries round 1's findings in both TUIs |
 
 ## Grooming

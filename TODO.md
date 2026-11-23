@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 81.
+Updated 2026-11-22 by the orchestrator, after unit 82.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–81, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–82, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- **82** The triage's raul changes (S)
 - **83** TOML in colour, and one story for TSK14 (S)
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
@@ -171,7 +170,14 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
-- Loose ends from the triage: units 82–83 in `docs/plan.md`.
+- Loose ends from the triage: unit 83 in `docs/plan.md`.
+- **2026-11-22, unit 82:** `docs/tui/screens.md` has no section for the `?`
+  overlay, so its sizing and scroll keys are unspecified. The builder and the
+  reviewer both recommend a line under § Mouse or a new overlay section. The
+  mouse wheel does nothing while the overlay is open; that is the builder's
+  choice and is not specified either.
+- **2026-11-22, unit 82:** the `?` overlay draws no scroll indicator when it
+  overflows. Not in the brief; the orchestrator may want one.
 - **2026-11-22, unit 81:** none of unit 81's tests was run against the code
   before its fix, so none is shown to fail without it.
 - **2026-11-22, unit 81:** the sidebar's config warning is cut at the pane
