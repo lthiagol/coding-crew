@@ -1616,6 +1616,13 @@ reviewer `opencode-go/glm-5.3` on high, through herdr-crew unchanged — the
 model and effort travel in `OPENCODE_CONFIG_CONTENT`. One build round, one
 review, clean. Built in a worktree and cherry-picked. Commit `d05bb29`.
 
+Unit closed: HS (live test). hugo's `s` failed inside herdr with no
+orchestrator named: herdr writes `agent_not_found` on stderr with stdout
+empty, and hugo read stdout only. It now reads both, with a test that fails on
+the old code. Built by the opencode crew, clean in one round. Retested live:
+`s` opened the orchestrator tab on opencode, and the model, effort and
+`HUGO_CREW` reached it. Commit `4eb8914`.
+
 ---
 
 ## Lessons

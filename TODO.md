@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after unit 94 and the HUGO_CREW rename.
+Updated 2026-11-23 by the orchestrator, after the opencode live tests.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -168,6 +168,15 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
+- **2026-11-23, live test:** hugo's start prompt says "Run `hugo --skill
+  orchestrator`", but a dev machine has no `hugo` on PATH. The opencode
+  orchestrator spent 39 commands looking for it and was stopped. hugo should
+  name its own path (`std::env::current_exe`) in the prompt. Recorded, not
+  ruled.
+- **2026-11-23, live test:** raul's Settings cannot set an agent's `harness`
+  or `effort` when its table lacks the line (an old-shape
+  `model = "…#high"` entry). Rows are never added, by design, so the value is
+  reachable only by hand. Recorded, not ruled.
 - **2026-11-23, unit 94:** five comments in `crates/theme/src/theme.rs` (lines
   1035, 1080, 1250, 1425, 1594) still say a family palette's "eighteen values".
   They count raw palette values, not slots. The builder did not verify the
