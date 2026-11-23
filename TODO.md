@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 82.
+Updated 2026-11-22 by the orchestrator, after unit 83.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,10 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–82, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–83, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- **83** TOML in colour, and one story for TSK14 (S)
+- None. Every row of `docs/plan.md` is ✓.
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
@@ -170,7 +170,18 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
-- Loose ends from the triage: unit 83 in `docs/plan.md`.
+- **2026-11-22, unit 83:** the model has no re-review record (TSK14's round 2
+  is unstampable) — talita's design adds one. The stamp rule in
+  `crates/core/tests/mock_data.rs` cannot place a `re_review` moment, so
+  TSK14 sits in `code-review` with round 2 in flight and an open high. The
+  story is recorded in `mock-data/generate.py` (`check_runtime`) and
+  `mock-data/README.md`.
+- **2026-11-22, unit 83:** the TOML render test was not run against the old
+  code, so it is not shown to fail without the grammar. The resolve assertion
+  was probed against the YAML fallback.
+- **2026-11-22, unit 83:** raul's Settings TOML painter
+  (`crates/raul/src/settings.rs:1535`, `toml_spans`) is hand-written and does
+  not use the engine grammar. It can take it later.
 - **2026-11-22, unit 82:** `docs/tui/screens.md` has no section for the `?`
   overlay, so its sizing and scroll keys are unspecified. The builder and the
   reviewer both recommend a line under § Mouse or a new overlay section. The

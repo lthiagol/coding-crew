@@ -1464,6 +1464,20 @@ low`; the filter's plain words are AND'd; a resized list is written whole;
 drops the session's picks, kept as built, recorded in the design record. Limits
 are in THE FOLLOW-UPS. Commit `d566c99`.
 
+Unit closed: TOML in colour, and one story for TSK14 (plan 83). Three reviews,
+the last clean. The engine highlights `toml` fences through a bundled grammar,
+`crates/engine/assets/toml.sublime-syntax`, added to the default syntax set.
+Keys take the tag role, tables the type role, booleans and numbers the number
+role. Its only new dependency is syntect's `yaml-load` feature, which the loader
+needs; it brings `yaml-rust` and `linked-hash-map`. The grammar is deviation 26
+in `VENDORED.md`, with its SHA-256. Raul's Settings painter is unchanged. TSK14
+carries round 1's findings: an external `changes-needed` round raising FIND-01
+(high, still open) and FIND-02 and FIND-03 (medium, fixed). Ruling, from the
+orchestrator: option 1. TSK14 stays in `code-review` with round 2 in flight.
+The lifecycle reaches that state only by `re_review`, which the model cannot
+stamp, so the story is kept as built and recorded in `mock-data/generate.py`
+and the README. Limits are in THE FOLLOW-UPS. Commit `7479283`.
+
 ---
 
 ## Lessons
