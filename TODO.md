@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-22 by the orchestrator, after unit 85.
+Updated 2026-11-23 by the orchestrator, after unit 86.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–85, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–86, 63b and 70b are closed; their record is in
 `DONE.md`.
 
-- 86 · **T3 · Core operations** (M): claim take/renew/release with takeover; the section ownership table; the stored criterion-status mirror.
 - 87 · **T4 · Core store** (S): project lock, atomic journal and runtime writes, numeric id sort, `save_item` removes an old file.
 
 Grooming (G1–G4) and question Q5 wait on decisions or the flow.
@@ -171,6 +170,31 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
+- **2026-11-23, unit 86:** `status` has no owner in `ownership.rs` or task-model
+  § 2.5, and `roles.md:60` and `commands.md:38-42` now say transitions alone
+  write it. Round two applied the reviewer's recommendation; no human ruling.
+  Confirm, or revert both docs and make `Section::Status` runner-owned in
+  `ownership.rs` with the TM line at 942.
+- **2026-11-23, unit 86:** who owns `questions` is unsettled. `roles.md` says
+  the creator, task-model § 2.5 says any role (append-only), and `commands.md`
+  says `ask` is any and `answer` is the creator. `ownership.rs` follows
+  roles.md. Recommended: split ask (any) from answer (creator) when T6 writes
+  the question verbs; that needs a `Section` split and a § 2.5 change. Nothing
+  calls `authorize` yet. Needs a ruling.
+- **2026-11-23, unit 86:** a takeover in `executing` ignores overlays. ADR 0020
+  is silent, so a blocked executing task can be taken over once its lease
+  expires. Needs a ruling: refuse, or allow.
+- **2026-11-23, unit 86:** `task cancel` does not release a live claim yet
+  (ADR 0020). It belongs with the overlay verbs in T7.
+- **2026-11-23, unit 86:** `release` requires a reason and stores none. The
+  journal writer (T11) carries it.
+- **2026-11-23, unit 86:** a mirror with neither evidence nor deferral writes
+  `pending`, so a cleared deferral cannot stick. Recorded, not ruled.
+- **2026-11-23, unit 86:** the claim operations take `now` as an RFC 3339
+  stamp, but `transition()` still reads the clock itself. Recorded, not ruled.
+- **2026-11-23, unit 86:** the optional `NotHolder` hint (a holder's `take`
+  points to `renew`) was not taken. `take` returns `Held` alone. Recorded, not
+  ruled.
 - **2026-11-22, unit 85:** the round-filing session check (ADR 0017) is not in
   core. Core has no round-filing operation, so a round filed by the claim's own
   session is refused only at the reviewer transitions. talita's T10 should call

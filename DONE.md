@@ -1506,6 +1506,19 @@ review moves as the filing reviewer. `TransitionError::Gate` became `Gates`, and
 `Cancelled` is new; no crate outside core matches on it. No ruling was made.
 Limits are in THE FOLLOW-UPS. Commit `5c19a5d`.
 
+Unit closed: T3 · Core operations (plan 86). Three build rounds and three
+reviews; the third clean. Core gains `take`, `renew` and `release` in
+`crates/core/src/claim.rs`, with the claimable rule, the takeover rule (an
+approved claimable task, or an executing one with an expired lease) and a
+two-hour default lease. `ownership.rs` gives each section an owner, and a
+section with no owner refuses every writer. `AcceptanceCriterion` stores its
+status mirror. Fixtures are unchanged. Round one's review fixed a doc row:
+`claim.held` now reads "no live claim", because the holder renews rather than
+takes again; a test pins it. Round two's review found `status` owner-less
+against `roles.md` and `commands.md`, which named the runner. The builder kept
+the code and amended both docs to say transitions alone write `status`. No
+human ruling was made on it. Limits are in THE FOLLOW-UPS. Commit `a094e78`.
+
 ---
 
 ## Lessons

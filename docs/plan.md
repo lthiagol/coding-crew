@@ -105,7 +105,7 @@ A unit without one is not ready, and belongs under **Grooming** instead.
 | 83 | **TOML in colour, and one story for TSK14** ✓ | done | the engine highlights `toml` fences through a bundled grammar; TSK14 carries round 1's three findings in both TUIs, and its round 2 is the runtime's story |
 | 84 | **T1 · Core schema additions** ✓ | done | `Round.session`, `review.re_reviews[]`, `Evidence.manual`, `Task.revision`, `crew[].actor` and the thirteen new journal kinds are optional fields in core, read with defaults so old files still load; the generator writes them; TSK14 carries a re-review entry; raul and hugo render the fixtures unchanged except the Overview's activity block, which the new kinds displace |
 | 85 | **T2 · Core gates** ✓ | done | collect-all `check()`; `review.round_current`, `review.round_owner`, `task.claimed` on finish, external round refused from the claim's session |
-| 86 | **T3 · Core operations** | M | claim take/renew/release with takeover; the section ownership table; the stored criterion-status mirror |
+| 86 | **T3 · Core operations** ✓ | done | claim take/renew/release with takeover; the section ownership table; the stored criterion-status mirror |
 | 87 | **T4 · Core store** | S | project lock, atomic journal and runtime writes, numeric id sort, `save_item` removes an old file |
 
 ## Grooming
