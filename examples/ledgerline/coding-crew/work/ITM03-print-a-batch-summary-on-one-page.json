@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "ITM03",
+  "title": "Print a batch summary on one page",
+  "slug": "print-a-batch-summary-on-one-page",
+  "kind": "feature",
+  "status": "open",
+  "body": "",
+  "scope": [
+    "the summary page",
+    "the summary printer"
+  ],
+  "tags": [],
+  "created": "2026-11-23T21:41:18Z",
+  "updated": "2026-11-23T21:41:18Z",
+  "dismissed_reason": ""
+}

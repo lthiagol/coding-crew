@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "id": "TSK05",
+  "title": "Write the reconciliation report to a file",
+  "slug": "write-the-reconciliation-report-to-a-file",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:41:17Z",
+  "updated": "2026-11-23T21:41:17Z",
+  "revision": 17,
+  "status": "code-review",
+  "status_since": "2026-11-23T21:41:17Z",
+  "overlays": {},
+  "claim": {
+    "by": "omar",
+    "session": "ses-omar-ledgerline",
+    "at": "2026-11-23T21:41:17Z",
+    "lease_expires_at": "2026-11-23T23:41:17Z"
+  },
+  "planned_by": "ses-thea-ledgerline",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The report is a file the finance team can keep",
+    "problem": "the report was only ever on the screen"
+  },
+  "scope": {
+    "in_scope": [
+      "the report writer",
+      "the file format"
+    ],
+    "out_of_scope": [
+      "a spreadsheet export"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "the report file holds one line per payment",
+      "verification": "grep -c '\"reconciliation\"' fixtures/gateway.json && echo \"the gateway file knows the reconciliation\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"reconciliation\"' fixtures/gateway.json && echo \"the gateway file knows the reconciliation\"",
+          "exit_code": 0,
+          "summary": "the gateway file knows the reconciliation",
+          "at": "2026-11-23T21:41:17Z",
+          "by": "omar",
+          "session": "ses-omar-ledgerline",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "write the report file",
+      "done_when": "the file holds one line per payment",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "omar",
+        "session": "ses-omar-ledgerline",
+        "verdict": "ok",
+        "at": "2026-11-23T21:41:17Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "sam",
+        "session": "ses-sam-ledgerline",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:41:17Z",
+        "notes": "A file with only the matched payments is not the report finance asked for.",
+        "findings": [
+          "FIND-01"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "open",
+        "description": "## D1 [high] The report file skips the unmatched payments\n\n**where:** `ledgerline-core/src/report.rs`\n\n**defect:** only matched payments are written, so the file is not one line per payment.\n\n**scenario:** write the report for a batch with one unmatched payment.\n\n**fix:** write a line for every payment in the batch.",
+        "created": "2026-11-23T21:41:17Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

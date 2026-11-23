@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "id": "TSK08",
+  "title": "Reconcile against the gateway's daily file",
+  "slug": "reconcile-against-the-gateway-s-daily-file",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:41:17Z",
+  "updated": "2026-11-23T21:41:18Z",
+  "revision": 10,
+  "status": "approved",
+  "status_since": "2026-11-23T21:41:18Z",
+  "overlays": {
+    "deferred": {
+      "reason": "the gateway ships the daily file next quarter; do it then",
+      "by": "hugo",
+      "at": "2026-11-23T21:41:18Z"
+    }
+  },
+  "planned_by": "ses-thea-ledgerline",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The day's payments are reconciled against the file the gateway sends",
+    "problem": "the reconciliation only worked against the live API"
+  },
+  "scope": {
+    "in_scope": [
+      "the daily file reader",
+      "the comparison"
+    ],
+    "out_of_scope": [
+      "the live API"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "the day's payments match the gateway's file",
+      "verification": "test -f fixtures/gateway.json && echo \"the gateway file is there\"",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "read the daily file",
+      "done_when": "the day's payments are compared",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

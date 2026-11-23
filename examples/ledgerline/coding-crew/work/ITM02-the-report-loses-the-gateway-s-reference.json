@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "ITM02",
+  "title": "The report loses the gateway's reference",
+  "slug": "the-report-loses-the-gateway-s-reference",
+  "kind": "bug",
+  "status": "open",
+  "body": "Two payments with the same amount cannot be told apart.",
+  "scope": [],
+  "tags": [],
+  "created": "2026-11-23T21:41:18Z",
+  "updated": "2026-11-23T21:41:18Z",
+  "dismissed_reason": ""
+}

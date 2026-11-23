@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "id": "TSK04",
+  "title": "Retry a payment the gateway refused",
+  "slug": "retry-a-payment-the-gateway-refused",
+  "children": [],
+  "kind": "bug",
+  "created": "2026-11-23T21:41:17Z",
+  "updated": "2026-11-23T21:41:17Z",
+  "revision": 19,
+  "status": "remediating",
+  "status_since": "2026-11-23T21:41:17Z",
+  "overlays": {},
+  "claim": {
+    "by": "omar",
+    "session": "ses-omar-ledgerline",
+    "at": "2026-11-23T21:41:17Z",
+    "lease_expires_at": "2026-11-23T23:41:17Z"
+  },
+  "planned_by": "ses-thea-ledgerline",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A refused payment is tried again, and only once more",
+    "problem": "a refused payment was retried in a loop until the gateway gave up"
+  },
+  "scope": {
+    "in_scope": [
+      "the retry",
+      "the backoff"
+    ],
+    "out_of_scope": [
+      "retrying a whole batch"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "a refused payment is tried twice at most",
+      "verification": "grep -c '\"retry\"' fixtures/gateway.json && echo \"the gateway file knows about retries\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"retry\"' fixtures/gateway.json && echo \"the gateway file knows about retries\"",
+          "exit_code": 0,
+          "summary": "the gateway file knows about retries",
+          "at": "2026-11-23T21:41:17Z",
+          "by": "omar",
+          "session": "ses-omar-ledgerline",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "bound the retry",
+      "done_when": "the second refusal ends it",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "omar",
+        "session": "ses-omar-ledgerline",
+        "verdict": "ok",
+        "at": "2026-11-23T21:41:17Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "sam",
+        "session": "ses-sam-ledgerline",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:41:17Z",
+        "notes": "The retry still runs away; D2 costs money but does not stop the release.",
+        "findings": [
+          "FIND-01",
+          "FIND-02"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] The retry ignores the second refusal\n\n**where:** `ledgerline-core/src/retry.rs`\n\n**defect:** the loop counts successes, so a refused payment is tried until the gateway gives up.\n\n**scenario:** let the gateway refuse a payment twice.\n\n**fix:** stop after the second refusal.",
+        "created": "2026-11-23T21:41:17Z",
+        "resolved": "2026-11-23T21:41:17Z",
+        "resolution": "the retry stops after the second refusal",
+        "comments": []
+      },
+      {
+        "id": "FIND-02",
+        "severity": "medium",
+        "status": "open",
+        "description": "## D2 [medium] The backoff resets after every attempt\n\n**where:** `ledgerline-core/src/retry.rs`\n\n**defect:** there is no wait between tries, so a retry storms the gateway.\n\n**scenario:** refuse a payment and watch the timestamps.\n\n**fix:** double the wait after each refusal.",
+        "created": "2026-11-23T21:41:17Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

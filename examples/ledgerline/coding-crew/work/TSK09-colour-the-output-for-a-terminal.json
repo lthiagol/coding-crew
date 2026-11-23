@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "id": "TSK09",
+  "title": "Colour the output for a terminal",
+  "slug": "colour-the-output-for-a-terminal",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:41:18Z",
+  "updated": "2026-11-23T21:41:18Z",
+  "revision": 9,
+  "status": "groomed",
+  "status_since": "2026-11-23T21:41:18Z",
+  "overlays": {},
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The output is readable when the terminal can show colour",
+    "problem": "the output was a wall of plain text"
+  },
+  "scope": {
+    "in_scope": [
+      "the colouring",
+      "the no-colour fallback"
+    ],
+    "out_of_scope": [
+      "the layout"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "the output is coloured on a terminal that can",
+      "verification": "grep -c 'colour' README.md && echo \"the readme talks about colour\"",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "colour the output",
+      "done_when": "a terminal with colour shows the parts",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Should the colour follow the terminal's own palette?",
+      "status": "open",
+      "answer": "",
+      "raised_by": "thea",
+      "raised_at": "2026-11-23T21:41:18Z",
+      "resolved_by": "",
+      "resolved_at": ""
+    }
+  ],
+  "notes": [],
+  "depends_on": []
+}

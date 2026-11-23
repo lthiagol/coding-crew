@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "id": "TSK01",
+  "title": "Read a payment batch from a CSV file",
+  "slug": "read-a-payment-batch-from-a-csv-file",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-23T21:41:16Z",
+  "updated": "2026-11-23T21:41:16Z",
+  "revision": 27,
+  "status": "done",
+  "status_since": "2026-11-23T21:41:16Z",
+  "overlays": {},
+  "claim": {
+    "by": "omar",
+    "session": "ses-omar-ledgerline",
+    "at": "2026-11-23T21:41:16Z",
+    "lease_expires_at": "2026-11-23T23:41:16Z"
+  },
+  "planned_by": "ses-thea-ledgerline",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "Ledgerline reads a batch of payments from a CSV file",
+    "problem": "the batch arrived as a spreadsheet nobody could script against"
+  },
+  "scope": {
+    "in_scope": [
+      "the CSV reader",
+      "the batch record"
+    ],
+    "out_of_scope": [
+      "reading a spreadsheet"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "a batch of ten payments is read",
+      "verification": "grep -c ',' fixtures/batches.csv && echo \"the batch file has rows\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c ',' fixtures/batches.csv && echo \"the batch file has rows\"",
+          "exit_code": 0,
+          "summary": "the batch file has rows",
+          "at": "2026-11-23T21:41:16Z",
+          "by": "omar",
+          "session": "ses-omar-ledgerline",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "parse the CSV into a batch",
+      "done_when": "the batch holds every payment",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "omar",
+        "session": "ses-omar-ledgerline",
+        "verdict": "ok",
+        "at": "2026-11-23T21:41:16Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "sam",
+        "session": "ses-sam-ledgerline",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:41:16Z",
+        "notes": "Two defects in the reader; D1 stops the release.",
+        "findings": [
+          "FIND-01",
+          "FIND-02"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "sam",
+        "session": "ses-sam-ledgerline",
+        "verdict": "ok",
+        "at": "2026-11-23T21:41:16Z",
+        "notes": "",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] The reader stops at the first blank line\n\n**where:** `ledgerline-core/src/batch.rs`\n\n**defect:** a blank line ends the batch, so every payment after it is dropped.\n\n**scenario:** import a batch with a blank line between two payments.\n\n**fix:** skip blank lines until the end of the file.",
+        "created": "2026-11-23T21:41:16Z",
+        "resolved": "2026-11-23T21:41:16Z",
+        "resolution": "blank lines are skipped; the reader runs to the end of the file",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "sam",
+            "body": "re-checked the batch with a blank line: every payment is read",
+            "at": "2026-11-23T21:41:16Z"
+          }
+        ]
+      },
+      {
+        "id": "FIND-02",
+        "severity": "low",
+        "status": "dismissed",
+        "description": "## D2 [low] The header row is counted as a payment\n\n**where:** `ledgerline-core/src/batch.rs`\n\n**defect:** the header is parsed into the batch, so the count is one too high.\n\n**scenario:** import any batch and count the payments.\n\n**fix:** start at the first line after the header.",
+        "created": "2026-11-23T21:41:16Z",
+        "resolved": "2026-11-23T21:41:16Z",
+        "resolution": "the header is read as the column names; the count is right",
+        "comments": []
+      }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-23T21:41:16Z",
+        "after_round": 1,
+        "by": "priya",
+        "session": "ses-priya-ledgerline"
+      }
+    ]
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Do we keep the amount in pence or convert on import?",
+      "status": "resolved",
+      "answer": "pence, converted once at the edge",
+      "raised_by": "thea",
+      "raised_at": "2026-11-23T21:41:16Z",
+      "resolved_by": "thea",
+      "resolved_at": "2026-11-23T21:41:16Z"
+    }
+  ],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "thea",
+      "body": "the gateway sends amounts in pence; keep the conversion in one place",
+      "at": "2026-11-23T21:41:16Z"
+    }
+  ],
+  "depends_on": []
+}

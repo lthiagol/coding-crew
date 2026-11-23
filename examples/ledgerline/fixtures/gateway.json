@@ -1,0 +1,112 @@
+[
+  {
+    "batch_id": "B-2041",
+    "reference": "INV-1001",
+    "entry": "LEDG-7001",
+    "amount": 125000,
+    "signature": "9c1f4e7a2b6d8f01",
+    "retry": 0,
+    "cancel": false,
+    "reconciliation": "matched",
+    "colour": "green: matched on the first pass"
+  },
+  {
+    "batch_id": "B-2041",
+    "reference": "INV-1002",
+    "entry": "LEDG-7002",
+    "amount": 45500,
+    "signature": "3a8b1c5d9e2f7046",
+    "retry": 1,
+    "cancel": false,
+    "reconciliation": "matched",
+    "colour": "amber: matched on the retry"
+  },
+  {
+    "batch_id": "B-2041",
+    "reference": "INV-1003",
+    "entry": "LEDG-7003",
+    "amount": 9900,
+    "signature": "d40e7f2a6b1c9358",
+    "retry": 0,
+    "cancel": false,
+    "reconciliation": "matched",
+    "colour": "green"
+  },
+  {
+    "batch_id": "B-2041",
+    "reference": "INV-1004",
+    "entry": null,
+    "amount": 230000,
+    "signature": "7e2d9a4c1f6b8305",
+    "retry": 2,
+    "cancel": false,
+    "reconciliation": "unmatched",
+    "colour": "red: no entry in the ledger"
+  },
+  {
+    "batch_id": "B-2041",
+    "reference": "INV-1005",
+    "entry": "LEDG-7005",
+    "amount": 1750,
+    "signature": "1b6c3d8e5f0a2947",
+    "retry": 0,
+    "cancel": true,
+    "reconciliation": "cancelled",
+    "colour": "grey: the gateway cancelled it"
+  },
+  {
+    "batch_id": "B-2041",
+    "reference": "INV-1006",
+    "entry": "LEDG-7006",
+    "amount": 64000,
+    "signature": "f0a3b7c2d9e14685",
+    "retry": 0,
+    "cancel": false,
+    "reconciliation": "amount-differs",
+    "colour": "amber: the gateway rounded the amount"
+  },
+  {
+    "batch_id": "B-2041",
+    "reference": "INV-1007",
+    "entry": "LEDG-7007",
+    "amount": 31000,
+    "signature": "2c5e8a1f4b7d0369",
+    "retry": 0,
+    "cancel": false,
+    "reconciliation": "matched",
+    "colour": "green"
+  },
+  {
+    "batch_id": "B-2041",
+    "reference": "INV-1008",
+    "entry": null,
+    "amount": 12750,
+    "signature": "a9d2f6b3c8e57014",
+    "retry": 3,
+    "cancel": false,
+    "reconciliation": "unmatched",
+    "colour": "red: the reference was retired"
+  },
+  {
+    "batch_id": "B-2041",
+    "reference": "INV-1009",
+    "entry": "LEDG-7009",
+    "amount": 80000,
+    "signature": "6f1b4c9d2a8e3570",
+    "retry": 0,
+    "cancel": false,
+    "reconciliation": "matched",
+    "colour": "green"
+  },
+  {
+    "batch_id": "B-2041",
+    "reference": "INV-1010",
+    "entry": "LEDG-7010",
+    "amount": 5200,
+    "signature": "8e3a5f0c7b2d1964",
+    "retry": 0,
+    "cancel": false,
+    "reconciliation": "matched",
+    "colour": "green: matched after the second import"
+  }
+]

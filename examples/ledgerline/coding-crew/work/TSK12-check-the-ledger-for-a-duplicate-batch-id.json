@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "id": "TSK12",
+  "title": "Check the ledger for a duplicate batch id",
+  "slug": "check-the-ledger-for-a-duplicate-batch-id",
+  "children": [],
+  "kind": "bug",
+  "created": "2026-11-23T21:41:18Z",
+  "updated": "2026-11-23T21:41:18Z",
+  "revision": 9,
+  "status": "approved",
+  "status_since": "2026-11-23T21:41:18Z",
+  "overlays": {},
+  "planned_by": "ses-thea-ledgerline",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A batch that was already imported is refused the second time",
+    "problem": "the same batch was imported twice and the ledger doubled"
+  },
+  "scope": {
+    "in_scope": [
+      "the duplicate check",
+      "the error line"
+    ],
+    "out_of_scope": [
+      "repairing a doubled batch"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "a repeated batch id is refused",
+      "verification": "grep -c '\"batch_id\"' fixtures/batches.csv && echo \"the batch file has ids\"",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "check the id before importing",
+      "done_when": "the second import is refused",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

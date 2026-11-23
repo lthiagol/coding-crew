@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "ITM04",
+  "title": "Support CSV files with semicolons",
+  "slug": "support-csv-files-with-semicolons",
+  "kind": "bug",
+  "status": "dismissed",
+  "body": "One of the bank's exports uses semicolons.",
+  "scope": [],
+  "tags": [],
+  "created": "2026-11-23T21:41:18Z",
+  "updated": "2026-11-23T21:41:18Z",
+  "dismissed_reason": "not now: the bank is changing its export anyway"
+}

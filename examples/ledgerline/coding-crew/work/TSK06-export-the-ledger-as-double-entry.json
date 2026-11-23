@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "id": "TSK06",
+  "title": "Export the ledger as double-entry",
+  "slug": "export-the-ledger-as-double-entry",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:41:17Z",
+  "updated": "2026-11-23T21:41:17Z",
+  "revision": 13,
+  "status": "executing",
+  "status_since": "2026-11-23T21:41:17Z",
+  "overlays": {},
+  "claim": {
+    "by": "omar",
+    "session": "ses-omar-ledgerline",
+    "at": "2026-11-23T21:41:17Z",
+    "lease_expires_at": "2026-11-23T23:41:17Z"
+  },
+  "planned_by": "ses-thea-ledgerline",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The ledger is exported as the double-entry lines the accountant expects",
+    "problem": "the export was a CSV of amounts, not entries"
+  },
+  "scope": {
+    "in_scope": [
+      "the export",
+      "the entry format"
+    ],
+    "out_of_scope": [
+      "the tax rules"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "each payment becomes one debit and one credit",
+      "verification": "grep -c '\"entry\"' fixtures/gateway.json && echo \"the gateway file has entries\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"entry\"' fixtures/gateway.json && echo \"the gateway file has entries\"",
+          "exit_code": 0,
+          "summary": "the gateway file has entries",
+          "at": "2026-11-23T21:41:17Z",
+          "by": "omar",
+          "session": "ses-omar-ledgerline",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "write the double-entry lines",
+      "done_when": "the export balances",
+      "files": [],
+      "status": "in-progress",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

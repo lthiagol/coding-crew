@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "id": "TSK03",
+  "title": "Report the payments that matched nothing",
+  "slug": "report-the-payments-that-matched-nothing",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:41:16Z",
+  "updated": "2026-11-23T21:41:17Z",
+  "revision": 34,
+  "status": "needs-human",
+  "status_since": "2026-11-23T21:41:17Z",
+  "overlays": {},
+  "claim": {
+    "by": "omar",
+    "session": "ses-omar-ledgerline",
+    "at": "2026-11-23T21:41:16Z",
+    "lease_expires_at": "2026-11-23T23:41:16Z"
+  },
+  "planned_by": "ses-thea-ledgerline",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The unmatched payments are listed with what was looked for",
+    "problem": "a payment that matched nothing vanished"
+  },
+  "scope": {
+    "in_scope": [
+      "the unmatched list",
+      "the report line per payment"
+    ],
+    "out_of_scope": [
+      "a summary of the causes"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "every unmatched payment has a line",
+      "verification": "grep -c '\"unmatched\"' fixtures/gateway.json && echo \"the gateway file counts unmatched\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"unmatched\"' fixtures/gateway.json && echo \"the gateway file counts unmatched\"",
+          "exit_code": 0,
+          "summary": "the gateway file counts unmatched",
+          "at": "2026-11-23T21:41:16Z",
+          "by": "omar",
+          "session": "ses-omar-ledgerline",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "list what was not matched",
+      "done_when": "the report names every unmatched payment",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "omar",
+        "session": "ses-omar-ledgerline",
+        "verdict": "ok",
+        "at": "2026-11-23T21:41:16Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "spec-compliance",
+        "reviewer": "sam",
+        "session": "ses-sam-ledgerline",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:41:17Z",
+        "notes": "The report counts unmatched payments instead of naming them.",
+        "findings": [
+          "FIND-01"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "sam",
+        "session": "ses-sam-ledgerline",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:41:17Z",
+        "notes": "A payment the gateway never answered has nothing to match.",
+        "findings": [
+          "FIND-02"
+        ]
+      },
+      {
+        "n": 3,
+        "kind": "external",
+        "focus": "security",
+        "reviewer": "sam",
+        "session": "ses-sam-ledgerline",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:41:17Z",
+        "notes": "The gateway's own text is copied into the report.",
+        "findings": [
+          "FIND-03"
+        ]
+      },
+      {
+        "n": 4,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "sam",
+        "session": "ses-sam-ledgerline",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:41:17Z",
+        "notes": "Measured on a batch with a thousand unmatched payments.",
+        "findings": [
+          "FIND-04"
+        ]
+      },
+      {
+        "n": 5,
+        "kind": "external",
+        "focus": "design",
+        "reviewer": "sam",
+        "session": "ses-sam-ledgerline",
+        "verdict": "changes-needed",
+        "at": "2026-11-23T21:41:17Z",
+        "notes": "The unmatched line cannot be acted on by finance.",
+        "findings": [
+          "FIND-05"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] The unmatched payments are only counted\n\n**where:** `ledgerline-core/src/report.rs`\n\n**defect:** the report prints a count where the task asked for a line per payment.\n\n**scenario:** reconcile a batch with one unmatched payment.\n\n**fix:** write a line naming the payment.",
+        "created": "2026-11-23T21:41:17Z",
+        "resolved": "2026-11-23T21:41:17Z",
+        "resolution": "the report writes a line per unmatched payment",
+        "comments": []
+      },
+      {
+        "id": "FIND-02",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] A payment with no gateway answer disappears\n\n**where:** `ledgerline-core/src/report.rs`\n\n**defect:** a payment the gateway never answered has no entry to match and is skipped.\n\n**scenario:** reconcile a batch where one payment was never sent.\n\n**fix:** write a line saying the gateway has no answer.",
+        "created": "2026-11-23T21:41:17Z",
+        "resolved": "2026-11-23T21:41:17Z",
+        "resolution": "a payment with no gateway answer gets a line of its own",
+        "comments": []
+      },
+      {
+        "id": "FIND-03",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] The gateway's text lands in the report unescaped\n\n**where:** `ledgerline-core/src/report.rs`\n\n**defect:** a newline in the gateway's field splits the report line.\n\n**scenario:** reconcile a batch whose gateway note carries a newline.\n\n**fix:** quote the field before writing it.",
+        "created": "2026-11-23T21:41:17Z",
+        "resolved": "2026-11-23T21:41:17Z",
+        "resolution": "gateway fields are quoted before they reach the report",
+        "comments": []
+      },
+      {
+        "id": "FIND-04",
+        "severity": "high",
+        "status": "fixed",
+        "description": "## D1 [high] A thousand unmatched payments take minutes\n\n**where:** `ledgerline-core/src/report.rs`\n\n**defect:** every report line rescans the whole batch.\n\n**scenario:** reconcile a batch with a thousand unmatched payments.\n\n**fix:** build the index once and read it per line.",
+        "created": "2026-11-23T21:41:17Z",
+        "resolved": "2026-11-23T21:41:17Z",
+        "resolution": "the index is built once; a thousand lines take a second",
+        "comments": []
+      },
+      {
+        "id": "FIND-05",
+        "severity": "high",
+        "status": "open",
+        "description": "## D1 [high] The unmatched line does not say what was looked for\n\n**where:** `ledgerline-core/src/report.rs`\n\n**defect:** the line names the payment but not the entry or amount it was matched against.\n\n**scenario:** hand the report to finance and ask why a payment failed.\n\n**fix:** print the reference and amount that were searched for.",
+        "created": "2026-11-23T21:41:17Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-23T21:41:17Z",
+        "after_round": 1,
+        "by": "priya",
+        "session": "ses-priya-ledgerline"
+      },
+      {
+        "at": "2026-11-23T21:41:17Z",
+        "after_round": 2,
+        "by": "priya",
+        "session": "ses-priya-ledgerline"
+      },
+      {
+        "at": "2026-11-23T21:41:17Z",
+        "after_round": 3,
+        "by": "priya",
+        "session": "ses-priya-ledgerline"
+      },
+      {
+        "at": "2026-11-23T21:41:17Z",
+        "after_round": 4,
+        "by": "priya",
+        "session": "ses-priya-ledgerline"
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

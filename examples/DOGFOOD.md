@@ -41,3 +41,23 @@ would not expect, or a rule that cost a call to find.
 - happened: every event's `by` is `creator`, `runner`, `reviewer` or `human`; ravi's and jo's moves both read `"by": "runner"`.
 - expected: the actor id, as `claim.by`, `round.reviewer` and a note's `author` record it. ADR 0018 defers the actor and session to later; until then the record cannot say who fixed FIND-01.
 - severity: low
+
+## Ledgerline
+
+### The approving human's name is accepted and dropped
+- command: `talita --as thea --role creator --session ses-thea-ledgerline task approve TSK01 --instructed-by hugo`
+- happened: accepted, exit 0, `data.instructed_by: "hugo"`; the journal event is a bare `approved` and the task file records only `planned_by: ses-thea-ledgerline`. Nothing on disk names hugo: the task file and `activity.json` both contain the string zero times.
+- expected: ADR 0015 says `--instructed-by` is recorded in the journal event's note, so the approval should read "instructed by hugo" after the call. The command's own output says it was carried.
+- severity: medium
+
+### A cancelled task is not a cancelled status
+- command: `talita task list --status cancelled`
+- happened: `input.invalid`, exit 2, "status `cancelled` is not one of draft, groomed, approved, executing, code-review, remediating, needs-human, done". TSK11, cancelled a moment earlier by the human, is listed by `task list` as `groomed` with an `overlays.cancelled` entry, and raul's counts put it under groomed.
+- expected: either `status: cancelled`, as the task status machine draws it, or a list filter for the overlay. A caller tallying by status counts a terminal task as live work.
+- severity: low
+
+### `start_readiness` does not see the overlay that stops the start
+- command: `talita task show TSK08`
+- happened: `derived.claimable` is false, but `derived.start_readiness.gates` names only `task.claimed`; the deferred overlay is absent, so the readiness list reads as "claim it and go". `claim take TSK08` then refuses `claim.not_claimable`: "the task is deferred".
+- expected: the readiness gate list to name `overlay.clear`, the way the claim refusal does, so the two derived answers agree.
+- severity: low

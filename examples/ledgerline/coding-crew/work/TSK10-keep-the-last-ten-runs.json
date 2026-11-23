@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "id": "TSK10",
+  "title": "Keep the last ten runs",
+  "slug": "keep-the-last-ten-runs",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:41:18Z",
+  "updated": "2026-11-23T21:55:16Z",
+  "revision": 5,
+  "status": "draft",
+  "status_since": "2026-11-23T21:41:18Z",
+  "overlays": {},
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The last ten runs are kept, so a week of work is on hand",
+    "problem": "each run overwrote the last"
+  },
+  "scope": {
+    "in_scope": [
+      "the run history",
+      "the pruning"
+    ],
+    "out_of_scope": [
+      "a searchable history"
+    ]
+  },
+  "acceptance_criteria": [],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

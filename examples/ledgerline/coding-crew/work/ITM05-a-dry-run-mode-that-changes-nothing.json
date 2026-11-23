@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "ITM05",
+  "title": "A dry-run mode that changes nothing",
+  "slug": "a-dry-run-mode-that-changes-nothing",
+  "kind": "feature",
+  "status": "promoted",
+  "body": "A tester wants to see what a batch would do.",
+  "scope": [
+    "the dry-run flag",
+    "the report it would write"
+  ],
+  "tags": [],
+  "created": "2026-11-23T21:41:18Z",
+  "updated": "2026-11-23T21:41:18Z",
+  "promoted_to": "TSK13",
+  "dismissed_reason": ""
+}

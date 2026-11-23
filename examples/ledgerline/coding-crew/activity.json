@@ -1,0 +1,644 @@
+{
+  "events": [
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "created",
+      "task": "TSK01",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "commented",
+      "task": "TSK01",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "groomed",
+      "task": "TSK01",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "approved",
+      "task": "TSK01",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "claimed",
+      "task": "TSK01",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "started",
+      "task": "TSK01",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "round_filed",
+      "task": "TSK01",
+      "by": "runner",
+      "note": "self, spec-compliance, ok"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "review_requested",
+      "task": "TSK01",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "round_filed",
+      "task": "TSK01",
+      "by": "reviewer",
+      "note": "external 1, edge-cases, changes-needed"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "finding_raised",
+      "task": "TSK01",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "finding_raised",
+      "task": "TSK01",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "changes_requested",
+      "task": "TSK01",
+      "by": "reviewer"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "finding_resolved",
+      "task": "TSK01",
+      "by": "runner",
+      "note": "fixed FIND-01"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "finding_resolved",
+      "task": "TSK01",
+      "by": "runner",
+      "note": "dismissed FIND-02"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "commented",
+      "task": "TSK01",
+      "by": "reviewer"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "remediated",
+      "task": "TSK01",
+      "by": "runner",
+      "note": "after round 1"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "round_filed",
+      "task": "TSK01",
+      "by": "reviewer",
+      "note": "external 2, edge-cases, ok"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "completed",
+      "task": "TSK01",
+      "by": "reviewer"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "created",
+      "task": "TSK02",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "groomed",
+      "task": "TSK02",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "approved",
+      "task": "TSK02",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "claimed",
+      "task": "TSK02",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "started",
+      "task": "TSK02",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "round_filed",
+      "task": "TSK02",
+      "by": "runner",
+      "note": "self, spec-compliance, ok"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "review_requested",
+      "task": "TSK02",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "round_filed",
+      "task": "TSK02",
+      "by": "reviewer",
+      "note": "external 1, edge-cases, ok"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "completed",
+      "task": "TSK02",
+      "by": "reviewer"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "created",
+      "task": "TSK03",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "groomed",
+      "task": "TSK03",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "approved",
+      "task": "TSK03",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "claimed",
+      "task": "TSK03",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "started",
+      "task": "TSK03",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:16Z",
+      "kind": "round_filed",
+      "task": "TSK03",
+      "by": "runner",
+      "note": "self, spec-compliance, ok"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "review_requested",
+      "task": "TSK03",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "round_filed",
+      "task": "TSK03",
+      "by": "reviewer",
+      "note": "external 1, spec-compliance, changes-needed"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_raised",
+      "task": "TSK03",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "changes_requested",
+      "task": "TSK03",
+      "by": "reviewer"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_resolved",
+      "task": "TSK03",
+      "by": "runner",
+      "note": "fixed FIND-01"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "remediated",
+      "task": "TSK03",
+      "by": "runner",
+      "note": "after round 1"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "round_filed",
+      "task": "TSK03",
+      "by": "reviewer",
+      "note": "external 2, edge-cases, changes-needed"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_raised",
+      "task": "TSK03",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "changes_requested",
+      "task": "TSK03",
+      "by": "reviewer"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_resolved",
+      "task": "TSK03",
+      "by": "runner",
+      "note": "fixed FIND-02"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "remediated",
+      "task": "TSK03",
+      "by": "runner",
+      "note": "after round 2"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "round_filed",
+      "task": "TSK03",
+      "by": "reviewer",
+      "note": "external 3, security, changes-needed"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_raised",
+      "task": "TSK03",
+      "by": "reviewer",
+      "note": "raised FIND-03"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "changes_requested",
+      "task": "TSK03",
+      "by": "reviewer"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_resolved",
+      "task": "TSK03",
+      "by": "runner",
+      "note": "fixed FIND-03"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "remediated",
+      "task": "TSK03",
+      "by": "runner",
+      "note": "after round 3"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "round_filed",
+      "task": "TSK03",
+      "by": "reviewer",
+      "note": "external 4, empirical, changes-needed"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_raised",
+      "task": "TSK03",
+      "by": "reviewer",
+      "note": "raised FIND-04"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "changes_requested",
+      "task": "TSK03",
+      "by": "reviewer"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_resolved",
+      "task": "TSK03",
+      "by": "runner",
+      "note": "fixed FIND-04"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "remediated",
+      "task": "TSK03",
+      "by": "runner",
+      "note": "after round 4"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "round_filed",
+      "task": "TSK03",
+      "by": "reviewer",
+      "note": "external 5, design, changes-needed"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_raised",
+      "task": "TSK03",
+      "by": "reviewer",
+      "note": "raised FIND-05"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "escalated",
+      "task": "TSK03",
+      "by": "reviewer"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "created",
+      "task": "TSK04",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "groomed",
+      "task": "TSK04",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "approved",
+      "task": "TSK04",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "claimed",
+      "task": "TSK04",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "started",
+      "task": "TSK04",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "round_filed",
+      "task": "TSK04",
+      "by": "runner",
+      "note": "self, spec-compliance, ok"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "review_requested",
+      "task": "TSK04",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "round_filed",
+      "task": "TSK04",
+      "by": "reviewer",
+      "note": "external 1, edge-cases, changes-needed"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_raised",
+      "task": "TSK04",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_raised",
+      "task": "TSK04",
+      "by": "reviewer",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "changes_requested",
+      "task": "TSK04",
+      "by": "reviewer"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_resolved",
+      "task": "TSK04",
+      "by": "runner",
+      "note": "fixed FIND-01"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "created",
+      "task": "TSK05",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "groomed",
+      "task": "TSK05",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "approved",
+      "task": "TSK05",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "claimed",
+      "task": "TSK05",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "started",
+      "task": "TSK05",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "round_filed",
+      "task": "TSK05",
+      "by": "runner",
+      "note": "self, spec-compliance, ok"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "review_requested",
+      "task": "TSK05",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "round_filed",
+      "task": "TSK05",
+      "by": "reviewer",
+      "note": "external 1, edge-cases, changes-needed"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "finding_raised",
+      "task": "TSK05",
+      "by": "reviewer",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "created",
+      "task": "TSK06",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "groomed",
+      "task": "TSK06",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "approved",
+      "task": "TSK06",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "claimed",
+      "task": "TSK06",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "started",
+      "task": "TSK06",
+      "by": "runner"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "created",
+      "task": "TSK07",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "groomed",
+      "task": "TSK07",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "approved",
+      "task": "TSK07",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:17Z",
+      "kind": "created",
+      "task": "TSK08",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "groomed",
+      "task": "TSK08",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "approved",
+      "task": "TSK08",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "deferred",
+      "task": "TSK08",
+      "by": "human",
+      "note": "the gateway ships the daily file next quarter; do it then"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "created",
+      "task": "TSK09",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "groomed",
+      "task": "TSK09",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "created",
+      "task": "TSK10",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "created",
+      "task": "TSK11",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "groomed",
+      "task": "TSK11",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "cancelled",
+      "task": "TSK11",
+      "by": "human",
+      "note": "the batch runner is being replaced; a cancel key there would be dead code"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "created",
+      "task": "TSK12",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "groomed",
+      "task": "TSK12",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "approved",
+      "task": "TSK12",
+      "by": "creator"
+    },
+    {
+      "at": "2026-11-23T21:41:18Z",
+      "kind": "created",
+      "task": "TSK13",
+      "by": "creator",
+      "note": "from ITM05"
+    }
+  ]
+}

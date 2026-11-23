@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "id": "TSK11",
+  "title": "Cancel a batch that is still running",
+  "slug": "cancel-a-batch-that-is-still-running",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-23T21:41:18Z",
+  "updated": "2026-11-23T21:41:18Z",
+  "revision": 9,
+  "status": "groomed",
+  "status_since": "2026-11-23T21:41:18Z",
+  "overlays": {
+    "cancelled": {
+      "reason": "the batch runner is being replaced; a cancel key there would be dead code",
+      "by": "hugo",
+      "at": "2026-11-23T21:41:18Z"
+    }
+  },
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A batch can be stopped while it runs",
+    "problem": "a wrong batch ran to the end"
+  },
+  "scope": {
+    "in_scope": [
+      "the cancel key",
+      "the partial batch"
+    ],
+    "out_of_scope": [
+      "undoing a finished batch"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "a running batch stops on the cancel key",
+      "verification": "grep -c '\"cancel\"' fixtures/gateway.json && echo \"the gateway file knows cancel\"",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "stop the batch on the key",
+      "done_when": "the batch stops where it is",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

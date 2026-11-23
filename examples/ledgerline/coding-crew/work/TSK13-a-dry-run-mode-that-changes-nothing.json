@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "id": "TSK13",
+  "title": "A dry-run mode that changes nothing",
+  "slug": "a-dry-run-mode-that-changes-nothing",
+  "children": [],
+  "kind": "feature",
+  "promoted_from": "ITM05",
+  "created": "2026-11-23T21:41:18Z",
+  "updated": "2026-11-23T21:41:18Z",
+  "revision": 1,
+  "status": "draft",
+  "status_since": "2026-11-23T21:41:18Z",
+  "overlays": {},
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A dry-run mode that changes nothing",
+    "problem": "A tester wants to see what a batch would do."
+  },
+  "scope": {
+    "in_scope": [
+      "the dry-run flag",
+      "the report it would write"
+    ],
+    "out_of_scope": []
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A dry-run mode that changes nothing",
+      "verification": "",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "thea",
+      "body": "from ITM05",
+      "at": "2026-11-23T21:41:18Z"
+    }
+  ],
+  "depends_on": []
+}

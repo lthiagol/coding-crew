@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "ITM01",
+  "title": "Watch the gateway's dashboard while a batch runs",
+  "slug": "watch-the-gateway-s-dashboard-while-a-batch-runs",
+  "kind": "idea",
+  "status": "open",
+  "body": "The finance team asks for a screen during a long run.",
+  "scope": [],
+  "tags": [],
+  "created": "2026-11-23T21:41:18Z",
+  "updated": "2026-11-23T21:41:18Z",
+  "dismissed_reason": ""
+}

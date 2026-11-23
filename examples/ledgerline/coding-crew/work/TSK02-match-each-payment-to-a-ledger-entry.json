@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "id": "TSK02",
+  "title": "Match each payment to a ledger entry",
+  "slug": "match-each-payment-to-a-ledger-entry",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-23T21:41:16Z",
+  "updated": "2026-11-23T21:41:16Z",
+  "revision": 18,
+  "status": "done",
+  "status_since": "2026-11-23T21:41:16Z",
+  "overlays": {},
+  "claim": {
+    "by": "omar",
+    "session": "ses-omar-ledgerline",
+    "at": "2026-11-23T21:41:16Z",
+    "lease_expires_at": "2026-11-23T23:41:16Z"
+  },
+  "planned_by": "ses-thea-ledgerline",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "Every payment is matched to the entry it pays",
+    "problem": "the matching was a spreadsheet formula nobody could check"
+  },
+  "scope": {
+    "in_scope": [
+      "the matcher",
+      "the amount comparison"
+    ],
+    "out_of_scope": [
+      "matching by note text"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "a payment with the same amount and reference is matched",
+      "verification": "grep -c '\"reference\"' fixtures/gateway.json && echo \"the gateway file has references\"",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -c '\"reference\"' fixtures/gateway.json && echo \"the gateway file has references\"",
+          "exit_code": 0,
+          "summary": "the gateway file has references",
+          "at": "2026-11-23T21:41:16Z",
+          "by": "omar",
+          "session": "ses-omar-ledgerline",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "match on the reference",
+      "done_when": "the payment names its entry",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "omar",
+        "session": "ses-omar-ledgerline",
+        "verdict": "ok",
+        "at": "2026-11-23T21:41:16Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "sam",
+        "session": "ses-sam-ledgerline",
+        "verdict": "ok",
+        "at": "2026-11-23T21:41:16Z",
+        "notes": "",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}
