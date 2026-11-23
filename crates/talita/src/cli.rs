@@ -14,7 +14,7 @@ use crate::parts::{self, StepFields};
 use crate::project::{self, Project};
 use crate::review::RoundFlags;
 use crate::write::Call;
-use crate::{item, journal, lifecycle, review, session, task};
+use crate::{claim, item, journal, lifecycle, review, session, task};
 
 /// Task Administration, Lifecycle & Interaction Terminal Application — the CLI
 /// tool of coding-crew. Every call prints one JSON object on stdout.
@@ -61,6 +61,11 @@ enum Noun {
     Task {
         #[command(subcommand)]
         verb: TaskVerb,
+    },
+    /// A runner's hold on a task, with a lease.
+    Claim {
+        #[command(subcommand)]
+        verb: ClaimVerb,
     },
     /// A task's scope: what is in it and what is not.
     Scope {
@@ -246,6 +251,32 @@ enum TaskVerb {
         #[arg(long)]
         reason: Option<String>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum ClaimVerb {
+    /// Take the task, or take over an expired claim.
+    Take {
+        id: String,
+        /// 30s, 5m, 2h or 1d. Default 2h.
+        #[arg(long)]
+        lease: Option<String>,
+    },
+    /// Extend the holder's lease.
+    Renew {
+        id: String,
+        /// 30s, 5m, 2h or 1d. Default 2h.
+        #[arg(long)]
+        lease: Option<String>,
+    },
+    /// Give the claim up; the reason is required.
+    Release {
+        id: String,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// The claim and whether its lease is live.
+    Show { id: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -577,6 +608,26 @@ fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
             ),
         },
         Noun::Task { verb } => task_verb(verb, project_flag, identity, talita.expect_revision),
+        Noun::Claim { verb } => {
+            let run = writer(project_flag, identity, talita.expect_revision);
+            match verb {
+                ClaimVerb::Take { id, lease } => {
+                    ("claim take", run(&|c| claim::take(c, id, lease.as_deref())))
+                }
+                ClaimVerb::Renew { id, lease } => (
+                    "claim renew",
+                    run(&|c| claim::renew(c, id, lease.as_deref())),
+                ),
+                ClaimVerb::Release { id, reason } => (
+                    "claim release",
+                    run(&|c| claim::release(c, id, reason.as_deref())),
+                ),
+                ClaimVerb::Show { id } => (
+                    "claim show",
+                    project::locate(project_flag).and_then(|p| claim::show(&p, id)),
+                ),
+            }
+        }
         Noun::Scope { verb } => {
             let run = writer(project_flag, identity, talita.expect_revision);
             match verb {

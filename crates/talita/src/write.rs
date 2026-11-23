@@ -1,7 +1,8 @@
 //! What every task write shares: identity, the lock, the revision check,
-//! cancellation, ownership, the frozen sections, and text values.
+//! cancellation, ownership, the frozen sections, text values and durations.
 
 use std::io::Read;
+use std::time::Duration;
 
 use coding_crew_core::ownership::authorize;
 use coding_crew_core::store::{ACTIVITY_FILE, WORK_DIR};
@@ -255,6 +256,28 @@ pub fn required_text(flag: &str, value: &str) -> Result<String, Failure> {
         return Err(Failure::new(Code::InputInvalid, format!("{flag} is empty")));
     }
     Ok(text)
+}
+
+/// A duration: a whole number and a unit, `30s`, `5m`, `2h` or `1d`.
+pub fn duration(flag: &str, value: &str) -> Result<Duration, Failure> {
+    let seconds = [("s", 1u64), ("m", 60), ("h", 3_600), ("d", 86_400)]
+        .iter()
+        .find_map(|(unit, seconds)| value.strip_suffix(unit).map(|count| (count, *seconds)));
+    let Some((count, seconds)) = seconds else {
+        return Err(not_a_duration(flag, value));
+    };
+    let count: u64 = count.parse().map_err(|_| not_a_duration(flag, value))?;
+    let seconds = count
+        .checked_mul(seconds)
+        .ok_or_else(|| Failure::new(Code::InputInvalid, format!("{flag} `{value}` is too long")))?;
+    Ok(Duration::from_secs(seconds))
+}
+
+fn not_a_duration(flag: &str, value: &str) -> Failure {
+    Failure::new(
+        Code::InputInvalid,
+        format!("{flag} `{value}` is not a duration; write 30s, 5m, 2h or 1d"),
+    )
 }
 
 /// A title: one non-empty line.
