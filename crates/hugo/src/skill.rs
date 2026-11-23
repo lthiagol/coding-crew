@@ -128,7 +128,7 @@ fn crew(config: &Config, note: Option<&str>) -> String {
     }
     out.push_str(&format!("Review-round limit: {}.\n\n", config.round_limit));
     for agent in &config.agents {
-        let effort = agent.effort.as_deref().map_or("default", effort_word);
+        let effort = agent.effort.as_deref().map_or("unset", effort_word);
         out.push_str(&format!(
             "- {}: harness {}, model {}, effort {effort}\n",
             agent.role.as_str(),
@@ -263,11 +263,12 @@ mod tests {
     }
 
     #[test]
-    fn an_agent_with_no_effort_names_the_default() {
+    fn an_agent_with_no_effort_says_it_is_unset() {
         let mut config = Config::default();
         config.agents[1].effort = None;
         let text = crew(&config, None);
-        assert!(text.contains("effort default\n"), "{text}");
+        assert!(text.contains("effort unset\n"), "{text}");
+        assert!(!text.contains("effort default"), "{text}");
         assert!(
             text.contains("  start args: --model claude-haiku-5-5 --permission-mode auto\n"),
             "{text}"

@@ -3580,36 +3580,63 @@ mod tests {
         sentences
     }
 
-    /// Whether a sentence states how many things a family has.
-    ///
-    /// A sentence that names a number and a count noun — or says "one of the
-    /// sixteen" — is a count the guard has to read. A number word on its own
-    /// is not: "channels" and "one of them" are prose, not catalog counts.
+    /// The sentences of the family sections that state a number and no count.
+    /// Each is named by a phrase of its sentence. Three kinds: `one` as a
+    /// pronoun, a channel gap between two colours, and a contrast ratio.
+    const NOT_COUNTS: [&str; 21] = [
+        // `one` as a pronoun.
+        "stays one: it is not a candidate",
+        "no slot spends one",
+        "25 apart in latte, 41 in frappé",
+        // Channel gaps.
+        "its channels are 25 apart",
+        "foreground's three channels are 6 apart",
+        "It is 11 channels apart",
+        "nord7 is 45 channels apart",
+        "is a frost blue, 78 channels apart",
+        // Contrast ratios.
+        "2.9:1 in frappé and 3.4:1 in mocha",
+        "5.6:1 in frappé and 8.1:1 in mocha",
+        "14.2:1 on the background, a step above",
+        "The comment reads at 3.0:1 on the background",
+        "at 3.0:1 it is at the floor",
+        "reads at 3.0:1 on the base, 3.6:1",
+        "with the base colour on it, 5.9:1",
+        "on the family's own base it is faint: nord3 reads at 1.7:1",
+        "nord3 reads at 1.7:1 on the base, which is a border",
+        "nord4, which reads at 9.2:1",
+        "it reads at 4.6:1 on the base",
+        "nord2 is a border grade — 1.4:1",
+        "nord11 reads at 3.1:1",
+    ];
+
+    /// Whether a sentence states a count: a number word or a digit outside a
+    /// code span, unless the sentence is listed in [`NOT_COUNTS`]. A sentence
+    /// is a count by its number, not by a noun that sits near it.
     fn states_a_count(sentence: &str) -> bool {
-        if number_words_in(sentence).is_empty() {
+        if NOT_COUNTS.iter().any(|phrase| sentence.contains(phrase)) {
             return false;
         }
-        const NOUNS: [&str; 14] = [
-            "values",
-            "colours",
-            "colors",
-            "variants",
-            "flavours",
-            "flavors",
-            "backgrounds",
-            "greys",
-            "grays",
-            "roles",
-            "groups",
-            "whites",
-            "palettes",
-            "slots",
-        ];
-        let lower = sentence.to_lowercase();
-        let named = lower
-            .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
-            .any(|word| NOUNS.contains(&word));
-        named || lower.contains(" of the ") || lower.contains(" the other ")
+        let prose = without_code_spans(sentence);
+        let digit = prose
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|word| !word.is_empty() && word.chars().all(|c| c.is_ascii_digit()));
+        digit || !number_words_in(&prose).is_empty()
+    }
+
+    /// The text of a sentence outside its code spans: a hex colour or a
+    /// setting in backticks is not a count.
+    fn without_code_spans(sentence: &str) -> String {
+        let mut text = String::new();
+        let mut in_code = false;
+        for character in sentence.chars() {
+            if character == '`' {
+                in_code = !in_code;
+            } else if !in_code {
+                text.push(character);
+            }
+        }
+        text
     }
 
     /// The counts the family sections state, with the numbers each one should
@@ -4046,6 +4073,19 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_stated_number_is_a_count_unless_it_is_exempt() {
+        // The old guard needed a count noun beside the number, so "Nine hues"
+        // passed. A number is a count by itself; a pronoun or a figure is
+        // exempt by name, and a code span is not read.
+        assert!(states_a_count("Nine hues sit in the family."));
+        assert!(states_a_count("The family states 9 things."));
+        assert!(!states_a_count(
+            "The overlay stays one: it is not a candidate."
+        ));
+        assert!(!states_a_count("The notes read `#1e1e2e` in the base."));
     }
 
     #[test]
@@ -4690,6 +4730,34 @@ mod tests {
         r.abs_diff(x).max(g.abs_diff(y)).max(b.abs_diff(z))
     }
 
+    /// The first pair of a palette's headings and alerts, and its link and
+    /// section heading, that are nearer than [`APART`]: the two roles, and
+    /// the channel gap between them.
+    fn near_pair(palette: &DocPalette) -> Option<(&'static str, &'static str, u8)> {
+        let headings = [
+            ("section heading", palette.heading_section),
+            ("item heading", palette.heading_item),
+            ("finding heading", palette.heading_finding),
+        ];
+        let alerts = [
+            ("note", palette.alert_note),
+            ("tip", palette.alert_tip),
+            ("important", palette.alert_important),
+            ("warning", palette.alert_warning),
+            ("caution", palette.alert_caution),
+        ];
+        for (heading, colour) in headings {
+            for (alert, other) in alerts {
+                let gap = channel_gap(colour, other);
+                if gap < APART {
+                    return Some((heading, alert, gap));
+                }
+            }
+        }
+        let gap = channel_gap(palette.link, palette.heading_section);
+        (gap < APART).then_some(("link", "section heading", gap))
+    }
+
     #[test]
     fn the_headings_and_the_alerts_are_apart() {
         // A heading level and an alert severity are different jobs, so the
@@ -4697,34 +4765,25 @@ mod tests {
         // apart too: a link is not the heading it sits under.
         for preset in colour_presets() {
             let palette = document_palette(preset);
-            let headings = [
-                palette.heading_section,
-                palette.heading_item,
-                palette.heading_finding,
-            ];
-            let alerts = [
-                palette.alert_note,
-                palette.alert_tip,
-                palette.alert_important,
-                palette.alert_warning,
-                palette.alert_caution,
-            ];
-            for heading in headings {
-                for alert in alerts {
-                    assert!(
-                        channel_gap(heading, alert) >= APART,
-                        "{} paints a heading and an alert {} channels apart",
-                        preset.name(),
-                        channel_gap(heading, alert)
-                    );
-                }
+            if let Some((one, other, gap)) = near_pair(&palette) {
+                panic!(
+                    "{} paints a {one} and a {other} {gap} channels apart",
+                    preset.name()
+                );
             }
-            assert!(
-                channel_gap(palette.link, palette.heading_section) >= APART,
-                "{} paints the link as the section heading",
-                preset.name()
-            );
         }
+        // The check fails a near-duplicate: an alert note shifted by five
+        // channels is the heading it sits beside, and the check names it.
+        let mut palette = document_palette(Preset::Dark);
+        let Color::Rgb(r, g, b) = palette.alert_note else {
+            panic!("the dark note is not an RGB colour");
+        };
+        palette.heading_item = Color::Rgb(r.saturating_add(5), g, b);
+        assert_eq!(
+            near_pair(&palette),
+            Some(("item heading", "note", 5)),
+            "the check passed a heading five channels from a note"
+        );
     }
 
     #[test]

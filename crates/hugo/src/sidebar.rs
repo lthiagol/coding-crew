@@ -609,6 +609,13 @@ mod tests {
         ConfigRead::of(ConfigState::Config(Config::default()))
     }
 
+    /// The error the config pipeline gives a configuration that does not parse.
+    fn syntax_error() -> String {
+        Config::from_toml("round_limit = \n")
+            .expect_err("a broken configuration")
+            .to_string()
+    }
+
     fn unreadable() -> ConfigRead {
         // The error is the reader's own: a row-level wording the pipeline
         // never produces is not a test of the screen.
@@ -1038,7 +1045,7 @@ mod tests {
         let state = ConfigRead {
             state: ConfigState::Unreadable(crate::app::ReadError {
                 file: CONFIG_FILE.to_string(),
-                error: "syntax error at line 1, column 15: expected a value".to_string(),
+                error: syntax_error(),
             }),
             legacy: Some("config.json".to_string()),
         };
@@ -1064,7 +1071,7 @@ mod tests {
         let state = ConfigRead {
             state: ConfigState::Unreadable(crate::app::ReadError {
                 file: CONFIG_FILE.to_string(),
-                error: "syntax error at line 1, column 15: expected a value".to_string(),
+                error: syntax_error(),
             }),
             legacy: Some("config.json".to_string()),
         };

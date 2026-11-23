@@ -200,6 +200,9 @@ struct Choice {
     cursor: usize,
     /// What the choice has to show.
     state: ChoiceState,
+    /// The state the id input opened from, so esc goes back to it: a failed
+    /// catalogue keeps its reason.
+    before_typing: Option<ChoiceState>,
 }
 
 /// One entry of a choice's list.
@@ -644,7 +647,7 @@ impl App {
             return;
         };
         if key.code == KeyCode::Esc {
-            choice.state = ChoiceState::Listed;
+            choice.state = choice.before_typing.take().unwrap_or(ChoiceState::Listed);
             return;
         }
         let agent = choice.agent;
@@ -1097,6 +1100,7 @@ impl App {
             catalog: Catalog::default(),
             cursor,
             state,
+            before_typing: None,
         });
     }
 
@@ -1284,6 +1288,15 @@ impl App {
         }
     }
 
+    /// Open the id input over the open choice, keeping the state it opened
+    /// from for esc.
+    fn open_typing(&mut self) {
+        if let Some(choice) = self.choice.as_mut() {
+            choice.before_typing = Some(choice.state.clone());
+            choice.state = ChoiceState::Typing(String::new());
+        }
+    }
+
     /// The agent of the open choice, and the text of the entry under its
     /// cursor.
     fn entry_under_cursor(&self) -> Option<(usize, String)> {
@@ -1337,7 +1350,7 @@ impl App {
             return;
         };
         if model == pick::TYPE_AN_ID {
-            self.set_state(ChoiceState::Typing(String::new()));
+            self.open_typing();
             return;
         }
         let levels = self
@@ -1358,7 +1371,7 @@ impl App {
             return;
         };
         if entry == pick::TYPE_A_LEVEL {
-            self.set_state(ChoiceState::Typing(String::new()));
+            self.open_typing();
             return;
         }
         let listed = self.effort_listed(agent);
@@ -6333,6 +6346,28 @@ mod tests {
     }
 
     #[test]
+    fn esc_from_the_id_input_goes_back_to_the_failure_it_opened_from() {
+        // The reason the catalogue failed stays on the choice when the id
+        // input is opened and closed again.
+        let home = scratch("model-choice-esc");
+        let mut window = on_builder(&home, Field::Model);
+        answer_choice_for(&mut window, 1, Err("opencode timed out".to_string()));
+        window.on_key(press(KeyCode::Enter));
+        assert!(window.typing(), "enter did not open the id input");
+        window.on_key(press(KeyCode::Esc));
+        assert_eq!(
+            window.choice.as_ref().expect("the choice").state,
+            ChoiceState::Failed("opencode timed out".to_string())
+        );
+        let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
+        let text = text_of(&rows);
+        assert!(text.contains(CATALOG_UNREADABLE), "{text}");
+        assert!(text.contains("opencode timed out"), "{text}");
+        assert!(text.contains(pick::TYPE_AN_ID), "{text}");
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
     fn a_model_pick_clears_an_effort_the_new_model_does_not_take() {
         // The builder runs high. A model that takes high keeps it; one that
         // lists only low and medium, or none, clears it.
@@ -6749,14 +6784,26 @@ mod tests {
     #[test]
     fn each_queue_pick_is_the_line_its_task_is_drawn_on() {
         // A pick is the line the draw recorded for its task, under the caption:
-        // the click answers to what is drawn there.
+        // the click answers to what is drawn there. The held task sits ahead of
+        // the waiting ones, so a waiting task's place in the queue is not its
+        // place among the waiting: a pick that counted the queue would land on
+        // another row.
         let window = app();
+        let mut runtime = queued_runtime();
+        runtime
+            .queue
+            .insert(1, queue_item("TSK13", Status::Approved));
+        assert!(
+            runtime.is_held("TSK13"),
+            "the fixture no longer holds TSK13"
+        );
+        let waiting: Vec<String> = runtime.waiting().map(|item| item.id.clone()).collect();
+        assert_eq!(waiting, ["TSK29", "TSK07", "TSK08"]);
         let queue = window
-            .sections(&queued_runtime(), 100, RENDER_NOW, 0)
+            .sections(&runtime, 100, RENDER_NOW, 0)
             .into_iter()
             .find(|section| section.title == QUEUE_TITLE)
             .expect("the queue section");
-        let waiting = ["TSK29", "TSK07", "TSK08"];
         assert_eq!(queue.picks.len(), waiting.len());
         for (line, index) in &queue.picks {
             let text: String = queue.lines[*line]
@@ -6765,8 +6812,36 @@ mod tests {
                 .map(|span| span.content.as_ref())
                 .collect();
             assert!(
-                text.contains(waiting[*index]),
+                text.contains(waiting[*index].as_str()),
                 "task {index} is picked on line {line}, drawn as {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_caption_moves_every_pick_down_by_its_own_lines_not_a_fixed_offset() {
+        // The queue's picks sit one count line below the caption. A block with
+        // two count lines puts its rows one line lower, so a pick that kept the
+        // fixed offset of the queue would land on the second count line.
+        let window = app();
+        let block = vec![
+            Line::from("count one"),
+            Line::from("count two"),
+            Line::from("TSK21 waiting"),
+            Line::from("TSK22 waiting"),
+        ];
+        let (lines, picks) = window.captioned_picks("caption", (block, vec![(2, 0), (3, 1)]), 100);
+        assert_eq!(picks, [(3, 0), (4, 1)]);
+        for (line, index) in &picks {
+            let text: String = lines[*line]
+                .spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect();
+            let task = ["TSK21", "TSK22"][*index];
+            assert!(
+                text.contains(task),
+                "task {task} is picked on line {line}, drawn as {text:?}"
             );
         }
     }
