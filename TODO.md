@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after unit 91.
+Updated 2026-11-23 by the orchestrator, after unit 92.
 Branch `main`, remote `https://github.com/lthiagol/coding-lanes.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -50,10 +50,9 @@ defects the review found are in the known-issues block of
 
 ## THE OPEN UNITS
 
-Queued in `docs/plan.md`, in order. Units 0–91, 63b and 70b are closed; their record is in
+Queued in `docs/plan.md`, in order. Units 0–92, 63b and 70b are closed; their record is in
 `DONE.md`. Open, in order:
 
-- 92 · Review E · fixtures — S
 - 93 · Review F · engine, theme, tooling — S
 - 94 · Review G · docs — S
 
@@ -172,6 +171,14 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
+- **2026-11-23, unit 92:** the fixtures hold no code-review task before its first
+  external round, since the one-review-round shape is gone. A fixture would be
+  needed if raul or hugo must read that state. Not done: it changes the fixture
+  count and the pins. Recorded, not ruled.
+- **2026-11-23, unit 92:** TSK13 and TSK15 record `changes_requested` at their
+  external round, while the status stays `code-review` until the reviewer calls
+  `request-changes`. TSK14 already does this, so it was left as is. Recorded, not
+  ruled.
 - **2026-11-23, unit 91:** the tests for F7, F8, F18, F20 and F21 were not run
   against the pre-fix code (round 0's report). The reviewer read each as failing
   without its fix. Recorded, not ruled.

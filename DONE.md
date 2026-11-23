@@ -1579,6 +1579,14 @@ gives the picker an optional cursor, so an odd crew paints none. Ruling: an odd
 crew opens unpicked, not at the nearest size, the builder's choice on the
 reviewer's recommendation. Limits are in THE FOLLOW-UPS. Commit `a538692`.
 
+Unit closed: Review E · fixtures (plan 92). One build round and one review,
+clean. Two findings of the full review's batch E. F9 (ruled by the human,
+2026-11-23: the fixtures follow ADR 0017): TSK13 and TSK15 carry a findings-free
+self round 0 and their findings on an external round 1, as TSK14 does. TSK13's
+FIND-02, fixed in code review by the claim's session, is open. F22: the mock README's fan-in counts now match the fixtures, and a test
+recomputes them. The generator reproduces the tree byte for byte. Limits are in
+THE FOLLOW-UPS. Commit `fc6006c`.
+
 ---
 
 ## Lessons
