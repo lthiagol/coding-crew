@@ -20,9 +20,11 @@ configuration is centralized under `~/.config/coding-crew/`, and that folder is
 created on demand when it does not exist.
 
 **talita is built in part** (the human, 2026-11-23): T5, T6, T7, T10, T11 and
-T13 of `docs/talita/roadmap.md` are closed. T8, T9, T12 and T14 still wait for
-the word. Then agents dogfood it into a sandbox project under `examples/`,
-which replaces random fixtures in `mock-data/`.
+T13 of `docs/talita/roadmap.md` are closed. T8 (claim) and T9 (steps at work
+and evidence) have the word too (the human, 2026-11-23): they come before the
+dogfood, which needs claims and evidence. T12 and T14 still wait for the word.
+Then agents dogfood it into a sandbox project under `examples/`, which
+replaces random fixtures in `mock-data/`.
 
 `crates/core` is shared and stays editable.
 
