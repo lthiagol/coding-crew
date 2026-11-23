@@ -204,6 +204,12 @@ themes and a theme file on disk (`docs/plan.md` § Deferred).
 
 ## THE FOLLOW-UPS
 
+- 2026-11-23 · macOS CI: hugo's `a_catalogue_that_cannot_be_read_is_named_in_the_choice`
+  fails (run 45215295287): the choice shows "the model catalog cannot be
+  read" but not the `failed:` line. Likely the error names the tool by its
+  long macOS temp path (`/var/folders/…`), so the fitted line is cut before
+  `failed:`. Decide whether the reason should lead the line, then fix and pin.
+  Ubuntu is green; the bash 3.2 fix in `sync.sh` passed on macOS.
 - 2026-11-23 · talita `task show` `derived.review_state`, `derived.lane`
   and `task list --lane`, `--needs-you` are not built (T6 review D2). The
   rules live in raul (`crates/raul/src/data.rs` `needs_you`) or nowhere
