@@ -30,7 +30,7 @@ bytes cannot drift apart silently.
 
 | upstream file | upstream sha256 | vendored file | vendored sha256 | deviation |
 |---|---|---|---|---|
-| `src/markdown/blocks.rs` | `8c4e53212383b794247b2e7502a6d6b74e01266a322ad42c787b98c0524360f7` | `crates/engine/src/markdown/blocks.rs` | `c25b4be50e8786fdbf6ae1b6a09008ca9f50938d2c97a2cc78b177432aeb08ba` | 1, 6, 11, 16, 17, 22 |
+| `src/markdown/blocks.rs` | `8c4e53212383b794247b2e7502a6d6b74e01266a322ad42c787b98c0524360f7` | `crates/engine/src/markdown/blocks.rs` | `8474530a55fa7ed5865a48b0a9e4c25532323d0e9916b4093defb357c4c6d714` | 1, 6, 11, 16, 17, 21, 22 |
 | `src/markdown/fences.rs` | `e5810317dd42f09780ddbd800d6ef7d81e213461181f38096cc0821d554d6ce0` | `crates/engine/src/markdown/fences.rs` | `99cc29ba50ee9b591dded59ef745d03dbd6cc82ec5c910268246e81400242487` | 11, 12 |
 | `src/markdown/footnotes.rs` | `40a60dbff36117b6e4a6803bca6ba43b4b5965c523285d2d8471e89f9014ee76` | `crates/engine/src/markdown/footnotes.rs` | `0c4a012058588f9b34c6bfcef85382296a077fdb3c836e512a58636d32ca01aa` | 1, 4, 11 |
 | `src/markdown/frontmatter.rs` | `de8dd7ae2337ab6a2c7837e98826280f4e0374fa809c3cfbaf6af7f0918d1e8c` | `crates/engine/src/markdown/frontmatter.rs` | `de8dd7ae2337ab6a2c7837e98826280f4e0374fa809c3cfbaf6af7f0918d1e8c` | identical |
@@ -318,7 +318,9 @@ clickable. `push_link_url` in `spans.rs` and `TableBuf::push_link_url` in
 shows once. A link inside `<mark>` or `<code>` flushes its buffered text first,
 so the URL follows the label; `handle_inline_style_event` takes the HTML buffer
 for that. `CellInlineStyle` gains `dim`, which `align_cell` applies. The glyph
-before the text is set by deviations 7 and 24.
+before the text is set by deviations 7 and 24. In a heading the URL keeps its
+own dim style: `push_heading_lines` in `blocks.rs` restyles every other span to
+the heading, and passes a link-owned dim span through.
 
 ### 22. Fenced code and diagrams round their frames, and dim their numbers
 

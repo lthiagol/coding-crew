@@ -659,3 +659,29 @@ fn highlight_matches_only_bolds_matches_without_line_bg() {
             .contains(ratatui::style::Modifier::BOLD)
     );
 }
+
+#[test]
+fn a_link_url_in_a_heading_stays_dim() {
+    let (ss, theme) = test_assets();
+    let parsed = parse_markdown_with_width(
+        "# See [leaf](https://x)\n",
+        &ss,
+        &theme,
+        80,
+        &test_md_theme(),
+        false,
+        true,
+    );
+    let url = parsed
+        .lines
+        .iter()
+        .flat_map(|line| line.spans.iter())
+        .find(|span| span.content.contains("https://x"))
+        .expect("the heading draws the URL");
+    assert!(
+        url.style
+            .add_modifier
+            .contains(ratatui::style::Modifier::DIM),
+        "a link's URL in a heading keeps its dim (deviation 21)"
+    );
+}

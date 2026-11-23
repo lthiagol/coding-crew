@@ -54,16 +54,13 @@ pub fn pane_titled(
 const DOT: &str = " · ";
 
 /// A key chip: the key bold on `chrome.key`, then its action on `text.dim`,
-/// one space apart. The key is foreground only: a chip is not filled.
+/// one space apart. The key keeps the slot's other attributes, reversed where
+/// the preset sets it; a chip is not filled with a tint of its own.
 pub fn key_chip(key: &str, action: &str, theme: &Theme) -> Vec<Span<'static>> {
     vec![
         Span::styled(
             key.to_string(),
-            theme
-                .chrome
-                .key
-                .remove_modifier(Modifier::REVERSED)
-                .add_modifier(Modifier::BOLD),
+            theme.chrome.key.add_modifier(Modifier::BOLD),
         ),
         Span::styled(format!(" {action}"), theme.text.dim),
     ]
@@ -251,9 +248,22 @@ mod tests {
         assert_eq!(spans[0].content, "q");
         assert_eq!(spans[0].style.fg, theme.chrome.key.fg);
         assert!(spans[0].style.add_modifier.contains(Modifier::BOLD));
-        assert!(!spans[0].style.add_modifier.contains(Modifier::REVERSED));
         assert_eq!(spans[1].content, " quit");
         assert_eq!(spans[1].style, theme.text.dim);
+    }
+
+    #[test]
+    fn a_key_chip_in_the_terminal_preset_is_bold_and_reversed() {
+        // theme.md: every key label holds BOLD and REVERSED together.
+        let theme = Theme::preset(Preset::Terminal);
+        let spans = key_chip("q", "quit", &theme);
+        assert_eq!(spans[0].style, theme.chrome.key);
+        assert!(
+            spans[0]
+                .style
+                .add_modifier
+                .contains(Modifier::BOLD | Modifier::REVERSED)
+        );
     }
 
     /// The footer's lines as text.

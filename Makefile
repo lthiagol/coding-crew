@@ -49,7 +49,7 @@ test: ## Run the test suite
 test-scripts: ## Run the shell script tests
 	bash scripts/test-pty-sweep.sh
 
-columns: ## Regenerate the terminal-column table from its rules and check it
+columns: ## Check the terminal-column table against its rules (writes nothing)
 	python3 scripts/generate-terminal-columns.py --check
 
 .PHONY: sweep

@@ -190,6 +190,9 @@ pub(super) fn push_heading_lines(
                 || span.style.fg == Some(theme.link_icon)
             {
                 style.fg = span.style.fg;
+            } else if link_id.is_some() && span.style.add_modifier.contains(Modifier::DIM) {
+                // A link's URL keeps its own dim style (deviation 21).
+                style = span.style;
             }
             LinkedSpan::new(Span::styled(span.content, style), link_id)
         })

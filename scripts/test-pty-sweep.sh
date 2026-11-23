@@ -31,6 +31,7 @@ width=""
 height=""
 work=""
 icons=""
+tab=none
 while (($#)); do
   case "$1" in
     --render | --plain)
@@ -48,6 +49,10 @@ while (($#)); do
       icons=${2:-}
       shift 2
       ;;
+    --tab)
+      tab=${2:-}
+      shift 2
+      ;;
     --*)
       printf 'fake raul: unknown option %s\n' "$1" >&2
       exit 2
@@ -60,6 +65,7 @@ while (($#)); do
 done
 printf '%s|%s|%s\n' "$width" "$height" "$work" >>"$state/calls"
 printf '%s|%s\n' "$icons" "${CODING_CREW_ICONS-unset}" >>"$state/icon-calls"
+printf '%s\n' "$tab" >>"$state/tab-calls"
 
 if [[ -n ${FAKE_HANG_WIDTH:-} && $width == "$FAKE_HANG_WIDTH" ]]; then
   exec sleep 60
@@ -253,6 +259,18 @@ run_sweep --raul "$BIN/raul" --icons emoji --work work
 expect_rc 2 "unknown icon set"
 expect_contains "$STDERR" "invalid choice: 'emoji'" "unknown icon set is named"
 expect_missing "$FAKE_STATE_DIR/calls" "unknown icon set runs no render"
+
+# 1b. --tab reaches every render when it is given, and no render names a tab
+# when it is not.
+new_case
+run_sweep --raul "$BIN/raul" --tab tasks --work work
+expect_rc 0 "tab forwarded"
+expect_count 81 "$(grep -c '^tasks$' "$FAKE_STATE_DIR/tab-calls")" "every render names the tab"
+
+new_case
+run_sweep --raul "$BIN/raul" --work work
+expect_rc 0 "no tab given"
+expect_count 81 "$(grep -c '^none$' "$FAKE_STATE_DIR/tab-calls")" "no render names a tab when none is given"
 
 # 2. An explicit --out is used, created with its parents, and a --height is
 # passed through.
