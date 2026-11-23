@@ -107,6 +107,13 @@ A unit without one is not ready, and belongs under **Grooming** instead.
 | 85 | **T2 · Core gates** ✓ | done | collect-all `check()`; `review.round_current`, `review.round_owner`, `task.claimed` on finish, external round refused from the claim's session |
 | 86 | **T3 · Core operations** ✓ | done | claim take/renew/release with takeover; the section ownership table; the stored criterion-status mirror |
 | 87 | **T4 · Core store** ✓ | done | project lock, atomic journal and runtime writes, numeric id sort, `save_item` removes an old file |
+| 88 | **Review A · core lifecycle, claims, ownership** | S | the runner's self round is allowed; transitions write their record; leases cannot wrap; the ownership test asserts its name |
+| 89 | **Review B · core store** | S | revision moves and is checked; read-check-write under the lock; a rename leaves one file |
+| 90 | **Review C · raul** | M | wide titles keep Path's branches; overlay on groomed has a branch; ids past 99; filter line; Overview's next; manual evidence drawn |
+| 91 | **Review D · hugo** | M | quoted start; no unprompted orchestrator; effort back to none; crew selector; timeout bound; config error detail |
+| 92 | **Review E · fixtures** | S | TSK13 and TSK15 follow ADR 0017 (the human, 2026-11-23); the mock README is true |
+| 93 | **Review F · engine, theme, tooling** | S | heading link URLs dim; terminal footer keys reversed (the human, 2026-11-23); sweep test covers --tab; make columns |
+| 94 | **Review G · docs** | S | task-model drift, slot count, hugo and raul screens, what waits on the flow |
 
 ## Grooming
 
