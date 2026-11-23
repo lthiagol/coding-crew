@@ -53,8 +53,11 @@ defects the review found are in the known-issues block of
 ## THE OPEN UNITS
 
 Queued in `docs/plan.md`, in order. Units 0–100, 63b and 70b are closed; their
-record is in `DONE.md`. Nothing is in flight: the human said to prepare, not
-build (2026-11-23); the human then started phase 1; 95–99 are closed; phase 1 is done, and 100 is closed. Next: 101, after the first CI run on macOS is green and the human tags `v0.1.0`.
+record is in `DONE.md`. Nothing is in flight; the tree is clean. The crew
+wound down at 13:55 on 2026-11-23 for the weekly limits reset. The talita
+queue (T5 → T6 → T7 → T10 → T11 → T13, then the `examples/` dogfood) stopped
+after T6: T5 and T6 are closed. Next: the macOS catalogue follow-up below
+(CI green on both runners), then T7.
 
 | phase | units | needs |
 |---|---|---|
