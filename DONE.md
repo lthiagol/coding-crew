@@ -1919,6 +1919,29 @@ override on a deferred criterion, masked by the deferral, and a stale
 and pinned. By the opencode crew (deepseek-v4.1-flash builder, glm-5.3
 reviewer, slug `mm`), two rounds. Commit `3c3339d`.
 
+### 2026-11-23 · the dogfood run
+
+Two sandbox projects under `examples/` — **Pantry**, a recipe app, and
+**Ledgerline**, a payments CLI — written by talita alone, with the binary
+built from this branch: thirteen tasks and five items each, every lifecycle
+state between them (draft, groomed, approved, executing, code-review,
+remediating, needs-human, done; self and external rounds; findings open,
+fixed and dismissed; comments; re-reviews; an escalation; a resume; a reopen;
+the blocked, deferred and cancelled overlays; items shaped, dismissed and
+promoted), five actors with their own sessions, and the human's decisions
+written down by the creator with `--instructed-by`. Nothing under a
+`coding-crew/` folder was edited by hand, and no talita code changed in the
+run.
+
+`examples/DOGFOOD.md` is the honest list: nine entries, worst first. The two
+worst: **the fifth review round cannot be sent back** — `review.budget_left`
+refuses the fifth `request-changes`, so that round's finding can never be
+remediated and the task escalates with it open; and **the approving human's
+name is accepted and dropped** — ADR 0015 puts it in the journal note, and
+the note is empty, so the decision-maker's record is lost. Both want a unit.
+By the opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug
+`mm`), three units, two rounds. Commits `6bf312d`, `3ae2640`, `545e8e2`.
+
 ---
 
 ## Lessons
