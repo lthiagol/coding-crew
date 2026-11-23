@@ -13,7 +13,9 @@ fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("coding-crew-store-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("a scratch folder");
-    dir
+    // macOS's temp dir is behind a symlink (/var -> /private/var); discovery
+    // returns canonical paths.
+    dir.canonicalize().expect("a canonical scratch folder")
 }
 
 /// A work folder inside a scratch project. The store's lock sits beside
