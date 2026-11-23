@@ -1775,6 +1775,18 @@ raul's Settings shows a missing `harness` or `effort` as an empty row that can
 be set and saved; an unchanged empty row writes nothing. One round, clean.
 Commit `964bec6`.
 
+### 2026-11-23 · Unit 100, version and releases
+
+raul and hugo answer `--version` and `-V` with the workspace version, tested
+through the real binaries; talita already did. `LICENSE-MIT` and
+`LICENSE-APACHE` (2026, coding-crew contributors) are at the root. CI runs
+`make ci` and the release build on `ubuntu-latest` and `macos-latest`, with
+Python pinned to 3.15.2 because the column check refuses another Unicode
+version. `scripts/test-pty-sweep.sh` drops GNU `timeout`, `sed -i`, padded
+`wc -l` and `\u` escapes for macOS. `docs/release.md` says how a release is
+cut; the README links it. Not verified here: CI on macOS, and that
+setup-python offers 3.15.2 on both runners. One round, clean. Commit `22c89fd`.
+
 ---
 
 ## Lessons
