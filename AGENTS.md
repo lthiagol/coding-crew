@@ -38,10 +38,8 @@ superpowers.
 - `crates/talita` — talita; package `coding-crew-talita`, binary `talita`.
   Off-limits until instructed.
 - `flow/` — the project's role configs: `builder.json` and `reviewer.json`.
-  They name the agent each role runs and the model it runs on. hugo's
-  configuration defaults read them, and a test pins the two together. The
-  flow skill does not read them: it generates a role config per session,
-  outside the repository. When coding-crew manages this project, they move
+  They name the agent each role runs; the model lives in hugo's
+  configuration (`[agents.<role>]`). No crew skill reads them. When coding-crew manages this project, they move
   to `coding-crew/flow/` — see `docs/decisions/0011-flow-files.md`.
 - `crates/raul` — raul; package `coding-crew-raul`, binary `raul`.
 - `crates/hugo` — hugo; package `coding-crew-hugo`, binary `hugo`.

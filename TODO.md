@@ -170,6 +170,11 @@ Grooming (G1–G4) and question Q5 wait on decisions or the flow.
 
 None blocking. Carried from the closed units.
 
+- **talita's design is accepted** (2026-11-22, the human). `docs/talita/` and
+  ADRs 0012–0020; `docs/talita/roadmap.md` holds the build order, units
+  T1–T14. Nothing is built: talita code waits on the human's word.
+- **hugo renames `HUGO_SESSION` to `HUGO_CREW`** (2026-11-22, ADR 0015). It
+  holds the crew's configuration, not an actor's session. A small hugo unit.
 - **2026-11-22, unit 83:** the model has no re-review record (TSK14's round 2
   is unstampable) — talita's design adds one. The stamp rule in
   `crates/core/tests/mock_data.rs` cannot place a `re_review` moment, so

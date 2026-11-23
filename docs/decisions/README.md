@@ -66,3 +66,12 @@ points at it rather than repeating it. The vocabulary of record is
 | [0009](0009-markdown-projection.md) | JSON for agents, markdown for humans — the record and the display | ✅ accepted |
 | [0010](0010-project-boundary.md) | A project boundary stops store discovery | ✅ accepted |
 | [0011](0011-flow-files.md) | The flow's files live with the project | ✅ accepted |
+| [0012](0012-noun-verb-grammar.md) | talita's grammar — noun, then verb | ✅ accepted |
+| [0013](0013-intent-verbs.md) | Intent verbs only — no field editing | ✅ accepted |
+| [0014](0014-output-and-errors.md) | talita's output and errors — machine first | ✅ accepted |
+| [0015](0015-identity.md) | Identity — how actor, role and session reach a call | ✅ accepted |
+| [0016](0016-concurrency.md) | Concurrency — one lock, atomic writes, optional revision check | ✅ accepted |
+| [0017](0017-review-record.md) | The review record — a round is filed whole | ✅ accepted |
+| [0018](0018-runtime-and-journal-writers.md) | The runtime record and the journal — who writes them, and when | ✅ accepted |
+| [0019](0019-evidence.md) | Evidence — talita runs the verification | ✅ accepted |
+| [0020](0020-claims-and-leases.md) | Claims and leases | ✅ accepted |
