@@ -1,0 +1,5 @@
+[queue]
+path = "/var/lib/railyard/queue"
+
+[retry]
+max_attempts = 4

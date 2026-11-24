@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "id": "TSK02",
+  "title": "Autosave loses the cursor position",
+  "slug": "autosave-loses-the-cursor-position",
+  "children": [],
+  "kind": "bug",
+  "created": "2026-11-24T18:25:20Z",
+  "updated": "2026-11-24T18:25:20Z",
+  "revision": 16,
+  "status": "done",
+  "status_since": "2026-11-24T18:25:20Z",
+  "overlays": {},
+  "claim": {
+    "by": "ines",
+    "session": "ses-ines-qn",
+    "at": "2026-11-24T18:25:20Z",
+    "lease_expires_at": "2026-11-24T20:25:20Z"
+  },
+  "planned_by": "ses-lena-qn",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "Autosave keeps the cursor where the writer left it.",
+    "problem": "After an autosave the cursor jumps to the top."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Undo history"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "The autosave returns the cursor",
+      "verification": "grep -q cursor src/quillnote/notes.py",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q cursor src/quillnote/notes.py",
+          "exit_code": 0,
+          "summary": "autosave returns the cursor",
+          "at": "2026-11-24T18:25:20Z",
+          "by": "ines",
+          "session": "ses-ines-qn",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Return the cursor from autosave",
+      "done_when": "autosave takes and returns a cursor",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "edge-cases",
+        "reviewer": "ines",
+        "session": "ses-ines-qn",
+        "verdict": "ok",
+        "at": "2026-11-24T18:25:20Z",
+        "notes": "Cursor at end of file checked.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "yusuf",
+        "session": "ses-yusuf-qn",
+        "verdict": "ok",
+        "at": "2026-11-24T18:25:20Z",
+        "notes": "The cursor survives a save in a manual run.",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

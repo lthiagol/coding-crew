@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "id": "TSK03",
+  "title": "Search across every note",
+  "slug": "search-across-every-note",
+  "children": [
+    "TSK03.1"
+  ],
+  "kind": "feature",
+  "created": "2026-11-24T18:25:20Z",
+  "updated": "2026-11-24T18:25:20Z",
+  "revision": 7,
+  "status": "groomed",
+  "status_since": "2026-11-24T18:25:20Z",
+  "overlays": {},
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "Searching finds notes by title.",
+    "problem": "Writers scroll through the folder to find a note."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Full-text search of the body"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "Searching lists the notes whose titles match",
+      "verification": "grep -q search_titles src/quillnote/notes.py",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Search the titles",
+      "done_when": "search_titles returns matches",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

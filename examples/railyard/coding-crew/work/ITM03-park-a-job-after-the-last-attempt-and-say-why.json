@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "ITM03",
+  "title": "Park a job after the last attempt and say why",
+  "slug": "park-a-job-after-the-last-attempt-and-say-why",
+  "kind": "feature",
+  "status": "promoted",
+  "body": "From TODO.md: [ ] open.",
+  "scope": [],
+  "tags": [
+    "adopted"
+  ],
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "promoted_to": "TSK03",
+  "dismissed_reason": ""
+}

@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "id": "TSK01",
+  "title": "Send a storm alert when a surge passes a harbour's limit",
+  "slug": "send-a-storm-alert-when-a-surge-passes-a-harbour-s-limit",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-24T18:30:36Z",
+  "updated": "2026-11-24T18:30:36Z",
+  "revision": 36,
+  "status": "done",
+  "status_since": "2026-11-24T18:30:36Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-tw",
+    "at": "2026-11-24T18:30:36Z",
+    "lease_expires_at": "2026-11-24T20:30:36Z"
+  },
+  "planned_by": "ses-mara-tw",
+  "meta": {
+    "priority": "high",
+    "effort": "M",
+    "tags": [
+      "storm",
+      "alerts"
+    ]
+  },
+  "intent": {
+    "outcome": "A harbour master hears of a storm surge when it passes the harbour's limit, not hours later.",
+    "problem": "The masters read the tide table by hand, hours after a surge has started."
+  },
+  "scope": {
+    "in_scope": [
+      "Surge alerts for the three harbours"
+    ],
+    "out_of_scope": [
+      "Sending by SMS"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A surge above the harbour's limit queues an alert",
+      "verification": "grep -q surge_limit src/tidewatch/thresholds.py",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q surge_limit src/tidewatch/thresholds.py",
+          "exit_code": 0,
+          "summary": "",
+          "at": "2026-11-24T18:30:36Z",
+          "by": "ravi",
+          "session": "ses-ravi-tw",
+          "manual": false
+        },
+        {
+          "command": "grep -q surge_limit src/tidewatch/thresholds.py",
+          "exit_code": 0,
+          "summary": "surge_limit is defined",
+          "at": "2026-11-24T18:30:36Z",
+          "by": "ravi",
+          "session": "ses-ravi-tw",
+          "manual": false
+        }
+      ],
+      "failure_reason": "grep printed nothing; exit 0 with no output counts as a failure"
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The alert names the harbour and the level",
+      "verification": "grep -q surge src/tidewatch/alerts.py",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q surge src/tidewatch/alerts.py",
+          "exit_code": 0,
+          "summary": "compose_surge names the gauge and the limit",
+          "at": "2026-11-24T18:30:36Z",
+          "by": "ravi",
+          "session": "ses-ravi-tw",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Add the surge limit to the thresholds",
+      "done_when": "surge_limit is defined in thresholds.py",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Compose the surge alert",
+      "done_when": "alerts.py composes a surge message",
+      "files": [
+        "src/tidewatch/alerts.py"
+      ],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "ravi",
+        "session": "ses-ravi-tw",
+        "verdict": "ok",
+        "at": "2026-11-24T18:30:36Z",
+        "notes": "Both criteria pass. The limit is strictly greater-than; the reviewer may question the boundary.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "nadia",
+        "session": "ses-nadia-tw",
+        "verdict": "changes-needed",
+        "at": "2026-11-24T18:30:36Z",
+        "notes": "The limit is tested with >, so a surge exactly at the limit sends nothing.",
+        "findings": [
+          "FIND-01",
+          "FIND-02",
+          "FIND-03"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "spec-compliance",
+        "reviewer": "nadia",
+        "session": "ses-nadia-tw",
+        "verdict": "ok",
+        "at": "2026-11-24T18:30:36Z",
+        "notes": "The boundary is >= now and the findings are closed.",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "fixed",
+        "description": "alerts.py: a surge exactly at the limit queues no alert (strict >). Scenario: a gauge reads 0.6 m above the mark. Fix: compare with >= and test the boundary.",
+        "created": "2026-11-24T18:30:36Z",
+        "resolved": "2026-11-24T18:30:36Z",
+        "resolution": "Compare with >= and test the boundary",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "nadia",
+            "body": "Boundary is the point of the rule. Strict > is the bug.",
+            "at": "2026-11-24T18:30:36Z"
+          },
+          {
+            "id": "CMT-02",
+            "author": "ravi",
+            "body": "Agreed. Changing it to >= and adding a boundary test.",
+            "at": "2026-11-24T18:30:36Z"
+          }
+        ]
+      },
+      {
+        "id": "FIND-02",
+        "severity": "low",
+        "status": "dismissed",
+        "description": "thresholds.py: surge_limit does not say its unit in the name. Fix: document the unit in the docstring.",
+        "created": "2026-11-24T18:30:36Z",
+        "resolved": "2026-11-24T18:30:36Z",
+        "resolution": "The unit is in the docstring already; the name stays",
+        "comments": []
+      },
+      {
+        "id": "FIND-03",
+        "severity": "medium",
+        "status": "fixed",
+        "description": "No test covers the surge alert; the grep checks only the name.",
+        "created": "2026-11-24T18:30:36Z",
+        "resolved": "2026-11-24T18:30:36Z",
+        "resolution": "Boundary test added in tests of the alert",
+        "comments": []
+      }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-24T18:30:36Z",
+        "after_round": 1,
+        "by": "jo",
+        "session": "ses-jo-tw"
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

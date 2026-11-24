@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "ITM01",
+  "title": "Email the harbour office a daily digest",
+  "slug": "email-the-harbour-office-a-daily-digest",
+  "kind": "feature",
+  "status": "open",
+  "body": "One email at 07:00.",
+  "scope": [
+    "One email at 07:00 for each harbour"
+  ],
+  "tags": [
+    "digest"
+  ],
+  "created": "2026-11-24T18:30:41Z",
+  "updated": "2026-11-24T18:30:41Z",
+  "dismissed_reason": ""
+}

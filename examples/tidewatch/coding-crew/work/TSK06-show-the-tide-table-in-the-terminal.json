@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "id": "TSK06",
+  "title": "Show the tide table in the terminal",
+  "slug": "show-the-tide-table-in-the-terminal",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-24T18:30:37Z",
+  "updated": "2026-11-24T18:30:40Z",
+  "revision": 14,
+  "status": "executing",
+  "status_since": "2026-11-24T18:30:40Z",
+  "overlays": {
+    "cancelled": {
+      "reason": "The tide table stays in the web view this year",
+      "by": "jo",
+      "at": "2026-11-24T18:30:40Z"
+    }
+  },
+  "planned_by": "ses-mara-tw",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A harbour master sees the tide table in a terminal.",
+    "problem": "Masters ask for a terminal view."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "A web view"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "The table prints one row per gauge",
+      "verification": "grep -q gauge src/tidewatch/alerts.py",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Print the table",
+      "done_when": "the table prints",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

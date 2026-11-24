@@ -1,0 +1,276 @@
+{
+  "schema_version": 1,
+  "id": "TSK01",
+  "title": "Open a note from a Markdown file on disk",
+  "slug": "open-a-note-from-a-markdown-file-on-disk",
+  "children": [],
+  "kind": "feature",
+  "created": "2026-11-24T18:25:20Z",
+  "updated": "2026-11-24T18:25:20Z",
+  "revision": 41,
+  "status": "executing",
+  "status_since": "2026-11-24T18:25:20Z",
+  "overlays": {},
+  "claim": {
+    "by": "tomas",
+    "session": "ses-tomas-qn",
+    "at": "2026-11-24T18:25:20Z",
+    "lease_expires_at": "2026-11-24T20:25:20Z"
+  },
+  "planned_by": "ses-lena-qn",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A note opens from its .md file with its title and body.",
+    "problem": "Only the sample notes open; a user's own folder shows nothing."
+  },
+  "scope": {
+    "in_scope": [
+      "Opening .md files in the notes folder"
+    ],
+    "out_of_scope": [
+      "Importing other formats"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A note opens with its title and body",
+      "verification": "grep -q 'def read_note' src/quillnote/notes.py",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q 'def read_note' src/quillnote/notes.py",
+          "exit_code": 0,
+          "summary": "read_note is defined",
+          "at": "2026-11-24T18:25:20Z",
+          "by": "tomas",
+          "session": "ses-tomas-qn",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A missing file shows an error, not a crash",
+      "verification": "grep -q FileNotFoundError src/quillnote/notes.py",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q FileNotFoundError src/quillnote/notes.py",
+          "exit_code": 0,
+          "summary": "",
+          "at": "2026-11-24T18:25:20Z",
+          "by": "tomas",
+          "session": "ses-tomas-qn",
+          "manual": false
+        },
+        {
+          "command": "grep -q FileNotFoundError src/quillnote/notes.py",
+          "exit_code": 0,
+          "summary": "FileNotFoundError is raised for a missing name",
+          "at": "2026-11-24T18:25:20Z",
+          "by": "tomas",
+          "session": "ses-tomas-qn",
+          "manual": false
+        }
+      ],
+      "failure_reason": "The handler is not written yet"
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Add read_note",
+      "done_when": "read_note is defined",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Handle a missing file",
+      "done_when": "a missing name raises a clear error",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 6,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "spec-compliance",
+        "reviewer": "tomas",
+        "session": "ses-tomas-qn",
+        "verdict": "ok",
+        "at": "2026-11-24T18:25:20Z",
+        "notes": "Both criteria pass.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "yusuf",
+        "session": "ses-yusuf-qn",
+        "verdict": "changes-needed",
+        "at": "2026-11-24T18:25:20Z",
+        "notes": "Round of review",
+        "findings": [
+          "FIND-01"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "security",
+        "reviewer": "yusuf",
+        "session": "ses-yusuf-qn",
+        "verdict": "changes-needed",
+        "at": "2026-11-24T18:25:20Z",
+        "notes": "Round of review",
+        "findings": [
+          "FIND-02"
+        ]
+      },
+      {
+        "n": 3,
+        "kind": "external",
+        "focus": "empirical",
+        "reviewer": "yusuf",
+        "session": "ses-yusuf-qn",
+        "verdict": "changes-needed",
+        "at": "2026-11-24T18:25:20Z",
+        "notes": "Round of review",
+        "findings": [
+          "FIND-03"
+        ]
+      },
+      {
+        "n": 4,
+        "kind": "external",
+        "focus": "design",
+        "reviewer": "yusuf",
+        "session": "ses-yusuf-qn",
+        "verdict": "changes-needed",
+        "at": "2026-11-24T18:25:20Z",
+        "notes": "Round of review",
+        "findings": [
+          "FIND-04"
+        ]
+      },
+      {
+        "n": 5,
+        "kind": "external",
+        "focus": "spec-compliance",
+        "reviewer": "yusuf",
+        "session": "ses-yusuf-qn",
+        "verdict": "changes-needed",
+        "at": "2026-11-24T18:25:20Z",
+        "notes": "Round of review",
+        "findings": [
+          "FIND-05"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "high",
+        "status": "fixed",
+        "description": "read_note: a file with CRLF line endings keeps the carriage return on every line. Scenario: a note saved on Windows. Fix: read with universal newlines.",
+        "created": "2026-11-24T18:25:20Z",
+        "resolved": "2026-11-24T18:25:20Z",
+        "resolution": "Fixed in read_note: round 1 finding",
+        "comments": []
+      },
+      {
+        "id": "FIND-02",
+        "severity": "medium",
+        "status": "fixed",
+        "description": "read_note: a 50 MB file is read whole into memory. Fix: refuse above a limit with a message.",
+        "created": "2026-11-24T18:25:20Z",
+        "resolved": "2026-11-24T18:25:20Z",
+        "resolution": "Fixed in read_note: round 2 finding",
+        "comments": []
+      },
+      {
+        "id": "FIND-03",
+        "severity": "low",
+        "status": "fixed",
+        "description": "read_note: a blank first line makes the title empty. Fix: skip leading blank lines when taking the title.",
+        "created": "2026-11-24T18:25:20Z",
+        "resolved": "2026-11-24T18:25:20Z",
+        "resolution": "Fixed in read_note: round 3 finding",
+        "comments": []
+      },
+      {
+        "id": "FIND-04",
+        "severity": "high",
+        "status": "fixed",
+        "description": "read_note: a symlink to a file outside the folder is followed. Fix: resolve it and check it is inside the folder.",
+        "created": "2026-11-24T18:25:20Z",
+        "resolved": "2026-11-24T18:25:20Z",
+        "resolution": "Fixed in read_note: round 4 finding",
+        "comments": []
+      },
+      {
+        "id": "FIND-05",
+        "severity": "medium",
+        "status": "open",
+        "description": "read_note: no test covers the missing-file error. Fix: add a test that opens a missing name.",
+        "created": "2026-11-24T18:25:20Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": []
+      }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-24T18:25:20Z",
+        "after_round": 1,
+        "by": "ines",
+        "session": "ses-ines-qn"
+      },
+      {
+        "at": "2026-11-24T18:25:20Z",
+        "after_round": 2,
+        "by": "ines",
+        "session": "ses-ines-qn"
+      },
+      {
+        "at": "2026-11-24T18:25:20Z",
+        "after_round": 3,
+        "by": "ines",
+        "session": "ses-ines-qn"
+      },
+      {
+        "at": "2026-11-24T18:25:20Z",
+        "after_round": 4,
+        "by": "ines",
+        "session": "ses-ines-qn"
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

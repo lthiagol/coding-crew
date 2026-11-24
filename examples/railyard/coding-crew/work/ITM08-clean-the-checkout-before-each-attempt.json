@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "ITM08",
+  "title": "Clean the checkout before each attempt",
+  "slug": "clean-the-checkout-before-each-attempt",
+  "kind": "feature",
+  "status": "open",
+  "body": "From TODO.md: [ ] open.",
+  "scope": [
+    "A clean checkout per attempt"
+  ],
+  "tags": [
+    "adopted"
+  ],
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "dismissed_reason": ""
+}

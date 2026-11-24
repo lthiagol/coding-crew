@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "id": "TSK03.1",
+  "title": "Index note titles",
+  "slug": "index-note-titles",
+  "parent": "TSK03",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-24T18:25:20Z",
+  "updated": "2026-11-24T18:25:24Z",
+  "revision": 24,
+  "status": "executing",
+  "status_since": "2026-11-24T18:25:21Z",
+  "overlays": {},
+  "claim": {
+    "by": "tomas",
+    "session": "ses-tomas-qn",
+    "at": "2026-11-24T18:25:24Z",
+    "lease_expires_at": "2026-11-24T20:25:24Z"
+  },
+  "planned_by": "ses-lena-qn",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "Titles are indexed when a note is opened.",
+    "problem": "Each search reads every file."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Searching inside a note"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "Titles are indexed on open",
+      "verification": "grep -q index_titles src/quillnote/notes.py",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q index_titles src/quillnote/notes.py",
+          "exit_code": 0,
+          "summary": "index_titles is defined",
+          "at": "2026-11-24T18:25:24Z",
+          "by": "tomas",
+          "session": "ses-tomas-qn",
+          "manual": false
+        },
+        {
+          "command": "",
+          "exit_code": 0,
+          "summary": "manual check",
+          "at": "2026-11-24T18:25:24Z",
+          "by": "tomas",
+          "session": "ses-tomas-qn",
+          "manual": true
+        }
+      ],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The index is rebuilt after a save",
+      "verification": "grep -q rebuild_index src/quillnote/notes.py",
+      "status": "deferred",
+      "evidence": [
+        {
+          "command": "grep -q rebuild_index src/quillnote/notes.py",
+          "exit_code": 1,
+          "summary": "rebuild",
+          "at": "2026-11-24T18:25:24Z",
+          "by": "tomas",
+          "session": "ses-tomas-qn",
+          "manual": false
+        }
+      ],
+      "deferral": {
+        "reason": "The save hook waits for the autosave work",
+        "follow_up": "TSK07"
+      },
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Index on open",
+      "done_when": "index_titles exists",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Rebuild after save",
+      "done_when": "rebuild_index exists",
+      "files": [],
+      "status": "skipped",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [],
+      "deviation": "Rebuild is deferred with TSK07"
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Should the index include notes that fail to parse?",
+      "status": "resolved",
+      "answer": "Skip them and log the name.",
+      "raised_by": "tomas",
+      "raised_at": "2026-11-24T18:25:24Z",
+      "resolved_by": "lena",
+      "resolved_at": "2026-11-24T18:25:24Z",
+      "instructed_by": "marta"
+    }
+  ],
+  "notes": [],
+  "depends_on": []
+}

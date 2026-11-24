@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "ITM10",
+  "title": "Write the config reader's tests",
+  "slug": "write-the-config-reader-s-tests",
+  "kind": "feature",
+  "status": "open",
+  "body": "From TODO.md: [~] half-done. Becomes a child of the cap task.",
+  "scope": [],
+  "tags": [
+    "adopted",
+    "half-done"
+  ],
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "dismissed_reason": ""
+}

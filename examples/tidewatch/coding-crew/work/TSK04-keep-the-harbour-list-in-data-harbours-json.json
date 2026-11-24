@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "id": "TSK04",
+  "title": "Keep the harbour list in data/harbours.json",
+  "slug": "keep-the-harbour-list-in-data-harbours-json",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-24T18:30:37Z",
+  "updated": "2026-11-24T18:30:37Z",
+  "revision": 42,
+  "status": "executing",
+  "status_since": "2026-11-24T18:30:37Z",
+  "overlays": {
+    "blocked": {
+      "reason": "Waiting for the harbour office's list of names",
+      "by": "ravi",
+      "at": "2026-11-24T18:30:37Z"
+    }
+  },
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-tw",
+    "at": "2026-11-24T18:30:37Z",
+    "lease_expires_at": "2026-11-24T22:30:37Z"
+  },
+  "planned_by": "ses-mara-tw",
+  "meta": {
+    "priority": "urgent",
+    "effort": "S",
+    "tags": [
+      "data"
+    ]
+  },
+  "intent": {
+    "outcome": "The harbour list is one file that the alerts read.",
+    "problem": "The high marks are copied into thresholds.py and drift from the list."
+  },
+  "scope": {
+    "in_scope": [
+      "The three harbours"
+    ],
+    "out_of_scope": [
+      "The gauge list"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "The list names the three harbours",
+      "verification": "grep -q '\"ports-south\"' data/harbours.json",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q '\"ports-south\"' data/harbours.json",
+          "exit_code": 0,
+          "summary": "three harbours named",
+          "at": "2026-11-24T18:30:37Z",
+          "by": "ravi",
+          "session": "ses-ravi-tw",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "Every master is named",
+      "verification": "grep -q '\"master\"' data/harbours.json",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q '\"master\"' data/harbours.json",
+          "exit_code": 0,
+          "summary": "masters named",
+          "at": "2026-11-24T18:30:37Z",
+          "by": "ravi",
+          "session": "ses-ravi-tw",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-03",
+      "description": "Thresholds read the list from one file",
+      "verification": "grep -q harbours.json src/tidewatch/thresholds.py",
+      "status": "failed",
+      "evidence": [
+        {
+          "command": "grep -q harbours.json src/tidewatch/thresholds.py",
+          "exit_code": 0,
+          "summary": "",
+          "at": "2026-11-24T18:30:37Z",
+          "by": "ravi",
+          "session": "ses-ravi-tw",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Keep the list",
+      "done_when": "the list names the three harbours",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01",
+        "ACCEPT-02"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Check the masters and the thresholds",
+      "done_when": "every master is named and the thresholds read the list",
+      "files": [],
+      "status": "skipped",
+      "covers": [
+        "ACCEPT-02",
+        "ACCEPT-03"
+      ],
+      "depends_on": [],
+      "deviation": "The harbour office sent the names; checked against the list by hand"
+    },
+    {
+      "id": "STP-03",
+      "order": 3,
+      "action": "Check the thresholds reads the list",
+      "done_when": "the file is read",
+      "files": [],
+      "status": "failed",
+      "covers": [
+        "ACCEPT-03"
+      ],
+      "depends_on": [],
+      "deviation": "thresholds.py still caches the marks at import"
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "ravi",
+      "body": "The import drops a trailing comma in the CSV version of the list.",
+      "at": "2026-11-24T18:30:37Z"
+    }
+  ],
+  "depends_on": []
+}

@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "id": "TSK04",
+  "title": "Read the queue path from the environment too",
+  "slug": "read-the-queue-path-from-the-environment-too",
+  "children": [],
+  "kind": "feature",
+  "promoted_from": "ITM05",
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:43Z",
+  "revision": 21,
+  "status": "done",
+  "status_since": "2026-11-24T18:31:43Z",
+  "overlays": {},
+  "claim": {
+    "by": "vic",
+    "session": "ses-vic-ry",
+    "at": "2026-11-24T18:31:43Z",
+    "lease_expires_at": "2026-11-24T20:31:43Z"
+  },
+  "planned_by": "ses-nell-ry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The queue path can come from RAILYARD_QUEUE.",
+    "problem": "Staging and production point at different queues."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Other config sources"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "config.py reads RAILYARD_QUEUE",
+      "verification": "grep -q RAILYARD_QUEUE src/railyard/config.py",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q RAILYARD_QUEUE src/railyard/config.py",
+          "exit_code": 1,
+          "summary": "not yet",
+          "at": "2026-11-24T18:31:43Z",
+          "by": "vic",
+          "session": "ses-vic-ry",
+          "manual": false
+        },
+        {
+          "command": "grep -q RAILYARD_QUEUE src/railyard/config.py",
+          "exit_code": 0,
+          "summary": "config.py reads RAILYARD_QUEUE",
+          "at": "2026-11-24T18:31:43Z",
+          "by": "vic",
+          "session": "ses-vic-ry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Read the variable",
+      "done_when": "config.py reads it",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "edge-cases",
+        "reviewer": "vic",
+        "session": "ses-vic-ry",
+        "verdict": "ok",
+        "at": "2026-11-24T18:31:43Z",
+        "notes": "Empty variable falls back to the file.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "edge-cases",
+        "reviewer": "ruth",
+        "session": "ses-ruth-ry",
+        "verdict": "changes-needed",
+        "at": "2026-11-24T18:31:43Z",
+        "notes": "An empty variable is returned as an empty string; the caller treats it as a path.",
+        "findings": [
+          "FIND-01"
+        ]
+      },
+      {
+        "n": 2,
+        "kind": "external",
+        "focus": "design",
+        "reviewer": "ruth",
+        "session": "ses-ruth-ry",
+        "verdict": "ok",
+        "at": "2026-11-24T18:31:43Z",
+        "notes": "The dismissal is reasoned; the variable reads as intended.",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "low",
+        "status": "dismissed",
+        "description": "config.py queue_path(): an empty RAILYARD_QUEUE returns '' instead of the file's path. Fix: fall back to the file.",
+        "created": "2026-11-24T18:31:43Z",
+        "resolved": "2026-11-24T18:31:43Z",
+        "resolution": "The caller in the queue never passes an empty value; noted for later",
+        "comments": []
+      }
+    ],
+    "re_reviews": [
+      {
+        "at": "2026-11-24T18:31:43Z",
+        "after_round": 1,
+        "by": "wes",
+        "session": "ses-wes-ry"
+      }
+    ]
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "nell",
+      "body": "from ITM05",
+      "at": "2026-11-24T18:31:42Z"
+    }
+  ],
+  "depends_on": []
+}

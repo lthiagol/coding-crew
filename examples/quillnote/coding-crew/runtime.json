@@ -1,0 +1,70 @@
+{
+  "started_at": "2026-11-24T18:25:24Z",
+  "updated_at": "2026-11-24T18:25:24Z",
+  "crew": [
+    {
+      "role": "builder",
+      "model": "deepseek-v4.1-flash",
+      "actor": "tomas",
+      "holds": "TSK03.1",
+      "since": "2026-11-24T18:25:24Z",
+      "state": "executing"
+    },
+    {
+      "role": "builder",
+      "model": "deepseek-v4.1-flash",
+      "actor": "ines",
+      "holds": "TSK04",
+      "since": "2026-11-24T18:25:24Z",
+      "state": "executing"
+    },
+    {
+      "role": "reviewer",
+      "model": "glm-5.3",
+      "actor": "yusuf",
+      "holds": "TSK04",
+      "since": "2026-11-24T18:25:24Z",
+      "state": "idle"
+    }
+  ],
+  "queue": [
+    {
+      "id": "TSK04",
+      "status": "remediating",
+      "claimable": false
+    },
+    {
+      "id": "TSK03.1",
+      "status": "executing",
+      "claimable": false
+    },
+    {
+      "id": "TSK07",
+      "status": "groomed",
+      "claimable": false
+    },
+    {
+      "id": "TSK06",
+      "status": "executing",
+      "claimable": false
+    }
+  ],
+  "round": {
+    "task": "TSK03.1",
+    "stage": "self",
+    "number": 0
+  },
+  "budget": {
+    "spent": 0,
+    "total": 5
+  },
+  "findings": 0,
+  "severities": {
+    "high": 0,
+    "medium": 0,
+    "low": 0
+  },
+  "stamp": {
+    "runs": true
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "ITM05",
+  "title": "Read the queue path from the environment too",
+  "slug": "read-the-queue-path-from-the-environment-too",
+  "kind": "feature",
+  "status": "promoted",
+  "body": "From TODO.md: [~] half-done. config.py reads the file only.",
+  "scope": [],
+  "tags": [
+    "adopted",
+    "half-done"
+  ],
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "promoted_to": "TSK04",
+  "dismissed_reason": ""
+}

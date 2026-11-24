@@ -1,0 +1,7 @@
+{
+  "harbours": [
+    {"id": "ports-north", "name": "North Quay", "high_mark_m": 3.4, "master": "R. Okafor"},
+    {"id": "ports-east", "name": "East Basin", "high_mark_m": 2.9, "master": "S. Lindqvist"},
+    {"id": "ports-south", "name": "South Mole", "high_mark_m": 3.1, "master": "D. Ferreira"}
+  ]
+}

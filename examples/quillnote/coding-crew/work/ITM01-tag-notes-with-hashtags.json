@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "ITM01",
+  "title": "Tag notes with #hashtags",
+  "slug": "tag-notes-with-hashtags",
+  "kind": "feature",
+  "status": "promoted",
+  "body": "A line of #tags at the top.",
+  "scope": [
+    "Tags read from the title line"
+  ],
+  "tags": [
+    "tags"
+  ],
+  "created": "2026-11-24T18:25:24Z",
+  "updated": "2026-11-24T18:25:24Z",
+  "promoted_to": "TSK07",
+  "dismissed_reason": ""
+}

@@ -1,0 +1,565 @@
+{
+  "events": [
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "created",
+      "task": "TSK01",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "groomed",
+      "task": "TSK01",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "approved",
+      "task": "TSK01",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by hugo"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "claimed",
+      "task": "TSK01",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "started",
+      "task": "TSK01",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "round_filed",
+      "task": "TSK01",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "self, spec-compliance, ok"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "review_requested",
+      "task": "TSK01",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "round_filed",
+      "task": "TSK01",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode",
+      "note": "external 1, edge-cases, changes-needed"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "finding_raised",
+      "task": "TSK01",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "finding_raised",
+      "task": "TSK01",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode",
+      "note": "raised FIND-02"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "finding_raised",
+      "task": "TSK01",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode",
+      "note": "raised FIND-03"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "commented",
+      "task": "TSK01",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "commented",
+      "task": "TSK01",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "changes_requested",
+      "task": "TSK01",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "finding_resolved",
+      "task": "TSK01",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "fixed FIND-01"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "finding_resolved",
+      "task": "TSK01",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "dismissed FIND-02"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "finding_resolved",
+      "task": "TSK01",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "fixed FIND-03"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "remediated",
+      "task": "TSK01",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "after round 1"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "round_filed",
+      "task": "TSK01",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode",
+      "note": "external 2, spec-compliance, ok"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "completed",
+      "task": "TSK01",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "created",
+      "task": "TSK02",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "groomed",
+      "task": "TSK02",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "approved",
+      "task": "TSK02",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by hugo"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "claimed",
+      "task": "TSK02",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "started",
+      "task": "TSK02",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "round_filed",
+      "task": "TSK02",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "self, edge-cases, ok"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "review_requested",
+      "task": "TSK02",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "round_filed",
+      "task": "TSK02",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode",
+      "note": "external 1, security, ok"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "completed",
+      "task": "TSK02",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "reopened",
+      "task": "TSK02",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by hugo: The retry still sends twice after a restart"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "created",
+      "task": "TSK03",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:36Z",
+      "kind": "groomed",
+      "task": "TSK03",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "created",
+      "task": "TSK03.1",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "groomed",
+      "task": "TSK03.1",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "approved",
+      "task": "TSK03.1",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by hugo"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "deferred",
+      "task": "TSK03.1",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "Waiting on the contact list from the harbour office"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "undeferred",
+      "task": "TSK03.1",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "deferred",
+      "task": "TSK03.1",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "Still waiting on the contact list"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "created",
+      "task": "TSK04",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "groomed",
+      "task": "TSK04",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "approved",
+      "task": "TSK04",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by hugo"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "claimed",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "started",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "blocked",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "Waiting for the harbour office's sign-off"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "unblocked",
+      "task": "TSK04",
+      "by": "human"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "commented",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "blocked",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "Waiting for the harbour office's list of names"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "created",
+      "task": "TSK05",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "commented",
+      "task": "TSK05",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "commented",
+      "task": "TSK05",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "commented",
+      "task": "TSK05",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "created",
+      "task": "TSK06",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "groomed",
+      "task": "TSK06",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "approved",
+      "task": "TSK06",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by hugo"
+    },
+    {
+      "at": "2026-11-24T18:30:37Z",
+      "kind": "claimed",
+      "task": "TSK06",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "claimed",
+      "task": "TSK06",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "took over from ravi"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "released",
+      "task": "TSK06",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "Taking the other task first"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "claimed",
+      "task": "TSK06",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "started",
+      "task": "TSK06",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "cancelled",
+      "task": "TSK06",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "The tide table stays in the web view this year"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "released",
+      "task": "TSK06",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "The tide table stays in the web view this year"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "created",
+      "task": "TSK07",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "groomed",
+      "task": "TSK07",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "approved",
+      "task": "TSK07",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by hugo"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "claimed",
+      "task": "TSK07",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "started",
+      "task": "TSK07",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:30:40Z",
+      "kind": "commented",
+      "task": "TSK07",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    }
+  ]
+}

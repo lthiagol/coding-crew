@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "id": "TSK02.1",
+  "title": "Write the config reader's tests",
+  "slug": "write-the-config-reader-s-tests",
+  "parent": "TSK02",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-24T18:31:43Z",
+  "updated": "2026-11-24T18:31:43Z",
+  "revision": 20,
+  "status": "executing",
+  "status_since": "2026-11-24T18:31:43Z",
+  "overlays": {},
+  "claim": {
+    "by": "wes",
+    "session": "ses-wes-ry",
+    "at": "2026-11-24T18:31:43Z",
+    "lease_expires_at": "2026-11-24T22:31:43Z"
+  },
+  "planned_by": "ses-nell-ry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The config reader has tests.",
+    "problem": "The reader is untested."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Integration tests"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "tests/test_retry.py exists",
+      "verification": "test -f tests/test_retry.py",
+      "status": "failed",
+      "evidence": [
+        {
+          "command": "test -f tests/test_retry.py",
+          "exit_code": 1,
+          "summary": "tests file",
+          "at": "2026-11-24T18:31:43Z",
+          "by": "wes",
+          "session": "ses-wes-ry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The deliberate failure is caught",
+      "verification": "false",
+      "status": "failed",
+      "evidence": [
+        {
+          "command": "false",
+          "exit_code": 1,
+          "summary": "x",
+          "at": "2026-11-24T18:31:43Z",
+          "by": "wes",
+          "session": "ses-wes-ry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-03",
+      "description": "The suite runs",
+      "verification": "true",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "true",
+          "exit_code": 0,
+          "summary": "",
+          "at": "2026-11-24T18:31:43Z",
+          "by": "wes",
+          "session": "ses-wes-ry",
+          "manual": false
+        },
+        {
+          "command": "true",
+          "exit_code": 0,
+          "summary": "true exits 0",
+          "at": "2026-11-24T18:31:43Z",
+          "by": "wes",
+          "session": "ses-wes-ry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Write the retry test",
+      "done_when": "the file exists",
+      "files": [],
+      "status": "in-progress",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Run the suite",
+      "done_when": "the suite ran",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-02",
+        "ACCEPT-03"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Use unittest or pytest? The repo has neither runner configured.",
+      "status": "resolved",
+      "answer": "unittest; no new dependency.",
+      "raised_by": "wes",
+      "raised_at": "2026-11-24T18:31:43Z",
+      "resolved_by": "nell",
+      "resolved_at": "2026-11-24T18:31:43Z",
+      "instructed_by": "marta"
+    }
+  ],
+  "notes": [],
+  "depends_on": []
+}

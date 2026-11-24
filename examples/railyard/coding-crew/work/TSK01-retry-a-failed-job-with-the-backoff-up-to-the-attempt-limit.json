@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "id": "TSK01",
+  "title": "Retry a failed job with the backoff, up to the attempt limit",
+  "slug": "retry-a-failed-job-with-the-backoff-up-to-the-attempt-limit",
+  "children": [],
+  "kind": "feature",
+  "promoted_from": "ITM01",
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "revision": 19,
+  "status": "draft",
+  "status_since": "2026-11-24T18:31:42Z",
+  "overlays": {},
+  "meta": {
+    "priority": "high",
+    "effort": "M",
+    "tags": [
+      "retry",
+      "adopted"
+    ]
+  },
+  "intent": {
+    "outcome": "A failed job is retried with the backoff until the attempt limit.",
+    "problem": "A flaky step fails the whole job on the first try."
+  },
+  "scope": {
+    "in_scope": [
+      "Retries of the whole job"
+    ],
+    "out_of_scope": [
+      "Per-step retries"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A failed job is retried up to the attempt limit",
+      "verification": "grep -q 'for attempt in range' src/railyard/runner.py && echo retry loop found",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Loop over the attempts",
+      "done_when": "run_job loops to the attempt limit",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "nell",
+      "body": "from ITM01",
+      "at": "2026-11-24T18:31:42Z"
+    }
+  ],
+  "depends_on": []
+}

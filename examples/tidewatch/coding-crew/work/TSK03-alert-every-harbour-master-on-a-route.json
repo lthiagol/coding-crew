@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "id": "TSK03",
+  "title": "Alert every harbour master on a route",
+  "slug": "alert-every-harbour-master-on-a-route",
+  "children": [
+    "TSK03.1"
+  ],
+  "kind": "feature",
+  "created": "2026-11-24T18:30:36Z",
+  "updated": "2026-11-24T18:30:37Z",
+  "revision": 10,
+  "status": "groomed",
+  "status_since": "2026-11-24T18:30:36Z",
+  "overlays": {},
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A route's masters all get the alert together.",
+    "problem": "Only the first master on a route is told."
+  },
+  "scope": {
+    "in_scope": [
+      "The Thursday tide route"
+    ],
+    "out_of_scope": [
+      "Harbours outside the route"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "Every master on the route is alerted",
+      "verification": "grep -q route src/tidewatch/alerts.py",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Walk the route's harbours",
+      "done_when": "every harbour on the route is sent",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

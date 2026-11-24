@@ -1,9 +1,11 @@
 # Dogfood — what talita hurt
 
-The two sandbox projects under `examples/` were written by talita alone, with
-the binary built from this branch. Every entry below is something a caller
-would not expect, or a rule that cost a call to find. A verb that writes was
-not re-run for this list; its entry quotes the run that hit it.
+The five sandbox projects under `examples/` were written by talita alone, with
+the binary built from this branch: Pantry and Ledgerline in the first run,
+Tidewatch, Quillnote and Railyard in the second (`## Second run`). Every entry
+below is something a caller would not expect, or a rule that cost a call to
+find. A verb that writes was not re-run for this list; its entry quotes the
+run that hit it.
 
 ## The review budget
 
@@ -78,4 +80,111 @@ not re-run for this list; its entry quotes the run that hit it.
 - happened: every event's `by` is `creator`, `runner`, `reviewer` or `human`; jo's four resolutions and four re-reviews read `"by": "runner"`, the same as ravi's, and `ses-jo-pantry` appears zero times in `activity.json`.
 - expected: the actor id, as `claim.by`, `round.reviewer` and a note's `author` record it. ADR 0018 defers the actor and session to later; until then the record cannot say who fixed FIND-01.
 - closed: unit DF2, by ruling (the human, 2026-11-23) — the actor is not recorded. The role and the model are what matter, and the harness is an extra: `by` stays the role word, and every journal event gained an optional `model` and `harness`, from `--model`/`--harness` or `TALITA_MODEL`/`TALITA_HARNESS`. The task file still carries the actor, so FIND-01's fixer is named there, not in the journal.
+- severity: low
+
+## Second run (2026-11-24)
+
+`talita` below is `target/debug/talita` from `cargo build -p coding-crew-talita`,
+run from the repository root. The projects are Tidewatch, Quillnote and Railyard.
+Entries marked *re-run* are refusals or reads: they write nothing, and the
+command works on the projects as they stand. The fifth-round refusal
+(`review.budget_left`) reproduced in Quillnote's TSK01 and is the entry above;
+it is not repeated.
+
+### Work and evidence
+
+#### `step done` straight from `failed` leaves no trace that the step failed
+- command: `talita --project <scratch> --as ravi --role runner --session ses-ravi-scratch step done TSK02 STP-01`
+- happened: Re-run on a scratch project where `step fail TSK02 STP-01 --deviation "broke"` had just run. Exit 0, `status: "done"`. The failure's deviation text stays, but the status no longer says the step failed, and `task finish` then reads it as settled (`steps.settled` accepts `done`).
+- expected: `step done` on a failed step needs `step begin` first, the retry path in the next entry; or the status keeps a record that the step failed.
+- severity: medium
+
+#### `task finish` refused for a failed step names `step done` with a placeholder
+- command: `talita --project examples/tidewatch --as ravi --role runner --session ses-ravi-tw task finish TSK04`
+- happened: Re-run (refused, nothing written). Exit 4, `gate.refused`: `steps.settled` ("every step must be settled"), `criteria.proven` ("ACCEPT-03 failed without a reason"), `self_round.filed`. Remedy `talita step done TSK04 <STP>`: the `<STP>` is not filled in, and `step done` is the call from the entry above. It names one gate's call; the failed criterion needs `criterion explain`.
+- expected: the remedy names the failed step and what settles it (`step skip --deviation <why>`, or a fix and `step begin`), and names the criterion's call for `criteria.proven`.
+- severity: medium
+
+#### A passing command with no output reads as failed, and the output gives no reason
+- command: `talita --project examples/tidewatch --as ravi --role runner --session ses-ravi-tw evidence run TSK01 ACCEPT-01`
+- happened: Not re-run (it writes). The verification `grep -q surge_limit …` exits 0 and prints nothing. Exit 0, `status: "failed"`, `output: []`. The stored evidence is `exit_code: 0`, `summary: ""`, read as a failure as task-model § 5 says. Nothing in the output says why; the next `task finish` gate says "ACCEPT-01 failed without a reason". Re-run the read: `talita --project examples/tidewatch task show TSK01 | jq '.data.task.acceptance_criteria[0].evidence[0]'`.
+- expected: the rule stays. The output says why, for example "exit 0 with no summary: pass --summary", so a caller does not explain a pass.
+- severity: medium
+
+#### A passing criterion keeps the failure reason from before it passed
+- command: `talita --project examples/tidewatch task show TSK01 | jq '.data.task.acceptance_criteria[0] | {status, failure_reason}'`
+- happened: Re-run (read). `status: "passed"` with `failure_reason: "grep printed nothing; exit 0 with no output counts as a failure"`. The reason came from `criterion explain`, before a later `evidence run --summary` passed the criterion.
+- expected: a passing criterion carries no failure reason, or the reason clears when a later evidence passes.
+- severity: low
+
+#### An override on a criterion that already passes marks its proof manual
+- command: `talita --project examples/quillnote task show TSK03.1 | jq '.data.task.acceptance_criteria[] | select(.id=="ACCEPT-01") | {status, last: .evidence[-1]}'`
+- happened: Re-run (read). ACCEPT-01 passed by its command. Then `evidence override TSK03.1 ACCEPT-01 --reason "manual check"` exited 0 and appended `manual: true`, `command: ""`. The criterion reads `passed`, and its last evidence is the bypass, which raul marks as manual.
+- expected: an override refused for a criterion already proven by command, since the bypass is for a criterion that cannot be proven; or the command's proof stays last.
+- severity: low
+
+#### `evidence run` on a criterion with no verification names the bypass
+- command: `talita --project examples/railyard --as vic --role runner --session ses-vic-ry evidence run TSK02 ACCEPT-01` (run while ACCEPT-01 was the promoted placeholder; to reproduce, start a promoted task whose criterion still has `verification: ""`)
+- happened: Refused, exit 2, `input.invalid`: "TSK02 ACCEPT-01 has no verification to run". Remedy `talita evidence override TSK02 ACCEPT-01 --reason <why>`: a manual bypass, which the spec calls debt. The fix is `criterion revise … --verification <cmd>`.
+- expected: the remedy names `talita criterion revise TSK02 ACCEPT-01 --verification <cmd>`.
+- severity: medium
+
+#### A promoted task's placeholder criterion has no verification, and `groom` accepts it
+- command: `talita --project examples/quillnote task show TSK07`
+- happened: Re-run (read). `item promote` made TSK07 in draft with one criterion: `ACCEPT-01`, the item's title as its description, `verification: ""`. `task groom TSK07` exited 0 (`criteria.present`). Railyard's promoted tasks began the same way; each needed `criterion revise` on ACCEPT-01 before its evidence could run.
+- expected: promotion writes no criterion, or groom refuses a criterion with no verification.
+- severity: medium
+
+### Claims and concurrency
+
+#### `claim renew` by a non-holder points at `claim take`, which a live claim refuses
+- command: `talita --project examples/tidewatch --as jo --role runner --session ses-jo-tw claim renew TSK04`
+- happened: Re-run (refused, nothing written). Exit 5, `claim.not_holder`; remedy `talita claim take TSK04`. While ravi's lease runs, `claim take` by jo is refused `claim.held` ("the task is held by a live claim of ravi", as in the run's race). Today it is refused `claim.not_claimable` because TSK04 is blocked.
+- expected: a remedy that names the holder, or `talita claim show TSK04`, not a take that a live lease refuses.
+- severity: low
+
+#### A non-holder's `finish` is refused with the holder's gate, and the remedy asks for work it cannot do
+- command: `talita --project examples/quillnote --as ines --role runner --session ses-ines-qn task finish TSK03.1`
+- happened: Re-run (refused, nothing written). Exit 4, `gate.refused`. Gates: `self_round.filed`, and `task.claimed` twice ("the task is claimed by someone else"; "only the claiming session may finish the task"). Remedy `talita round file TSK03.1 --kind self --focus spec-compliance --verdict ok`. On the first run the remedy was `talita step done TSK03.1 <STP>`. A non-holder can file neither a self round nor a step, since both are the working runner's.
+- expected: exit 5, `claim.not_holder`, naming the holder (tomas) as the other claim verbs do.
+- severity: medium
+
+### Adoption
+
+#### `item promote` has no `--parent`, so an item cannot become a child task
+- command: `talita --project examples/railyard --as nell --role creator --session ses-nell-ry item promote ITM10 --parent TSK02`
+- happened: Re-run (usage error, nothing written). Exit 2: "unexpected argument '--parent'", with clap's tip "a similar argument exists: '--project'". Adopting TODO.md's "Write the config reader's tests", a child of the cap task, left ITM10 open: the child had to come from `task create --parent TSK02`, and nothing links it to the item.
+- expected: `item promote --parent <TSK>`, or the child's `created` event names `from ITM10`, as a top-level promotion's does.
+- severity: medium
+
+### Runtime and reads
+
+#### `run start` takes one `--task` per id; the doc says a list
+- command: `talita --project examples/railyard --as oz --role orchestrator --session ses-oz-ry run start --task TSK01 TSK02`
+- happened: Re-run (usage error, nothing written). Exit 2, "unexpected argument 'TSK02'"; remedy `talita --help`. commands.md § run says `run start [--task <TSK>…]`. The working form is `--task TSK01 --task TSK02`.
+- expected: the list the doc gives, or the doc shows the repeated flag.
+- severity: medium
+
+#### `project show` from a subfolder suggests a nested `project init`
+- command: `talita --project examples/quillnote/src project show`
+- happened: Re-run (read). Exit 3, `project.not_found`: "examples/quillnote/src holds no coding-crew folder". Remedy `talita project init --path examples/quillnote/src`, which would make a second `coding-crew/` inside the first project's source tree.
+- expected: a remedy that names the project root, such as `--project examples/quillnote`.
+- severity: medium
+
+#### `task list --lane` and `--needs-you` are not in the binary
+- command: `talita --project examples/tidewatch task list --lane human --needs-you`
+- happened: Re-run (read). Exit 2, "unexpected argument '--lane'". Clap's tip: "a similar argument exists: '--harness'". `talita --help` shows no `lane` noun, and `talita task list --help` no such flags. The § task table (commands.md:99) lists `--lane` and `--needs-you` without saying they are not built; the header at commands.md:3 says so. A caller who reads only the table reaches for them. The gap is recorded in TODO.md's follow-ups (2026-11-23, T6 review D2).
+- expected: the § task table marks `--lane`, `--needs-you` and the `lane` noun as not built, as the header does.
+- severity: low
+
+#### `talita re-review` at the top level
+- command: `talita --project examples/quillnote --as ines --role runner --session ses-ines-qn re-review TSK04`
+- happened: Re-run (usage error, nothing written). Exit 2, "unrecognized subcommand 're-review'"; remedy `talita --help`, which does not show the verb. The verb is `talita task re-review`.
+- expected: a remedy that names `talita task re-review <TSK>`.
+- severity: low
+
+#### `queue add --before` reports a task that exists as not found
+- command: `talita --project examples/quillnote --as kai --role orchestrator --session ses-kai-qn queue add TSK02 --before TSK05`
+- happened: Re-run (refused, nothing written). Exit 3, `task.not_found`: "the queue does not hold TSK05". TSK05 exists (approved, not queued). `queue add TSK02 --before TSK99` gets the same code and message for a task that does not exist.
+- expected: a message that tells "not in the project" from "not in the queue", for example a code of its own for the queue case.
 - severity: low

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "id": "TSK07",
+  "title": "Tag notes with #hashtags",
+  "slug": "tag-notes-with-hashtags",
+  "children": [],
+  "kind": "feature",
+  "promoted_from": "ITM01",
+  "created": "2026-11-24T18:25:24Z",
+  "updated": "2026-11-24T18:25:24Z",
+  "revision": 4,
+  "status": "groomed",
+  "status_since": "2026-11-24T18:25:24Z",
+  "overlays": {},
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "Tags in a note's first line show in the list.",
+    "problem": "Writers cannot group notes by topic."
+  },
+  "scope": {
+    "in_scope": [
+      "Tags read from the title line"
+    ],
+    "out_of_scope": [
+      "Tag autocomplete"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "Tag notes with #hashtags",
+      "verification": "",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "lena",
+      "body": "from ITM01",
+      "at": "2026-11-24T18:25:24Z"
+    }
+  ],
+  "depends_on": []
+}

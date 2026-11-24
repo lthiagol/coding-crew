@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "ITM07",
+  "title": "Timeout a step after 30 minutes",
+  "slug": "timeout-a-step-after-30-minutes",
+  "kind": "feature",
+  "status": "promoted",
+  "body": "From TODO.md: [ ] open.",
+  "scope": [],
+  "tags": [
+    "adopted"
+  ],
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "promoted_to": "TSK05",
+  "dismissed_reason": ""
+}

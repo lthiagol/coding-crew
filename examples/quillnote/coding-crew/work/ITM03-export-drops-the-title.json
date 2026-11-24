@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "ITM03",
+  "title": "Export drops the title",
+  "slug": "export-drops-the-title",
+  "kind": "bug",
+  "status": "open",
+  "body": "",
+  "scope": [],
+  "tags": [],
+  "created": "2026-11-24T18:25:24Z",
+  "updated": "2026-11-24T18:25:24Z",
+  "dismissed_reason": ""
+}

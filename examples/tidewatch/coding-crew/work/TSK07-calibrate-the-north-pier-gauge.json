@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "id": "TSK07",
+  "title": "Calibrate the north pier gauge",
+  "slug": "calibrate-the-north-pier-gauge",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-24T18:30:40Z",
+  "updated": "2026-11-24T18:30:41Z",
+  "revision": 29,
+  "status": "executing",
+  "status_since": "2026-11-24T18:30:40Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-tw",
+    "at": "2026-11-24T18:30:40Z",
+    "lease_expires_at": "2026-11-24T20:30:40Z"
+  },
+  "planned_by": "ses-mara-tw",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The north pier gauge reads zero in still water.",
+    "problem": "The north pier gauge drifts by 0.2 m over a week."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "The south mole gauges"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "The gauge NQ-1 is in the gauge list",
+      "verification": "grep -q NQ-1 data/gauges.csv",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q NQ-1 data/gauges.csv",
+          "exit_code": 0,
+          "summary": "NQ-1 is in the list",
+          "at": "2026-11-24T18:30:40Z",
+          "by": "ravi",
+          "session": "ses-ravi-tw",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The reading matches the reference gauge",
+      "verification": "sleep 5",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "sleep 5",
+          "summary": "reading",
+          "at": "2026-11-24T18:30:41Z",
+          "by": "ravi",
+          "session": "ses-ravi-tw",
+          "manual": false
+        },
+        {
+          "command": "",
+          "exit_code": 0,
+          "summary": "The reference gauge was read by hand on 2026-11-24 and agrees",
+          "at": "2026-11-24T18:30:41Z",
+          "by": "ravi",
+          "session": "ses-ravi-tw",
+          "manual": true
+        }
+      ],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-03",
+      "description": "The calibration date is in the log",
+      "verification": "grep -q calibrated data/gauges.csv",
+      "status": "deferred",
+      "evidence": [],
+      "deferral": {
+        "reason": "The log format is not agreed",
+        "follow_up": "TSK05"
+      },
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Confirm the gauge is listed",
+      "done_when": "NQ-1 is in the list",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Read against the reference",
+      "done_when": "the reading agrees",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-03",
+      "order": 3,
+      "action": "Log the calibration",
+      "done_when": "the log has the date",
+      "files": [],
+      "status": "skipped",
+      "covers": [
+        "ACCEPT-03"
+      ],
+      "depends_on": [],
+      "deviation": "Deferred with TSK05; the log format is not agreed"
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Is the north pier zero the still-water mark or the chart datum?",
+      "status": "resolved",
+      "answer": "The still-water mark.",
+      "raised_by": "ravi",
+      "raised_at": "2026-11-24T18:30:40Z",
+      "resolved_by": "mara",
+      "resolved_at": "2026-11-24T18:30:40Z",
+      "instructed_by": "hugo"
+    },
+    {
+      "id": "QST-02",
+      "question": "Should the log keep the reading as well as the date?",
+      "status": "resolved",
+      "answer": "Keep both.",
+      "raised_by": "ravi",
+      "raised_at": "2026-11-24T18:30:40Z",
+      "resolved_by": "mara",
+      "resolved_at": "2026-11-24T18:30:40Z"
+    }
+  ],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "ravi",
+      "body": "Waiting on the datum answer before reading the reference.",
+      "at": "2026-11-24T18:30:40Z"
+    }
+  ],
+  "depends_on": []
+}

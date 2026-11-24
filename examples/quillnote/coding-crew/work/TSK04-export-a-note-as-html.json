@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "id": "TSK04",
+  "title": "Export a note as HTML",
+  "slug": "export-a-note-as-html",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-24T18:25:24Z",
+  "updated": "2026-11-24T18:25:24Z",
+  "revision": 22,
+  "status": "remediating",
+  "status_since": "2026-11-24T18:25:24Z",
+  "overlays": {},
+  "claim": {
+    "by": "ines",
+    "session": "ses-ines-qn",
+    "at": "2026-11-24T18:25:24Z",
+    "lease_expires_at": "2026-11-24T20:25:24Z"
+  },
+  "planned_by": "ses-lena-qn",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A note exports to a standalone HTML page.",
+    "problem": "Writers share notes as pages."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "PDF output"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "The export has the note's headings",
+      "verification": "grep -q render src/quillnote/markdown.py",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q render src/quillnote/markdown.py",
+          "exit_code": 0,
+          "summary": "render is defined",
+          "at": "2026-11-24T18:25:24Z",
+          "by": "ines",
+          "session": "ses-ines-qn",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "Markup in titles is escaped",
+      "verification": "grep -q html.escape src/quillnote/markdown.py",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q html.escape src/quillnote/markdown.py",
+          "exit_code": 0,
+          "summary": "html.escape is used",
+          "at": "2026-11-24T18:25:24Z",
+          "by": "ines",
+          "session": "ses-ines-qn",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Render the note",
+      "done_when": "render produces the page",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01",
+        "ACCEPT-02"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "design",
+        "reviewer": "ines",
+        "session": "ses-ines-qn",
+        "verdict": "ok",
+        "at": "2026-11-24T18:25:24Z",
+        "notes": "",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "spec-compliance",
+        "reviewer": "yusuf",
+        "session": "ses-yusuf-qn",
+        "verdict": "changes-needed",
+        "at": "2026-11-24T18:25:24Z",
+        "notes": "Headings with trailing hashes keep them.",
+        "findings": [
+          "FIND-01"
+        ]
+      }
+    ],
+    "verdict": "changes-needed",
+    "findings": [
+      {
+        "id": "FIND-01",
+        "severity": "medium",
+        "status": "open",
+        "description": "markdown.py headings(): a title written as '## Title ##' keeps the closing hashes. Fix: strip the trailing run of '#'.",
+        "created": "2026-11-24T18:25:24Z",
+        "resolved": "",
+        "resolution": "",
+        "comments": [
+          {
+            "id": "CMT-01",
+            "author": "yusuf",
+            "body": "Check the heading case as well.",
+            "at": "2026-11-24T18:25:24Z"
+          },
+          {
+            "id": "CMT-02",
+            "author": "ines",
+            "body": "Taking this on; the fix goes in the next round.",
+            "at": "2026-11-24T18:25:24Z"
+          }
+        ]
+      }
+    ],
+    "re_reviews": []
+  },
+  "questions": [
+    {
+      "id": "QST-01",
+      "question": "Should the export keep the front matter?",
+      "status": "resolved",
+      "answer": "Yes, keep it.",
+      "raised_by": "ines",
+      "raised_at": "2026-11-24T18:25:24Z",
+      "resolved_by": "lena",
+      "resolved_at": "2026-11-24T18:25:24Z",
+      "instructed_by": "marta"
+    }
+  ],
+  "notes": [],
+  "depends_on": []
+}

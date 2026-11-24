@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "id": "TSK03",
+  "title": "Park a job after the last attempt and say why",
+  "slug": "park-a-job-after-the-last-attempt-and-say-why",
+  "children": [],
+  "kind": "feature",
+  "promoted_from": "ITM03",
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:46Z",
+  "revision": 12,
+  "status": "approved",
+  "status_since": "2026-11-24T18:31:43Z",
+  "overlays": {},
+  "claim": {
+    "by": "vic",
+    "session": "ses-vic-ry",
+    "at": "2026-11-24T18:31:46Z",
+    "lease_expires_at": "2026-11-24T18:31:48Z"
+  },
+  "planned_by": "ses-nell-ry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A job that exhausts its attempts is parked with the last exit code.",
+    "problem": "A parked job says nothing about why."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Notifications"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A parked job is named as parked",
+      "verification": "grep -q parked src/railyard/runner.py",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Return parked",
+      "done_when": "run_job returns parked",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "nell",
+      "body": "from ITM03",
+      "at": "2026-11-24T18:31:42Z"
+    }
+  ],
+  "depends_on": []
+}

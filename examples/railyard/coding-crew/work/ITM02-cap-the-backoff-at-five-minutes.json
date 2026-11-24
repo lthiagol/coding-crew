@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "ITM02",
+  "title": "Cap the backoff at five minutes",
+  "slug": "cap-the-backoff-at-five-minutes",
+  "kind": "feature",
+  "status": "promoted",
+  "body": "From TODO.md: [~] half-done. retry.py has the cap; no test yet.",
+  "scope": [],
+  "tags": [
+    "adopted",
+    "half-done"
+  ],
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "promoted_to": "TSK02",
+  "dismissed_reason": ""
+}

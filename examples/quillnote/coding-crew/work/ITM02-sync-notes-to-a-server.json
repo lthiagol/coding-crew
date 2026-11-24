@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "ITM02",
+  "title": "Sync notes to a server",
+  "slug": "sync-notes-to-a-server",
+  "kind": "idea",
+  "status": "dismissed",
+  "body": "",
+  "scope": [],
+  "tags": [],
+  "created": "2026-11-24T18:25:24Z",
+  "updated": "2026-11-24T18:25:24Z",
+  "dismissed_reason": "Out of scope for the desktop app"
+}

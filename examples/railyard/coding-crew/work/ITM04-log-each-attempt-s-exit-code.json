@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "ITM04",
+  "title": "Log each attempt's exit code",
+  "slug": "log-each-attempt-s-exit-code",
+  "kind": "feature",
+  "status": "dismissed",
+  "body": "From TODO.md: [ ] open.",
+  "scope": [],
+  "tags": [
+    "adopted"
+  ],
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "dismissed_reason": "Covered by the parking note on TSK03"
+}

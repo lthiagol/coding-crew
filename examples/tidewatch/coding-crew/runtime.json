@@ -1,0 +1,66 @@
+{
+  "started_at": "2026-11-24T18:30:41Z",
+  "updated_at": "2026-11-24T18:30:42Z",
+  "crew": [
+    {
+      "role": "builder",
+      "model": "deepseek-v4.1-flash",
+      "actor": "ravi",
+      "holds": "TSK07",
+      "since": "2026-11-24T18:30:41Z",
+      "state": "idle"
+    },
+    {
+      "role": "builder",
+      "model": "deepseek-v4.1-flash",
+      "actor": "jo",
+      "holds": "TSK04",
+      "since": "2026-11-24T18:30:41Z",
+      "state": "idle"
+    },
+    {
+      "role": "reviewer",
+      "model": "glm-5.3",
+      "actor": "nadia",
+      "holds": "TSK01",
+      "since": "2026-11-24T18:30:41Z",
+      "state": "idle"
+    }
+  ],
+  "queue": [
+    {
+      "id": "TSK04",
+      "status": "executing",
+      "claimable": false
+    },
+    {
+      "id": "TSK07",
+      "status": "executing",
+      "claimable": false
+    },
+    {
+      "id": "TSK06",
+      "status": "executing",
+      "claimable": false
+    }
+  ],
+  "round": {
+    "task": "TSK07",
+    "stage": "self",
+    "number": 0
+  },
+  "budget": {
+    "spent": 0,
+    "total": 5
+  },
+  "findings": 0,
+  "severities": {
+    "high": 0,
+    "medium": 0,
+    "low": 0
+  },
+  "stamp": {
+    "runs": false,
+    "why": "The morning batch is through; the rest waits for the next run"
+  }
+}

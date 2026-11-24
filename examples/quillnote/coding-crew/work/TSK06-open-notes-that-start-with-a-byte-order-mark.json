@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "id": "TSK06",
+  "title": "Open notes that start with a byte-order mark",
+  "slug": "open-notes-that-start-with-a-byte-order-mark",
+  "children": [],
+  "kind": "bug",
+  "created": "2026-11-24T18:25:24Z",
+  "updated": "2026-11-24T18:25:24Z",
+  "revision": 12,
+  "status": "executing",
+  "status_since": "2026-11-24T18:25:24Z",
+  "overlays": {
+    "deferred": {
+      "reason": "Waiting for a sample file from the writer",
+      "by": "tomas",
+      "at": "2026-11-24T18:25:24Z"
+    }
+  },
+  "claim": {
+    "by": "tomas",
+    "session": "ses-tomas-qn",
+    "at": "2026-11-24T18:25:24Z",
+    "lease_expires_at": "2026-11-24T20:25:24Z"
+  },
+  "planned_by": "ses-lena-qn",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A note saved by Windows opens with its title.",
+    "problem": "The BOM makes the first heading unreadable."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Writing a BOM"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A BOM at the start of a note is skipped",
+      "verification": "grep -q utf-8-sig src/quillnote/notes.py",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Read with the BOM skipped",
+      "done_when": "utf-8-sig is used",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

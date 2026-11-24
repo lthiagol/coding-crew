@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "id": "TSK05",
+  "title": "Timeout a step after 30 minutes",
+  "slug": "timeout-a-step-after-30-minutes",
+  "children": [],
+  "kind": "feature",
+  "promoted_from": "ITM07",
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:43Z",
+  "revision": 8,
+  "status": "approved",
+  "status_since": "2026-11-24T18:31:43Z",
+  "overlays": {
+    "blocked": {
+      "reason": "Waiting on how a timeout is reported to the owner",
+      "by": "marta",
+      "at": "2026-11-24T18:31:43Z"
+    }
+  },
+  "planned_by": "ses-nell-ry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A step that runs past 30 minutes is stopped and reported.",
+    "problem": "A hung step holds the runner forever."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Retries of a timed-out step"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A step past 30 minutes is stopped",
+      "verification": "grep -q timeout src/railyard/runner.py",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Pass a timeout to the step",
+      "done_when": "subprocess gets a timeout",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "nell",
+      "body": "from ITM07",
+      "at": "2026-11-24T18:31:42Z"
+    }
+  ],
+  "depends_on": []
+}

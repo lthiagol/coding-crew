@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "ITM02",
+  "title": "Gauge CSV has a blank level",
+  "slug": "gauge-csv-has-a-blank-level",
+  "kind": "bug",
+  "status": "dismissed",
+  "body": "",
+  "scope": [],
+  "tags": [],
+  "created": "2026-11-24T18:30:41Z",
+  "updated": "2026-11-24T18:30:41Z",
+  "dismissed_reason": "The gauge export fixed it"
+}

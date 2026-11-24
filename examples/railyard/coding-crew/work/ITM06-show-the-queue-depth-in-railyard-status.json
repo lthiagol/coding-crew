@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "ITM06",
+  "title": "Show the queue depth in railyard status",
+  "slug": "show-the-queue-depth-in-railyard-status",
+  "kind": "feature",
+  "status": "open",
+  "body": "From TODO.md: [ ] open.",
+  "scope": [],
+  "tags": [
+    "adopted"
+  ],
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "dismissed_reason": ""
+}

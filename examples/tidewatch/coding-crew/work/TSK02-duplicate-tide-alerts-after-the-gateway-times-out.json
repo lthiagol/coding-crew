@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "id": "TSK02",
+  "title": "Duplicate tide alerts after the gateway times out",
+  "slug": "duplicate-tide-alerts-after-the-gateway-times-out",
+  "children": [],
+  "kind": "bug",
+  "created": "2026-11-24T18:30:36Z",
+  "updated": "2026-11-24T18:30:36Z",
+  "revision": 17,
+  "status": "executing",
+  "status_since": "2026-11-24T18:30:36Z",
+  "overlays": {},
+  "claim": {
+    "by": "ravi",
+    "session": "ses-ravi-tw",
+    "at": "2026-11-24T18:30:36Z",
+    "lease_expires_at": "2026-11-24T20:30:36Z"
+  },
+  "planned_by": "ses-mara-tw",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A timed-out send is retried without sending the same alert twice.",
+    "problem": "A gateway timeout re-sends every alert of the batch."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Alerts to masters who have not confirmed"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A retry after a timeout sends each alert once",
+      "verification": "grep -q dedupe src/tidewatch/alerts.py",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "grep -q dedupe src/tidewatch/alerts.py",
+          "exit_code": 0,
+          "summary": "dedupe step in alerts.py",
+          "at": "2026-11-24T18:30:36Z",
+          "by": "ravi",
+          "session": "ses-ravi-tw",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Remember the alerts already sent",
+      "done_when": "alerts.py has a dedupe step",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [
+      {
+        "n": 0,
+        "kind": "self",
+        "focus": "edge-cases",
+        "reviewer": "ravi",
+        "session": "ses-ravi-tw",
+        "verdict": "ok",
+        "at": "2026-11-24T18:30:36Z",
+        "notes": "A retry of a sent alert is skipped.",
+        "findings": []
+      },
+      {
+        "n": 1,
+        "kind": "external",
+        "focus": "security",
+        "reviewer": "nadia",
+        "session": "ses-nadia-tw",
+        "verdict": "ok",
+        "at": "2026-11-24T18:30:36Z",
+        "notes": "Dedupe is in-process; a restart resends, which is accepted for now.",
+        "findings": []
+      }
+    ],
+    "verdict": "ok",
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

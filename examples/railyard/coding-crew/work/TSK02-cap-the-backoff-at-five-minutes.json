@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "id": "TSK02",
+  "title": "Cap the backoff at five minutes",
+  "slug": "cap-the-backoff-at-five-minutes",
+  "children": [
+    "TSK02.1"
+  ],
+  "kind": "feature",
+  "promoted_from": "ITM02",
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:43Z",
+  "revision": 19,
+  "status": "executing",
+  "status_since": "2026-11-24T18:31:42Z",
+  "overlays": {},
+  "claim": {
+    "by": "vic",
+    "session": "ses-vic-ry",
+    "at": "2026-11-24T18:31:42Z",
+    "lease_expires_at": "2026-11-24T20:31:42Z"
+  },
+  "planned_by": "ses-nell-ry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The backoff stops at five minutes.",
+    "problem": "A long outage backs off for hours."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "A configurable cap"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "The backoff stops at 300 seconds",
+      "verification": "PYTHONPATH=src python3 -c 'from railyard.retry import backoff; assert backoff(20) == 300; print(\"capped at\", backoff(20))'",
+      "status": "passed",
+      "evidence": [
+        {
+          "command": "PYTHONPATH=src python3 -c 'from railyard.retry import backoff; assert backoff(20) == 300; print(\"capped at\", backoff(20))'",
+          "exit_code": 0,
+          "summary": "capped at 300",
+          "at": "2026-11-24T18:31:43Z",
+          "by": "vic",
+          "session": "ses-vic-ry",
+          "manual": false
+        }
+      ],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "A test asserts the cap",
+      "verification": "test -f tests/test_retry.py",
+      "status": "deferred",
+      "evidence": [],
+      "deferral": {
+        "reason": "The tests are TSK02.1's",
+        "follow_up": "TSK02.1"
+      },
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Cap the backoff at CAP_SECONDS",
+      "done_when": "retry.py caps the wait",
+      "files": [],
+      "status": "done",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Test the cap",
+      "done_when": "tests/test_retry.py asserts it",
+      "files": [],
+      "status": "skipped",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [],
+      "deviation": "The test is TSK02.1's; the cap is proven by ACCEPT-01"
+    },
+    {
+      "id": "STP-03",
+      "order": 3,
+      "action": "Check attempt 20",
+      "done_when": "attempt 20 is capped",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": "Found while adopting: the cap was never tested at attempt 20"
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "nell",
+      "body": "from ITM02",
+      "at": "2026-11-24T18:31:42Z"
+    }
+  ],
+  "depends_on": []
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "ITM09",
+  "title": "Fix the runner crashing on a missing config file",
+  "slug": "fix-the-runner-crashing-on-a-missing-config-file",
+  "kind": "bug",
+  "status": "promoted",
+  "body": "From TODO.md: [ ] open.",
+  "scope": [],
+  "tags": [
+    "adopted"
+  ],
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "promoted_to": "TSK06",
+  "dismissed_reason": ""
+}

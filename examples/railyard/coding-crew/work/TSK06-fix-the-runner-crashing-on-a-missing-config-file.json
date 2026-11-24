@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "TSK06",
+  "title": "Fix the runner crashing on a missing config file",
+  "slug": "fix-the-runner-crashing-on-a-missing-config-file",
+  "children": [],
+  "kind": "bug",
+  "promoted_from": "ITM09",
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:43Z",
+  "revision": 4,
+  "status": "draft",
+  "status_since": "2026-11-24T18:31:42Z",
+  "overlays": {},
+  "meta": {
+    "priority": "urgent",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "A missing config file gives one clear error.",
+    "problem": "The runner shows a traceback."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": []
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A missing config gives a message, not a traceback",
+      "verification": "grep -q FileNotFoundError src/railyard/config.py",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "nell",
+      "body": "from ITM09",
+      "at": "2026-11-24T18:31:42Z"
+    }
+  ],
+  "depends_on": []
+}

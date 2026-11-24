@@ -1,0 +1,394 @@
+{
+  "events": [
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "created",
+      "task": "TSK01",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "from ITM01"
+    },
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "created",
+      "task": "TSK02",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "from ITM02"
+    },
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "created",
+      "task": "TSK03",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "from ITM03"
+    },
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "created",
+      "task": "TSK04",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "from ITM05"
+    },
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "created",
+      "task": "TSK05",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "from ITM07"
+    },
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "created",
+      "task": "TSK06",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "from ITM09"
+    },
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "created",
+      "task": "TSK07",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "from ITM12"
+    },
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "groomed",
+      "task": "TSK02",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "approved",
+      "task": "TSK02",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by marta"
+    },
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "claimed",
+      "task": "TSK02",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:42Z",
+      "kind": "started",
+      "task": "TSK02",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "created",
+      "task": "TSK02.1",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "groomed",
+      "task": "TSK02.1",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "approved",
+      "task": "TSK02.1",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by marta"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "claimed",
+      "task": "TSK02.1",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "started",
+      "task": "TSK02.1",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "groomed",
+      "task": "TSK03",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "approved",
+      "task": "TSK03",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by marta"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "claimed",
+      "task": "TSK03",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "released",
+      "task": "TSK03",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "Moving to the next unit; re-claim after the queue is set"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "claimed",
+      "task": "TSK03",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "groomed",
+      "task": "TSK04",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "approved",
+      "task": "TSK04",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by marta"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "claimed",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "started",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "round_filed",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "self, edge-cases, ok"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "review_requested",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "round_filed",
+      "task": "TSK04",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode",
+      "note": "external 1, edge-cases, changes-needed"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "finding_raised",
+      "task": "TSK04",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode",
+      "note": "raised FIND-01"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "changes_requested",
+      "task": "TSK04",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "finding_resolved",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "dismissed FIND-01"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "remediated",
+      "task": "TSK04",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "after round 1"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "round_filed",
+      "task": "TSK04",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode",
+      "note": "external 2, design, ok"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "completed",
+      "task": "TSK04",
+      "by": "reviewer",
+      "model": "glm-5.3",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "groomed",
+      "task": "TSK05",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "approved",
+      "task": "TSK05",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by marta"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "blocked",
+      "task": "TSK05",
+      "by": "human",
+      "note": "Waiting on how a timeout is reported to the owner"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "groomed",
+      "task": "TSK07",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "approved",
+      "task": "TSK07",
+      "by": "creator",
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "note": "instructed by marta"
+    },
+    {
+      "at": "2026-11-24T18:31:43Z",
+      "kind": "claimed",
+      "task": "TSK07",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:46Z",
+      "kind": "claimed",
+      "task": "TSK07",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "took over from vic"
+    },
+    {
+      "at": "2026-11-24T18:31:46Z",
+      "kind": "started",
+      "task": "TSK07",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:46Z",
+      "kind": "deferred",
+      "task": "TSK07",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "Waiting on the chat decision"
+    },
+    {
+      "at": "2026-11-24T18:31:46Z",
+      "kind": "undeferred",
+      "task": "TSK07",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    },
+    {
+      "at": "2026-11-24T18:31:46Z",
+      "kind": "released",
+      "task": "TSK03",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode",
+      "note": "Re-claiming with a short lease for the staleness check"
+    },
+    {
+      "at": "2026-11-24T18:31:46Z",
+      "kind": "claimed",
+      "task": "TSK03",
+      "by": "runner",
+      "model": "deepseek-v4.1-flash",
+      "harness": "opencode"
+    }
+  ]
+}

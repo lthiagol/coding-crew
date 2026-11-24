@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "id": "TSK07",
+  "title": "Notify the owner when a job is parked",
+  "slug": "notify-the-owner-when-a-job-is-parked",
+  "children": [],
+  "kind": "feature",
+  "promoted_from": "ITM12",
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:46Z",
+  "revision": 12,
+  "status": "executing",
+  "status_since": "2026-11-24T18:31:46Z",
+  "overlays": {},
+  "claim": {
+    "by": "wes",
+    "session": "ses-wes-ry",
+    "at": "2026-11-24T18:31:46Z",
+    "lease_expires_at": "2026-11-24T20:31:46Z"
+  },
+  "planned_by": "ses-nell-ry",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "The owner of a job hears when it is parked.",
+    "problem": "Parked jobs are found by chance."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Chat integrations"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "The owner is told when a job is parked",
+      "verification": "grep -q notify src/railyard/runner.py",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Notify the owner",
+      "done_when": "a notify call exists",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "nell",
+      "body": "from ITM12",
+      "at": "2026-11-24T18:31:42Z"
+    }
+  ],
+  "depends_on": []
+}

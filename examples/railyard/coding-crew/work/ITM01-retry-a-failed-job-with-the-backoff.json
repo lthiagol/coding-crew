@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "ITM01",
+  "title": "Retry a failed job with the backoff",
+  "slug": "retry-a-failed-job-with-the-backoff",
+  "kind": "feature",
+  "status": "promoted",
+  "body": "From TODO.md: [ ] open. Attempts exist; the runner does not retry yet.",
+  "scope": [],
+  "tags": [
+    "adopted"
+  ],
+  "created": "2026-11-24T18:31:42Z",
+  "updated": "2026-11-24T18:31:42Z",
+  "promoted_to": "TSK01",
+  "dismissed_reason": ""
+}

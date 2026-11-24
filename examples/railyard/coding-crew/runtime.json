@@ -1,0 +1,39 @@
+{
+  "started_at": "2026-11-24T18:31:46Z",
+  "updated_at": "2026-11-24T18:31:49Z",
+  "crew": [
+    {
+      "role": "builder",
+      "model": "deepseek-v4.1-flash",
+      "actor": "vic",
+      "holds": "TSK03",
+      "since": "2026-11-24T18:31:46Z",
+      "state": "executing"
+    }
+  ],
+  "queue": [
+    {
+      "id": "TSK03",
+      "status": "approved",
+      "claimable": true
+    }
+  ],
+  "round": {
+    "task": "TSK03",
+    "stage": "self",
+    "number": 0
+  },
+  "budget": {
+    "spent": 0,
+    "total": 5
+  },
+  "findings": 0,
+  "severities": {
+    "high": 0,
+    "medium": 0,
+    "low": 0
+  },
+  "stamp": {
+    "runs": true
+  }
+}

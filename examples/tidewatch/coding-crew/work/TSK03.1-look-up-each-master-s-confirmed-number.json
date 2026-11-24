@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "id": "TSK03.1",
+  "title": "Look up each master's confirmed number",
+  "slug": "look-up-each-master-s-confirmed-number",
+  "parent": "TSK03",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-24T18:30:36Z",
+  "updated": "2026-11-24T18:30:37Z",
+  "revision": 10,
+  "status": "approved",
+  "status_since": "2026-11-24T18:30:37Z",
+  "overlays": {
+    "deferred": {
+      "reason": "Still waiting on the contact list",
+      "by": "jo",
+      "at": "2026-11-24T18:30:37Z"
+    }
+  },
+  "planned_by": "ses-mara-tw",
+  "meta": {
+    "priority": "normal",
+    "effort": "M",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "Each master's number is known and confirmed.",
+    "problem": "Numbers are kept by hand in the harbour office."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Numbers from the public list"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "A confirmed number is on file for each master",
+      "verification": "test -f data/contacts.json",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Collect the confirmed numbers",
+      "done_when": "data/contacts.json exists",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}

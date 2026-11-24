@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "id": "TSK05",
+  "title": "Record each gauge's calibration date in gauges.csv",
+  "slug": "record-each-gauge-s-calibration-date-in-gauges-csv",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-24T18:30:37Z",
+  "updated": "2026-11-24T18:30:37Z",
+  "revision": 6,
+  "status": "draft",
+  "status_since": "2026-11-24T18:30:37Z",
+  "overlays": {},
+  "meta": {
+    "priority": "normal",
+    "effort": "L",
+    "tags": []
+  },
+  "intent": {
+    "outcome": "Each gauge row says when it was last calibrated.",
+    "problem": "The file has no calibration date."
+  },
+  "scope": {
+    "in_scope": [],
+    "out_of_scope": []
+  },
+  "acceptance_criteria": [],
+  "steps": [],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [
+    {
+      "id": "NOTE-01",
+      "author": "mara",
+      "body": "The date format is still open; see the north pier question.",
+      "at": "2026-11-24T18:30:37Z"
+    },
+    {
+      "id": "NOTE-02",
+      "author": "mara",
+      "body": "The log keeps the calibration date as YYYY-MM-DD, one row per gauge.\n",
+      "at": "2026-11-24T18:30:37Z"
+    },
+    {
+      "id": "NOTE-03",
+      "author": "mara",
+      "body": "Confirmed with the harbour office by phone; the format is agreed.\n",
+      "at": "2026-11-24T18:30:37Z"
+    }
+  ],
+  "depends_on": []
+}

@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "id": "TSK05",
+  "title": "Name the notes folder in settings.toml",
+  "slug": "name-the-notes-folder-in-settings-toml",
+  "children": [],
+  "kind": "task",
+  "created": "2026-11-24T18:25:24Z",
+  "updated": "2026-11-24T18:25:24Z",
+  "revision": 28,
+  "status": "approved",
+  "status_since": "2026-11-24T18:25:24Z",
+  "overlays": {},
+  "planned_by": "ses-lena-qn",
+  "meta": {
+    "priority": "urgent",
+    "effort": "S",
+    "tags": [
+      "settings"
+    ]
+  },
+  "intent": {
+    "outcome": "The notes folder is named in settings.toml.",
+    "problem": "The folder is hard-coded to ~/Notes."
+  },
+  "scope": {
+    "in_scope": [
+      "The notes folder path",
+      "A default for new installs"
+    ],
+    "out_of_scope": [
+      "Multiple folders"
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "ACCEPT-01",
+      "description": "settings.toml names a folder",
+      "verification": "grep -q notes_folder settings.toml",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    },
+    {
+      "id": "ACCEPT-02",
+      "description": "The app opens that folder",
+      "verification": "grep -q list_notes src/quillnote/notes.py",
+      "status": "pending",
+      "evidence": [],
+      "failure_reason": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "STP-01",
+      "order": 1,
+      "action": "Write settings.toml",
+      "done_when": "the file names the folder",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-01"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    },
+    {
+      "id": "STP-02",
+      "order": 2,
+      "action": "Read it on start",
+      "done_when": "the app opens the folder named in settings",
+      "files": [],
+      "status": "pending",
+      "covers": [
+        "ACCEPT-02"
+      ],
+      "depends_on": [],
+      "deviation": ""
+    }
+  ],
+  "review": {
+    "max_rounds": 5,
+    "rounds": [],
+    "findings": [],
+    "re_reviews": []
+  },
+  "questions": [],
+  "notes": [],
+  "depends_on": []
+}
