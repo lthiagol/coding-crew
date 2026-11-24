@@ -1994,6 +1994,38 @@ journals and task files read unchanged. By the opencode crew (deepseek-v4.1-flas
 builder, glm-5.3 reviewer, slug `mm`), review 1 clean, one round. Commit
 `64c5d6e`.
 
+### 2026-11-23 · talita T12, the runtime writer
+
+talita writes `coding-crew/runtime.json`. The `run`, `crew` and `queue` verbs
+write its written fields — `run start` a new record, `run stop` the stamp and
+every row idle, `crew join|leave|assign|idle|stall` the rows, `queue add|drop`
+the ids — and every talita write recomputes the derived fields from the task
+files: the queue's status and claimable flag (core's claim rule), the round in
+flight with its stage, number and earlier rounds, the budget, the open
+findings and their severities. The task verbs make their crew rows certain in
+the same locked write: `claim take` holds and executes, `task finish`, `task
+re-review` and an external `round file` idle and keep the hold, `task
+pass-review` and `task escalate` release every row holding the task, `claim
+release` and `task cancel` release them. The flow verbs are the orchestrator's.
+The record is optional — a project without one gets none — and one that does
+not parse refuses the write.
+
+Staleness is the human's ruling of 2026-11-23: the record's last write is the
+file's modification time (no field, no schema change), and the record is stale
+when that write is older than the **length** of the longest lease the crew
+holds. An expired lease still counts — that is the crashed case — and a record
+with no held lease never is.
+
+The proof is the mock's own state: the record talita writes for it is
+`mock-data/coding-crew/runtime.json`, field for field — the crew, the queue,
+the round, the budget, the findings — with only the run's `started_at` and the
+rows' `since` this run's. hugo renders the record it is given, so it shows
+what the mock shows. By the opencode crew (deepseek-v4.1-flash builder, glm-5.3
+reviewer, slug `mm`), two rounds: round 1 found the `crew join` flag
+collision — the subcommand's `--role` and the global `--role` share clap's
+id, so the caller's role was dropped — and the fix reads the caller's flag
+from the argv. Commit `1735e22`.
+
 ---
 
 ## Lessons
