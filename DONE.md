@@ -2026,6 +2026,21 @@ collision — the subcommand's `--role` and the global `--role` share clap's
 id, so the caller's role was dropped — and the fix reads the caller's flag
 from the argv. Commit `1735e22`.
 
+### 2026-11-24 · talita T12a, the record's last write is its own
+
+The human's ruling of 2026-11-23: the file's modification time does not hold
+up — the record lives in the project's folder, so a clone, a checkout or a
+copy makes a dead run look fresh. The runtime record carries an optional
+`updated_at`, stamped by talita on every write of it, and `run show` measures
+staleness from it against the length of the longest lease the crew holds. An
+expired lease still counts (the crashed case); a record with no `updated_at`
+has no known last write and is never stale. The mock's fixture carries the
+field through the generator — derived from the fixtures, byte-reproducible.
+Round 1's finding was a decision beyond the docs: a malformed `updated_at`
+read as never stale, and it now reads as expired, as a malformed lease does.
+By the opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug
+`mm`), two rounds. Commit `00b2845`.
+
 ---
 
 ## Lessons
