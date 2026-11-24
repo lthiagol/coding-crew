@@ -2064,6 +2064,51 @@ table did not carry. One drift stays open and placed: `commands.md`'s `task
 list` synopsis lists `--lane` and `--needs-you`, which the binary lacks — the
 T6 follow-up in `TODO.md`. Commit `bb883c0`.
 
+### 2026-11-24 · the second dogfood run and its fixes (DF3–DF6)
+
+DF3: three more sandbox projects under `examples/`, written by talita alone —
+**tidewatch** (tide and storm alerts) and **quillnote** (a Markdown notes app),
+greenfield, and **railyard** (a CI runner) adopting talita mid-flight from a
+hand-written `TODO.md` — eight tasks each, four or more actors, editing after
+creation and after approval, claim races, an expired lease taken over, evidence
+that passes and fails, questions, rounds with findings and comments, the
+overlays and the runtime record. Fifteen new `examples/DOGFOOD.md` entries
+(nine medium, six low, no high), all closed: DF4 the seven of work and evidence
+(the human's rulings: a failed step is retried with `step begin` before `step
+done`; `evidence override` on a passed criterion is refused; `task groom`
+refuses a criterion with no verification), DF5 the six of remedies, claims and
+reads, DF6 `item promote --parent`, and F2 the `--lane` gap. Haiku builders,
+Opus reviewer, slug `cc`: DF3 two rounds (two entries misstated), DF4 two (the
+override refusal fired on a criterion its command no longer proved), DF5 two (a
+misplaced-verb hint below the top level; a remedy that was not a command), DF6
+one. Commits `ff455ef`, `c82e053`, `7bb415b`, `1e0e659`.
+
+### 2026-11-24 · the follow-ups F1 and F2
+
+F1: hugo's catalogue tests hold the scratch tool's read until the test releases
+it, then wait on the state under a deadline — no `sleep` racing the read. F2:
+the lane, the needs-you reason and the review state are core's; raul calls
+them; talita's `task show` fills `derived.lane` and `derived.review_state`, and
+`task list` takes `--lane` and `--needs-you`. The review state's rule is the
+human's (2026-11-24), in `task-model.md` § 12. Built in a worktree (slug `cc2`)
+beside DF3, two rounds each. Commits `eb3d4b6`, `1d95757`.
+
+### 2026-11-24 · O1 and O2, the orchestrator's job
+
+O1: `docs/hugo/orchestrator.md` — the loop S0–S9, the talita call at each step,
+what hugo shows, herdr-crew's scripts mapped onto it, and fourteen open
+questions, every recommendation accepted by the human. Review round 1 found the
+dead-orchestrator path missing (now Q14). O2 in three units: O2b — hugo mints
+the orchestrator's session at `s` and passes `TALITA_SESSION`/`ROLE`/`ACTOR`
+(Q7, ADR 0015), talita gains a lib target, and a hugo test reads a
+talita-written `runtime.json`; O2a — `crew assign --review` (Q5), `task
+resume`/`reopen` release the claim and `claim take` takes an executing task with
+none (Q8, ADR 0020), `make install` ships talita (Q12), ADR 0005 follows the
+crew rule; O2c — hugo's three shipped skills run the accepted loop, pinned to
+talita's grammar. O2 is built; the live run of one task from `approved` to
+`done` is check L5. Commits `64b7243`, `dd4aa8a`, `2659050`, `d01790a`,
+`aaaeba8`.
+
 ---
 
 ## Lessons

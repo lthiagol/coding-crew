@@ -129,7 +129,7 @@ The dogfooding path. Each waits as marked; none starts without the human's word.
 | # | unit | size | done when |
 |---|---|---|---|
 | O1 | **The orchestrator's job, designed** ✓ | done | docs only, as talita's design was: `docs/hugo/orchestrator.md` says what `hugo --skill orchestrator` tells the agent to do — pick the queue's next task, start builders and the reviewer, run rounds to the limit, stop for the human — which talita verbs it calls, and how herdr-crew's scripts map onto it; the human accepts it. Can start any time. Closed 2026-11-24: [`docs/hugo/orchestrator.md`](hugo/orchestrator.md), accepted with every recommended ruling, Q1–Q14 |
-| O2 | **The orchestrator's job, built** ⬚ | L | hugo's orchestrator skill drives one task of a talita-managed project from `approved` to `done` with a builder and a reviewer, and hugo shows the crew, round, budget and findings from the real `runtime.json`. Needs O1 and T12 |
+| O2 | **The orchestrator's job, built** ✓ | done (live run: L5) | hugo's orchestrator skill drives one task of a talita-managed project from `approved` to `done` with a builder and a reviewer, and hugo shows the crew, round, budget and findings from the real `runtime.json`. Needs O1 and T12 |
 | DF | **Dogfooding** ⬚ | M | this repository has its own `coding-crew/`: `talita project init`, the open plan rows become tasks, the role configs move to `coding-crew/flow/` (ADR 0011), and `TODO.md` stops being the memory; raul shows the project's own work and hugo runs a unit of it. Needs O2 |
 
 ## Live checks
@@ -142,6 +142,7 @@ Each needs a human, a machine or a font this one lacks.
 | L2 | **raul's freeze, live** (unit 69) | raul on a large work folder in a real terminal takes key bursts without lag; the key drain in `crates/raul/src/main.rs` is watched working |
 | L3 | **The Tasks nerd glyph** (unit 60) | U+F0AE7 is seen in a nerd font at one column, or replaced |
 | L4 | **The Windows lock** (unit 87) | the store's `File::try_lock` is run on Windows by two writers |
+| L5 | **The orchestrator, live** (O2) | hugo's `s` on a sandbox project drives one approved task to `done` with a builder and a reviewer, and the main pane shows the crew, round, budget and findings from talita's `runtime.json` |
 
 ## Grooming
 
