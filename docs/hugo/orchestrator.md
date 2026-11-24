@@ -17,7 +17,9 @@ and 11.2, [talita commands](../talita/commands.md), ADRs
   harness, model and effort; `round_limit`; `order`; `raul`), and prompts:
   `Run hugo --skill orchestrator and follow it. Project: <path>. Tasks, in order: <TSK>…`
 - `hugo --skill orchestrator` prints the crew: each agent's start kind, args and
-  env, and `none` for a role the crew leaves out. Then the skill.
+  env, and `none` for a role the crew leaves out. Each agent's env also carries
+  `TALITA_MODEL=<model>` and `TALITA_HARNESS=<harness>`, so its talita events
+  name the model and harness they ran on. Then the skill.
 - hugo claims nothing, runs no round and writes no record. The loop below is the
   orchestrator's.
 
@@ -30,7 +32,9 @@ and 11.2, [talita commands](../talita/commands.md), ADRs
   `orchestrator`), not the caller's. The caller's role comes from `TALITA_ROLE`.
   Do not pass the caller's role as `--role` on a `crew` call.
 - Each agent gets its identity in its tab: `herdr tab create … --env TALITA_ACTOR=… --env TALITA_ROLE=… --env TALITA_SESSION=…`
-  (herdr-crew's `crew_tab` in `lib.sh` takes these).
+  (herdr-crew's `crew_tab` in `lib.sh` takes these). The orchestrator also passes
+  each start env line `hugo --skill` printed as `--env`, `TALITA_MODEL` and
+  `TALITA_HARNESS` among them, so the agent's talita events carry its model.
 - **A fresh session per act**, so the session gates hold by construction: a build
   job, a fix job, a review, and in the one-agent crew each act of the orchestrator.
 - Actor ids: the herdr agent's name (`cc-b-tsk04-0`, `cc-reviewer`). A builder
@@ -202,10 +206,13 @@ findings count falls as they close.
 ### S7 Pass and commit — orchestrator
 
 - Status `done`. The pass released every row holding TSK04.
-- List the paths the task changed (scratch snapshot, as `changed.sh` does). Check
-  the list holds only this task's work.
+- List the paths the task changed (`git status --porcelain`). Check the list holds
+  only this task's work, plus the run's records: `coding-crew/activity.json` and
+  `coding-crew/runtime.json`. They join the task's commit, so the tree is clean
+  after every task (ruling, 2026-11-24).
 - Run `make check` — the commit's claim (Q13).
-- `scripts/commit.sh "<subject>" "<body names TSK04>" -- <paths>`, conventional, stage by name (Q1).
+- `git add -- <paths>`, then `git commit -m "<subject>" -m "<body names TSK04>" -- <paths>`,
+  conventional, by name (Q1). No `git add -A`; no `commit.sh`, which the project lacks.
 - Back to S2.
 
 Pane: the done count rises.
@@ -247,6 +254,10 @@ herdr-crew's rule has it), when `make check` fails at S7, when `talita project s
 finds no project, when `run start` refuses an active run, or when a second
 orchestrator is named in herdr. `needs-human` does not stop the run (Q10).
 
+Every stop ends by committing the record `talita run stop` wrote, in a final
+`chore:` commit, by name: `coding-crew/activity.json` and `coding-crew/runtime.json`
+(ruling, 2026-11-24). Skip it when git reports nothing to commit.
+
 ## From herdr-crew to O2
 
 herdr-crew's scripts are read, not edited. Each step maps to one of: kept as it
@@ -268,7 +279,7 @@ is, replaced by a talita call or a hugo action, or dropped.
 | `unit.sh`: setting old files aside on re-run | dropped: the rounds are the task's record (ADR 0011) |
 | `await.sh` | kept. Done means the file and the status (Q2). Exits 2, 3 and 5 map to the stall and dead paths above |
 | `spawn.sh` | replaced. It passes the static `BUILDER_ENV` from `crew.env` and a fixed prompt, so it cannot carry a job's `TALITA_*` or the skill prompt. Not edited; the step is S4 |
-| `changed.sh`, `commit.sh` | kept; the orchestrator runs them at S7 |
+| `changed.sh`, `commit.sh` | replaced: the orchestrator lists the paths with `git status` and commits by name with plain git at S7. The project has no `scripts/commit.sh` |
 | `lib.sh` (`crew_tab`, `crew_status`, `crew_owner`, `crew_tree_state`) | kept |
 | `templates/full-review.md` | kept outside the loop: a whole-project review has no task |
 | round folder: `review<n>.md`, `report<n>.md`, `log`, tree digests | kept as scratch. Findings and verdicts live in the task (ADR 0011). The folder does not survive the machine |

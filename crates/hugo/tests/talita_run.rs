@@ -118,11 +118,10 @@ fn approved_task(project: &Path) -> String {
     id.to_string()
 }
 
-/// A run with one builder, one reviewer and the orchestrator, whose task has
-/// been built, reviewed once with two findings, and sent back for changes.
-fn run_with_a_review_round(project: &Path) {
-    let id = approved_task(project);
-    talita(project, &ORCHESTRATOR, &["run", "start", "--task", &id]);
+/// A run started over the task, with the orchestrator, a builder and a
+/// reviewer joined.
+fn run_with_a_crew(project: &Path, id: &str) {
+    talita(project, &ORCHESTRATOR, &["run", "start", "--task", id]);
     talita(
         project,
         &ORCHESTRATOR,
@@ -162,20 +161,52 @@ fn run_with_a_review_round(project: &Path) {
             "glm-5.3",
         ],
     );
+}
 
-    // The build: claim, start, the step and its evidence, a self round, finish.
-    talita(project, &BUILDER, &["claim", "take", &id, "--lease", "2h"]);
-    talita(project, &BUILDER, &["task", "start", &id]);
-    talita(project, &BUILDER, &["step", "begin", &id, "STP-01"]);
-    talita(project, &BUILDER, &["step", "done", &id, "STP-01"]);
-    talita(project, &BUILDER, &["evidence", "run", &id, "ACCEPT-01"]);
+/// A run with one builder, one reviewer and the orchestrator, whose task has
+/// been built, reviewed once with two findings, and sent back for changes.
+fn run_with_a_review_round(project: &Path) {
+    let id = approved_task(project);
+    run_with_a_crew(project, &id);
+    built(project, &id);
+    reviewed(
+        project,
+        &id,
+        "changes-needed",
+        serde_json::json!([
+            {"ref": "D1", "severity": "high", "description": "the lock is not released"},
+            {"ref": "D2", "severity": "low", "description": "the name is vague"},
+        ]),
+    );
+    talita(project, &REVIEWER, &["task", "request-changes", &id]);
+}
+
+/// A run whose task is built and reviewed clean, passed, and whose crew has
+/// left: the record a run stop writes once the queue is done.
+fn run_done(project: &Path) {
+    let id = approved_task(project);
+    run_with_a_crew(project, &id);
+    built(project, &id);
+    reviewed(project, &id, "ok", serde_json::json!([]));
+    talita(project, &REVIEWER, &["task", "pass-review", &id]);
+    talita(project, &ORCHESTRATOR, &["crew", "leave", BUILDER.actor]);
+    talita(project, &ORCHESTRATOR, &["crew", "leave", REVIEWER.actor]);
+}
+
+/// The build: claim, start, the step and its evidence, a self round, finish.
+fn built(project: &Path, id: &str) {
+    talita(project, &BUILDER, &["claim", "take", id, "--lease", "2h"]);
+    talita(project, &BUILDER, &["task", "start", id]);
+    talita(project, &BUILDER, &["step", "begin", id, "STP-01"]);
+    talita(project, &BUILDER, &["step", "done", id, "STP-01"]);
+    talita(project, &BUILDER, &["evidence", "run", id, "ACCEPT-01"]);
     talita(
         project,
         &BUILDER,
         &[
             "round",
             "file",
-            &id,
+            id,
             "--kind",
             "self",
             "--focus",
@@ -184,25 +215,24 @@ fn run_with_a_review_round(project: &Path) {
             "ok",
         ],
     );
-    talita(project, &BUILDER, &["task", "finish", &id]);
+    talita(project, &BUILDER, &["task", "finish", id]);
+}
 
-    // The review: the reviewer is assigned, files a round with two findings,
-    // and the verdict sends the task back.
+/// The review: the reviewer is assigned and files an external round with the
+/// verdict and findings given.
+fn reviewed(project: &Path, id: &str, verdict: &str, findings: serde_json::Value) {
     talita(
         project,
         &ORCHESTRATOR,
-        &["crew", "assign", REVIEWER.actor, &id],
+        &["crew", "assign", REVIEWER.actor, id],
     );
     let round = project.join("round.json");
     let input = serde_json::json!({
         "kind": "external",
         "focus": "spec-compliance",
-        "verdict": "changes-needed",
-        "notes": "two gaps",
-        "findings": [
-            {"ref": "D1", "severity": "high", "description": "the lock is not released"},
-            {"ref": "D2", "severity": "low", "description": "the name is vague"},
-        ],
+        "verdict": verdict,
+        "notes": "the review",
+        "findings": findings,
     });
     fs::write(&round, serde_json::to_vec(&input).expect("json")).expect("the round file");
     talita(
@@ -211,12 +241,11 @@ fn run_with_a_review_round(project: &Path) {
         &[
             "round",
             "file",
-            &id,
+            id,
             "--input",
             round.to_str().expect("a path"),
         ],
     );
-    talita(project, &REVIEWER, &["task", "request-changes", &id]);
 }
 
 /// The main pane, drawn plain by hugo in `project`, at a width the rows fit.
@@ -270,6 +299,32 @@ fn the_pane_shows_the_crew_round_budget_and_findings_talita_wrote() {
     assert!(row(&text, &["rounds", "2 of 5"]).contains("2 of 5"));
     // The findings: two open, by severity.
     row(&text, &["2 open findings · 1 high · 0 medium · 1 low"]);
+
+    let _ = fs::remove_dir_all(&project);
+    let _ = fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_stopped_run_is_not_drawn_with_a_crew_or_budget_it_no_longer_has() {
+    let project = scratch("stopped");
+    let home = scratch("stopped-home");
+    talita(&project, &CREATOR, &["project", "init"]);
+    run_done(&project);
+    talita(
+        &project,
+        &ORCHESTRATOR,
+        &["run", "stop", "--why", "queue done"],
+    );
+
+    let text = render(&project, &home);
+    // The run is over: the stamp says so, and the crew's size is not claimed.
+    row(&text, &["not running: queue done"]);
+    assert!(!text.contains("the orchestrator reviews"), "{text}");
+    assert!(!text.contains("the reviewer reviews"), "{text}");
+    // No task is in flight, so the budget shows the configured limit, not
+    // the record's empty 0 of 0.
+    assert!(!text.contains("0 of 0"), "{text}");
+    assert!(row(&text, &["rounds", "of 5"]).contains("0 of 5"));
 
     let _ = fs::remove_dir_all(&project);
     let _ = fs::remove_dir_all(&home);

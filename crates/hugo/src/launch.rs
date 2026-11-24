@@ -29,6 +29,10 @@ const ENV_SESSION: &str = "TALITA_SESSION";
 /// The code herdr answers with when no agent has the name asked for.
 const AGENT_NOT_FOUND: &str = "agent_not_found";
 
+/// The code herdr answers with when a prompt is sent to an agent already
+/// blocked: the prompt is rejected before any input is sent.
+const AGENT_BLOCKED: &str = "agent_blocked";
+
 /// How long a herdr call may take before hugo gives up on it. herdr answers
 /// from its own socket, so a call that runs past this is stuck, not slow. The
 /// one call that waits on its agent has its own bound.
@@ -40,6 +44,14 @@ const AGENT_START_TIMEOUT_MS: u64 = 30_000;
 /// How long `herdr agent start` may take: its readiness wait, plus room to
 /// report it.
 const AGENT_START_BOUND: Duration = Duration::from_secs(35);
+
+/// How long the prompt may take to show the orchestrator working. herdr waits
+/// five seconds of a prompt sent from idle for that activity; the rest is
+/// the submission.
+const PROMPT_TIMEOUT_MS: u64 = 15_000;
+
+/// How long a prompt call may take: the timeout it names, plus room to report.
+const PROMPT_BOUND: Duration = Duration::from_secs(20);
 
 /// What a start needs: the agent kind, the invocation that starts the agent
 /// in its harness, the project's root, and the queue's task ids in order.
@@ -63,6 +75,37 @@ pub struct LaunchRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Launched {
     pub tab: String,
+}
+
+/// Whether a prompt reached the orchestrator, given herdr's answer to it and
+/// the orchestrator's state after it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Prompted {
+    /// The orchestrator took it: it is working on it, or blocked on a dialog
+    /// it raised after taking it.
+    Taken,
+    /// It is still idle, so the prompt did not reach it: it goes once more.
+    Again,
+    /// Neither: the orchestrator's state is not known.
+    Refused,
+}
+
+/// The step after a prompt. An accepted prompt is taken, since herdr returns
+/// once the agent is working. A prompt rejected as `agent_blocked` was not
+/// delivered: the agent was blocked before submission, so it is refused. Any
+/// other failed prompt is taken when the agent is working, blocked or done (a
+/// timed-out prompt may have reached a harness that then raised a dialog);
+/// left idle, it is sent once more; in any other state, or idle after the
+/// resend, it is not taken and the error stands. `code` is herdr's error code
+/// for the failed prompt, when it gave one.
+fn prompted(sent: bool, code: Option<&str>, state: Option<&str>, resent: bool) -> Prompted {
+    match (sent, code, state) {
+        (true, _, _) => Prompted::Taken,
+        (false, Some(AGENT_BLOCKED), _) => Prompted::Refused,
+        (false, _, Some("working" | "blocked" | "done")) => Prompted::Taken,
+        (false, _, Some("idle")) if !resent => Prompted::Again,
+        _ => Prompted::Refused,
+    }
 }
 
 /// What a start found: an orchestrator started, or one already named in herdr.
@@ -166,9 +209,50 @@ impl Launcher for Herdr {
             )
         };
         herdr_within(&agent_start_args(req, &pane), AGENT_START_BOUND).map_err(after)?;
-        herdr(&agent_prompt_args(req)).map_err(after)?;
+        self.prompt_orchestrator(req).map_err(after)?;
         Ok(Launched { tab: tab_id })
     }
+}
+
+impl Herdr {
+    /// Prompt the orchestrator to run the skill, and confirm it took the prompt.
+    /// herdr answers from a TUI that may not be ready yet: a prompt it did not
+    /// take leaves the agent idle, and is sent once more. The error of a prompt
+    /// still not taken stands, and `after_tab` names the prompt to send by hand.
+    fn prompt_orchestrator(&self, req: &LaunchRequest) -> Result<()> {
+        let args = agent_prompt_args(req);
+        let mut resent = false;
+        loop {
+            let answer = herdr_answer_within(&args, PROMPT_BOUND);
+            let accepted = matches!(&answer, Ok(answer) if answer.status.success());
+            let code = match &answer {
+                Ok(answer) if !accepted => error_code(&answer.stdout, &answer.stderr),
+                _ => None,
+            };
+            let state = if accepted { None } else { self.agent_state() };
+            match prompted(accepted, code.as_deref(), state.as_deref(), resent) {
+                Prompted::Taken => return Ok(()),
+                Prompted::Again => resent = true,
+                Prompted::Refused => {
+                    return Err(match answer {
+                        Ok(answer) => refused(&args, &answer),
+                        Err(error) => error,
+                    });
+                }
+            }
+        }
+    }
+
+    /// The orchestrator's state in herdr, when herdr says it.
+    fn agent_state(&self) -> Option<String> {
+        let answer = herdr_json(&words(&["agent", "get", ORCHESTRATOR])).ok()?;
+        state_of(&answer)
+    }
+}
+
+/// The state herdr's answer to `agent get` gives the agent.
+fn state_of(answer: &Value) -> Option<String> {
+    text_at(answer, &["result", "agent", "agent_status"]).ok()
 }
 
 /// The error for a start that failed once its tab was open. When herdr may
@@ -229,9 +313,22 @@ fn agent_start_args(req: &LaunchRequest, pane: &str) -> Vec<String> {
 }
 
 /// The command that prompts the orchestrator to run the skill over the queue.
+/// `--wait` with `--until working` or `--until blocked` returns once the agent
+/// is seen working or blocked (left idle, it took no prompt), and fails with
+/// `agent_prompt_stalled` when neither is seen within herdr's five seconds. The
+/// default wait would hold the call for the whole run.
 fn agent_prompt_args(req: &LaunchRequest) -> Vec<String> {
     let mut args = words(&["agent", "prompt", ORCHESTRATOR]);
     args.push(prompt(req));
+    args.extend(words(&[
+        "--wait",
+        "--until",
+        "working",
+        "--until",
+        "blocked",
+        "--timeout",
+        &PROMPT_TIMEOUT_MS.to_string(),
+    ]));
     args
 }
 
@@ -284,9 +381,19 @@ fn refused(args: &[String], answer: &Answer) -> anyhow::Error {
 /// its errors as JSON with a code, on stdout or on stderr by version: both
 /// are read.
 fn not_found(stdout: &[u8], stderr: &[u8]) -> bool {
-    [stderr, stdout].into_iter().any(|stream| {
+    error_code(stdout, stderr).is_some_and(|code| code == AGENT_NOT_FOUND)
+}
+
+/// The code of herdr's JSON error in a failed answer, read from stderr or
+/// stdout by version, whichever holds it.
+fn error_code(stdout: &[u8], stderr: &[u8]) -> Option<String> {
+    [stderr, stdout].into_iter().find_map(|stream| {
         serde_json::from_slice::<Value>(stream)
-            .is_ok_and(|answer| answer["error"]["code"] == AGENT_NOT_FOUND)
+            .ok()?
+            .get("error")?
+            .get("code")?
+            .as_str()
+            .map(str::to_string)
     })
 }
 
@@ -469,6 +576,118 @@ mod tests {
             session(orchestrator_identity()),
             session(orchestrator_identity())
         );
+    }
+
+    #[test]
+    fn the_prompt_waits_until_the_orchestrator_is_seen_working_or_blocked() {
+        let args = agent_prompt_args(&request());
+        assert_eq!(
+            args[4..],
+            [
+                "--wait",
+                "--until",
+                "working",
+                "--until",
+                "blocked",
+                "--timeout",
+                "15000"
+            ]
+        );
+        // The call's bound is the timeout the prompt names, plus room to report.
+        assert!(
+            PROMPT_BOUND > Duration::from_millis(PROMPT_TIMEOUT_MS),
+            "{PROMPT_BOUND:?}"
+        );
+    }
+
+    #[test]
+    fn a_prompt_accepted_is_taken_without_asking_the_state() {
+        assert_eq!(prompted(true, None, None, false), Prompted::Taken);
+        assert_eq!(prompted(true, None, None, true), Prompted::Taken);
+    }
+
+    #[test]
+    fn a_prompt_left_idle_is_sent_once_more_and_then_it_is_refused() {
+        assert_eq!(prompted(false, None, Some("idle"), false), Prompted::Again);
+        assert_eq!(prompted(false, None, Some("idle"), true), Prompted::Refused);
+    }
+
+    #[test]
+    fn a_prompt_that_failed_is_taken_when_the_orchestrator_is_working_blocked_or_done() {
+        assert_eq!(
+            prompted(false, None, Some("working"), false),
+            Prompted::Taken
+        );
+        assert_eq!(prompted(false, None, Some("done"), true), Prompted::Taken);
+        // A prompt taken into a permission dialog: the orchestrator is running,
+        // so a resend would queue the prompt twice.
+        assert_eq!(
+            prompted(false, None, Some("blocked"), false),
+            Prompted::Taken
+        );
+        assert_eq!(
+            prompted(false, None, Some("blocked"), true),
+            Prompted::Taken
+        );
+    }
+
+    #[test]
+    fn a_prompt_rejected_as_blocked_before_input_is_refused_even_when_blocked() {
+        // herdr rejects a prompt to an agent already blocked before any input
+        // is sent: the prompt never reached the orchestrator, so it is not taken.
+        assert_eq!(
+            prompted(false, Some("agent_blocked"), Some("blocked"), false),
+            Prompted::Refused
+        );
+        assert_eq!(
+            prompted(false, Some("agent_blocked"), Some("blocked"), true),
+            Prompted::Refused
+        );
+    }
+
+    #[test]
+    fn a_timed_out_prompt_is_taken_when_the_orchestrator_is_blocked() {
+        // A timeout does not say the prompt was rejected: it may have been
+        // taken before the dialog came up.
+        assert_eq!(
+            prompted(false, Some("timeout"), Some("blocked"), false),
+            Prompted::Taken
+        );
+        assert_eq!(
+            prompted(false, None, Some("blocked"), false),
+            Prompted::Taken
+        );
+    }
+
+    #[test]
+    fn a_prompt_is_refused_when_the_orchestrator_state_is_unknown() {
+        // The error carries the prompt for the human.
+        assert_eq!(
+            prompted(false, None, Some("unknown"), false),
+            Prompted::Refused
+        );
+        assert_eq!(prompted(false, None, None, false), Prompted::Refused);
+    }
+
+    #[test]
+    fn the_error_code_is_read_from_herdrs_json_error_on_either_stream() {
+        let blocked =
+            br#"{"error":{"code":"agent_blocked","message":"busy"},"id":"cli:agent:prompt"}"#;
+        assert_eq!(error_code(blocked, b"").as_deref(), Some("agent_blocked"));
+        assert_eq!(error_code(b"", blocked).as_deref(), Some("agent_blocked"));
+        assert_eq!(error_code(b"herdr: timed out", b""), None);
+        assert_eq!(error_code(br#"{"result":{}}"#, b""), None);
+    }
+
+    #[test]
+    fn the_state_is_read_from_herdrs_agent_answer() {
+        let answer: Value = serde_json::from_str(
+            r#"{"result":{"agent":{"name":"orchestrator","agent_status":"idle"}}}"#,
+        )
+        .expect("an answer");
+        assert_eq!(state_of(&answer).as_deref(), Some("idle"));
+        let missing: Value = serde_json::from_str(r#"{"result":{"agent":{}}}"#).expect("an answer");
+        assert_eq!(state_of(&missing), None);
     }
 
     #[test]

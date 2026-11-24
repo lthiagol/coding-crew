@@ -79,10 +79,10 @@ The blocks are read in this order; the crew leads.
 
 | order | block | shows |
 |---|---|---|
-| 1 | `crew` | a table under a header, one row per agent: its role's icon and role, the model it runs, the task it holds (or `—`), the hold, and its state; then the composition, in words. Drawn alone, a row says `holds …` in words instead |
+| 1 | `crew` | a table under a header, one row per agent: its role's icon and role, the model it runs, the task it holds (or `—`), the hold, and its state; then the composition, in words while the run runs. Drawn alone, a row says `holds …` in words instead |
 | 2 | `queue` | **the automation's queue**: the tasks waiting, in order, an id and a status each — never a title, a note or an intent. A task the crew holds is not a row; a done one is counted, not drawn |
 | 3 | `round` | **a timeline** of the task in flight: each round's build and review, and the findings each review raised; `no review in flight` when there is none |
-| 4 | `budget` | the rounds the task in flight has used, of its limit, as a bar and the numbers |
+| 4 | `budget` | the rounds the task in flight has used, of its limit, as a bar and the numbers. With no task in flight the record holds no limit: the budget reads the configured review-round limit, `0 of 5`, never `0 of 0` |
 | 5 | `findings` | the task in flight's open findings, as a count, and by severity when the record holds them |
 | 6 | stamp | at the foot: whether the automation runs, **and why** when it does not |
 
@@ -96,6 +96,10 @@ reviewer reviews; the orchestrator reviews; the human reviews — and never
 prints a bare count of agents. A crew with more than one agent in a role has
 no such rule: the pane says `more than one agent per role` rather than
 claiming a rule the crew does not follow.
+
+**A run that is over claims no crew size.** After `run stop` the composition
+line is not drawn: the crew it left is not a size the run has now. The rows stay,
+each as the record holds it, and the stamp says `not running: <why>`.
 
 **A blocked agent is named on the warning slot.** Its state is `blocked` on
 `semantic.warn`, under the theme's blocked icon. It holds its task and is not
@@ -391,6 +395,15 @@ harness, model and effort, no start is in flight, and `hugo` on PATH is this hug
 | starting | `starting the orchestrator…`, dim. The herdr calls run beside the window, which keeps drawing and taking keys |
 | started | `orchestrator started in tab <id>`, on `semantic.ok` |
 | failed | `the orchestrator did not start:` and the error, on the failure slot. When the tab was already open, the error names it |
+
+A start confirms the prompt: herdr returns once the orchestrator is seen working
+or blocked. A prompt that fails for any reason other than `agent_blocked` (a
+timeout, a stall) counts as taken when the orchestrator is then working, blocked
+or done; a blocked orchestrator counts as started, so it is not sent the prompt
+again. A prompt herdr rejects as `agent_blocked` was never delivered, even when the
+orchestrator is blocked: the start fails. A prompt the orchestrator left idle is
+sent once more; a prompt still not taken fails the start, and the error names the
+tab and carries the prompt to send by hand.
 
 The note sits on its own row above the footer's rule while a start has
 something to say. The last thing a start said stays until the next start.

@@ -80,13 +80,15 @@ With a builder in the crew:
 talita session new --as cc-b-tsk04-0 --role runner      # prints the session; writes nothing
 talita crew join cc-b-tsk04-0 --role builder --model <m>
 R=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$PWD" --label cc-b-tsk04-0 --no-focus \
-  --env TALITA_ACTOR=cc-b-tsk04-0 --env TALITA_ROLE=runner --env TALITA_SESSION=<s> <each start env word>)
+  --env TALITA_ACTOR=cc-b-tsk04-0 --env TALITA_ROLE=runner --env TALITA_SESSION=<s> --env <each start env word>)
 # .result.root_pane.pane_id and .result.tab.tab_id from R
 herdr agent start cc-b-tsk04-0 --kind <start kind> --pane <pane> -- <start args>
 herdr agent prompt cc-b-tsk04-0 "Run hugo --skill builder and follow it. Brief: <path>."
 ```
 
 Start env and start args are shell words, already quoted: paste them as printed.
+One `--env` per start env line. The env names the agent's model and harness
+(`TALITA_MODEL`, `TALITA_HARNESS`), so its talita events carry them.
 
 Wait for the job's report file. Poll `herdr agent get <name>` until
 `<round>/<TSK>/report<n>.md` exists. If the agent is `blocked`, read
@@ -112,8 +114,8 @@ come from that one session.
 
 - **Reviewer in the crew** (3-agent): once per run, `talita session new --as cc-reviewer --role reviewer`,
   `talita crew join cc-reviewer --role reviewer --model <m>`, then a tab with
-  `TALITA_ACTOR=cc-reviewer TALITA_ROLE=reviewer TALITA_SESSION=<s>` and the start
-  env, `herdr agent start`, and the prompt `Run hugo --skill reviewer and follow it. Task: <TSK>. Brief: <path>.`
+  `--env TALITA_ACTOR=cc-reviewer --env TALITA_ROLE=reviewer --env TALITA_SESSION=<s>` and each
+  start env line as `--env`, `herdr agent start`, and the prompt `Run hugo --skill reviewer and follow it. Task: <TSK>. Brief: <path>.`
   Before each later task's first review, send it `/clear`; its session stays.
 - **Reviewer marked `none`** (2- and 1-agent): you review. Once per run,
   `talita session new --as "$TALITA_ACTOR" --role reviewer` prints `<s>`. Every
@@ -154,11 +156,15 @@ means a refusal: read REPORT and go to § When it goes wrong. Close the tab; the
 ### Pass and commit
 
 - Status `done`. The pass released every row holding the task.
-- List the paths the task changed. Check the list holds only this task's work.
+- List the paths the task changed (`git status --porcelain`). Check the list holds
+  only this task's work, plus the run's two records: `coding-crew/activity.json`
+  and `coding-crew/runtime.json`.
 - Run `make check`. If it fails, stop the run: `talita run stop --why "make check failed after <TSK>"`,
   and say so in the report.
-- Commit by name: `commit.sh "<subject>" "<body names <TSK>>" -- <paths>` (herdr-crew's),
-  or `git add -- <paths>` then `git commit`. Conventional subject. Never `git add -A` or `git add .`.
+- Commit by name, the task's paths and the two records:
+  `git add -- <paths>`, then
+  `git commit -m "<subject>" -m "<body names <TSK>>" -- <paths>`.
+  Conventional subject. Never `git add -A` or `git add .`.
 - Back to Pick.
 
 ### Needs a human
@@ -183,6 +189,16 @@ Stop early, with `talita run stop --why "<reason>"` and a report to the human, w
 a builder or reviewer is blocked; `make check` fails at Pass and commit; `talita
 project show` finds no project; `run start` refuses an active run; or a second
 orchestrator is named in herdr.
+
+Every stop, normal or early, ends by committing the record the stop wrote, by
+name, as its own commit:
+
+```sh
+git add -- coding-crew/activity.json coding-crew/runtime.json
+git commit -m "chore: record the run's stop" -- coding-crew/activity.json coding-crew/runtime.json
+```
+
+Skip the commit when git reports nothing to commit.
 
 ## When it goes wrong
 

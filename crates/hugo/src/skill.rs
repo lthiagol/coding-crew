@@ -135,6 +135,8 @@ pub fn shell_word(text: &str) -> String {
 ///
 /// The environment is part of the start: a harness that reads its model from
 /// it is started with the variable set, so it is named beside the arguments.
+/// It also names the agent's model and harness, `TALITA_MODEL` and
+/// `TALITA_HARNESS`, so the events its talita calls write carry them.
 fn crew(config: &Config, note: Option<&str>) -> String {
     let mut out = String::from("# Crew\n\n");
     if let Some(note) = note {
@@ -157,7 +159,12 @@ fn crew(config: &Config, note: Option<&str>) -> String {
                 out.push_str(&format!("  start kind: {}\n", known.kind));
                 let args: Vec<String> = start.args.iter().map(|arg| shell_word(arg)).collect();
                 out.push_str(&format!("  start args: {}\n", args.join(" ")));
-                for (key, value) in &start.env {
+                let identity = [
+                    ("TALITA_MODEL".to_string(), agent.model.clone()),
+                    ("TALITA_HARNESS".to_string(), agent.harness.clone()),
+                ];
+                let env = start.env.iter().cloned().chain(identity);
+                for (key, value) in env {
                     out.push_str(&format!(
                         "  start env: {}\n",
                         shell_word(&format!("{key}={value}"))
@@ -315,9 +322,52 @@ mod tests {
                 .map(str::to_string)
                 .collect()
         };
-        let env = read_back(&line("  start env: "));
-        assert_eq!(env, [format!("OPENCODE_CONFIG_CONTENT={}", start.env[0].1)]);
+        let env: Vec<String> = text
+            .split("- reviewer: harness")
+            .nth(1)
+            .expect("the reviewer's lines")
+            .lines()
+            .filter_map(|line| line.strip_prefix("  start env: "))
+            .flat_map(read_back)
+            .collect();
+        assert_eq!(
+            env,
+            [
+                format!("OPENCODE_CONFIG_CONTENT={}", start.env[0].1),
+                "TALITA_MODEL=opencode-go/glm-5.3".to_string(),
+                "TALITA_HARNESS=opencode".to_string(),
+            ]
+        );
         assert_eq!(read_back(&line("  start args: ")), start.args);
+    }
+
+    #[test]
+    fn each_started_agent_names_its_model_and_harness_in_its_start_env() {
+        // Builder and reviewer events carry the model and harness the agent
+        // runs: the start env gives them, so no agent composes them by hand.
+        let text = crew(&Config::default(), None);
+        for (role, model, harness) in [
+            ("builder", "claude-haiku-5-5", "claude"),
+            ("reviewer", "claude-opus-5-5", "claude"),
+        ] {
+            let lines: Vec<&str> = text
+                .split(&format!("- {role}: harness"))
+                .nth(1)
+                .unwrap_or_else(|| panic!("no {role} line:\n{text}"))
+                .lines()
+                .skip(1)
+                .take_while(|line| line.starts_with("  "))
+                .filter(|line| line.starts_with("  start env: "))
+                .collect();
+            assert_eq!(
+                lines,
+                [
+                    format!("  start env: TALITA_MODEL={model}"),
+                    format!("  start env: TALITA_HARNESS={harness}"),
+                ],
+                "{role}: {text}"
+            );
+        }
     }
 
     #[test]

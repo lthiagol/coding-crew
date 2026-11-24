@@ -2092,13 +2092,17 @@ impl App {
         } else {
             lines.extend(self.crew_unaligned(&rows, width));
         }
-        lines.push(self.fit(
-            vec![(
-                runtime.composition().says().to_string(),
-                self.theme.text.dim,
-            )],
-            width,
-        ));
+        // A run that is over claims no crew size: its composition is said
+        // only while it runs.
+        if runtime.stamp.runs {
+            lines.push(self.fit(
+                vec![(
+                    runtime.composition().says().to_string(),
+                    self.theme.text.dim,
+                )],
+                width,
+            ));
+        }
         lines
     }
 
@@ -2399,7 +2403,7 @@ impl App {
     /// words. A line too narrow for both wraps the bar under its label.
     fn budget_lines(&self, runtime: &Runtime, width: usize) -> Vec<Line<'static>> {
         let spent = runtime.budget.spent as usize;
-        let total = runtime.budget.total as usize;
+        let total = self.budget_limit(runtime) as usize;
         let bar = chrome::progress_bar(
             spent,
             total,
@@ -2426,6 +2430,17 @@ impl App {
             self.fit(vec![label], width),
             self.fit(bar_and_numbers, width),
         ]
+    }
+
+    /// The limit the budget reads. The record holds the task in flight's limit,
+    /// and holds none when no task is in flight: the configured limit stands in,
+    /// so the budget never reads `0 of 0`.
+    fn budget_limit(&self, runtime: &Runtime) -> u32 {
+        if runtime.budget.total > 0 {
+            return runtime.budget.total;
+        }
+        self.session()
+            .map_or(Config::default().round_limit, |config| config.round_limit)
     }
 
     /// The open findings, as a count and, when the record holds them, the
@@ -3916,6 +3931,34 @@ mod tests {
         let text = rows.join("\n");
         assert!(text.contains("no review in flight"), "{text}");
         assert!(text.contains("no open findings"), "{text}");
+    }
+
+    #[test]
+    fn a_run_that_is_over_claims_no_crew_size_and_its_budget_reads_the_limit() {
+        // After the run stops, the record holds no task in flight: no
+        // composition is claimed, and the budget reads the configured limit.
+        let mut runtime = runtime();
+        runtime.stamp = Stamp {
+            runs: false,
+            why: Some("queue done".to_string()),
+        };
+        runtime.round = None;
+        runtime.budget = Budget { spent: 0, total: 0 };
+        runtime.findings = 0;
+        runtime.severities = None;
+        let (rows, _) = render_runtime(100, 40, &runtime);
+        let text = rows.join("\n");
+        for says in [
+            "one per role",
+            "the reviewer reviews",
+            "the orchestrator reviews",
+            "the human reviews",
+        ] {
+            assert!(!text.contains(says), "{says}: {text}");
+        }
+        assert!(text.contains("rounds ░░░░░░░░░░ 0 of 5"), "{text}");
+        assert!(!text.contains("0 of 0"), "{text}");
+        assert!(text.contains("not running: queue done"), "{text}");
     }
 
     #[test]
