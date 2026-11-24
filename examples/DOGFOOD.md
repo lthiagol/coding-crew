@@ -97,42 +97,52 @@ it is not repeated.
 - command: `talita --project <scratch> --as ravi --role runner --session ses-ravi-scratch step done TSK02 STP-01`
 - happened: Re-run on a scratch project where `step fail TSK02 STP-01 --deviation "broke"` had just run. Exit 0, `status: "done"`. The failure's deviation text stays, but the status no longer says the step failed, and `task finish` then reads it as settled (`steps.settled` accepts `done`).
 - expected: `step done` on a failed step needs `step begin` first, the retry path in the next entry; or the status keeps a record that the step failed.
+- ruled: the human, 2026-11-24 — `step done` on a failed step is refused; the remedy names `talita step begin <TSK> <STP>` (retry) or `talita step skip <TSK> <STP> --deviation <why>`.
+- fixed: unit DF4 — `step done` on a failed step is refused with `status.wrong` (4), and the remedy names both calls.
 - severity: medium
 
 #### `task finish` refused for a failed step names `step done` with a placeholder
 - command: `talita --project examples/tidewatch --as ravi --role runner --session ses-ravi-tw task finish TSK04`
 - happened: Re-run (refused, nothing written). Exit 4, `gate.refused`: `steps.settled` ("every step must be settled"), `criteria.proven` ("ACCEPT-03 failed without a reason"), `self_round.filed`. Remedy `talita step done TSK04 <STP>`: the `<STP>` is not filled in, and `step done` is the call from the entry above. It names one gate's call; the failed criterion needs `criterion explain`.
 - expected: the remedy names the failed step and what settles it (`step skip --deviation <why>`, or a fix and `step begin`), and names the criterion's call for `criteria.proven`.
+- fixed: unit DF4 — `task finish` names one call per failing gate, with the failed step's id (`step begin` retry or `step skip --deviation`) and `criterion explain` for `criteria.proven`, with no `<STP>` when the id is known.
 - severity: medium
 
 #### A passing command with no output reads as failed, and the output gives no reason
 - command: `talita --project examples/tidewatch --as ravi --role runner --session ses-ravi-tw evidence run TSK01 ACCEPT-01`
 - happened: Not re-run (it writes). The verification `grep -q surge_limit …` exits 0 and prints nothing. Exit 0, `status: "failed"`, `output: []`. The stored evidence is `exit_code: 0`, `summary: ""`, read as a failure as task-model § 5 says. Nothing in the output says why; the next `task finish` gate says "ACCEPT-01 failed without a reason". Re-run the read: `talita --project examples/tidewatch task show TSK01 | jq '.data.task.acceptance_criteria[0].evidence[0]'`.
 - expected: the rule stays. The output says why, for example "exit 0 with no summary: pass --summary", so a caller does not explain a pass.
+- fixed: unit DF4 — the rule stays, and the run's output carries `warnings` `evidence.summary_empty` ("exit 0 with no summary is a failure: pass --summary …").
 - severity: medium
 
 #### A passing criterion keeps the failure reason from before it passed
 - command: `talita --project examples/tidewatch task show TSK01 | jq '.data.task.acceptance_criteria[0] | {status, failure_reason}'`
 - happened: Re-run (read). `status: "passed"` with `failure_reason: "grep printed nothing; exit 0 with no output counts as a failure"`. The reason came from `criterion explain`, before a later `evidence run --summary` passed the criterion.
 - expected: a passing criterion carries no failure reason, or the reason clears when a later evidence passes.
+- fixed: unit DF4 — a criterion whose passing evidence is written clears its `failure_reason`; a file already holding a reason keeps it until its next pass.
 - severity: low
 
 #### An override on a criterion that already passes marks its proof manual
 - command: `talita --project examples/quillnote task show TSK03.1 | jq '.data.task.acceptance_criteria[] | select(.id=="ACCEPT-01") | {status, last: .evidence[-1]}'`
 - happened: Re-run (read). ACCEPT-01 passed by its command. Then `evidence override TSK03.1 ACCEPT-01 --reason "manual check"` exited 0 and appended `manual: true`, `command: ""`. The criterion reads `passed`, and its last evidence is the bypass, which raul marks as manual.
 - expected: an override refused for a criterion already proven by command, since the bypass is for a criterion that cannot be proven; or the command's proof stays last.
+- ruled: the human, 2026-11-24 — an override on a criterion already passed by its command is refused; the refusal says it is already proven.
+- fixed: unit DF4 — `evidence override` on a criterion a command has passed is refused with `status.wrong` (4), "already proven by its command".
 - severity: low
 
 #### `evidence run` on a criterion with no verification names the bypass
 - command: `talita --project examples/railyard --as vic --role runner --session ses-vic-ry evidence run TSK02 ACCEPT-01` (run while ACCEPT-01 was the promoted placeholder; to reproduce, start a promoted task whose criterion still has `verification: ""`)
 - happened: Refused, exit 2, `input.invalid`: "TSK02 ACCEPT-01 has no verification to run". Remedy `talita evidence override TSK02 ACCEPT-01 --reason <why>`: a manual bypass, which the spec calls debt. The fix is `criterion revise … --verification <cmd>`.
 - expected: the remedy names `talita criterion revise TSK02 ACCEPT-01 --verification <cmd>`.
+- fixed: unit DF4 — `evidence run` on a criterion with no verification names `talita criterion revise <TSK> <ACCEPT> --verification <cmd>`, not the override.
 - severity: medium
 
 #### A promoted task's placeholder criterion has no verification, and `groom` accepts it
 - command: `talita --project examples/quillnote task show TSK07`
 - happened: Re-run (read). `item promote` made TSK07 in draft with one criterion: `ACCEPT-01`, the item's title as its description, `verification: ""`. `task groom TSK07` exited 0 (`criteria.present`). Railyard's promoted tasks began the same way; each needed `criterion revise` on ACCEPT-01 before its evidence could run.
 - expected: promotion writes no criterion, or groom refuses a criterion with no verification.
+- ruled: the human, 2026-11-24 — `task groom` refuses a criterion with no verification; `item promote`'s placeholder criterion stays.
+- fixed: unit DF4 — `task groom` refuses a criterion with no verification (`criteria.verified`), and the remedy names `talita criterion revise <TSK> <ACCEPT> --verification <cmd>`.
 - severity: medium
 
 ### Claims and concurrency

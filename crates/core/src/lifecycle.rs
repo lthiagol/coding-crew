@@ -265,6 +265,15 @@ pub fn check(
                 !task.acceptance_criteria.is_empty(),
                 "at least one acceptance criterion is required",
             );
+            // A criterion no command can prove is not yet a criterion (ADR 0019).
+            for criterion in &task.acceptance_criteria {
+                gate(
+                    &mut failures,
+                    "criteria.verified",
+                    !criterion.verification.trim().is_empty(),
+                    &format!("{} has no verification", criterion.id),
+                );
+            }
             gate(
                 &mut failures,
                 "scope.out_of_scope_declared",

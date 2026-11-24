@@ -366,13 +366,17 @@ impl AcceptanceCriterion {
     }
 
     /// Writes the stored status from the derived one (ADR 0019). A criterion
-    /// with neither evidence nor a deferral is `pending`.
+    /// with neither evidence nor a deferral is `pending`. A passing criterion
+    /// carries no failure reason: one left from an earlier failure clears.
     pub fn mirror_status(&mut self) {
         self.status = match (&self.deferral, self.evidence.last()) {
             (Some(_), _) => CriterionStatus::Deferred,
             (None, Some(evidence)) => evidence.outcome(),
             (None, None) => CriterionStatus::Pending,
         };
+        if self.status == CriterionStatus::Passed {
+            self.failure_reason.clear();
+        }
     }
 
     /// Appends evidence and mirrors the status it leaves.

@@ -6,7 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use coding_crew_core::{CriterionStatus, Status, StepStatus, Store, Task, task_to_markdown};
+use coding_crew_core::{
+    CriterionStatus, Evidence, Status, StepStatus, Store, Task, task_to_markdown,
+};
 use serde_json::{Value, json};
 
 const ENVS: [&str; 4] = [
@@ -277,6 +279,12 @@ fn evidence_run_records_the_real_exit_code_and_summary() {
         silent["data"]["criterion"]["evidence"][0]["summary"], "",
         "{silent}"
     );
+    let warning = &silent["data"]["warnings"][0];
+    assert_eq!(warning["code"], "evidence.summary_empty", "{silent}");
+    assert!(
+        warning["message"].as_str().unwrap().contains("--summary"),
+        "{silent}"
+    );
 
     // --summary stands in for the command's words; the exit code still decides.
     let given = applied(
@@ -295,6 +303,7 @@ fn evidence_run_records_the_real_exit_code_and_summary() {
         "evidence run",
     );
     assert_eq!(given["data"]["status"], "passed", "{given}");
+    assert!(given["data"]["warnings"].is_null(), "{given}");
     assert_eq!(
         given["data"]["criterion"]["evidence"][1]["summary"], "it said nothing",
         "{given}"
@@ -839,5 +848,227 @@ fn evidence_run_needs_the_working_runner_a_command_and_no_deferral() {
             .unwrap()
             .contains("ACCEPT-01"),
         "{refusal}"
+    );
+    assert_eq!(
+        refusal["error"]["remedy"],
+        format!("talita criterion revise {unverified} ACCEPT-01 --verification <cmd>"),
+        "{refusal}"
+    );
+}
+
+#[test]
+fn a_failed_step_is_retried_or_skipped_before_step_done_settles_it() {
+    let dir = project("step-failed");
+    let id = at_work(&dir, "Retry a step", &[("it works", "true")]);
+    applied(
+        talita(
+            &dir,
+            &RUNNER,
+            &["step", "fail", &id, "STP-01", "--deviation", "broke"],
+        ),
+        "step fail",
+    );
+
+    let refusal = refused(
+        talita(&dir, &RUNNER, &["step", "done", &id, "STP-01"]),
+        "step done",
+        "status.wrong",
+        4,
+    );
+    assert_eq!(
+        refusal["error"]["remedy"],
+        format!(
+            "talita step begin {id} STP-01 (retry); talita step skip {id} STP-01 --deviation <why>"
+        ),
+        "{refusal}"
+    );
+    assert_eq!(
+        read(&dir, &id).step("STP-01").expect("the step").status,
+        StepStatus::Failed,
+        "a refusal writes nothing"
+    );
+
+    // The retry path: begin, then done.
+    applied(
+        talita(&dir, &RUNNER, &["step", "begin", &id, "STP-01"]),
+        "step begin",
+    );
+    let done = applied(
+        talita(&dir, &RUNNER, &["step", "done", &id, "STP-01"]),
+        "step done",
+    );
+    assert_eq!(done["data"]["step"]["status"], "done", "{done}");
+}
+
+#[test]
+fn an_override_does_not_mask_a_criterion_the_command_proved() {
+    let dir = project("override-proven");
+    let id = at_work(&dir, "Proven by its command", &[("it works", "echo ok")]);
+    applied(
+        talita(&dir, &RUNNER, &["evidence", "run", &id, "ACCEPT-01"]),
+        "evidence run",
+    );
+
+    let refusal = refused(
+        talita(
+            &dir,
+            &RUNNER,
+            &[
+                "evidence",
+                "override",
+                &id,
+                "ACCEPT-01",
+                "--reason",
+                "manual check",
+            ],
+        ),
+        "evidence override",
+        "status.wrong",
+        4,
+    );
+    assert!(
+        refusal["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("already proven"),
+        "{refusal}"
+    );
+
+    let task = read(&dir, &id);
+    let criterion = task.criterion("ACCEPT-01").expect("the criterion");
+    assert_eq!(criterion.evidence.len(), 1, "the refusal wrote no evidence");
+    assert!(
+        !criterion.evidence[0].manual,
+        "the command's proof stays last"
+    );
+    assert_eq!(criterion.effective_status(), CriterionStatus::Passed);
+
+    // A bypass already appended after the command's proof (written before this
+    // refusal existed) does not reopen the door.
+    edit(&dir, &id, |task| {
+        task.criterion_mut("ACCEPT-01")
+            .expect("the criterion")
+            .push_evidence(Evidence {
+                command: String::new(),
+                exit_code: Some(0),
+                summary: "checked by hand".to_string(),
+                manual: true,
+                ..Evidence::default()
+            });
+    });
+    refused(
+        talita(
+            &dir,
+            &RUNNER,
+            &[
+                "evidence",
+                "override",
+                &id,
+                "ACCEPT-01",
+                "--reason",
+                "again",
+            ],
+        ),
+        "evidence override",
+        "status.wrong",
+        4,
+    );
+
+    // A later command run that fails leaves the bypass as the only proof: the
+    // criterion is no longer proven by its command, so the override is allowed
+    // again, and a second one after it is too.
+    edit(&dir, &id, |task| {
+        task.criterion_mut("ACCEPT-01")
+            .expect("the criterion")
+            .push_evidence(Evidence {
+                command: "echo ok".to_string(),
+                exit_code: Some(1),
+                summary: "broke".to_string(),
+                ..Evidence::default()
+            });
+    });
+    applied(
+        talita(
+            &dir,
+            &RUNNER,
+            &[
+                "evidence",
+                "override",
+                &id,
+                "ACCEPT-01",
+                "--reason",
+                "checked after the failure",
+            ],
+        ),
+        "evidence override",
+    );
+    applied(
+        talita(
+            &dir,
+            &RUNNER,
+            &[
+                "evidence",
+                "override",
+                &id,
+                "ACCEPT-01",
+                "--reason",
+                "and again",
+            ],
+        ),
+        "evidence override",
+    );
+}
+
+#[test]
+fn a_passing_criterion_clears_the_failure_reason_it_carried() {
+    let dir = project("reason-clears");
+    let id = at_work(&dir, "Pass after a failure", &[("it fails", "exit 3")]);
+    applied(
+        talita(&dir, &RUNNER, &["evidence", "run", &id, "ACCEPT-01"]),
+        "evidence run",
+    );
+    applied(
+        talita(
+            &dir,
+            &RUNNER,
+            &[
+                "criterion",
+                "explain",
+                &id,
+                "ACCEPT-01",
+                "--failure-reason",
+                "the tool is missing",
+            ],
+        ),
+        "criterion explain",
+    );
+
+    let passed = applied(
+        talita(
+            &dir,
+            &RUNNER,
+            &[
+                "evidence",
+                "override",
+                &id,
+                "ACCEPT-01",
+                "--reason",
+                "checked by hand",
+            ],
+        ),
+        "evidence override",
+    );
+    assert_eq!(passed["data"]["status"], "passed", "{passed}");
+    assert_eq!(
+        passed["data"]["criterion"]["failure_reason"], "",
+        "{passed}"
+    );
+    assert_eq!(
+        read(&dir, &id)
+            .criterion("ACCEPT-01")
+            .expect("the criterion")
+            .failure_reason,
+        "",
+        "the stored reason clears with the pass"
     );
 }

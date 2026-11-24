@@ -6,11 +6,12 @@
 use std::collections::BTreeMap;
 
 use coding_crew_core::lifecycle::{Event, TransitionContext, TransitionError, transition};
-use coding_crew_core::{EventKind, Status, Task};
+use coding_crew_core::{EventKind, Status, StepStatus, Task};
 use serde_json::{Value, json};
 
 use crate::envelope::Done;
 use crate::error::{Code, Failure, GateDetail};
+use crate::parts::settle_calls;
 use crate::runtime::SideEffect;
 use crate::write::{Call, NewEvent, required_text, text};
 
@@ -52,13 +53,14 @@ fn apply(
             reason: overlay_reason,
         };
         transition(task, event, actor, &ctx, &now)
-            .map_err(|error| refused(error, verb, id, event))?;
+            .map_err(|error| refused(error, verb, id, event, task))?;
 
         // `human.instructed` is the task model's gate, checked here: the flag
         // must name the human who decided (ADR 0015). The status is checked
         // first, inside `transition`, as every gate follows it.
         if matches!(event, Event::ResumeWork | Event::Reopen) && instructed_by.is_none() {
             return Err(gate_refusal(
+                task,
                 verb,
                 id,
                 vec![GateDetail {
@@ -214,7 +216,7 @@ fn data(
 }
 
 /// The failure of a refused transition, with the role or every failing gate.
-fn refused(error: TransitionError, verb: &str, id: &str, event: Event) -> Failure {
+fn refused(error: TransitionError, verb: &str, id: &str, event: Event, task: &Task) -> Failure {
     match error {
         TransitionError::WrongRole { role, .. } => Failure::new(
             Code::RoleWrong,
@@ -234,6 +236,7 @@ fn refused(error: TransitionError, verb: &str, id: &str, event: Event) -> Failur
             Failure::new(Code::TaskCancelled, format!("{id} is cancelled"))
         }
         TransitionError::Gates(failures) => gate_refusal(
+            task,
             verb,
             id,
             failures
@@ -268,12 +271,14 @@ fn human_route(id: &str, event: Event) -> String {
     }
 }
 
-fn gate_refusal(verb: &str, id: &str, gates: Vec<GateDetail>) -> Failure {
+fn gate_refusal(task: &Task, verb: &str, id: &str, gates: Vec<GateDetail>) -> Failure {
     let count = gates.len();
-    let remedy = gates
-        .first()
-        .map(|gate| gate_remedy(verb, id, gate))
-        .unwrap_or_else(|| format!("talita task show {id}"));
+    let calls = gate_remedies(task, verb, id, &gates);
+    let remedy = if calls.is_empty() {
+        format!("talita task show {id}")
+    } else {
+        calls.join("; ")
+    };
     let mut failure = Failure::new(
         Code::GateRefused,
         format!(
@@ -286,6 +291,38 @@ fn gate_refusal(verb: &str, id: &str, gates: Vec<GateDetail>) -> Failure {
     failure
 }
 
+/// The calls that clear every failing gate, in the gates' order and without
+/// repeats: the remedy is the next calls, one per gate (ADR 0014).
+fn gate_remedies(task: &Task, verb: &str, id: &str, gates: &[GateDetail]) -> Vec<String> {
+    let mut calls: Vec<String> = Vec::new();
+    for gate in gates {
+        let found = if gate.gate == "steps.settled" {
+            unsettled_step_calls(task, id)
+        } else {
+            vec![gate_remedy(verb, id, gate)]
+        };
+        for call in found {
+            if !calls.contains(&call) {
+                calls.push(call);
+            }
+        }
+    }
+    calls
+}
+
+/// The calls that settle each step not yet settled, named by its id: a failed
+/// step is retried or skipped, any other is done.
+fn unsettled_step_calls(task: &Task, id: &str) -> Vec<String> {
+    task.steps
+        .iter()
+        .filter(|s| !matches!(s.status, StepStatus::Done | StepStatus::Skipped))
+        .map(|s| match s.status {
+            StepStatus::Failed => settle_calls(id, &s.id),
+            _ => format!("talita step done {id} {}", s.id),
+        })
+        .collect()
+}
+
 /// The command that moves a failing gate forward, when one exists. A remedy
 /// names the call that unblocks, never the verb that was just refused.
 fn gate_remedy(verb: &str, id: &str, gate: &GateDetail) -> String {
@@ -295,6 +332,9 @@ fn gate_remedy(verb: &str, id: &str, gate: &GateDetail) -> String {
         "criteria.present" => {
             format!("talita criterion add {id} --description <t> --verification <t>")
         }
+        "criteria.verified" => {
+            format!("talita criterion revise {id} {criterion} --verification <cmd>")
+        }
         "scope.out_of_scope_declared" => format!("talita scope exclude {id} --item <t>"),
         "questions.resolved" => format!("talita question answer {id} <QST> --answer <t>"),
         "criteria.covered" => {
@@ -302,7 +342,6 @@ fn gate_remedy(verb: &str, id: &str, gate: &GateDetail) -> String {
         }
         "steps.done_when_present" => format!("talita step revise {id} <STP> --done-when <t>"),
         "task.claimed" => format!("talita claim take {id}"),
-        "steps.settled" => format!("talita step done {id} <STP>"),
         "criteria.proven" if gate.detail.contains("without a reason") => {
             format!("talita criterion explain {id} {criterion} --failure-reason <t>")
         }

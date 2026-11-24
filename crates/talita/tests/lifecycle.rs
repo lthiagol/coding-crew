@@ -1011,6 +1011,117 @@ fn task_finish_names_the_call_that_clears_its_gate() {
         format!("talita criterion undefer {parked} ACCEPT-01"),
         "{refusal}"
     );
+
+    // A failed step and a criterion failed without a reason: each gate's call,
+    // with the step's id where the gate's detail does not carry it.
+    let both = at_work_with_a_round(&dir, "Two gates");
+    edit(&dir, &both, |task| {
+        task.acceptance_criteria[0].verification = "false".to_string();
+        task.steps[0].status = StepStatus::Failed;
+    });
+    applied(
+        talita(&dir, &RUNNER, &["evidence", "run", &both, "ACCEPT-01"]),
+        "evidence run",
+    );
+    let refusal = refused(
+        talita(&dir, &RUNNER, &["task", "finish", &both]),
+        "task finish",
+        "gate.refused",
+        4,
+    );
+    assert_eq!(gates(&refusal), vec!["steps.settled", "criteria.proven"]);
+    assert_eq!(
+        refusal["error"]["remedy"],
+        format!(
+            "talita step begin {both} STP-01 (retry); talita step skip {both} STP-01 --deviation <why>; talita criterion explain {both} ACCEPT-01 --failure-reason <t>"
+        ),
+        "{refusal}"
+    );
+}
+
+#[test]
+fn groom_refuses_a_criterion_no_command_can_prove() {
+    let dir = project("groom-verification");
+    let id = create(&dir, "Unverified");
+    applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &["task", "describe", &id, "--outcome", "it works"],
+        ),
+        "task describe",
+    );
+    applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &["scope", "exclude", &id, "--item", "not this"],
+        ),
+        "scope exclude",
+    );
+    applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &[
+                "criterion",
+                "add",
+                &id,
+                "--description",
+                "it works",
+                "--verification",
+                "true",
+            ],
+        ),
+        "criterion add",
+    );
+    // A promoted item's placeholder carries no verification (ITM promote).
+    edit(&dir, &id, |task| {
+        task.acceptance_criteria[0].verification.clear();
+    });
+
+    let refusal = refused(
+        talita(&dir, &CREATOR, &["task", "groom", &id]),
+        "task groom",
+        "gate.refused",
+        4,
+    );
+    assert_eq!(gates(&refusal), vec!["criteria.verified"]);
+    assert_eq!(
+        refusal["error"]["gates"][0]["detail"], "ACCEPT-01 has no verification",
+        "{refusal}"
+    );
+    assert_eq!(
+        refusal["error"]["remedy"],
+        format!("talita criterion revise {id} ACCEPT-01 --verification <cmd>"),
+        "{refusal}"
+    );
+    assert_eq!(
+        read(&dir, &id).status,
+        Status::Draft,
+        "a refusal writes nothing"
+    );
+
+    applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &[
+                "criterion",
+                "revise",
+                &id,
+                "ACCEPT-01",
+                "--verification",
+                "true",
+            ],
+        ),
+        "criterion revise",
+    );
+    let done = applied(
+        talita(&dir, &CREATOR, &["task", "groom", &id]),
+        "task groom",
+    );
+    assert_eq!(done["data"]["status"], "groomed", "{done}");
 }
 
 #[test]

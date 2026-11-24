@@ -86,6 +86,23 @@ fn draft_needs_outcome_criteria_and_scope() {
     );
 
     task.scope.out_of_scope.push("no more".to_string());
+    // A criterion no command can prove is refused at groom (criteria.verified).
+    let Err(TransitionError::Gates(failures)) = transition(
+        &mut task,
+        Event::Groom,
+        &creator(),
+        &TransitionContext::default(),
+        NOW,
+    ) else {
+        panic!("a criterion with no verification must refuse groom");
+    };
+    assert_eq!(
+        failures.iter().map(|f| f.gate).collect::<Vec<_>>(),
+        vec!["criteria.verified"]
+    );
+    assert_eq!(failures[0].message, "ACCEPT-01 has no verification");
+
+    task.acceptance_criteria[0].verification = "true".to_string();
     transition(
         &mut task,
         Event::Groom,

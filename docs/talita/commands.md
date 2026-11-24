@@ -129,7 +129,7 @@ reports every failing gate, not only the first ([decision 6](decisions.md)).
 
 | Verb | Synopsis | From → to | Who | Gates | Also writes | J |
 |---|---|---|---|---|---|---|
-| `groom` | `task groom <TSK>` | draft → groomed | creator | `intent.outcome_present` · `criteria.present` · `scope.out_of_scope_declared` | — | `groomed` |
+| `groom` | `task groom <TSK>` | draft → groomed | creator | `intent.outcome_present` · `criteria.present` · `criteria.verified` (every criterion has a `verification`) · `scope.out_of_scope_declared` | — | `groomed` |
 | `approve` | `task approve <TSK> [--instructed-by <human>]` | groomed → approved | creator | `questions.resolved` · `criteria.covered` · `steps.done_when_present` (step rules skipped for a small task) | `planned_by` = acting session; freezes intent, scope, criteria | `approved` (note: `instructed by <human>`, when given) |
 | `start` | `task start <TSK>` | approved → executing | runner | `task.claimed` (holder, lease live) · `dependencies.satisfied` | — | `started` |
 | `finish` | `task finish <TSK>` | executing → code-review | runner, claim holder | `steps.settled` · `evidence.attached` · `criteria.proven` · `self_round.filed` · `task.claimed` (new on finish) | crew: builder idle | `review_requested` |
@@ -180,7 +180,7 @@ Creator, draft or groomed. Frozen after.
 | Verb | Synopsis | Who | When | Writes |
 |---|---|---|---|---|
 | `add` | `criterion add <TSK> --description <t> --verification <t>` | creator | draft, groomed | new `ACCEPT-nn`, status `pending` |
-| `revise` | `criterion revise <TSK> <ACCEPT> [--description <t>] [--verification <t>]` | creator | draft, groomed | the two fields |
+| `revise` | `criterion revise <TSK> <ACCEPT> [--description <t>] [--verification <t>]` | creator | draft, groomed | the two fields. A criterion with no verification refuses `task groom` (`criteria.verified`); its remedy is this call |
 | `remove` | `criterion remove <TSK> <ACCEPT>` | creator | draft, groomed | removes it; refuses if a step `covers` it (`criterion.covered`) — revise the step first |
 | `defer` | `criterion defer <TSK> <ACCEPT> --reason <t> --follow-up <TSK>` | working runner | executing, remediating | `deferral`, stored status `deferred`. `--follow-up` must name an existing task |
 | `undefer` | `criterion undefer <TSK> <ACCEPT>` | working runner | executing, remediating | clears `deferral`; status re-derived |
@@ -197,7 +197,7 @@ mirror from `effective_status()` on every evidence or deferral write (TM:158).
 | `revise` | `step revise <TSK> <STP> [same flags]` | same | same | the given fields; after approval `--deviation` required |
 | `remove` | `step remove <TSK> <STP>` | creator | draft, groomed | removes. After approval use `skip`: the record stays |
 | `begin` | `step begin <TSK> <STP>` | working runner | executing, remediating | `in-progress` |
-| `done` | `step done <TSK> <STP> [--deviation <t>]` | working runner | executing, remediating | `done` |
+| `done` | `step done <TSK> <STP> [--deviation <t>]` | working runner | executing, remediating | `done`. Refused on a `failed` step (`status.wrong`): `step begin` retries it, `step skip --deviation` settles it as skipped |
 | `skip` | `step skip <TSK> <STP> --deviation <t>` | working runner | executing, remediating | `skipped`; why is required |
 | `fail` | `step fail <TSK> <STP> --deviation <t>` | working runner | executing, remediating | `failed` |
 
@@ -226,11 +226,13 @@ answered with why.
 
 | Verb | Synopsis | Does |
 |---|---|---|
-| `run` | `evidence run <TSK> <ACCEPT> [--timeout <dur>] [--summary <t>]` | runs the criterion's `verification` with `sh -c` in the project root; records `command`, `exit_code`, `summary`, `at`, `by`, `session`. Summary: `--summary` if given, else the last non-empty line of output, cut to 200 chars. Output returns the exit code, the derived status and the output's last 40 lines |
-| `override` | `evidence override <TSK> <ACCEPT> --reason <t>` | appends `{command: "", exit_code: 0, summary: <reason>, manual: true, …}`. The criterion reads `passed`, marked manual in raul |
+| `run` | `evidence run <TSK> <ACCEPT> [--timeout <dur>] [--summary <t>]` | runs the criterion's `verification` with `sh -c` in the project root; records `command`, `exit_code`, `summary`, `at`, `by`, `session`. Summary: `--summary` if given, else the last non-empty line of output, cut to 200 chars. Output returns the exit code, the derived status and the output's last 40 lines. Exit 0 with no summary is `failed`, and `warnings` says so (`evidence.summary_empty`: pass `--summary`) |
+| `override` | `evidence override <TSK> <ACCEPT> --reason <t>` | appends `{command: "", exit_code: 0, summary: <reason>, manual: true, …}`. The criterion reads `passed`, marked manual in raul. Refused (`status.wrong`) on a criterion whose latest command run passed: it is already proven. A later failed run lifts the refusal |
 
 Errors: `evidence.timeout` (4; the run is still recorded, exit code absent →
-`unproven`), `criterion.deferred` (4).
+`unproven`), `criterion.deferred` (4), `status.wrong` (4) on an override of a
+command-proven criterion. `evidence run` on a criterion with no verification is
+`input.invalid` (2), and its remedy is `criterion revise … --verification <cmd>`.
 
 ## claim
 

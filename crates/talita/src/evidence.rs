@@ -7,7 +7,7 @@ use std::io;
 use std::time::Duration;
 
 use coding_crew_core::bounded::{self, Answer};
-use coding_crew_core::{Evidence, Task};
+use coding_crew_core::{CriterionStatus, Evidence, Task};
 use serde_json::json;
 
 use crate::envelope::Done;
@@ -55,7 +55,15 @@ pub fn run(
         Ok(answer) => {
             let exit_code = answer.status.code();
             let summary = cut(&summary.unwrap_or_else(|| last_spoken(&answer)));
-            record(call, id, cid, &command, exit_code, summary, tail(&answer))
+            let silent = exit_code == Some(0) && summary.trim().is_empty();
+            let mut done = record(call, id, cid, &command, exit_code, summary, tail(&answer))?;
+            if silent {
+                done.data["warnings"] = json!([{
+                    "code": "evidence.summary_empty",
+                    "message": "exit 0 with no summary is a failure: pass --summary <what it showed>",
+                }]);
+            }
+            Ok(done)
         }
         Err(error) if error.kind() == io::ErrorKind::TimedOut => {
             let summary = cut(&summary.unwrap_or_default());
@@ -85,6 +93,21 @@ pub fn manual(call: &Call, id: &str, cid: &str, reason: Option<&str>) -> Result<
         };
         if criterion.deferral.is_some() {
             return Err(deferred(id, cid));
+        }
+        // The bypass is for a criterion no command can prove. A criterion whose
+        // latest command run passed is proven, whatever bypass came after it.
+        let proven = criterion
+            .evidence
+            .iter()
+            .rev()
+            .find(|e| !e.manual)
+            .is_some_and(|e| e.outcome() == CriterionStatus::Passed);
+        if proven && criterion.effective_status() == CriterionStatus::Passed {
+            return Err(Failure::new(
+                Code::StatusWrong,
+                format!("{cid} is already proven by its command; there is nothing to override"),
+            )
+            .remedy(format!("talita task show {id}")));
         }
         let criterion = task.criterion_mut(cid).expect("checked above");
         criterion.push_evidence(Evidence {
@@ -124,7 +147,7 @@ fn plan(call: &Call, task: &Task, id: &str, cid: &str) -> Result<String, Failure
             format!("{id} {cid} has no verification to run"),
         )
         .remedy(format!(
-            "talita evidence override {id} {cid} --reason <why>"
+            "talita criterion revise {id} {cid} --verification <cmd>"
         )));
     }
     Ok(criterion.verification.clone())

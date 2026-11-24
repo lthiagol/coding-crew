@@ -261,6 +261,7 @@ fails; a refused transition carries that whole list ([ADR 0014](../decisions/001
 |---|---|---|
 | `intent.outcome_present` | `intent.outcome` is non-empty | `groom` |
 | `criteria.present` | ≥1 acceptance criterion | `groom` |
+| `criteria.verified` | every criterion has a non-empty `verification` | `groom` |
 | `scope.out_of_scope_declared` | ≥1 `scope.out_of_scope` entry | `groom` |
 | `questions.resolved` | no open question | `approve` |
 | `criteria.covered` | every criterion has ≥1 covering step | `approve` |
@@ -452,7 +453,7 @@ Evidence is attached to a criterion and is the only thing that proves it.
 | **Exit code is the truth** | `exit 0` with a non-empty summary is a pass; any other exit code is a failure; no exit code at all is `unproven` |
 | **Status is derived** | A criterion's status is the outcome of its **latest** evidence: `passed` \| `failed` \| `unproven`. No evidence ⇒ the stored `status` stands (`pending`) |
 | **A failure needs a reason** | `failure_reason` is required when a criterion is `failed`; `criteria.proven` refuses a failure without one |
-| **A manual override is evidence** | An agent may override a derived status, and the override is recorded as an evidence entry with `manual: true`. A bypass is **explicit debt**, never a silent one |
+| **A manual override is evidence** | An agent may override a derived status, and the override is recorded as an evidence entry with `manual: true`. A bypass is **explicit debt**, never a silent one. Refused on a criterion a command has passed: the command's proof stands |
 | **Evidence is per criterion** | The command proves one thing; it does not prove the next criterion |
 
 `exit 0` with an **empty** summary is a failure, not a pass: a command that ran
@@ -471,7 +472,7 @@ verified.
 | `status` | derived: `pending` \| `passed` \| `failed` \| `unproven` \| `deferred` |
 | `evidence[]` | append-only |
 | `deferral` | `{reason, follow_up}` — required when the criterion is deferred |
-| `failure_reason` | why it failed, when it did |
+| `failure_reason` | why it failed, when it did. Cleared when the criterion passes |
 
 **Steps are the actions that get there.**
 
@@ -486,6 +487,9 @@ verified.
 | `covers[]` | the acceptance criteria ids this step advances |
 | `depends_on[]` | other step ids |
 | `deviation` | set when the step was done differently than described, with why |
+
+A `failed` step is not settled: `done` is refused on it. It is retried
+(`in-progress`, then `done`) or skipped with a deviation.
 
 Steps are **guidance, not a blueprint**. The runner may add, split or drop
 steps while executing; what changed goes on the step as `deviation`, where it

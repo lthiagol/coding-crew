@@ -598,12 +598,25 @@ fn step_status(
         let Some(step) = task.step_mut(sid) else {
             return Err(part_not_found(task, sid));
         };
+        // A failure stays on the record until the step is retried or skipped.
+        if status == StepStatus::Done && step.status == StepStatus::Failed {
+            return Err(Failure::new(
+                Code::StatusWrong,
+                format!("{sid} failed: step done is refused until it is retried or skipped"),
+            )
+            .remedy(settle_calls(id, sid)));
+        }
         step.status = status;
         if let Some(deviation) = deviation {
             step.deviation = deviation;
         }
         Ok(json!({ "step": task.step(sid) }))
     })
+}
+
+/// The calls that settle a failed step: a retry, or a skip with the why.
+pub(crate) fn settle_calls(id: &str, sid: &str) -> String {
+    format!("talita step begin {id} {sid} (retry); talita step skip {id} {sid} --deviation <why>")
 }
 
 // ---- question
