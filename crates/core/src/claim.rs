@@ -125,9 +125,10 @@ pub fn claimable(task: &Task, dependency_done: Option<&dyn Fn(&str) -> bool>, no
 /// Take a claim on the task, as a runner.
 ///
 /// In `approved` the task must be claimable; an expired claim is replaced. In
-/// `executing` only an expired claim is taken over, and never a blocked task's:
-/// the new holder and session become the execution session, so the holder
-/// cannot remediate later.
+/// `executing` only an expired claim or none at all is taken over (ADR 0020:
+/// `resume` and `reopen` release the claim), and never a blocked task's: the
+/// new holder and session become the execution session, so the holder cannot
+/// remediate later.
 pub fn take(
     task: &mut Task,
     actor: &Actor,
@@ -155,13 +156,9 @@ pub fn take(
                     "the task is blocked; a blocked task's claim is not taken over".to_string(),
                 )]));
             }
-            let Some(claim) = &task.claim else {
-                return Err(ClaimError::NotClaimable(vec![gate(
-                    "claim.takeover",
-                    "there is no claim to take over".to_string(),
-                )]));
-            };
-            if !claim.lease_expired(now) {
+            if let Some(claim) = &task.claim
+                && !claim.lease_expired(now)
+            {
                 return Err(ClaimError::Held {
                     by: claim.by.clone(),
                 });
@@ -499,11 +496,33 @@ mod tests {
     }
 
     #[test]
-    fn take_in_executing_needs_a_claim_to_take_over() {
+    fn take_in_executing_takes_a_task_whose_claim_was_released() {
+        // `resume` and `reopen` release the claim; the next runner takes over.
         let mut task = approved();
         task.status = Status::Executing;
+        assert!(task.claim.is_none());
+        take(&mut task, &runner(), DEFAULT_LEASE, None, NOW).unwrap();
+        let claim = task.claim.expect("the claim");
+        assert_eq!(claim.by, "runner-1");
+        assert_eq!(claim.session.as_deref(), Some("s-runner"));
+    }
+
+    #[test]
+    fn take_in_executing_refuses_a_blocked_task_with_no_claim() {
+        let mut task = approved();
+        task.status = Status::Executing;
+        task.overlays.blocked = Some(crate::Overlay {
+            reason: "waiting on a key".to_string(),
+            by: "creator-1".to_string(),
+            at: NOW.to_string(),
+        });
         let error = take(&mut task, &runner(), DEFAULT_LEASE, None, NOW).unwrap_err();
-        assert!(matches!(error, ClaimError::NotClaimable(_)));
+        assert!(
+            matches!(&error, ClaimError::NotClaimable(failures)
+                if failures.iter().any(|failure| failure.gate == "overlay.clear")),
+            "{error:?}"
+        );
+        assert!(task.claim.is_none());
     }
 
     #[test]

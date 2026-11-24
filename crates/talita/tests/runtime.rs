@@ -1137,6 +1137,171 @@ fn claim_release_and_task_cancel_release_the_rows() {
 }
 
 #[test]
+fn resume_and_reopen_release_the_claim_and_its_rows_so_the_next_runner_takes_over() {
+    let dir = project("resume-release");
+    applied(talita(&dir, &ORCH, &["run", "start"]), "run start");
+    applied(
+        talita(
+            &dir,
+            &ORCH,
+            &[
+                "crew", "join", "runner-1", "--role", "builder", "--model", "M",
+            ],
+        ),
+        "crew join",
+    );
+    let id = create(&dir, "Needs a human");
+    groom(&dir, &id);
+    approve(&dir, &id);
+    take(&dir, &id);
+    applied(
+        talita(&dir, &ORCH, &["crew", "assign", "runner-1", &id]),
+        "crew assign",
+    );
+    // Escalation leaves the live claim and the hold in place.
+    edit(&dir, &id, |task| task.status = Status::NeedsHuman);
+
+    let resumed = applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &[
+                "task",
+                "resume",
+                &id,
+                "--instructed-by",
+                "luiz",
+                "--reason",
+                "carry on",
+            ],
+        ),
+        "task resume",
+    );
+    assert_eq!(resumed["data"]["released"], true, "{resumed}");
+    assert_eq!(
+        resumed["journal"],
+        json!(["resumed", "released"]),
+        "{resumed}"
+    );
+    assert!(task_file(&dir, &id).claim.is_none());
+    let row = crew_row(&dir, "runner-1");
+    assert!(row.get("holds").is_none(), "{row}");
+
+    // Executing with no claim: the next runner takes it over, lease unexpired.
+    take_as(&dir, &RUNNER2, &id);
+    assert_eq!(
+        task_file(&dir, &id).claim.expect("the claim").by,
+        "runner-2"
+    );
+
+    // Reopen from done releases the claim the same way.
+    edit(&dir, &id, |task| task.status = Status::Done);
+    let reopened = applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &[
+                "task",
+                "reopen",
+                &id,
+                "--instructed-by",
+                "luiz",
+                "--reason",
+                "a regression",
+            ],
+        ),
+        "task reopen",
+    );
+    assert_eq!(reopened["data"]["released"], true, "{reopened}");
+    assert_eq!(
+        reopened["journal"],
+        json!(["reopened", "released"]),
+        "{reopened}"
+    );
+    assert!(task_file(&dir, &id).claim.is_none());
+    take_as(&dir, &RUNNER, &id);
+    assert_eq!(
+        task_file(&dir, &id).claim.expect("the claim").by,
+        "runner-1"
+    );
+}
+
+#[test]
+fn an_orchestrators_row_takes_the_review_state_when_assigned_to_review() {
+    let dir = project("crew-review");
+    applied(talita(&dir, &ORCH, &["run", "start"]), "run start");
+    applied(
+        talita(
+            &dir,
+            &ORCH,
+            &[
+                "crew",
+                "join",
+                "orchestrator-1",
+                "--role",
+                "orchestrator",
+                "--model",
+                "M",
+            ],
+        ),
+        "crew join",
+    );
+    applied(
+        talita(
+            &dir,
+            &ORCH,
+            &[
+                "crew", "join", "runner-1", "--role", "builder", "--model", "M",
+            ],
+        ),
+        "crew join",
+    );
+    let id = create(&dir, "Reviewed by the orchestrator");
+    groom(&dir, &id);
+    approve(&dir, &id);
+    take(&dir, &id);
+
+    // Without --review the orchestrator's row executes, and the round is self.
+    let executing = applied(
+        talita(&dir, &ORCH, &["crew", "assign", "orchestrator-1", &id]),
+        "crew assign",
+    );
+    assert_eq!(crew_row(&dir, "orchestrator-1")["state"], "executing");
+    assert_eq!(executing["data"]["crew"][0]["state"], "executing");
+    assert_eq!(record(&dir)["round"]["stage"], "self");
+
+    // With --review it reviews, and the round is external: the pane shows it.
+    let reviewing = applied(
+        talita(
+            &dir,
+            &ORCH,
+            &["crew", "assign", "orchestrator-1", &id, "--review"],
+        ),
+        "crew assign",
+    );
+    assert_eq!(
+        reviewing["data"]["crew"][0]["state"], "reviewing",
+        "{reviewing}"
+    );
+    assert_eq!(crew_row(&dir, "orchestrator-1")["holds"], id);
+    assert_eq!(record(&dir)["round"]["stage"], "external");
+    assert_eq!(record(&dir)["round"]["number"], 1);
+
+    // A builder's row does not review.
+    refused(
+        talita(
+            &dir,
+            &ORCH,
+            &["crew", "assign", "runner-1", &id, "--review"],
+        ),
+        "crew assign",
+        "input.invalid",
+        2,
+    );
+    assert_ne!(crew_row(&dir, "runner-1")["state"], "reviewing");
+}
+
+#[test]
 fn a_task_verb_by_an_actor_with_no_row_changes_nothing() {
     let dir = project("no-row");
     applied(talita(&dir, &ORCH, &["run", "start"]), "run start");

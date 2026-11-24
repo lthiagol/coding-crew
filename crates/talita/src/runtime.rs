@@ -154,8 +154,7 @@ fn derived(mut record: Runtime, tasks: &[Task], now: &str) -> Runtime {
 
     let external = task.status == Status::Remediating
         || record.crew.iter().any(|member| {
-            member.role == FlowRole::Reviewer
-                && member.state == AgentState::Reviewing
+            member.state == AgentState::Reviewing
                 && member.holds.as_deref() == Some(task.id.as_str())
         });
     let filed = task.external_rounds() as u32;
@@ -368,7 +367,11 @@ pub fn leave(call: &Call, actor: &str) -> Result<Done, Failure> {
 }
 
 /// `crew assign`: the row holds the task, `since` now, and its role's state.
-pub fn assign(call: &Call, actor: &str, id: &str) -> Result<Done, Failure> {
+///
+/// `review` names the review state for an orchestrator's row, which reviews in
+/// the two- and one-agent crews (Q5). A reviewer's row is `reviewing` either
+/// way; a builder's never reviews.
+pub fn assign(call: &Call, actor: &str, id: &str, review: bool) -> Result<Done, Failure> {
     orchestrator(&call.actor, "crew assign")?;
     let lock = call.project.store.lock()?;
     let mut record = require(&lock)?;
@@ -379,10 +382,18 @@ pub fn assign(call: &Call, actor: &str, id: &str) -> Result<Done, Failure> {
         .iter_mut()
         .find(|member| member.actor.as_deref() == Some(actor))
         .ok_or_else(|| crew_unknown(actor))?;
+    if review && member.role == FlowRole::Builder {
+        return Err(Failure::new(
+            Code::InputInvalid,
+            "--review names a review; a builder's row does not review",
+        )
+        .remedy(format!("talita crew assign {actor} {id}")));
+    }
     member.holds = Some(task.id);
     member.since = Some(now.clone());
     member.state = match member.role {
         FlowRole::Reviewer => AgentState::Reviewing,
+        FlowRole::Orchestrator if review => AgentState::Reviewing,
         _ => AgentState::Executing,
     };
     Ok(done_crew(write(&lock, record, &now)?))

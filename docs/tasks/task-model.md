@@ -286,8 +286,7 @@ fails; a refused transition carries that whole list ([ADR 0014](../decisions/001
 | `remediation.session_distinct` | the acting session is not `claim.session`; both are recorded | `re_review` |
 | `overlay.reason_present` | a non-empty reason | `block`, `defer`, `cancel` |
 | `claim.status` | the task is `approved` (a take) | `claim take`, `claimable` |
-| `claim.held` | no live claim (the holder renews its own) | `claim take`, `claimable` |
-| `claim.takeover` | a claim exists to take over, and its lease has expired | `claim take` in `executing` |
+| `claim.held` | no live claim (the holder renews its own) | `claim take`, `claimable`; `claim take` in `executing` |
 | `overlay.clear` | no `blocked`, `deferred` or `cancelled` overlay | `claim take`, `claimable`; `claim take` in `executing` (`blocked` only) |
 
 The claim gates are the operation's, not an edge's: a refused take names each
@@ -343,7 +342,7 @@ in a session; its lease is an RFC 3339 instant.
 
 | Operation | Who | Allowed when | Writes |
 |---|---|---|---|
-| `take` | runner, in a session | claimable; or `executing` with an expired lease and no `blocked` overlay (takeover) | `claim {by, session, at, lease_expires_at}`, lease 2 h by default |
+| `take` | runner, in a session | claimable; or `executing` with no claim or an expired lease, and no `blocked` overlay (takeover) | `claim {by, session, at, lease_expires_at}`, lease 2 h by default |
 | `renew` | the holder: same actor, same session | `approved` or `executing`, claim present | `lease_expires_at` |
 | `release` | the holder | `approved` or `executing`; a reason | removes the claim |
 
@@ -356,6 +355,10 @@ in a session; its lease is an RFC 3339 instant.
   not with the gates.
 - A claim stays through `code-review`, `remediating` and `done`, and is not
   renewed there.
+- `resume` and `reopen` remove the claim, whatever its lease, and the rows
+  holding the task are released. The task is then taken over, as an
+  `executing` task with no claim ([ADR 0020](../decisions/0020-claims-and-leases.md),
+  amended 2026-11-24).
 
 ## 4. Review
 
@@ -714,8 +717,8 @@ a task verb's included, so no `claimable` is older than the last write:
 - `queue[].status` is the task file's status; `queue[].claimable` is the
   claim rule of [§ 3.6](#36-claims) applied to it.
 - `round` is present while a crew row holds a task: that task, its `stage` —
-  `external` while a reviewer row is `reviewing` it or the task is
-  `remediating`, and `self` otherwise — its `number` — the external rounds
+  `external` while a row is `reviewing` it (a reviewer's, or an orchestrator's
+  under `crew assign --review`) or the task is `remediating`, and `self` otherwise — its `number` — the external rounds
   filed plus one for `external`, `0` for `self` — and `earlier`, the external
   rounds filed on it, oldest first, with the findings each raised.
 - `budget.spent` is the round in flight's `number` for `external` — the round

@@ -41,7 +41,7 @@ with its own checks; talita's `claim` noun calls it.
 
 | Verb | Who | Allowed when | Writes |
 |---|---|---|---|
-| `claim take <TSK> [--lease 2h]` | runner | `approved` and claimable; or `executing` with an expired lease (takeover) | `claim {by, session, at, lease_expires_at}` |
+| `claim take <TSK> [--lease 2h]` | runner | `approved` and claimable; or `executing` with no claim or an expired lease, unless blocked (takeover) | `claim {by, session, at, lease_expires_at}` |
 | `claim renew <TSK> [--lease 2h]` | the holder: same actor and session | claim present | `lease_expires_at` |
 | `claim release <TSK> --reason <t>` | the holder | `approved` or `executing` | removes the claim |
 
@@ -62,10 +62,10 @@ its holder.
 
 ### After `reopen` and `resume`
 
-The task returns to `executing` with its old claim. If the lease is live and
-the holder's session continues, it works on. Otherwise a runner takes it over
-(`executing` + expired lease). The new session is the execution session from
-then on.
+The task returns to `executing` with no claim: `resume` and `reopen` remove
+it, whatever its lease ([amended 2026-11-24](#amendment-2026-11-24-resume-and-reopen-release-the-claim)).
+A runner takes the task over (`executing` with no claim). The new session is
+the execution session from then on.
 
 ### Alternatives considered
 
@@ -81,8 +81,23 @@ then on.
 
 - Settled 2026-11-22: Default lease 2 h, renewable.
 - Settled 2026-11-22: `finish` requires `task.claimed`.
-- Settled 2026-11-22: After `reopen`/`resume` the old claim stays; takeover covers a dead holder.
+- Settled 2026-11-22: After `reopen`/`resume` the old claim stays; takeover covers a dead holder. *Superseded 2026-11-24: `resume` and `reopen` now release the claim (see the amendment below).*
 - Settled 2026-11-22: The orchestrator does not release a dead builder's claim; an expired lease frees it.
+
+### Amendment 2026-11-24: `resume` and `reopen` release the claim
+
+Decided by the human, 2026-11-24 (O1 Q8). The rule above left a resumed task
+`executing` with its old claim: a live claim blocked the takeover until it
+lapsed, so a resume within two hours of the take could not be taken.
+
+- `task resume` and `task reopen` remove the task's claim, live or expired,
+  and release the crew rows holding the task. The removal is journaled as
+  `released` after the move's own event ([ADR 0018](0018-runtime-and-journal-writers.md)).
+- `claim take` in `executing` takes over a task with **no claim** as well as
+  one with an expired lease. A blocked task is still not taken over.
+- The queue's `claimable` is unchanged: it stays `approved`-only. An
+  `executing` task is taken through the orchestrator's resume path, not the
+  queue.
 
 ## Consequences
 

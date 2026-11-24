@@ -65,8 +65,15 @@ structural: the reviewer has no write access to the code.
 
 ### The orchestrator is autopilot-only, and later
 
-The orchestrator sequences and escalates; it does not execute, review or approve.
-It is not built in this pass, and no gate refers to it yet.
+The orchestrator sequences and escalates; it does not approve. Where the crew
+has a builder or a reviewer, the orchestrator leaves that part to it. Where the
+crew leaves a role out, the orchestrator acts for it: in the two-agent crew
+(orchestrator and builder) it reviews; in the one-agent crew it builds and
+reviews. The crew rule is task model § 11.2.
+
+*Amended 2026-11-24, by the human.* The earlier line said the orchestrator
+"does not execute, review or approve", which the crew rule of task model § 11.2
+(unit 70) had already overtaken.
 
 ### The alternatives, and why they lost
 

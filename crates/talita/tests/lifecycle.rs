@@ -518,9 +518,12 @@ fn every_status_a_fixture_holds_is_reached_through_talita() {
     assert_eq!(resumed["data"]["status"], "executing");
     assert_eq!(resumed["data"]["max_rounds"], 7);
     assert_eq!(read(&dir, &id).review.max_rounds, 7);
+    assert!(read(&dir, &id).claim.is_none(), "resume releases the claim");
     reached.insert("executing".to_string());
 
-    // done: the findings closed, the work finished again, a sixth round ok.
+    // done: the runner takes the resumed task again, the findings closed, the
+    // work finished again, a sixth round ok.
+    applied(talita(&dir, &RUNNER, &["claim", "take", &id]), "claim take");
     close_findings(&dir, &id);
     finish(&dir, &id);
     file_round(&dir, &id, 6, Verdict::Ok, None);

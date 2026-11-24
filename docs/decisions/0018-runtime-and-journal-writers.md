@@ -47,7 +47,7 @@ Kinds, one per act (bold = new; core's enum and raul's reader gain them):
 | **`groomed`** | `task groom` |
 | `approved` | `task approve` (note: `instructed by <human>`, when the flag is given) |
 | `claimed` | `claim take` (note on takeover: `took over from <actor>`) |
-| **`released`** | `claim release`, `task cancel` with a live claim |
+| **`released`** | `claim release`, `task cancel` with a live claim, `task resume` and `task reopen` with a claim (after their own event, 2026-11-24) |
 | **`started`** | `task start` |
 | **`round_filed`** | `round file` (note: `self` or `external n`, focus, verdict) |
 | `finding_raised` | `round file` (one per finding), `finding open` |
@@ -91,9 +91,10 @@ talita is the runtime record's only writer, as ADR 0007 asks of every file.
 | `task finish`, `task re-review` | `idle`, keeps the hold |
 | `round file` (external) | `idle`, keeps the hold |
 | `task pass-review`, `task escalate` | every row holding the task released, `idle` |
-| `claim release`, `task cancel` | rows holding the task released |
+| `claim release`, `task cancel`, `task resume`, `task reopen` | rows holding the task released |
 
-The reviewer's `reviewing` state and a remediation builder's hold have no
+The reviewer's `reviewing` state, an orchestrator's `reviewing` state under
+`crew assign --review` (2026-11-24), and a remediation builder's hold have no
 task verb behind them; the orchestrator sets them with `crew assign`.
 
 Crew rows gain `actor` (optional; hugo ignores it) so a task verb finds the
@@ -105,7 +106,7 @@ caller's row.
 |---|---|
 | `queue[].status` | the task file's status |
 | `queue[].claimable` | `approved` · no overlay · no live claim · every `depends_on` done — the same core function raul's Claimable uses |
-| `round` | present when a crew row holds a task. `task` = that task. `stage` = `external` while a reviewer row is `reviewing` it or it is `remediating`; else `self`. `number` = external rounds filed + 1 for `external`; `0` for `self` |
+| `round` | present when a crew row holds a task. `task` = that task. `stage` = `external` while a row is `reviewing` it (a reviewer's, or an orchestrator's under `crew assign --review`) or it is `remediating`; else `self`. `number` = external rounds filed + 1 for `external`; `0` for `self` |
 | `earlier[]` | the external rounds filed, oldest first; `raised` = findings that round opened |
 | `budget` | `spent` = `number` for `external`, external rounds filed for `self`; `total` = `review.max_rounds` |
 | `findings`, `severities` | open findings of the task in flight, by severity |
@@ -164,6 +165,11 @@ as the remedy. Liveness in hugo is later.
   `run start` writes a new record (the human's ruling, replacing the file's
   modification time).
 - Settled 2026-11-22: Crew `model` is the model alone; harness and effort stay in the configuration.
+- Settled 2026-11-24: `crew assign --review` names the review state for an
+  orchestrator's row, so a 2- or 1-agent crew shows its external rounds (O1 Q5).
+  The row's state is `reviewing` only by that flag; a builder's row refuses it.
+- Settled 2026-11-24: `task resume` and `task reopen` release the task's claim
+  and the rows holding it, journaled as `released` (O1 Q8; ADR 0020 amended).
 
 ## Consequences
 

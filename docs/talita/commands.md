@@ -141,15 +141,16 @@ reports every failing gate, not only the first ([decision 6](decisions.md)).
 | `request-changes` | `task request-changes <TSK>` | code-review → remediating | reviewer | `review.verdict_changes_needed` · `review.findings_exist` · `review.budget_left` · `review.independent` · `review.round_current` · `review.round_owner` | — | `changes_requested` |
 | `re-review` | `task re-review <TSK>` | remediating → code-review | runner | `review.findings_closed` · `remediation.session_distinct` | appends `review.re_reviews[] {at, after_round, by, session}`; crew: builder idle | `remediated` |
 | `escalate` | `task escalate <TSK>` | code-review → needs-human | reviewer | `review.verdict_changes_needed` · `review.budget_exhausted` · `review.independent` · `review.round_current` · `review.round_owner` | crew: holds cleared | `escalated` |
-| `resume` | `task resume <TSK> --instructed-by <human> --reason <t> [--grant-rounds <n>]` | needs-human → executing | creator | `human.instructed` (flag present) | `--grant-rounds` raises `review.max_rounds` by `n` ([decision 22](decisions.md)) | `resumed` |
-| `reopen` | `task reopen <TSK> --instructed-by <human> --reason <t>` | done → executing | creator | `human.instructed` | — | `reopened` |
+| `resume` | `task resume <TSK> --instructed-by <human> --reason <t> [--grant-rounds <n>]` | needs-human → executing | creator | `human.instructed` (flag present) | `--grant-rounds` raises `review.max_rounds` by `n` ([decision 22](decisions.md)); removes any claim; crew rows holding the task released | `resumed`, then `released` if a claim was removed |
+| `reopen` | `task reopen <TSK> --instructed-by <human> --reason <t>` | done → executing | creator | `human.instructed` | removes any claim; crew rows holding the task released | `reopened`, then `released` if a claim was removed |
 
 `review.round_current` and `review.round_owner` are defined in
 [ADR 0017](../decisions/0017-review-record.md): the latest external round was
 filed at or after the task's last entry into `code-review`, and by the acting
 session.
 `task.claimed` on `finish` is defined in
-[ADR 0020](../decisions/0020-claims-and-leases.md). `human.instructed` is in
+[ADR 0020](../decisions/0020-claims-and-leases.md); `resume` and `reopen` release
+the claim whatever its lease (ADR 0020, amended 2026-11-24). `human.instructed` is in
 TM § 3.2 but not in LC; talita checks it as "the flag names a human".
 
 Errors: `status.wrong` (4), `gate.refused` (4, `gates[]` lists each failing
@@ -246,7 +247,7 @@ command-proven criterion. `evidence run` on a criterion with no verification is
 
 | Verb | Synopsis | When | Writes | J |
 |---|---|---|---|---|
-| `take` | `claim take <TSK> [--lease <dur>]` | approved and claimable (no overlay, deps done, no live claim); or executing with an expired lease and no `blocked` overlay (takeover) | `claim {by, session, at, lease_expires_at}`; default lease 2h; crew row of this actor: holds, executing | `claimed` |
+| `take` | `claim take <TSK> [--lease <dur>]` | approved and claimable (no overlay, deps done, no live claim); or executing with no claim or an expired lease, and no `blocked` overlay (takeover) | `claim {by, session, at, lease_expires_at}`; default lease 2h; crew row of this actor: holds, executing | `claimed` |
 | `renew` | `claim renew <TSK> [--lease <dur>]` | holder (same actor and session) | `lease_expires_at` | — |
 | `release` | `claim release <TSK> --reason <t>` | holder; approved or executing | removes `claim`; crew row released | `released` |
 | `show` | `claim show <TSK>` | read | the claim and whether it is live | — |
@@ -372,7 +373,7 @@ touches a task file or the journal.
 | `run refresh` | `run refresh` | recomputes every derived field and writes the record. Repair after a crash |
 | `crew join` | `crew join <actor> --role builder\|reviewer\|orchestrator --model <m>` | new crew row `{role, model, actor, state: idle}` |
 | `crew leave` | `crew leave <actor>` | removes the row |
-| `crew assign` | `crew assign <actor> <TSK>` | `holds`, `since` now, state `executing` (builder, orchestrator) or `reviewing` (reviewer) |
+| `crew assign` | `crew assign <actor> <TSK> [--review]` | `holds`, `since` now, state `executing` (builder, orchestrator) or `reviewing` (reviewer; orchestrator with `--review`, Q5). `--review` on a builder's row is `input.invalid` (2) |
 | `crew idle` | `crew idle <actor>` | state `idle`, keeps `holds` |
 | `crew stall` | `crew stall <actor>` | state `blocked` (the agent cannot go on). Word chosen so it is not read as the task overlay |
 | `queue add` | `queue add <TSK>… [--before <TSK>]` | appends (or inserts) ids, each once; every id the run took stays. `--before` must name a queued task: one the project holds but the queue does not is `queue.not_queued` (3), remedy `queue add` of it; one the project does not hold is `task.not_found` (3) |

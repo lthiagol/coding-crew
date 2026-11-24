@@ -138,8 +138,7 @@ runner's.
 | `remediation.session_distinct` | the acting session is not `claim.session`; both are recorded | `re_review` |
 | `overlay.reason_present` | a non-empty reason | `block`, `defer`, `cancel` |
 | `claim.status` | the task is `approved` (a take) | `claim take`, `claimable` |
-| `claim.held` | no live claim (the holder renews its own) | `claim take`, `claimable` |
-| `claim.takeover` | a claim exists to take over, and its lease has expired | `claim take` in `executing` |
+| `claim.held` | no live claim (the holder renews its own) | `claim take`, `claimable`; `claim take` in `executing` |
 | `overlay.clear` | no `blocked`, `deferred` or `cancelled` overlay | `claim take`, `claimable`; `claim take` in `executing` (`blocked` only) |
 
 The claim gates are the operation's, not an edge's: a refused take names each

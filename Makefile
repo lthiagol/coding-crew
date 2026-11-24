@@ -2,7 +2,7 @@
 #
 # The gate is one command: make check
 #
-# talita is out of scope for now; there are no targets for it.
+# make install installs talita, hugo and raul.
 
 CARGO ?= $(shell command -v cargo 2>/dev/null || echo $(HOME)/.cargo/bin/cargo)
 CARGO_TARGET_DIR ?= target
@@ -43,10 +43,11 @@ hugo: ## Run hugo (TUI) on its mock runtime
 	$(CARGO) run -p $(HUGO_PKG)
 
 .PHONY: install
-install: ## Install hugo and raul from this checkout, then name the folder to add to PATH
+install: ## Install talita, hugo and raul from this checkout, then name the folder to add to PATH
+	$(CARGO) install --path crates/talita
 	$(CARGO) install --path crates/hugo
 	$(CARGO) install --path crates/raul
-	@echo "add $${CARGO_INSTALL_ROOT:-$${CARGO_HOME:-$$HOME/.cargo}}/bin to PATH: agents run hugo --skill <role>"
+	@echo "add $${CARGO_INSTALL_ROOT:-$${CARGO_HOME:-$$HOME/.cargo}}/bin to PATH: agents run talita and hugo --skill <role>"
 
 .PHONY: test test-scripts columns columns-write
 test: ## Run the test suite
@@ -54,6 +55,7 @@ test: ## Run the test suite
 
 test-scripts: ## Run the shell script tests
 	bash scripts/test-pty-sweep.sh
+	bash scripts/test-install.sh
 
 columns: ## Check the terminal-column table against its rules (writes nothing)
 	python3 scripts/generate-terminal-columns.py --check

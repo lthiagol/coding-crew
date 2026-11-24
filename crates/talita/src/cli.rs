@@ -666,12 +666,16 @@ enum CrewVerb {
         #[arg(id = "crew-actor", value_name = "ACTOR")]
         actor: String,
     },
-    /// Give an agent a task: its hold, its since, and its state.
+    /// Give an agent a task: its hold, its since, and its state. A reviewer
+    /// reviews; an orchestrator executes, or with --review reviews.
     Assign {
         #[arg(id = "crew-actor", value_name = "ACTOR")]
         actor: String,
         #[arg(value_name = "TSK")]
         id: String,
+        /// The orchestrator's row reviews the task (Q5).
+        #[arg(long)]
+        review: bool,
     },
     /// The agent is idle; it keeps its hold.
     Idle {
@@ -1078,9 +1082,12 @@ fn dispatch(talita: &Talita, caller_role: Option<String>) -> (&'static str, Resu
                 let run = writer(project_flag, identity, None);
                 ("crew leave", run(&|c| runtime::leave(c, actor)))
             }
-            CrewVerb::Assign { actor, id } => {
+            CrewVerb::Assign { actor, id, review } => {
                 let run = writer(project_flag, identity, None);
-                ("crew assign", run(&|c| runtime::assign(c, actor, id)))
+                (
+                    "crew assign",
+                    run(&|c| runtime::assign(c, actor, id, *review)),
+                )
             }
             CrewVerb::Idle { actor } => {
                 let run = writer(project_flag, identity, None);

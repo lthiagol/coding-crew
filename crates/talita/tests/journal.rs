@@ -770,14 +770,24 @@ fn escalating_resuming_and_reopening_carry_their_note() {
         ),
         "task resume",
     );
-    assert_eq!(resumed["journal"], json!(["resumed"]), "{resumed}");
-    let last = journal(&dir).events.last().cloned().expect("an event");
-    assert_eq!(last.kind, EventKind::Resumed);
-    assert_eq!(last.by, "creator");
+    // The round's claim is released with the resume (ADR 0020), after the
+    // `resumed` event; the release carries the move's reason.
     assert_eq!(
-        last.note.as_deref(),
+        resumed["journal"],
+        json!(["resumed", "released"]),
+        "{resumed}"
+    );
+    let events = journal(&dir).events;
+    let resumed_event = &events[events.len() - 2];
+    assert_eq!(resumed_event.kind, EventKind::Resumed);
+    assert_eq!(resumed_event.by, "creator");
+    assert_eq!(
+        resumed_event.note.as_deref(),
         Some("instructed by luiz: the budget is raised")
     );
+    let last = events.last().expect("an event");
+    assert_eq!(last.kind, EventKind::Released);
+    assert_eq!(last.note.as_deref(), Some("the budget is raised"));
 
     edit(&dir, &id, |task| task.status = Status::Done);
     let reopened = applied(

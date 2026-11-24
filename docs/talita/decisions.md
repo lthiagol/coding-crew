@@ -36,7 +36,7 @@ recommended. The reasoning is in the ADRs.
 | 29 | Verification timeout | 10 min, `--timeout` | [0019](../decisions/0019-evidence.md) |
 | 30 | Claim lease | 2 h, renewable | [0020](../decisions/0020-claims-and-leases.md) |
 | 31 | `task.claimed` on `finish` | yes | [0020](../decisions/0020-claims-and-leases.md) |
-| 32 | Claim after `reopen`/`resume` | old claim stays; takeover if expired | [0020](../decisions/0020-claims-and-leases.md) |
+| 32 | Claim after `reopen`/`resume` | released (2026-11-24); takeover of no claim or an expired one | [0020](../decisions/0020-claims-and-leases.md) |
 | 33 | Child tasks | `task create --parent`, `TSK03.n`, inherits nothing | [commands](commands.md) |
 | 34 | Ids past 99 | numeric sort in talita and raul | [commands](commands.md) |
 | 35 | Items in the journal | later | [0018](../decisions/0018-runtime-and-journal-writers.md) |

@@ -30,7 +30,7 @@ fn apply(
     let effect = match event {
         Event::Finish | Event::ReReview => SideEffect::Idle,
         Event::PassReview | Event::Escalate => SideEffect::ReleaseIdle,
-        Event::Cancel => SideEffect::Release,
+        Event::Cancel | Event::ResumeWork | Event::Reopen => SideEffect::Release,
         _ => SideEffect::None,
     };
     call.task_journaled_with(id, effect, |task, actor| {
@@ -84,7 +84,9 @@ fn apply(
                 })?;
         }
         // Cancel releases a live claim (ADR 0020); an expired one holds
-        // nothing and stays as the record it is.
+        // nothing and stays as the record it is. Resume and reopen release
+        // the claim whatever its lease, so the next runner takes the task
+        // fresh (ADR 0020).
         let mut released = None;
         if matches!(event, Event::Cancel) {
             let live = task
@@ -95,6 +97,8 @@ fn apply(
                 task.claim = None;
             }
             released = Some(live);
+        } else if matches!(event, Event::ResumeWork | Event::Reopen) {
+            released = Some(task.claim.take().is_some());
         }
 
         let events = events(task, event, overlay_reason, instructed_by, released);
@@ -115,7 +119,7 @@ fn events(
     released: Option<bool>,
 ) -> Vec<NewEvent> {
     let note = |kind, text: String| NewEvent::note(kind, text);
-    match event {
+    let mut events = match event {
         Event::Groom => vec![NewEvent::new(EventKind::Groomed)],
         Event::Approve => vec![instructed(EventKind::Approved, instructed_by, None)],
         Event::Start => vec![NewEvent::new(EventKind::Started)],
@@ -144,20 +148,21 @@ fn events(
             reason.unwrap_or_default().to_string(),
         )],
         Event::Undefer => vec![NewEvent::new(EventKind::Undeferred)],
-        Event::Cancel => {
-            let mut events = vec![note(
-                EventKind::Cancelled,
-                reason.unwrap_or_default().to_string(),
-            )];
-            if released == Some(true) {
-                events.push(note(
-                    EventKind::Released,
-                    reason.unwrap_or_default().to_string(),
-                ));
-            }
-            events
-        }
+        Event::Cancel => vec![note(
+            EventKind::Cancelled,
+            reason.unwrap_or_default().to_string(),
+        )],
+    };
+    // A move that released a claim journals the release after its own event
+    // (ADR 0018); the release carries the move's reason.
+    if released == Some(true) && matches!(event, Event::Cancel | Event::ResumeWork | Event::Reopen)
+    {
+        events.push(note(
+            EventKind::Released,
+            reason.unwrap_or_default().to_string(),
+        ));
     }
+    events
 }
 
 /// The event a human's decision appends (ADR 0015): its note reads
