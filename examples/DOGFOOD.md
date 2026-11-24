@@ -77,4 +77,5 @@ not re-run for this list; its entry quotes the run that hit it.
 - command: `talita --project examples/pantry journal show --task TSK06`
 - happened: every event's `by` is `creator`, `runner`, `reviewer` or `human`; jo's four resolutions and four re-reviews read `"by": "runner"`, the same as ravi's, and `ses-jo-pantry` appears zero times in `activity.json`.
 - expected: the actor id, as `claim.by`, `round.reviewer` and a note's `author` record it. ADR 0018 defers the actor and session to later; until then the record cannot say who fixed FIND-01.
+- closed: unit DF2, by ruling (the human, 2026-11-23) — the actor is not recorded. The role and the model are what matter, and the harness is an extra: `by` stays the role word, and every journal event gained an optional `model` and `harness`, from `--model`/`--harness` or `TALITA_MODEL`/`TALITA_HARNESS`. The task file still carries the actor, so FIND-01's fixer is named there, not in the journal.
 - severity: low

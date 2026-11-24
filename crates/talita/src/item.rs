@@ -291,6 +291,7 @@ pub fn promote(call: &Call, id: &str) -> Result<Done, Failure> {
         &mut journal,
         &task.id,
         &call.actor,
+        &call.ran,
         &coding_crew_core::now_rfc3339(),
         vec![NewEvent::note(
             EventKind::Created,

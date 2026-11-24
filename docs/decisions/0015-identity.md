@@ -38,10 +38,13 @@ actor on every role-gated event.
 | actor id | `--as` | `TALITA_ACTOR` | every write but `project init` |
 | role | `--role` | `TALITA_ROLE` | every write but `project init`: `creator`, `runner` (or `builder`), `reviewer`, `orchestrator`, or `human` |
 | session | `--session` | `TALITA_SESSION` | every agent write |
+| model | `--model` | `TALITA_MODEL` | optional; recorded on the call's journal events |
+| harness | `--harness` | `TALITA_HARNESS` | optional; recorded on the call's journal events |
 
 Flags beat env. A write missing a part is `identity.missing` (exit 5), never
-a default. `talita session show` prints what a call would resolve to and
-from where. Reads need no identity.
+a default. The model and the harness are optional: a write that names neither
+works, and its events carry neither (ADR 0018). `talita session show` prints
+what a call would resolve to and from where. Reads need no identity.
 
 One write needs none: `project init`. It creates `<dir>/coding-crew/work/` and
 writes no task and no journal, so there is nothing to attribute (the human's
@@ -96,8 +99,11 @@ talita task approve TSK04 --instructed-by luiz
 
 `--instructed-by` is required on `resume` and `reopen` (gate
 `human.instructed`, TM § 3.2, today unchecked in LC:318-321) and optional on
-`approve` and `question answer`. It is recorded in the journal event's note.
-Core keeps refusing a human actor on role-gated events: the human's route is
+`approve` and `question answer`. For `approve`, `resume` and `reopen`, it is
+recorded in the journal event's note. `question answer` writes it on the
+question's own `instructed_by`: questions are not journaled (ADR 0018), so the
+question is where the name can live (the human's ruling, 2026-11-23). Core
+keeps refusing a human actor on role-gated events: the human's route is
 the creator, as ADR 0007 already implies.
 
 A human may also call talita directly (`--role human`) for what core lets
@@ -127,7 +133,12 @@ talita never reads `HUGO_SESSION`. hugo renames it `HUGO_CREW` so
 - Settled 2026-11-22: No session registry; `session new` only mints.
 - Settled 2026-11-22: `HUGO_SESSION` is renamed `HUGO_CREW`.
 - Settled 2026-11-22: `planned_by` is set at `task approve`, to the approving session.
-- Settled 2026-11-22: The human's name lives in the journal note only; a task field waits until raul needs it.
+- Settled 2026-11-23: The human's name lives where the verb records it: the
+  journal's note for `approve`, `resume` and `reopen`; the question's own
+  `instructed_by` for `question answer`, since questions are not journaled.
+  Amends the line of 2026-11-22, where a task field waited until raul needed it.
+- Settled 2026-11-23: The model and the harness are identity inputs, flag over
+  env, both optional; a write's journal events carry them when it named them.
 - Settled 2026-11-23: `project init` is the one write that needs no identity;
   it writes no task and no journal.
 

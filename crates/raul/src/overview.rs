@@ -1468,6 +1468,8 @@ mod tests {
             kind: coding_crew_core::EventKind::Commented,
             task: "TSK01".to_string(),
             by: "human".to_string(),
+            model: None,
+            harness: None,
             note: Some(format!("note {n}")),
         }
     }
@@ -2326,6 +2328,8 @@ mod tests {
             kind: EventKind::Commented,
             task: "TSK01".to_string(),
             by: "human".to_string(),
+            model: None,
+            harness: None,
             note: Some(format!("note {n}")),
         };
         let work = with_activity(vec![

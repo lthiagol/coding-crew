@@ -8,11 +8,13 @@ use std::process::Command;
 
 use serde_json::Value;
 
-const ENVS: [&str; 4] = [
+const ENVS: [&str; 6] = [
     "TALITA_PROJECT",
     "TALITA_ACTOR",
     "TALITA_ROLE",
     "TALITA_SESSION",
+    "TALITA_MODEL",
+    "TALITA_HARNESS",
 ];
 
 /// A fresh, canonical scratch directory for one test.
@@ -95,12 +97,23 @@ fn session_show_resolves_flag_over_env() {
         ("TALITA_ACTOR", "env-actor"),
         ("TALITA_ROLE", "reviewer"),
         ("TALITA_SESSION", "ses-env"),
+        ("TALITA_MODEL", "env-model"),
+        ("TALITA_HARNESS", "env-harness"),
     ];
     let data = applied(
         talita(
             &dir,
             &env,
-            &["session", "show", "--as", "flag-actor", "--role", "builder"],
+            &[
+                "session",
+                "show",
+                "--as",
+                "flag-actor",
+                "--role",
+                "builder",
+                "--model",
+                "flag-model",
+            ],
         ),
         "session show",
     )["data"]
@@ -112,9 +125,17 @@ fn session_show_resolves_flag_over_env() {
     assert_eq!(data["kind"], "agent");
     assert_eq!(data["session"]["value"], "ses-env");
     assert_eq!(data["session"]["source"], "env");
+    assert_eq!(data["model"]["value"], "flag-model");
+    assert_eq!(data["model"]["source"], "flag", "the flag beats the env");
+    assert_eq!(data["harness"]["value"], "env-harness");
+    assert_eq!(data["harness"]["source"], "env");
 
     let data = applied(talita(&dir, &[], &["session", "show"]), "session show")["data"].clone();
     assert!(data["actor"].is_null() && data["role"].is_null() && data["session"].is_null());
+    assert!(
+        data["model"].is_null() && data["harness"].is_null(),
+        "an unnamed model or harness is absent: {data}"
+    );
 
     let data = applied(
         talita(&dir, &[("TALITA_ROLE", "human")], &["session", "show"]),

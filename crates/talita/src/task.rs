@@ -86,16 +86,15 @@ pub fn parse_overlay(value: &str) -> Result<&str, Failure> {
 
 /// `task create`: a new task in `draft`; with `--parent`, the child `TSKnn.m`.
 pub fn create(
-    project: &Project,
-    actor: &Actor,
+    call: &Call,
     title_value: &str,
     kind: Option<&str>,
     parent: Option<&str>,
 ) -> Result<Done, Failure> {
-    creator(actor)?;
+    creator(&call.actor)?;
     let title = title(title_value)?;
     let kind = kind.map(parse_kind).transpose()?.unwrap_or_default();
-    let lock = project.store.lock()?;
+    let lock = call.project.store.lock()?;
     let mut journal = read_journal(&lock)?;
     let mut wrote = Vec::new();
     let mut parent_task = match parent {
@@ -107,7 +106,7 @@ pub fn create(
         None => None,
     };
     let id = match &parent_task {
-        Some(p) => next_child_id(project, p)?,
+        Some(p) => next_child_id(call.project, p)?,
         None => lock.next_id()?,
     };
     let mut task = Task::new(id, title);
@@ -127,7 +126,8 @@ pub fn create(
         &lock,
         &mut journal,
         &task.id,
-        actor,
+        &call.actor,
+        &call.ran,
         &coding_crew_core::now_rfc3339(),
         vec![NewEvent::new(EventKind::Created)],
     )?;

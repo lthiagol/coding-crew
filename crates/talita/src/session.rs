@@ -26,6 +26,8 @@ pub fn show(identity: &Resolved) -> Result<Done, Failure> {
         })),
         "kind": kind,
         "session": identity.session,
+        "model": identity.model,
+        "harness": identity.harness,
     })))
 }
 

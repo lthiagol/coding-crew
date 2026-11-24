@@ -130,7 +130,7 @@ A role may not write another role's section.
 | `scope.in_scope[]` | strings | the work |
 | `scope.out_of_scope[]` | strings | the work that is explicitly **not** in this task. At least one is required to groom |
 | `depends_on[]` | ids | tasks that must be `done` before this one starts |
-| `questions[]` | `[Question]` | `{id, question, status, answer, raised_by, raised_at, resolved_by, resolved_at}` |
+| `questions[]` | `[Question]` | `{id, question, status, answer, raised_by, raised_at, resolved_by, resolved_at, instructed_by}` |
 | `notes[]` | `[Note]` | `{id, author, body, at}` — what the execution learned |
 
 ### 2.4 Identifiers
@@ -511,7 +511,8 @@ step and not a finding, but that the next task of the same shape should not
 have to rediscover. Any role may write one.
 
 **Questions** (`QST-nn`) carry what is still undecided. An open question blocks
-approval (`questions.resolved`); a resolved one keeps its answer.
+approval (`questions.resolved`); a resolved one keeps its answer and, when a
+human decided it, the human's name in `instructed_by`.
 
 ## 9. Immutability after approval
 
@@ -604,10 +605,12 @@ The file is one object with an `events` array, oldest first.
 | `kind` | one of the kinds below |
 | `task` | the task id it happened to — `TSK01` |
 | `by` | who did it: the actor's role or kind — `creator`, `runner`, `reviewer`, `human`, `orchestrator` |
+| `model` | optional; the model that ran it, when the call named one |
+| `harness` | optional; the harness that ran it, when the call named one |
 | `note` | optional, one line of free text |
 
 The kinds are settled by [ADR 0018](../decisions/0018-runtime-and-journal-writers.md).
-Nothing writes the journal yet; talita will, as a side effect of each verb.
+talita writes the journal, as a side effect of each verb.
 
 | kind | what happened |
 |---|---|
@@ -950,4 +953,4 @@ work is in `TODO.md`.
 | the journal and runtime writers | `crates/core/src/store.rs` — `ProjectLock::write_activity`, `write_runtime`; atomic, under the lock |
 | the work folder path | the store reads `coding-crew/work/`, as [ADR 0002](../decisions/0002-work-folder.md) decides; [ADR 0010](../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-crew/` folder |
 | smaller tasks (`ITM*`) | `crates/core/src/item.rs` — shaping, dismissal, promotion; `Store::promote_item` writes the item first |
-| the schema additions: `revision`, `review.re_reviews[]`, `Round.session`, `Evidence.manual`, crew `actor`, the journal kinds | `crates/core/src/task.rs`, `runtime.rs`, `activity.rs`. Optional on read; the fixtures carry them; no verb writes them yet |
+| the schema additions: `revision`, `review.re_reviews[]`, `Round.session`, `Evidence.manual`, `Question.instructed_by`, crew `actor`, the journal kinds and its `model` and `harness` | `crates/core/src/task.rs`, `runtime.rs`, `activity.rs`. Optional on read; written by the verbs that own them (crew `actor` waits for T12's runtime writer) |

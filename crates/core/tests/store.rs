@@ -384,6 +384,8 @@ fn two_writers_appending_to_the_journal_lose_no_event() {
                         kind: EventKind::Commented,
                         task: "TSK01".to_string(),
                         by: format!("writer-{writer}"),
+                        model: None,
+                        harness: None,
                         note: Some(n.to_string()),
                     });
                     lock.write_activity(&journal).expect("the journal");

@@ -1,5 +1,6 @@
-//! Identity resolution (ADR 0015): actor, role and session, each from its
-//! flag or else its env variable. Flags beat env; nothing defaults.
+//! Identity resolution (ADR 0015): actor, role, session, model and harness,
+//! each from its flag or else its env variable. Flags beat env; nothing
+//! defaults.
 
 use coding_crew_core::{Actor, Role};
 use serde::Serialize;
@@ -10,6 +11,8 @@ pub const ENV_PROJECT: &str = "TALITA_PROJECT";
 pub const ENV_ACTOR: &str = "TALITA_ACTOR";
 pub const ENV_ROLE: &str = "TALITA_ROLE";
 pub const ENV_SESSION: &str = "TALITA_SESSION";
+pub const ENV_MODEL: &str = "TALITA_MODEL";
+pub const ENV_HARNESS: &str = "TALITA_HARNESS";
 
 /// Where a value came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -85,6 +88,8 @@ pub struct Flags {
     pub actor: Option<String>,
     pub role: Option<String>,
     pub session: Option<String>,
+    pub model: Option<String>,
+    pub harness: Option<String>,
 }
 
 /// What a call resolves to, part by part. Any part may be missing.
@@ -93,6 +98,8 @@ pub struct Resolved {
     pub actor: Option<Part>,
     pub role: Option<(Part, RoleWord)>,
     pub session: Option<Part>,
+    pub model: Option<Part>,
+    pub harness: Option<Part>,
 }
 
 impl Resolved {
@@ -104,6 +111,8 @@ impl Resolved {
             actor: resolve(flags.actor.as_deref(), ENV_ACTOR),
             role,
             session: resolve(flags.session.as_deref(), ENV_SESSION),
+            model: resolve(flags.model.as_deref(), ENV_MODEL),
+            harness: resolve(flags.harness.as_deref(), ENV_HARNESS),
         })
     }
 

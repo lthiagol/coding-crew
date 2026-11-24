@@ -16,10 +16,19 @@ use crate::envelope::Done;
 use crate::error::{Code, Failure};
 use crate::project::Project;
 
-/// One write call: the project, the writer, and `--expect-revision`.
+/// The model and the harness that ran a call; both optional (ADR 0018).
+#[derive(Debug, Clone, Default)]
+pub struct Ran {
+    pub model: Option<String>,
+    pub harness: Option<String>,
+}
+
+/// One write call: the project, the writer, what ran it, and
+/// `--expect-revision`.
 pub struct Call<'a> {
     pub project: &'a Project,
     pub actor: Actor,
+    pub ran: Ran,
     pub expect_revision: Option<u32>,
 }
 
@@ -86,7 +95,15 @@ impl Call<'_> {
         task.updated = now.clone();
         lock.save(&mut task)?;
         let mut wrote = vec![work_file(&lock.task_path(&task))];
-        let kinds = append_journal(&lock, &mut journal, &task.id, &self.actor, &now, events)?;
+        let kinds = append_journal(
+            &lock,
+            &mut journal,
+            &task.id,
+            &self.actor,
+            &self.ran,
+            &now,
+            events,
+        )?;
         if !kinds.is_empty() {
             wrote.push(ACTIVITY_FILE.to_string());
         }
@@ -121,12 +138,14 @@ pub fn read_journal(lock: &ProjectLock<'_>) -> Result<Activity, Failure> {
 }
 
 /// Append a call's events to the journal and write it, atomically. Returns
-/// the kinds appended, oldest first.
+/// the kinds appended, oldest first. Every event carries the call's model and
+/// harness when it named them (ADR 0018).
 pub fn append_journal(
     lock: &ProjectLock<'_>,
     journal: &mut Activity,
     task: &str,
     actor: &Actor,
+    ran: &Ran,
     at: &str,
     events: Vec<NewEvent>,
 ) -> Result<Vec<String>, Failure> {
@@ -142,6 +161,8 @@ pub fn append_journal(
             kind: event.kind,
             task: task.to_string(),
             by: by.clone(),
+            model: ran.model.clone(),
+            harness: ran.harness.clone(),
             note: event.note,
         });
     }

@@ -74,6 +74,12 @@ pub struct ActivityEvent {
     pub task: String,
     /// The actor's role or kind: `runner`, `reviewer`, `human`, `orchestrator`.
     pub by: String,
+    /// The model that ran it, when the call named one (ADR 0018).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// The harness that ran it, when the call named one (ADR 0018).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness: Option<String>,
     /// One line of free text, when there is one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
@@ -162,6 +168,35 @@ mod tests {
         assert!(activity.events[0].note.is_none());
         assert_eq!(activity.events[1].note.as_deref(), Some("raised FIND-01"));
         assert_eq!(activity.events[1].kind.as_str(), "finding_raised");
+    }
+
+    #[test]
+    fn an_event_without_a_model_or_a_harness_reads_and_keys_neither() {
+        let event: ActivityEvent = serde_json::from_str(
+            r#"{"at": "2026-11-01T09:00Z", "kind": "created", "task": "TSK01", "by": "human"}"#,
+        )
+        .expect("an event");
+        assert!(event.model.is_none());
+        assert!(event.harness.is_none());
+        let json = serde_json::to_value(&event).expect("an event");
+        assert!(json.get("model").is_none(), "{json}");
+        assert!(json.get("harness").is_none(), "{json}");
+    }
+
+    #[test]
+    fn an_event_with_a_model_and_a_harness_round_trips() {
+        let event = ActivityEvent {
+            at: "2026-11-01T09:00Z".to_string(),
+            kind: EventKind::Completed,
+            task: "TSK01".to_string(),
+            by: "runner".to_string(),
+            model: Some("deepseek-v4.1-flash".to_string()),
+            harness: Some("opencode".to_string()),
+            note: None,
+        };
+        let text = serde_json::to_string(&event).expect("an event");
+        let read: ActivityEvent = serde_json::from_str(&text).expect("an event");
+        assert_eq!(read, event);
     }
 
     #[test]

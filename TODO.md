@@ -61,7 +61,7 @@ queue (T5 → T6 → T7 → T10 → T11 → T13, then the `examples/` dogfood) s
 after T6: T5 and T6 are closed. Since then the opencode crew (deepseek-v4.1-flash builder, glm-5.3
 reviewer, slug `oc`) fixed the macOS catalogue failure and built T7. The long-path sweep is closed. T13 is closed too: a MiniMax orchestrator on branch
 `mm/talita` (a trial of an opencode orchestrator) ran the opencode crew again — deepseek-v4.1-flash builder,
-glm-5.3 reviewer, slug `mm` — and the review was clean in one round. T10 is closed too, on the same branch and the same crew, one clean round. T11 is closed as well: the journal writer, two rounds — the review found the two-file window a failed journal write leaves, now on the record in ADR 0018, and the cancel row of `commands.md`. T8 is closed: the claims, one clean round; the crew-row side effects wait for T12. T9 is closed too: the steps at work and the evidence, two rounds — the review found the override on a deferred criterion, masked by the deferral, and a stale `--expect-revision` checked only after the command had run. The dogfood run is closed too: two sandbox projects under `examples/`, written by talita alone, and `examples/DOGFOOD.md` with nine entries. Unit T11a is closed: `task approve --instructed-by` writes the human's name into the `approved` note, and the fifth round's escalation is ruled intended (2026-11-23). Unit DF1 is closed too: the six `examples/DOGFOOD.md` entries of the run — the finish and escalate remedies, the human's route, `task list --overlay`, the readiness's `overlay.clear`, and `project init`'s identity — are fixed. Next: T12, the runtime writer. Unit 101 waits for green CI and the human's `v0.1.0`
+glm-5.3 reviewer, slug `mm` — and the review was clean in one round. T10 is closed too, on the same branch and the same crew, one clean round. T11 is closed as well: the journal writer, two rounds — the review found the two-file window a failed journal write leaves, now on the record in ADR 0018, and the cancel row of `commands.md`. T8 is closed: the claims, one clean round; the crew-row side effects wait for T12. T9 is closed too: the steps at work and the evidence, two rounds — the review found the override on a deferred criterion, masked by the deferral, and a stale `--expect-revision` checked only after the command had run. The dogfood run is closed too: two sandbox projects under `examples/`, written by talita alone, and `examples/DOGFOOD.md` with nine entries. Unit T11a is closed: `task approve --instructed-by` writes the human's name into the `approved` note, and the fifth round's escalation is ruled intended (2026-11-23). Unit DF1 is closed too: the six `examples/DOGFOOD.md` entries of the run — the finish and escalate remedies, the human's route, `task list --overlay`, the readiness's `overlay.clear`, and `project init`'s identity — are fixed. Unit DF2 is closed as well: `question answer --instructed-by` writes the human on the question's own `instructed_by`, and every journal event carries the call's optional `--model`/`--harness` (their envs too); the sandboxes' journals and task files are untouched. Next: T12, the runtime writer. Unit 101 waits for green CI and the human's `v0.1.0`
 tag.
 
 | phase | units | needs |
@@ -90,6 +90,15 @@ themes and a theme file on disk (`docs/plan.md` § Deferred).
   `coding-crew/work/` and writes no task and no journal, so there is nothing
   to attribute. It is the one write that needs none; ADR 0015 names the
   exception.
+- **The actor is not recorded** (2026-11-23, the human). The journal's `by`
+  stays the role word; the role and the model are what matter, and the harness
+  is an extra. Every event carries an optional `model` and `harness`, from
+  `--model`/`--harness` or `TALITA_MODEL`/`TALITA_HARNESS`, flag over env
+  (ADR 0018).
+- **A question's answer names its human** (2026-11-23, the human). The name
+  lives on the question's own `instructed_by`, because questions are not
+  journaled: `question answer --instructed-by` writes it. The journal's note
+  stays the home for `approve`, `resume` and `reopen` (ADR 0015).
 - **talita's design is accepted** (2026-11-22, the human). `docs/talita/` and
   ADRs 0012–0020; `docs/talita/roadmap.md` holds the build order, units
   T1–T14. T1–T4 are built in core (units 84–87), with no talita code. T5
@@ -234,11 +243,6 @@ themes and a theme file on disk (`docs/plan.md` § Deferred).
   in talita's own tests; the mock still holds no such task, because it
   changes the fixture count and raul's and hugo's pins. Add it when one of
   them must read the state.
-- 2026-11-23 · `question answer --instructed-by` accepts the flag and records
-  the name nowhere (unit T11a): ADR 0018 keeps questions out of the journal, so
-  no event's note can carry it, and ADR 0015's settled line says a task field
-  waits until raul needs it. A question for the human: whether a question's
-  answer names its human at all, and where.
 
 Grooming on 2026-11-23 placed every earlier follow-up: the buildable ones
 are in units 96–99 of `docs/plan.md`, the talita-bound ones in the units of

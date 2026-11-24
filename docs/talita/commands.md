@@ -17,6 +17,8 @@ talita [global flags] <noun> <verb> <ids…> [flags]
 | `--as <actor>` | `TALITA_ACTOR` | actor id, e.g. `builder-1`, `luiz` |
 | `--role <role>` | `TALITA_ROLE` | `creator` · `runner` (alias `builder`) · `reviewer` · `orchestrator` · `human` |
 | `--session <id>` | `TALITA_SESSION` | the working session. Required for every agent write |
+| `--model <model>` | `TALITA_MODEL` | optional. The model that runs the call; its journal events carry it |
+| `--harness <harness>` | `TALITA_HARNESS` | optional. The harness that runs the call; its journal events carry it |
 | `--expect-revision <n>` | — | refuse with `conflict.revision` unless the task's revision is `n` (ADR 0016) |
 
 - Flags beat env. Read verbs (`show`, `list`, `journal show`) need no identity.
@@ -206,7 +208,7 @@ Reorder: later. `--covers` and `--after` refuse unknown ids.
 | Verb | Synopsis | Who | Writes | J |
 |---|---|---|---|---|
 | `ask` | `question ask <TSK> --question <t>` | any | new `QST-nn`, `open`, `raised_by`, `raised_at` | — |
-| `answer` | `question answer <TSK> <QST> --answer <t> [--instructed-by <human>]` | creator | `resolved`, `answer`, `resolved_by`, `resolved_at`. Second answer: `question.resolved` (4) | — |
+| `answer` | `question answer <TSK> <QST> --answer <t> [--instructed-by <human>]` | creator | `resolved`, `answer`, `resolved_by`, `resolved_at`, `instructed_by` (the human `--instructed-by` names; a question is not journaled). Second answer: `question.resolved` (4) | — |
 
 Append-only (TM:163): no withdraw. A question that no longer applies is
 answered with why.
@@ -369,6 +371,9 @@ Errors: `run.absent` (3), `run.active` (4), `crew.unknown` (3),
 ## journal
 
 Read only. Written as a side effect of task verbs (ADR 0018).
+
+An event carries `at`, `kind`, `task`, `by` (the role word) and, when the
+call named them, `model` and `harness`; plus its `note` when the act has one.
 
 | Verb | Synopsis | Output |
 |---|---|---|

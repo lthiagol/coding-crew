@@ -265,6 +265,7 @@ fn fixture() -> Task {
                 raised_at: "2026-11-14T09:00:00Z".to_string(),
                 resolved_by: String::new(),
                 resolved_at: String::new(),
+                ..Question::default()
             },
             Question {
                 id: "QST-02".to_string(),
@@ -275,6 +276,7 @@ fn fixture() -> Task {
                 raised_at: "2026-11-14T09:05:00Z".to_string(),
                 resolved_by: "human-1".to_string(),
                 resolved_at: "2026-11-14T10:00:00Z".to_string(),
+                ..Question::default()
             },
         ],
         notes: vec![Note {
@@ -1745,6 +1747,7 @@ fn every_fixed_field_keeps_its_code_span_under_attack() {
         raised_at: ATTACK.to_string(),
         resolved_by: ATTACK.to_string(),
         resolved_at: ATTACK.to_string(),
+        ..Question::default()
     }];
     task.notes = vec![Note {
         id: ATTACK.to_string(),

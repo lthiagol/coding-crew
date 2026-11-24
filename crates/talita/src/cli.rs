@@ -13,7 +13,7 @@ use crate::identity::{Flags, Resolved};
 use crate::parts::{self, StepFields};
 use crate::project::{self, Project};
 use crate::review::RoundFlags;
-use crate::write::Call;
+use crate::write::{Call, Ran};
 use crate::{claim, evidence, item, journal, lifecycle, review, session, task};
 
 /// Task Administration, Lifecycle & Interaction Terminal Application — the CLI
@@ -36,6 +36,14 @@ struct Talita {
     /// The working session; required for every agent write [env: TALITA_SESSION].
     #[arg(long, global = true, value_name = "ID")]
     session: Option<String>,
+
+    /// The model that runs the call; optional, recorded on its journal events [env: TALITA_MODEL].
+    #[arg(long, global = true, value_name = "MODEL")]
+    model: Option<String>,
+
+    /// The harness that runs the call; optional, recorded on its journal events [env: TALITA_HARNESS].
+    #[arg(long, global = true, value_name = "HARNESS")]
+    harness: Option<String>,
 
     /// Refuse with conflict.revision unless the task's revision is N.
     #[arg(long, global = true, value_name = "N")]
@@ -621,11 +629,13 @@ enum ProjectVerb {
 }
 
 /// Global flags that take a value, for naming the command of a usage error.
-const VALUE_FLAGS: [&str; 5] = [
+const VALUE_FLAGS: [&str; 7] = [
     "--project",
     "--as",
     "--role",
     "--session",
+    "--model",
+    "--harness",
     "--expect-revision",
 ];
 
@@ -655,6 +665,8 @@ fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
         actor: talita.actor.clone(),
         role: talita.role.clone(),
         session: talita.session.clone(),
+        model: talita.model.clone(),
+        harness: talita.harness.clone(),
     };
     let identity = Resolved::from_flags(&flags);
     let project_flag = talita.project.as_deref();
@@ -973,13 +985,17 @@ fn writer<'a>(
     identity: Result<Resolved, Failure>,
     expect_revision: Option<u32>,
 ) -> impl Fn(Verb) -> Result<Done, Failure> + 'a {
-    let actor = identity.and_then(|id| id.writer());
+    let identity = identity.and_then(|id| id.writer().map(|actor| (actor, id.model, id.harness)));
     move |verb| {
-        let actor = actor.clone()?;
+        let (actor, model, harness) = identity.clone()?;
         let project = project::locate(project_flag)?;
         verb(&Call {
             project: &project,
             actor,
+            ran: Ran {
+                model: model.map(|part| part.value),
+                harness: harness.map(|part| part.value),
+            },
             expect_revision,
         })
     }
@@ -1002,15 +1018,7 @@ fn task_verb(
             parent,
         } => (
             "task create",
-            run(&|c| {
-                task::create(
-                    c.project,
-                    &c.actor,
-                    title,
-                    kind.as_deref(),
-                    parent.as_deref(),
-                )
-            }),
+            run(&|c| task::create(c, title, kind.as_deref(), parent.as_deref())),
         ),
         TaskVerb::Show { id } => ("task show", read(&|p| task::show(p, id))),
         TaskVerb::List {

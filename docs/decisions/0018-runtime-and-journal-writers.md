@@ -11,12 +11,13 @@ raul reads the journal (`activity.json`); hugo reads only the runtime record
 `TODO.md:204-217`). Both shapes are provisional and "the writer settles
 them".
 
-The journal: `{events: [{at, kind, task, by, note?}]}`, `task` required,
-nine kinds (`created … commented`, `crates/core/src/activity.rs:12-22`). No
-kind exists for groom, start, a filed round, finding resolution, resume,
-reopen or the overlays (`inv-hugo.md` § 1b). The mock derives events from
-task history, partly from notes that start "Approved by"
-(`mock-data/generate.py:1332-1407`) — a generator convention, not the model.
+The journal: `{events: [{at, kind, task, by, model?, harness?, note?}]}`,
+`task` required, nine kinds (`created … commented`,
+`crates/core/src/activity.rs:12-22`). No kind exists for groom, start, a
+filed round, finding resolution, resume, reopen or the overlays
+(`inv-hugo.md` § 1b). The mock derives events from task history, partly from
+notes that start "Approved by" (`mock-data/generate.py:1332-1407`) — a
+generator convention, not the model.
 
 The runtime record mixes two kinds of fields (`inv-hugo.md` gap 2):
 
@@ -59,6 +60,11 @@ Kinds, one per act (bold = new; core's enum and raul's reader gain them):
 | **`resumed`** · **`reopened`** | `task resume`, `task reopen` (note: instructed by, reason) |
 | **`blocked`** · **`unblocked`** · **`deferred`** · **`undeferred`** · **`cancelled`** | the overlay verbs (note: reason) |
 | `commented` | `note add`, `comment add` |
+
+Every event carries `at`, `kind`, `task` and `by`; a call that names
+`--model` or `--harness` records them on each of its events, and a note when
+the act has one. The model and the harness are optional: an event a call
+appends without them carries neither, and an older journal reads unchanged.
 
 Not journaled: content edits (intent, scope, criteria, steps, meta), questions,
 evidence, item moves, run/crew/queue verbs. The task file is their record; the
@@ -135,7 +141,11 @@ run stays `runs: true` until the next `run start`, which refuses
 
 - Settled 2026-11-22: talita owns `runtime.json`: orchestrator verbs for written fields, derived fields recomputed on every write.
 - Settled 2026-11-22: Journal kinds: one per lifecycle and review act, as listed above.
-- Settled 2026-11-22: The journal's `by` stays the role word; actor and session in events are later.
+- Settled 2026-11-23: The journal's `by` stays the role word, and the actor is
+  not recorded. The role and the model are what matter, and the harness is an
+  extra: an event carries the model and the harness when the call named them
+  (the human's ruling, replacing the line of 2026-11-22 that deferred the
+  actor and the session).
 - Settled 2026-11-22: Items are not journaled; later.
 - Settled 2026-11-22: Dead runs: `run show` reports `stale`, `run start` refuses an active record; a heartbeat is later.
 - Settled 2026-11-22: Crew `model` is the model alone; harness and effort stay in the configuration.

@@ -15,11 +15,13 @@ use coding_crew_core::{
 };
 use serde_json::{Value, json};
 
-const ENVS: [&str; 4] = [
+const ENVS: [&str; 6] = [
     "TALITA_PROJECT",
     "TALITA_ACTOR",
     "TALITA_ROLE",
     "TALITA_SESSION",
+    "TALITA_MODEL",
+    "TALITA_HARNESS",
 ];
 
 const CREATOR: [(&str, &str); 3] = [
@@ -1132,6 +1134,8 @@ fn event(at: &str, kind: EventKind, task: &str, by: &str, note: Option<&str>) ->
         kind,
         task: task.to_string(),
         by: by.to_string(),
+        model: None,
+        harness: None,
         note: note.map(str::to_string),
     }
 }
@@ -1208,16 +1212,75 @@ fn an_unreadable_journal_refuses_every_write() {
     );
 }
 
+/// The call's model and harness reach the events it appends; a flag beats its
+/// env, and a call that names neither writes neither (ADR 0018).
+#[test]
+fn a_journal_event_carries_the_model_and_the_harness_the_call_named() {
+    let dir = project("model");
+    let env = [
+        ("TALITA_ACTOR", "creator-1"),
+        ("TALITA_ROLE", "creator"),
+        ("TALITA_SESSION", "ses-creator"),
+        ("TALITA_MODEL", "env-model"),
+        ("TALITA_HARNESS", "env-harness"),
+    ];
+    applied(
+        talita(
+            &dir,
+            &env,
+            &[
+                "task",
+                "create",
+                "--title",
+                "Named",
+                "--model",
+                "flag-model",
+                "--harness",
+                "flag-harness",
+            ],
+        ),
+        "task create",
+    );
+    let last = journal(&dir).events.last().cloned().expect("an event");
+    assert_eq!(last.kind, EventKind::Created);
+    assert_eq!(last.by, "creator");
+    assert_eq!(last.model.as_deref(), Some("flag-model"), "flag over env");
+    assert_eq!(last.harness.as_deref(), Some("flag-harness"));
+
+    // The env alone reaches the event too.
+    applied(
+        talita(&dir, &env, &["task", "create", "--title", "From the env"]),
+        "task create",
+    );
+    let last = journal(&dir).events.last().cloned().expect("an event");
+    assert_eq!(last.model.as_deref(), Some("env-model"));
+    assert_eq!(last.harness.as_deref(), Some("env-harness"));
+
+    // A call that names neither carries neither, and the file keys neither.
+    applied(
+        talita(&dir, &CREATOR, &["task", "create", "--title", "Bare"]),
+        "task create",
+    );
+    let last = journal(&dir).events.last().cloned().expect("an event");
+    assert!(last.model.is_none() && last.harness.is_none(), "{last:?}");
+    let raw: Value =
+        serde_json::from_str(&fs::read_to_string(journal_path(&dir)).expect("the journal"))
+            .expect("the journal");
+    let last = raw["events"].as_array().unwrap().last().unwrap();
+    assert!(
+        last.get("model").is_none() && last.get("harness").is_none(),
+        "{last}"
+    );
+}
+
 /// The two dogfood projects' journals predate this unit: their history still
 /// reads, and this unit rewrote none of it.
 #[test]
 fn the_dogfood_journals_still_read_clean() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for name in ["pantry", "ledgerline"] {
-        let path = root
-            .join("examples")
-            .join(name)
-            .join("coding-crew/activity.json");
+        let project = root.join("examples").join(name);
+        let path = project.join("coding-crew/activity.json");
         let activity =
             Activity::read(&path).unwrap_or_else(|error| panic!("{name}'s journal: {error}"));
         assert_eq!(
@@ -1231,5 +1294,28 @@ fn the_dogfood_journals_still_read_clean() {
                 .any(|event| event.kind == EventKind::Approved),
             "{name}'s journal lost its approvals"
         );
+        for event in &activity.events {
+            assert!(
+                event.model.is_none() && event.harness.is_none(),
+                "{name}: {:?} gained a model or a harness",
+                event.kind
+            );
+        }
+
+        // The task files read too, and their questions name no human.
+        let tasks = Store::for_project(&project)
+            .list()
+            .unwrap_or_else(|error| panic!("{name}'s tasks: {error}"));
+        assert!(!tasks.is_empty(), "{name} has no tasks");
+        for task in tasks {
+            for question in &task.questions {
+                assert!(
+                    question.instructed_by.is_none(),
+                    "{name}: {} {} gained a human",
+                    task.id,
+                    question.id
+                );
+            }
+        }
     }
 }

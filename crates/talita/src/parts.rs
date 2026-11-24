@@ -659,6 +659,7 @@ pub fn answer(
         question.answer = answer;
         question.resolved_by = actor.id.clone();
         question.resolved_at = coding_crew_core::now_rfc3339();
+        question.instructed_by = instructed_by.map(str::to_string);
         Ok(json!({ "question": question, "instructed_by": instructed_by }))
     })
 }

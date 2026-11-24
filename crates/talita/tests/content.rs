@@ -1138,3 +1138,109 @@ fn each_refusal_carries_its_code_and_exit() {
         7,
     );
 }
+
+#[test]
+fn a_questions_answer_names_the_human_who_decided_it() {
+    let dir = project("question-human");
+    let id = create(&dir, "Decide the config format");
+    for question in ["TOML or JSON?", "One file or two?"] {
+        applied(
+            talita(
+                &dir,
+                &RUNNER,
+                &["question", "ask", &id, "--question", question],
+            ),
+            "question ask",
+        );
+    }
+
+    // No flag: the question names no human, and the file gains nothing.
+    let bare = applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &["question", "answer", &id, "QST-01", "--answer", "JSON"],
+        ),
+        "question answer",
+    );
+    assert!(bare["data"]["instructed_by"].is_null(), "{bare}");
+    assert!(
+        bare["data"]["question"].get("instructed_by").is_none(),
+        "{bare}"
+    );
+    let text = fs::read_to_string(file_of(&dir, &id)).expect("the task file");
+    assert!(!text.contains("instructed_by"), "{text}");
+
+    // The flag: the question carries the human, and `task show` shows it.
+    let named = applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &[
+                "question",
+                "answer",
+                &id,
+                "QST-02",
+                "--answer",
+                "One file",
+                "--instructed-by",
+                "hannah",
+            ],
+        ),
+        "question answer",
+    );
+    assert_eq!(named["data"]["instructed_by"], "hannah", "{named}");
+    assert_eq!(
+        named["data"]["question"]["instructed_by"], "hannah",
+        "{named}"
+    );
+    let shown = applied(talita(&dir, &[], &["task", "show", &id]), "task show");
+    assert_eq!(
+        shown["data"]["task"]["questions"][1]["instructed_by"], "hannah",
+        "{shown}"
+    );
+    let task = Store::for_project(&dir).load(&id).expect("the task");
+    assert_eq!(
+        task.questions[1].instructed_by.as_deref(),
+        Some("hannah"),
+        "the file does not carry the name"
+    );
+    assert!(task.questions[0].instructed_by.is_none());
+
+    // An empty flag is refused, and the question stays open.
+    applied(
+        talita(
+            &dir,
+            &RUNNER,
+            &["question", "ask", &id, "--question", "And?"],
+        ),
+        "question ask",
+    );
+    refused(
+        talita(
+            &dir,
+            &CREATOR,
+            &[
+                "question",
+                "answer",
+                &id,
+                "QST-03",
+                "--answer",
+                "x",
+                "--instructed-by",
+                "",
+            ],
+        ),
+        "question answer",
+        "input.invalid",
+        2,
+    );
+    assert!(
+        Store::for_project(&dir)
+            .load(&id)
+            .expect("the task")
+            .questions[2]
+            .status
+            == coding_crew_core::QuestionStatus::Open
+    );
+}

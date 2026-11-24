@@ -628,6 +628,10 @@ pub struct Question {
     pub resolved_by: String,
     #[serde(default)]
     pub resolved_at: String,
+    /// The human who decided it, when a human did. Questions are not
+    /// journaled, so the name lives on the question (ADR 0015).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructed_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
