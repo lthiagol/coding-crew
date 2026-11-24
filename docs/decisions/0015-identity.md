@@ -141,6 +141,10 @@ talita never reads `HUGO_SESSION`. hugo renames it `HUGO_CREW` so
   env, both optional; a write's journal events carry them when it named them.
 - Settled 2026-11-23: `project init` is the one write that needs no identity;
   it writes no task and no journal.
+- Settled 2026-11-24: hugo mints the orchestrator's session at `s` (O1 Q7, the
+  human's ruling): the tab's environment carries `TALITA_ACTOR` (the agent's
+  name in herdr), `TALITA_ROLE=orchestrator` and `TALITA_SESSION`, so the
+  agent never handles its session. `session new` still writes nothing.
 
 ## Consequences
 

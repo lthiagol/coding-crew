@@ -284,6 +284,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "coding-crew-core",
+ "coding-crew-talita",
  "coding-crew-theme",
  "crossterm",
  "ratatui",
