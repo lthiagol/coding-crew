@@ -128,7 +128,7 @@ The dogfooding path. Each waits as marked; none starts without the human's word.
 
 | # | unit | size | done when |
 |---|---|---|---|
-| O1 | **The orchestrator's job, designed** | M | docs only, as talita's design was: `docs/hugo/orchestrator.md` says what `hugo --skill orchestrator` tells the agent to do — pick the queue's next task, start builders and the reviewer, run rounds to the limit, stop for the human — which talita verbs it calls, and how herdr-crew's scripts map onto it; the human accepts it. Can start any time |
+| O1 | **The orchestrator's job, designed** | M | docs only, as talita's design was: `docs/hugo/orchestrator.md` says what `hugo --skill orchestrator` tells the agent to do — pick the queue's next task, start builders and the reviewer, run rounds to the limit, stop for the human — which talita verbs it calls, and how herdr-crew's scripts map onto it; the human accepts it. Can start any time. Drafted in [`docs/hugo/orchestrator.md`](hugo/orchestrator.md): the open questions wait on the human's rulings, Q1–Q13 |
 | O2 | **The orchestrator's job, built** ⬚ | L | hugo's orchestrator skill drives one task of a talita-managed project from `approved` to `done` with a builder and a reviewer, and hugo shows the crew, round, budget and findings from the real `runtime.json`. Needs O1 and T12 |
 | DF | **Dogfooding** ⬚ | M | this repository has its own `coding-crew/`: `talita project init`, the open plan rows become tasks, the role configs move to `coding-crew/flow/` (ADR 0011), and `TODO.md` stops being the memory; raul shows the project's own work and hugo runs a unit of it. Needs O2 |
 
