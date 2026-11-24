@@ -340,7 +340,7 @@ journaled: a journal event needs a task id (later).
 | `show` / `list` | `item show <ITM>` · `item list [--status] [--kind]` | read | |
 | `shape` | `item shape <ITM> --kind feature\|bug [--scope <t>…]` | open, kind idea | kind and scope; id unchanged |
 | `dismiss` | `item dismiss <ITM> --reason <t>` | open | `dismissed`, `dismissed_reason` |
-| `promote` | `item promote <ITM>` | open, kind feature or bug | item `promoted`, `promoted_to`; new task in `draft` with one criterion (item first, then task). J on the new task: `created`, note `from ITM<nn>` |
+| `promote` | `item promote <ITM> [--parent <TSK>]` | open, kind feature or bug | item `promoted`, `promoted_to`; new task in `draft` with one criterion (item first, then task). With `--parent`, the task is the child `TSK<nn>.<m>`: `parent` set, the parent's `children[]` extended, and the parent refused as `task create --parent` refuses it (`task.cancelled`, `task.not_found`). Journal on the new task: `created`, note `from ITM<nn>` |
 
 Errors: `item.not_open` (4), `item.is_idea` (4, remedy: shape it first),
 `item.already_shaped` (4), `item.not_found` (3).

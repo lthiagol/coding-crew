@@ -167,6 +167,7 @@ it is not repeated.
 - command: `talita --project examples/railyard --as nell --role creator --session ses-nell-ry item promote ITM10 --parent TSK02`
 - happened: Re-run (usage error, nothing written). Exit 2: "unexpected argument '--parent'", with clap's tip "a similar argument exists: '--project'". Adopting TODO.md's "Write the config reader's tests", a child of the cap task, left ITM10 open: the child had to come from `task create --parent TSK02`, and nothing links it to the item.
 - expected: `item promote --parent <TSK>`, or the child's `created` event names `from ITM10`, as a top-level promotion's does.
+- fixed: unit DF6 — `item promote <ITM> --parent <TSK>` makes the task the child `TSK<nn>.<m>` under `task create --parent`'s gates (a cancelled parent is `task.cancelled`, a missing one `task.not_found`); the child's `created` event reads `from <ITM>`.
 - severity: medium
 
 ### Runtime and reads

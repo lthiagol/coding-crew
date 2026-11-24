@@ -220,6 +220,87 @@ fn an_idea_is_shaped_and_promoted_into_a_draft_task() {
 }
 
 #[test]
+fn a_feature_promoted_with_a_parent_becomes_the_parents_child() {
+    let dir = project("promote-parent");
+    let c = &CREATOR;
+    applied(
+        talita(&dir, c, &["task", "create", "--title", "Cap task"]),
+        "task create",
+    );
+    let first = create(&dir, "Write the config reader's tests", "feature");
+    assert_eq!(first, "ITM01");
+
+    let promoted = applied(
+        talita(&dir, c, &["item", "promote", &first, "--parent", "TSK01"]),
+        "item promote",
+    );
+    assert_eq!(promoted["data"]["item"]["promoted_to"], "TSK01.1");
+    assert_eq!(promoted["data"]["task"]["id"], "TSK01.1");
+    assert_eq!(promoted["data"]["task"]["status"], "draft");
+    assert_eq!(promoted["data"]["task"]["parent"], "TSK01");
+    assert_eq!(promoted["data"]["task"]["promoted_from"], "ITM01");
+    assert_eq!(
+        promoted["wrote"],
+        json!([
+            "work/ITM01-write-the-config-reader-s-tests.json",
+            "work/TSK01.1-write-the-config-reader-s-tests.json",
+            "work/TSK01-cap-task.json",
+            "activity.json"
+        ]),
+        "the item, the child, the parent, then the journal"
+    );
+
+    let child = applied(talita(&dir, &[], &["task", "show", "TSK01.1"]), "task show");
+    assert_eq!(child["data"]["task"]["parent"], "TSK01");
+    assert_eq!(child["data"]["task"]["promoted_from"], "ITM01");
+    assert_eq!(child["data"]["task"]["notes"][0]["body"], "from ITM01");
+    let parent = applied(talita(&dir, &[], &["task", "show", "TSK01"]), "task show");
+    assert_eq!(parent["data"]["task"]["children"], json!(["TSK01.1"]));
+
+    // The next child takes the next number, as `task create --parent` does.
+    let second = create(&dir, "Fix the reader", "bug");
+    applied(
+        talita(&dir, c, &["item", "promote", &second, "--parent", "TSK01"]),
+        "item promote",
+    );
+    let parent = applied(talita(&dir, &[], &["task", "show", "TSK01"]), "task show");
+    assert_eq!(
+        parent["data"]["task"]["children"],
+        json!(["TSK01.1", "TSK01.2"])
+    );
+
+    // A cancelled parent and a missing one refuse before anything is written.
+    let third = create(&dir, "Third", "feature");
+    applied(
+        talita(
+            &dir,
+            &HUMAN,
+            &["task", "cancel", "TSK01", "--reason", "dropped"],
+        ),
+        "task cancel",
+    );
+    refused(
+        talita(&dir, c, &["item", "promote", &third, "--parent", "TSK01"]),
+        "item promote",
+        "task.cancelled",
+        4,
+    );
+    refused(
+        talita(&dir, c, &["item", "promote", &third, "--parent", "TSK09"]),
+        "item promote",
+        "task.not_found",
+        3,
+    );
+    let shown = applied(talita(&dir, &[], &["item", "show", &third]), "item show");
+    assert_eq!(shown["data"]["item"]["status"], "open");
+    let parent = applied(talita(&dir, &[], &["task", "show", "TSK01"]), "task show");
+    assert_eq!(
+        parent["data"]["task"]["children"],
+        json!(["TSK01.1", "TSK01.2"])
+    );
+}
+
+#[test]
 fn each_item_refusal_carries_its_code_and_exit() {
     let dir = project("refusals");
     let c = &CREATOR;

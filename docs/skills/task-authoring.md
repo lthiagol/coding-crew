@@ -246,7 +246,7 @@ is a flag.
 | `talita task groom <TSK>` | `draft → groomed` |
 | `talita task approve <TSK> [--instructed-by <human>]` | `groomed → approved`; sets `planned_by` |
 | `talita task block <TSK> --reason <t>` · `talita task unblock <TSK>` · `talita task defer <TSK> --reason <t>` · `talita task undefer <TSK>` · `talita task cancel <TSK> --reason <t>` | the overlays |
-| `talita item create --kind idea\|feature\|bug --title <t> [--body <t>] [--scope <t>…] [--tag <t>…]` · `talita item shape <ITM> --kind feature\|bug [--scope <t>…]` · `talita item dismiss <ITM> --reason <t>` · `talita item promote <ITM>` | a smaller task, before it is a task |
+| `talita item create --kind idea\|feature\|bug --title <t> [--body <t>] [--scope <t>…] [--tag <t>…]` · `talita item shape <ITM> --kind feature\|bug [--scope <t>…]` · `talita item dismiss <ITM> --reason <t>` · `talita item promote <ITM> [--parent <TSK>]` | a smaller task, before it is a task |
 
 A text flag takes `@<path>` to read a file, `@-` for stdin. `--expect-revision
 <n>` refuses the write when the task has moved since you read it.

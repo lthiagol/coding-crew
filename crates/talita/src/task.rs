@@ -167,7 +167,7 @@ pub fn create(
 }
 
 /// One past the highest child number the parent lists or the folder holds.
-fn next_child_id(project: &Project, parent: &Task) -> Result<String, Failure> {
+pub fn next_child_id(project: &Project, parent: &Task) -> Result<String, Failure> {
     let prefix = format!("{}.", parent.id);
     let mut highest = 0u32;
     let number = |id: &str| id.strip_prefix(&prefix).and_then(|n| n.parse::<u32>().ok());

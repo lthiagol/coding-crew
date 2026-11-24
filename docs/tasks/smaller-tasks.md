@@ -75,6 +75,10 @@ A promoted small task becomes a task in `draft`:
 | `kind` | `feature` or `bug` |
 | `promoted_from` | the item's id |
 
+With `--parent <TSK>` the task is a child, `TSK<nn>.<m>`: `parent` is set and the
+parent lists it in `children[]`. The parent passes the gates of `task create
+--parent`, so a cancelled parent refuses the promotion, and nothing is written.
+
 No gate is weakened. The promoted task is **checkable, not pre-groomed**: the
 verification, the out-of-scope entries and the steps are the task's own life,
 exactly as for any task.

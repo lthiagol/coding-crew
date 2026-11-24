@@ -604,8 +604,12 @@ enum ItemVerb {
         #[arg(long)]
         reason: String,
     },
-    /// Turn it into a task in draft.
-    Promote { id: String },
+    /// Turn it into a task in draft; with --parent, the child TSKnn.m.
+    Promote {
+        id: String,
+        #[arg(long, value_name = "TSK")]
+        parent: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1294,7 +1298,10 @@ fn item_verb(
         ItemVerb::Dismiss { id, reason } => {
             ("item dismiss", run(&|c| item::dismiss(c, id, reason)))
         }
-        ItemVerb::Promote { id } => ("item promote", run(&|c| item::promote(c, id))),
+        ItemVerb::Promote { id, parent } => (
+            "item promote",
+            run(&|c| item::promote(c, id, parent.as_deref())),
+        ),
     }
 }
 

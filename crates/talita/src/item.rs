@@ -12,8 +12,10 @@ use crate::envelope::Done;
 use crate::error::{Code, Failure};
 use crate::project::Project;
 use crate::runtime;
+use crate::task::next_child_id;
 use crate::write::{
-    Call, NewEvent, append_journal, read_journal, required_text, text, title, work_file,
+    Call, NewEvent, append_journal, read_journal, refuse_cancelled, required_text, text, title,
+    work_file,
 };
 
 /// The creator agent, or the refusal. Every item write is the creator's.
@@ -267,8 +269,9 @@ pub fn dismiss(call: &Call, id: &str, reason: &str) -> Result<Done, Failure> {
 }
 
 /// `item promote`: the item is written first, then the task, so a crash
-/// cannot produce two tasks from one item.
-pub fn promote(call: &Call, id: &str) -> Result<Done, Failure> {
+/// cannot produce two tasks from one item. With `--parent`, the task is the
+/// child `TSKnn.m`, under the gates `task create --parent` applies.
+pub fn promote(call: &Call, id: &str, parent: Option<&str>) -> Result<Done, Failure> {
     creator(&call.actor, "item promote")?;
     let lock = call.project.store.lock()?;
     let mut journal = read_journal(&lock)?;
@@ -286,9 +289,24 @@ pub fn promote(call: &Call, id: &str) -> Result<Done, Failure> {
         )
         .remedy(format!("talita item shape {id} --kind feature")));
     }
+    let mut parent_task = match parent {
+        Some(parent_id) => {
+            let task = lock.load(parent_id)?;
+            refuse_cancelled(&task)?;
+            Some(task)
+        }
+        None => None,
+    };
+    let task_id = match &parent_task {
+        Some(p) => next_child_id(call.project, p)?,
+        None => lock.next_id()?,
+    };
     let mut task = item
-        .promote(lock.next_id()?)
+        .promote(task_id)
         .map_err(|error| item_failure(id, error))?;
+    if let Some(p) = &parent_task {
+        task.parent = Some(p.id.clone());
+    }
     task.notes.push(Note {
         id: "NOTE-01".to_string(),
         author: call.actor.id.clone(),
@@ -299,6 +317,12 @@ pub fn promote(call: &Call, id: &str) -> Result<Done, Failure> {
     lock.save_item(&item)?;
     lock.save(&mut task)?;
     let mut wrote = vec![item_path, work_file(&lock.task_path(&task))];
+    if let Some(p) = &mut parent_task {
+        p.children.push(task.id.clone());
+        p.updated = coding_crew_core::now_rfc3339();
+        lock.save(p)?;
+        wrote.push(work_file(&lock.task_path(p)));
+    }
     let now = coding_crew_core::now_rfc3339();
     let kinds = append_journal(
         &lock,
@@ -326,6 +350,7 @@ pub fn promote(call: &Call, id: &str) -> Result<Done, Failure> {
                 "status": task.status.as_str(),
                 "kind": task.kind.as_str(),
                 "promoted_from": task.promoted_from,
+                "parent": task.parent,
             },
         }),
         wrote,
