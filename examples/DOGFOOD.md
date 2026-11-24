@@ -185,6 +185,7 @@ it is not repeated.
 - command: `talita --project examples/tidewatch task list --lane human --needs-you`
 - happened: Re-run (read). Exit 2, "unexpected argument '--lane'". Clap's tip: "a similar argument exists: '--harness'". `talita --help` shows no `lane` noun, and `talita task list --help` no such flags. The § task table (commands.md:99) lists `--lane` and `--needs-you` without saying they are not built; the header at commands.md:3 says so. A caller who reads only the table reaches for them. The gap is recorded in TODO.md's follow-ups (2026-11-23, T6 review D2).
 - expected: the § task table marks `--lane`, `--needs-you` and the `lane` noun as not built, as the header does.
+- fixed: unit F2 — `task list --lane` and `--needs-you` are built, and `task show` fills `derived.lane` and `derived.review_state`; the command above exits 0.
 - severity: low
 
 #### `talita re-review` at the top level
