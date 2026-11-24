@@ -4789,6 +4789,24 @@ mod tests {
         }
     }
 
+    /// A scratch tool that answers `answer` only once the test releases it:
+    /// it waits for the `release` file beside it.
+    fn held_tool(name: &str, answer: &str) -> std::path::PathBuf {
+        let script = format!(
+            "#!/bin/sh\n\
+             dir=$(dirname \"$0\")\n\
+             while [ ! -e \"$dir/release\" ]; do sleep 0.01; done\n\
+             echo {answer}\n"
+        );
+        crate::catalog::scratch_tool(name, &script)
+    }
+
+    /// Let a held tool answer.
+    fn release(tool: &std::path::Path) {
+        let dir = tool.parent().expect("the scratch folder");
+        fs::write(dir.join("release"), "").expect("the release");
+    }
+
     /// A window on the orchestrator's model row, reading its catalogue from `tool`
     /// in place of the harness's own list.
     fn on_orchestrator_with(tool: &std::path::Path) -> App {
@@ -4808,7 +4826,7 @@ mod tests {
     fn enter_opens_the_choice_before_the_catalogue_is_read() {
         // The catalogue is a subprocess: the choice opens at once and the list
         // lands when the tool answers. The window is never held on the tool.
-        let tool = crate::catalog::scratch_tool("app-reading", "#!/bin/sh\nsleep 0.3\necho p/m0\n");
+        let tool = held_tool("app-reading", "p/m0");
         let mut window = on_orchestrator_with(&tool);
         assert_eq!(
             window.on_key(press(KeyCode::Enter)),
@@ -4828,6 +4846,7 @@ mod tests {
         // The keys are still read while the tool runs: quit is one of them.
         assert_eq!(window.on_key(press(KeyCode::Char('q'))), Action::Quit);
 
+        release(&tool);
         wait_for_catalog(&mut window);
         let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
         assert!(
@@ -4919,7 +4938,7 @@ mod tests {
 
     #[test]
     fn a_catalogue_that_lands_after_esc_does_not_reopen_the_choice() {
-        let tool = crate::catalog::scratch_tool("app-late", "#!/bin/sh\nsleep 0.2\necho p/m0\n");
+        let tool = held_tool("app-late", "p/m0");
         let mut window = on_orchestrator_with(&tool);
         window.on_key(press(KeyCode::Enter));
         assert!(window.catalog_pending());
@@ -4929,6 +4948,8 @@ mod tests {
             !window.catalog_pending(),
             "the read outlived the choice it was opened for"
         );
+        // Let the tool finish, so it does not spin on after the test.
+        release(&tool);
         let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
     }
 
@@ -5152,8 +5173,7 @@ mod tests {
         // then: the read is not abandoned and no model is saved. Once the list
         // is in, enter picks.
         let home = scratch("choice-enter-reading");
-        let tool =
-            crate::catalog::scratch_tool("app-enter-reading", "#!/bin/sh\nsleep 0.5\necho p/m0\n");
+        let tool = held_tool("app-enter-reading", "p/m0");
         let mut window = on_orchestrator_with(&tool);
         window.home = Some(home.clone());
         window.on_key(press(KeyCode::Enter));
@@ -5172,6 +5192,10 @@ mod tests {
         );
         assert!(window.catalog_pending(), "enter abandoned the read");
         assert!(
+            !window.poll_choice(),
+            "the read answered before the test released it"
+        );
+        assert!(
             !config::config_path(&home).exists(),
             "enter picked while the catalogue was read"
         );
@@ -5185,6 +5209,7 @@ mod tests {
             !footer.contains("pick"),
             "the footer offers a dead key: {footer}"
         );
+        release(&tool);
         wait_for_catalog(&mut window);
         let (rows, _) = render_app(&mut window, 100, 40, &RuntimeRead::Absent);
         assert!(text_of(&rows).contains("pick"), "{}", text_of(&rows));
@@ -5203,6 +5228,7 @@ mod tests {
             "the pick wrote the configuration"
         );
         let _ = fs::remove_dir_all(&home);
+        let _ = fs::remove_dir_all(tool.parent().expect("the scratch folder"));
     }
 
     #[test]
