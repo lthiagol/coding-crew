@@ -408,8 +408,10 @@ the work that was done.
 
 ### 4.3 The round budget
 
-`review.max_rounds` is `5` and counts **external** rounds. Self-review is a
-pre-screen and does not consume it.
+`review.max_rounds` is `5` and counts **external** rounds. For an external round
+the round in flight counts, so a budget read while a round is open shows that
+round spent; at a self stage it counts the external rounds filed. Self-review
+is a pre-screen and never consumes the budget ([ADR 0018](../decisions/0018-runtime-and-journal-writers.md)).
 
 Five external rounds with work still outstanding and the task is `needs-human`.
 The loop is bounded so that a task cannot be approved by the same kind of
@@ -584,7 +586,7 @@ lives in the project it describes, next to the code it is about.
 The store is **discovered**, not configured: from any path, walk up until a
 `coding-crew` folder appears.
 
-### 11.1 The journal (provisional)
+### 11.1 The journal
 
 ```
 <project>/coding-crew/
@@ -638,7 +640,7 @@ talita writes the journal, as a side effect of each verb.
 Each event names a task and covers a step the lifecycle already has; the kinds
 add no state.
 
-### 11.2 The runtime record (provisional)
+### 11.2 The runtime record
 
 ```
 <project>/coding-crew/
@@ -710,9 +712,9 @@ a task verb's included, so no `claimable` is older than the last write:
   `remediating`, and `self` otherwise — its `number` — the external rounds
   filed plus one for `external`, `0` for `self` — and `earlier`, the external
   rounds filed on it, oldest first, with the findings each raised.
-- `budget.spent` is the `number` for `external` and the external rounds filed
-  for `self`; `total` is the task's `review.max_rounds`. Self rounds never
-  consume the budget.
+- `budget.spent` is the round in flight's `number` for `external` — the round
+  in flight counts — and the external rounds filed for `self`; `total` is the
+  task's `review.max_rounds`. Self rounds never consume the budget.
 - `findings` and `severities` are the task in flight's open findings.
 
 With no task in flight there is no `round`, the budget is
@@ -923,7 +925,7 @@ when it changes, so an id in a doc is a fact that goes stale.
 | an approved task | criteria covered by steps, every step with a `done_when` |
 | an approved task whose dependencies are done | **claimable** — the one thing an agent could take right now |
 | an executing task | claimed with a lease, evidence attached, a `deviation` on the step, a note |
-| a task with a deferred criterion | `status` `deferred`, a `deferral` with a `follow_up` |
+| a task with a deferred criterion | the criterion's `status` `deferred`, with a `deferral` and a `follow_up`; the task is `executing` |
 | a task in code review | a `self` round (`ok`) then an `external` round (`changes-needed`) with findings still open |
 | a task in remediation | a `self` round (`ok`) then an `external` round (`changes-needed`) |
 | a task needing a human | five external rounds spent, work still outstanding |
@@ -951,7 +953,7 @@ work is in `TODO.md`.
 
 | | |
 |---|---|
-| **Not talita's command surface** | the verbs, their flags and their output are not defined yet |
+| **Not talita's command surface** | that is [talita/commands.md](../talita/commands.md) |
 | **Not raul's screens** | the tabs, the columns and the key bindings are not defined yet |
 | **Not the smaller-task model** | that is [smaller-tasks.md](smaller-tasks.md) |
 | **Not the role model** | that is [roles/roles.md](../roles/roles.md) |
@@ -962,10 +964,11 @@ work is in `TODO.md`.
 
 **Not defined yet:**
 
-- talita's operation surface
 - autopilot
-- the runtime record's writer — the record is provisional (§ 11.2)
 - the configuration's writer — the configuration is provisional (§ 11.3)
+
+talita's operation surface is [talita/commands.md](../talita/commands.md); the
+journal and the runtime record are talita's to write (ADR 0018).
 
 **Specified here, now in `crates/core`:**
 
@@ -982,4 +985,4 @@ work is in `TODO.md`.
 | the journal and runtime writers | `crates/core/src/store.rs` — `ProjectLock::write_activity`, `write_runtime`; atomic, under the lock |
 | the work folder path | the store reads `coding-crew/work/`, as [ADR 0002](../decisions/0002-work-folder.md) decides; [ADR 0010](../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-crew/` folder |
 | smaller tasks (`ITM*`) | `crates/core/src/item.rs` — shaping, dismissal, promotion; `Store::promote_item` writes the item first |
-| the schema additions: `revision`, `review.re_reviews[]`, `Round.session`, `Evidence.manual`, `Question.instructed_by`, crew `actor`, the record's `updated_at`, the journal kinds and its `model` and `harness` | `crates/core/src/task.rs`, `runtime.rs`, `activity.rs`. Optional on read; written by the verbs that own them (crew `actor` waits for T12's runtime writer) |
+| the schema additions: `revision`, `review.re_reviews[]`, `Round.session`, `Evidence.manual`, `Question.instructed_by`, crew `actor`, the record's `updated_at`, the journal kinds and its `model` and `harness` | `crates/core/src/task.rs`, `runtime.rs`, `activity.rs`. Optional on read; each is written by the verb that owns it: `revision` by every task write, `review.re_reviews[]` by `task re-review`, `Round.session` by `round file`, `Evidence.manual` by `evidence override`, `Question.instructed_by` by `question answer --instructed-by`, the crew's `actor` by `crew join`, the record's `updated_at` by every runtime write, and the journal's kinds, `model` and `harness` by the task verb that appends them |

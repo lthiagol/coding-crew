@@ -103,7 +103,12 @@ approved` (steps 4–5).
 
 A transition that can happen without its guards has no guards. The gates live
 in `crates/core/src/lifecycle.rs`; the transitions run them internally, so a
-transition and its guards cannot be applied apart.
+transition and its guards cannot be applied apart. A refused call reports every
+gate it failed, not only the first.
+
+The whole lifecycle's gates, one definition each — the task model's § 3.3. The
+creator meets the first six and `overlay.reason_present`; the claim rule is the
+runner's.
 
 | gate | checks | applies to |
 |---|---|---|
@@ -113,11 +118,11 @@ transition and its guards cannot be applied apart.
 | `questions.resolved` | no open question | `approve` |
 | `criteria.covered` | every criterion has ≥1 covering step | `approve` |
 | `steps.done_when_present` | every step has a non-empty `done_when` | `approve` |
-| `task.claimed` | a claim exists and `claim.by` is the acting runner | `start` |
+| `task.claimed` | a claim exists and `claim.by` is the acting runner; at `start`, its lease is live. At `finish`, the acting session is `claim.session` ([ADR 0020](../decisions/0020-claims-and-leases.md)) | `start`, `finish` |
 | `dependencies.satisfied` | every `depends_on` task is `done` | `start` |
 | `steps.settled` | every step is `done` or `skipped` | `finish` |
-| `evidence.attached` | every criterion carries ≥1 evidence entry | `finish` |
-| `criteria.proven` | every criterion is `passed`, `failed` **with a `failure_reason`**, or `deferred` | `finish` |
+| `evidence.attached` | every criterion not deferred carries ≥1 evidence entry | `finish` |
+| `criteria.proven` | every criterion is `passed`, `failed` **with a `failure_reason`**, or `deferred` **with a `deferral`** | `finish` |
 | `self_round.filed` | ≥1 round of kind `self` | `finish` |
 | `review.verdict_ok` | `review.verdict` is `ok` | `pass_review` |
 | `review.verdict_changes_needed` | `review.verdict` is `changes-needed` | `request_changes`, `escalate` |
@@ -127,12 +132,20 @@ transition and its guards cannot be applied apart.
 | `review.within_budget` | external rounds ≤ `max_rounds` | `pass_review` |
 | `review.budget_left` | external rounds < `max_rounds` | `request_changes` |
 | `review.budget_exhausted` | external rounds ≥ `max_rounds` | `escalate` |
-| `review.independent` | the acting session is not `planned_by` | `pass_review`, `request_changes` |
-| `remediation.session_distinct` | the acting session is not `claim.session` | `re_review` |
+| `review.round_current` | the latest external round was filed at or after the task's `status_since` (its entry into `code-review`) | `pass_review`, `request_changes`, `escalate` |
+| `review.round_owner` | the acting session is the one that filed the latest external round | `pass_review`, `request_changes`, `escalate` |
+| `review.independent` | the acting session is neither `planned_by` nor `claim.session`; all three are recorded | `pass_review`, `request_changes`, `escalate` |
+| `remediation.session_distinct` | the acting session is not `claim.session`; both are recorded | `re_review` |
 | `overlay.reason_present` | a non-empty reason | `block`, `defer`, `cancel` |
+| `claim.status` | the task is `approved` (a take) | `claim take`, `claimable` |
+| `claim.held` | no live claim (the holder renews its own) | `claim take`, `claimable` |
+| `claim.takeover` | a claim exists to take over, and its lease has expired | `claim take` in `executing` |
+| `overlay.clear` | no `blocked`, `deferred` or `cancelled` overlay | `claim take`, `claimable`; `claim take` in `executing` (`blocked` only) |
 
-`review.independent` is why `planned_by` is recorded on the task: the session
-that planned a task never reviews it.
+The claim gates are the operation's, not an edge's: a refused take names each
+failing one. `review.independent` is why `planned_by` is recorded on the task:
+the session that planned a task — and the one that executed it — never reviews
+it.
 
 ## Never hand-edit a task file
 
@@ -156,17 +169,17 @@ proves a criterion.
 
 ```json
 { "command": "cargo test --workspace", "exit_code": 0, "summary": "10 passed; 0 failed",
-  "at": "2026-11-10T12:00Z", "by": "runner-01", "session": "session-runner-01" }
+  "at": "2026-11-10T12:00:00Z", "by": "runner-01", "session": "session-runner-01", "manual": false }
 ```
 
 | rule | detail |
 |---|---|
-| Attached, never prose | `{command, exit_code, summary, at, by, session}` |
+| Attached, never prose | `{command, exit_code, summary, at, by, session, manual}` |
 | Append-only | re-running appends. It never overwrites |
 | Exit code is the truth | `exit 0` with a non-empty summary is a pass; any other exit code is a failure; no exit code at all is `unproven` |
 | Status is derived | a criterion's status is the outcome of its **latest** evidence. No evidence ⇒ `pending` |
 | A failure needs a reason | `failure_reason` is required when a criterion is `failed` |
-| A manual override is evidence | an agent may override a derived status, and the override is recorded as an evidence entry. A bypass is explicit debt, never a silent one |
+| A manual override is evidence | an agent may override a derived status with `talita evidence override`, and the override is recorded as an evidence entry with `manual: true`. A bypass is explicit debt, never a silent one |
 | Evidence is per criterion | the command proves one thing; it does not prove the next criterion |
 
 `exit 0` with an **empty** summary is a failure: a command that ran and said
@@ -214,27 +227,39 @@ Work that is not a task yet is a **smaller task** — `ITM01` — with a `kind` 
 
 ## The CLI surface
 
-**Only three verbs exist today.** talita's full operation surface is not
-defined yet (`docs/tasks/task-model.md` §15). The verbs below marked *not
-implemented yet* are the ones we will use; the marked ones are not in the
-binary and cannot be run.
+The grammar is noun, then verb: the noun is the part of the task the call
+writes, the verb is the act. Ids are positional, task first; every other value
+is a flag.
 
-| verb | does | implemented |
-|---|---|---|
-| `talita create "<title>"` | create a task in `draft`; prints the task JSON | yes |
-| `talita list` | list tasks as `id  status  title` | yes |
-| `talita show <id>` | print one task as JSON | yes |
-| `talita groom <id> --outcome ... --problem ... --out-of-scope ... --criterion ...` | write `intent`, `scope` and the criteria, then `draft → groomed` | not implemented yet |
-| `talita add-step <id> --action ... --done-when ... --covers <ACCEPT-nn>` | add a step; `--covers` names the criteria it advances | not implemented yet |
-| `talita approve <id>` | `groomed → approved` | not implemented yet |
-| `talita ask <id> "<question>"` / `talita answer <id> <QST-nn> "<answer>"` | raise and resolve a question | not implemented yet |
-| `talita set-meta <id> --priority ... --effort ... --tags ...` | write `meta` | not implemented yet |
-| `talita reopen <id>` | `done → executing` | not implemented yet |
-| `talita resume <id>` | `needs-human → executing`, when a human instructed it | not implemented yet |
-| `talita block <id> --reason ...` / `defer` / `cancel` / `unblock` / `undefer` | set and clear an overlay; a reason is always required | not implemented yet |
+| call | what it does |
+|---|---|
+| `talita task create --title <t> [--kind task\|bug\|feature] [--parent <TSK>]` | a task in `draft`, and its new id |
+| `talita task describe <TSK> [--outcome <t>] [--problem <t>]` | writes the intent |
+| `talita task retitle <TSK> --title <t>` | the title, and the file name with it |
+| `talita task prioritize <TSK> --priority urgent\|high\|normal\|low` · `talita task estimate <TSK> --effort S\|M\|L` · `talita task tag <TSK> [--add <t>…] [--remove <t>…]` | the meta |
+| `talita task depend <TSK> --on <TSK>…` · `talita task undepend <TSK> --on <TSK>…` | what must be `done` before this one starts |
+| `talita scope include <TSK> --item <t>` · `talita scope exclude <TSK> --item <t>` · `talita scope drop <TSK> --in <n>` or `--out <n>` | the scope lists |
+| `talita criterion add <TSK> --description <t> --verification <t>` · `talita criterion revise <TSK> <ACCEPT> [--description <t>] [--verification <t>]` · `talita criterion remove <TSK> <ACCEPT>` | the acceptance criteria |
+| `talita step add <TSK> --action <t> --done-when <t> [--covers <ACCEPT>…] [--files <p>…] [--after <STP>…]` · `talita step revise <TSK> <STP> [the same flags]` · `talita step remove <TSK> <STP>` | the steps |
+| `talita question ask <TSK> --question <t>` · `talita question answer <TSK> <QST> --answer <t> [--instructed-by <human>]` | what is undecided, and its answer |
+| `talita note add <TSK> --body <t>` | a note |
+| `talita task groom <TSK>` | `draft → groomed` |
+| `talita task approve <TSK> [--instructed-by <human>]` | `groomed → approved`; sets `planned_by` |
+| `talita task block <TSK> --reason <t>` · `talita task unblock <TSK>` · `talita task defer <TSK> --reason <t>` · `talita task undefer <TSK>` · `talita task cancel <TSK> --reason <t>` | the overlays |
+| `talita item create --kind idea\|feature\|bug --title <t> [--body <t>] [--scope <t>…] [--tag <t>…]` · `talita item shape <ITM> --kind feature\|bug [--scope <t>…]` · `talita item dismiss <ITM> --reason <t>` · `talita item promote <ITM>` | a smaller task, before it is a task |
 
-Until the missing verbs land, do not write task files by hand. Say what is
-missing, and let the human decide how to proceed.
+A text flag takes `@<path>` to read a file, `@-` for stdin. `--expect-revision
+<n>` refuses the write when the task has moved since you read it.
+
+Every write carries the identity: `--as <you> --role creator --session <s>`,
+or `TALITA_ACTOR`, `TALITA_ROLE` and `TALITA_SESSION`; a flag beats its env.
+Reads need none: `talita task show <TSK>` prints the task with its derived
+criteria, claimability, readiness and children progress, `talita task list
+[--status <s>…]` lists the work, and `talita item show <ITM>` / `talita item
+list` read the smaller tasks.
+
+A refusal is not a dead end: the envelope's `error` carries the code, the
+`gates` that failed, and the remedy — the move that would have worked.
 
 ## Writing a task, end to end
 

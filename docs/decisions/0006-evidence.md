@@ -51,9 +51,12 @@ a silent override does the most damage.
 | none | `pending` |
 | exit code 0, non-empty summary | `passed` |
 | exit code non-zero | `failed` |
+| no exit code at all | `unproven` |
 
-The status is **never written**. It is computed from the criterion's evidence
-whenever it is read, so a reader and the tool cannot disagree about it.
+The status is **never written by a role**. It is computed from the criterion's
+evidence whenever it is read, so a reader and the tool cannot disagree about
+it. The stored value is only a mirror of the derived one, and talita writes it
+on an evidence or deferral write ([ADR 0019](0019-evidence.md)).
 
 ### A manual override is recorded as evidence
 
@@ -95,6 +98,6 @@ status; the earlier ones stay as the trail.
 
 - The evidence's shape and the derived statuses are listed in
   [tasks/task-model.md](../tasks/task-model.md#evidence).
-- What talita does with a verification command — whether it runs it or accepts the
-  runner's report of a run — is part of the operation surface, which is not
-  decided yet.
+- What talita does with a verification command is settled:
+  [ADR 0019](0019-evidence.md) has talita run the frozen `verification` itself;
+  there are no reported runs.

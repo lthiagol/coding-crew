@@ -96,8 +96,9 @@ left open. The states are in [screens.md](screens.md#starting-the-orchestrator).
 A review round read the thirty sketches against the rules above and settled
 six points. They bind whatever gets built, so they are written down here:
 
-- **A held task belongs to the crew, not the queue.** The queue holds
-  unclaimed work; a task an agent holds is that agent's row.
+- **A held task belongs to the crew, not the queue.** The record's queue holds
+  every task the run took, held and done included; the pane draws the waiting
+  ones, and a task an agent holds is that agent's row.
 - **No invented interactions.** A screen may not paint a key for an action
   the open question has not settled — whether hugo drives the loop or only
   shows it. Where a design wants one, it says so in a line instead.
@@ -272,5 +273,5 @@ over from.
 
 ## Not decided here
 
-- Whether the autopilot runs at all, or hugo describes a policy the human
-  applies by hand. That is the question behind the interface.
+Nothing now: the ruling of 2026-11-22 settled whether the autopilot runs — hugo
+starts the orchestrator, and the loop stays the orchestrator's.

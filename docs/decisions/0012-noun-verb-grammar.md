@@ -8,8 +8,8 @@
 
 talita has three flat verbs today: `create`, `list`, `show`
 (`crates/talita/src/main.rs:20-33`). The skill docs plan more flat verbs —
-`talita groom`, `talita add-step`, `talita set-meta`, `talita finding`,
-`talita pass-review` (`docs/skills/task-authoring.md:222-234`,
+`groom`, `add-step`, `set-meta`, `finding`, `pass-review`
+(`docs/skills/task-authoring.md:222-234`,
 `docs/skills/task-review.md:215-223`). ADR 0001 already shows
 `talita task approve TSK01` (`0001-naming.md:108`).
 
@@ -57,8 +57,8 @@ Unifying the word is a schema change for later.
 
 | Option | Lost because |
 |---|---|
-| Flat verbs, as the skill docs planned | collide as the surface grows (`defer` a task vs a criterion); no place for item, run and crew verbs; `talita finding` reads as a noun used as a verb |
-| Verb, then noun (`talita approve task TSK04`) | groups help by verb, so an agent asking "what can I do to a finding" reads the whole surface |
+| Flat verbs, as the skill docs planned | collide as the surface grows (`defer` a task vs a criterion); no place for item, run and crew verbs; `finding` alone reads as a noun used as a verb |
+| Verb, then noun (`approve task TSK04`) | groups help by verb, so an agent asking "what can I do to a finding" reads the whole surface |
 | `talita --task X <verb>` (the task as a flag) | the human's idea for rounds; makes the task id optional-looking and breaks "ids positional". Kept for the review input as `round file <TSK> --input` ([ADR 0017](0017-review-record.md)) |
 | All lifecycle events under a `review` noun for the reviewer verbs | splits the status machine across nouns; the noun rule ("what it writes") puts every status change on `task` |
 
@@ -79,7 +79,7 @@ Unifying the word is a schema change for later.
 ### Negative
 
 - Longer commands than flat verbs. Agents pay a few tokens per call.
-- Today's `talita create|list|show` break. They are placeholders
+- Today's flat `create`, `list` and `show` break. They are placeholders
   (`TODO.md:22`); nothing outside the repo calls them.
 - Splitting `groom` makes grooming several calls instead of one.
 

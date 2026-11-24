@@ -83,7 +83,8 @@ Round fields:
 | `n` | the round number. The count is of **external** rounds |
 | `kind` | `self` \| `external` |
 | `focus` | the five above |
-| `reviewer` | who reviewed |
+| `reviewer` | who reviewed: the actor id |
+| `session` | the session that filed the round |
 | `verdict` | `ok` \| `changes-needed` |
 | `at` | timestamp |
 | `notes` | free text |
@@ -125,7 +126,7 @@ one consequence.
 |---|---|
 | The model has no separate anchor field | the file, function or command goes in `description` |
 | The model has no separate axis or evidence field | name the axis (`code` or `spec`) and the evidence in `description` |
-| A `low` finding does not force another round | record it as a follow-up; the task verdict turns on a blocking finding |
+| A `low` finding does not force another round | record it as a follow-up and let the runner dismiss it with that reason — `pass_review` refuses while any finding is open |
 | A `fixed` finding records **what** was fixed | |
 | A `dismissed` finding records **why** it is not worth fixing | |
 | The outcome is written once | the second writer is refused. A dismissal that overwrote a fix would erase the record of the work that was done |
@@ -142,21 +143,24 @@ Severity is about consequence, not effort:
 
 ## Session boundaries
 
-Two rules. Both are gates, not guidance: a transition that would cross one
+Three rules. All are gates, not guidance: a transition that would cross one
 fails.
 
 | rule | gate |
 |---|---|
 | The session that **planned** the task never **reviews** it | `review.independent` |
+| The session that **executed** the task never **reviews** it | `review.independent` |
 | The session that **executed** the task never **remediates** its findings | `remediation.session_distinct` |
 
 The task records the planning session in `planned_by`; the claim records the
-execution session in `claim.session`.
+execution session in `claim.session`. `review.independent` reads all three: the
+acting session is neither `planned_by` nor `claim.session`, and all three are
+recorded. A session that is not recorded is a refusal, not a pass.
 
 A reviewer is ideally a different **model**, not only a different session — the
 diversity is what surfaces uncorrelated bugs. If you are the session that
-planned the task, you cannot give the verdict. Say so, and let another session
-review it.
+planned the task or the one that executed it, you cannot give the verdict. Say
+so, and let another session review it.
 
 ## The verdict
 
@@ -178,6 +182,8 @@ records and are not interchangeable.
 
 ## What a verdict is checked against
 
+The task model's § 3.3, for the reviewer's moves.
+
 | gate | checks | applies to |
 |---|---|---|
 | `review.verdict_ok` | `review.verdict` is `ok` | `pass_review` |
@@ -188,7 +194,10 @@ records and are not interchangeable.
 | `review.within_budget` | external rounds ≤ `max_rounds` | `pass_review` |
 | `review.budget_left` | external rounds < `max_rounds` | `request_changes` |
 | `review.budget_exhausted` | external rounds ≥ `max_rounds` | `escalate` |
-| `review.independent` | the acting session is not `planned_by` | `pass_review`, `request_changes` |
+| `review.round_current` | the latest external round was filed at or after the task's `status_since` (its entry into `code-review`) | `pass_review`, `request_changes`, `escalate` |
+| `review.round_owner` | the acting session is the one that filed the latest external round | `pass_review`, `request_changes`, `escalate` |
+| `review.independent` | the acting session is neither `planned_by` nor `claim.session`; all three are recorded | `pass_review`, `request_changes`, `escalate` |
+| `remediation.session_distinct` | the acting session is not `claim.session`; both are recorded | `re_review` |
 
 `review.verdict` is set by the round. A verdict of `ok` with an open finding is
 refused; a verdict of `changes-needed` with no finding is refused.
@@ -206,21 +215,54 @@ verdict.
 
 ## The CLI surface
 
-**Only three verbs exist today** — `talita create`, `talita list`,
-`talita show`. talita's full operation surface is not defined yet
-(`docs/tasks/task-model.md` §15). The verbs below marked *not implemented yet*
-are the ones we will use; the marked ones are not in the binary and cannot be
-run.
+The grammar is noun, then verb: the noun is the record the call writes.
 
-| verb | does | implemented |
-|---|---|---|
-| `talita show <id>` | print the task, its criteria, its evidence and its rounds as JSON | yes |
-| `talita review <id> --focus <focus> --verdict <ok\|changes-needed> [--note ...]` | file an `external` round with its focus and verdict | not implemented yet |
-| `talita finding <id> --severity <low\|medium\|high> --description ...` | open a finding on the task | not implemented yet |
-| `talita comment <id> <FIND-nn> "<body>"` | add a comment under a finding | not implemented yet |
-| `talita pass-review <id>` | `code-review → done` | not implemented yet |
-| `talita request-changes <id>` | `code-review → remediating` | not implemented yet |
-| `talita escalate <id>` | `code-review → needs-human`, when the budget is spent | not implemented yet |
+| call | what it does |
+|---|---|
+| `talita task show <TSK>` | the task as stored, with its derived criteria, claimability, readiness and children progress |
+| `talita round file <TSK> --input <path\|->` | files the whole external round: focus, verdict, notes and findings. talita allocates the `FIND-nn` ids and returns `refs` |
+| `talita round file <TSK> --kind external --focus <f> --verdict ok [--notes <t>]` | the same round from flags, without findings |
+| `talita finding open <TSK> --severity low\|medium\|high --description <t>` | a finding raised outside the round |
+| `talita comment add <TSK> <FIND> --body <t>` | the discussion under a finding |
+| `talita task request-changes <TSK>` | `code-review → remediating` |
+| `talita task pass-review <TSK>` | `code-review → done` |
+| `talita task escalate <TSK>` | `code-review → needs-human`, when the budget is spent |
 
-Until the missing verbs land, do not hand-edit the task file to file a round or
-a finding. Report the review and let the human decide how to record it.
+Every write carries the identity: `--as <you> --role reviewer --session <s>`,
+or `TALITA_ACTOR`, `TALITA_ROLE` and `TALITA_SESSION`; a flag beats its env.
+Reads need none: `talita task show`, `talita round show <TSK>` and `talita
+journal show --task <TSK>`.
+
+## Filing the round
+
+File the whole round in one call, before the verdict. Its input is closed:
+unknown keys are refused.
+
+```json
+{
+  "kind": "external",
+  "focus": "edge-cases",
+  "verdict": "changes-needed",
+  "notes": "free text",
+  "findings": [
+    { "ref": "D1", "severity": "high", "description": "where; defect; scenario; fix" }
+  ]
+}
+```
+
+```sh
+talita round file <TSK> --input round.json
+```
+
+The four lines of an `OUTFILE` finding go in `description`: where, defect,
+scenario, fix. The output's `refs` maps each `D<n>` to the `FIND-nn` it
+became. Then move the task: `talita task request-changes <TSK>` for
+`changes-needed`, `talita task pass-review <TSK>` for `ok`, or `talita task
+escalate <TSK>` when the budget is spent and work is still outstanding.
+
+A finding found after the round is filed is `talita finding open <TSK>
+--severity … --description "…"`. A comment is `talita comment add <TSK> <FIND>
+--body "…"`.
+
+Do not hand-edit the task file to file a round or a finding: these verbs are
+the record, and they allocate the ids the gates read.

@@ -25,6 +25,28 @@ the flow that governs the automation (**H**uman-guided **U**nified
 | `role` | `creator`, `runner`, `reviewer`, `orchestrator` |
 | `session` | the working session, so separation between planning, execution, remediation, and review is structural rather than a matter of discipline |
 
+## Identity
+
+talita resolves the actor from flags or the `TALITA_*` environment. A flag beats
+its env.
+
+| part | flag | env | meaning |
+|---|---|---|---|
+| actor | `--as <actor>` | `TALITA_ACTOR` | who acts, e.g. `builder-1`, `luiz` |
+| role | `--role <role>` | `TALITA_ROLE` | `creator` · `runner` (alias `builder`) · `reviewer` · `orchestrator`; `human` marks the actor as a human, who carries no role |
+| session | `--session <id>` | `TALITA_SESSION` | the working session |
+| model | `--model <m>` | `TALITA_MODEL` | optional; the model the call runs, carried by its journal events |
+| harness | `--harness <h>` | `TALITA_HARNESS` | optional; the harness the call runs in, carried by its journal events |
+
+Every write needs the identity; a read does not (`task show`, `task list`,
+`journal show`). `project init` is the one write that needs none: it creates
+`coding-crew/work/` and writes no task and no journal (ADR 0015).
+
+A human's decision is written by a creator agent with `--instructed-by <human>`
+— `task approve`, `task resume`, `task reopen`, `question answer`. The session
+recorded is the agent's, never the human's; the human's name goes in the
+journal's note, or on the question's `instructed_by` (ADR 0015).
+
 ## The roles
 
 ```mermaid
@@ -59,13 +81,14 @@ sequenceDiagram
 | `questions` | any role asks; the creator answers |
 | `steps` | creator while grooming, runner while executing |
 | `claim`, evidence | runner |
-| `review` | reviewer; the runner for its self round, in `executing` and `remediating` |
+| `review` | reviewer; the runner for its self round, in `executing` and `remediating`, and for a finding's outcome |
 | `notes` | any role |
 
 `status` is written by transitions only; no role writes it directly.
 
-The reviewer opens findings; the runner resolves them. A role may not write
-another role's section.
+The reviewer opens findings; the runner resolves or dismisses them. The
+finding's outcome is the runner's part of the `review` section; otherwise a role
+may not write another role's section.
 
 `steps` is the one section with two owners, and the phase decides which: the
 creator writes the steps while grooming, and once the task is approved the

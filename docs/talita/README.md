@@ -4,7 +4,7 @@ talita is coding-crew's CLI. Agents call it; humans read its results in raul
 and hugo. It is the **only writer** of a project's `coding-crew/` folder: the
 task files, the smaller tasks, the journal and the runtime record.
 
-Status: **accepted design; nothing is built**. The full reference is
+Status: **built**; the roadmap is done. The full reference is
 [commands.md](commands.md); the decisions are ADRs 0012–0020; the human's rulings
 are in [decisions.md](decisions.md); the build order is [roadmap.md](roadmap.md).
 
@@ -206,10 +206,11 @@ stateDiagram-v2
 
 ## A full unit
 
-One task, `TSK04`, already `approved`. The orchestrator runs the flow; a fresh
-builder session builds and another remediates; one reviewer session reviews
-both rounds. Every talita call, in order. Each task-changing call appends its
-journal event and refreshes `runtime.json` as part of the same call.
+One task, `TSK04`, already `approved`. The orchestrator runs the flow and joins
+the crew, itself included; a fresh builder session builds and another
+remediates; one reviewer session reviews both rounds. Every talita call, in
+order. Each task-changing call appends its journal event and refreshes
+`runtime.json` as part of the same call.
 
 ```mermaid
 sequenceDiagram
@@ -222,6 +223,7 @@ sequenceDiagram
     Note over O,T: run setup
     O->>T: talita session new --as orch-1 --role orchestrator
     O->>T: talita run start --task TSK04
+    O->>T: talita crew join orch-1 --role orchestrator --model M0
     O->>T: talita crew join builder-1 --role builder --model M1
     O->>T: talita crew join reviewer-1 --role reviewer --model M2
     O->>T: talita session new --as builder-1 --role runner

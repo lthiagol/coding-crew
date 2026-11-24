@@ -1772,8 +1772,8 @@ def runtime_record(tasks):
     The queue is the run's tasks in order, each with the status its fixture
     holds. The crew holds the task in flight. The round is the reviewer's
     second external round, after one round that raised findings. The budget
-    is the rounds the task in flight has used of its own limit, and the
-    findings are its open ones.
+    is the rounds the task in flight has used of its own limit; the round in
+    flight counts. The findings are its open ones.
 
     The record's last write is the last hold it tells — the reviewer took the
     task in flight when it went back to review — derived from the fixtures,
@@ -1871,13 +1871,17 @@ def check_runtime(record, tasks):
         assert record["stamp"].get("why"), record["stamp"]
 
     # The round is the task in flight's: the next external round, after the
-    # rounds it has had. The budget counts those rounds of its own limit.
+    # rounds it has had. The record tells an external round in flight, so the
+    # budget counts the round in flight too: `spent` is its number, the rounds
+    # before it plus this one. At a self stage `spent` is the external rounds
+    # filed instead; self rounds never consume the budget.
     # TSK14 reaches round 2 through its re_review, stamped in
     # review.re_reviews; the task's status_since is that hand-back.
     round_ = record["round"]
     assert round_["task"] == IN_FLIGHT, round_
     assert by_id[IN_FLIGHT]["status"] == "code-review", IN_FLIGHT
     assert round_["number"] == len(round_["earlier"]) + 1, round_
+    assert round_["stage"] == "external", round_
     assert record["budget"] == {
         "spent": round_["number"],
         "total": by_id[IN_FLIGHT]["review"]["max_rounds"],
