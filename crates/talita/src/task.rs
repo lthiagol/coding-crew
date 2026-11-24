@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use coding_crew_core::claim::claim_failures;
-use coding_crew_core::lifecycle::{TransitionContext, check};
+use coding_crew_core::lifecycle::{Lane, TransitionContext, check, needs_you, review_state};
 use coding_crew_core::store::{ACTIVITY_FILE, RUNTIME_FILE, by_number};
 use coding_crew_core::task::{Effort, Priority, slugify};
 use coding_crew_core::{Actor, ActorKind, Event, EventKind, Role, Section, Status, Task, TaskKind};
@@ -55,6 +55,19 @@ pub fn parse_kind(value: &str) -> Result<TaskKind, Failure> {
             ));
         }
     })
+}
+
+/// The lane `task list --lane` filters on (TM § 12).
+pub fn parse_lane(value: &str) -> Result<Lane, Failure> {
+    match value {
+        "human" => Ok(Lane::Human),
+        "agent" => Ok(Lane::Agent),
+        other => Err(Failure::new(
+            Code::InputInvalid,
+            format!("lane `{other}` is not one of human, agent"),
+        )
+        .remedy("talita task list --lane human|agent")),
+    }
 }
 
 pub fn parse_status(value: &str) -> Result<Status, Failure> {
@@ -196,6 +209,8 @@ pub fn show(project: &Project, id: &str) -> Result<Done, Failure> {
         "task": task,
         "derived": {
             "criteria": criteria,
+            "review_state": review_state(&task).map(|state| state.as_str()),
+            "lane": task.status.lane().map(|lane| lane.as_str()),
             "claimable": claim_failures(&task, Some(&done), &now).is_empty(),
             "start_readiness": start_readiness(&task, &done, &now),
             "children_progress": { "done": children_done, "total": task.children.len() },
@@ -242,6 +257,8 @@ pub struct ListFilter {
     pub kind: Option<String>,
     pub claimable: bool,
     pub tags: Vec<String>,
+    pub lane: Option<String>,
+    pub needs_you: bool,
 }
 
 /// `task list`: summaries in numeric id order.
@@ -257,6 +274,7 @@ pub fn list(project: &Project, filter: &ListFilter) -> Result<Done, Failure> {
         .map(|s| parse_overlay(s))
         .collect::<Result<_, _>>()?;
     let kind = filter.kind.as_deref().map(parse_kind).transpose()?;
+    let lane = filter.lane.as_deref().map(parse_lane).transpose()?;
     let mut tasks = project.store.list()?;
     tasks.sort_by(|a, b| by_number(&a.id, &b.id));
     let done_ids: BTreeSet<String> = tasks
@@ -278,6 +296,8 @@ pub fn list(project: &Project, filter: &ListFilter) -> Result<Done, Failure> {
                 })
         })
         .filter(|t| kind.is_none_or(|k| t.kind == k))
+        .filter(|t| lane.is_none_or(|wanted| t.status.lane() == Some(wanted)))
+        .filter(|t| !filter.needs_you || needs_you(t).is_some())
         .filter(|t| filter.tags.iter().all(|tag| t.meta.tags.contains(tag)))
         .filter_map(|t| {
             let claimable = claim_failures(t, Some(&done), &now).is_empty();

@@ -174,6 +174,12 @@ enum TaskVerb {
         claimable: bool,
         #[arg(long = "tag")]
         tags: Vec<String>,
+        /// human or agent.
+        #[arg(long)]
+        lane: Option<String>,
+        /// Only the tasks waiting on a human, with no overlay.
+        #[arg(long = "needs-you")]
+        needs_you: bool,
     },
     /// Title, slug and file name. Draft or groomed.
     Retitle {
@@ -1169,6 +1175,8 @@ fn task_verb(
             kind,
             claimable,
             tags,
+            lane,
+            needs_you,
         } => (
             "task list",
             read(&|p| {
@@ -1180,6 +1188,8 @@ fn task_verb(
                         kind: kind.clone(),
                         claimable: *claimable,
                         tags: tags.clone(),
+                        lane: lane.clone(),
+                        needs_you: *needs_you,
                     },
                 )
             }),

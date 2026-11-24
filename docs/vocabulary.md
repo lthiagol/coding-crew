@@ -99,7 +99,8 @@ action**:
 | The human lane | the human — approve, decide, unblock |
 | The agent lane | an agent — claim, execute, review, remediate |
 
-A task's lane is computed from its status, its overlays and its claims. It is
+A task's lane is computed from its status. The overlays narrow the human lane
+to Needs you (see [screens.md](tui/screens.md)); claims do not move it. It is
 never a field, because a stored lane is a lane that can disagree with the
 status it was derived from.
 

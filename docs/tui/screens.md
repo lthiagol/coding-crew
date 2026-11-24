@@ -418,7 +418,7 @@ Every view above is computed from the task files.
 | needs you | the human lane, minus the tasks carrying an overlay |
 | claimable | `approved`, no overlay, no live claim, every dependency `done` |
 | blocked reason | dependency not done · overlay set · claimed by another session |
-| review state | `pending-review` · `open-findings` · `clean` |
+| review state | `open-findings` · `pending-review` · `clean`, the first that holds: `open-findings` a finding is open; `pending-review` in `code-review` with no external round filed since the task entered it; `clean` the latest external round is filed. None otherwise |
 | criterion status | from the latest evidence |
 | children progress | from the children's own statuses |
 | next | the first claimable row of *Path* |

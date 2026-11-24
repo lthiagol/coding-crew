@@ -34,6 +34,33 @@ impl Status {
             Status::Done => "done",
         }
     }
+
+    /// The lane the status is in. `draft` and `done` are in neither.
+    pub fn lane(&self) -> Option<Lane> {
+        match self {
+            Status::Groomed | Status::CodeReview | Status::NeedsHuman => Some(Lane::Human),
+            Status::Approved | Status::Executing | Status::Remediating => Some(Lane::Agent),
+            Status::Draft | Status::Done => None,
+        }
+    }
+}
+
+/// Who owns a task's next action. A view of the status, never stored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lane {
+    /// The human lane: approve, review, decide.
+    Human,
+    /// The agent lane: claim, execute, remediate.
+    Agent,
+}
+
+impl Lane {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Lane::Human => "human",
+            Lane::Agent => "agent",
+        }
+    }
 }
 
 /// Why a task waits on a human.
@@ -81,6 +108,13 @@ pub struct Overlays {
     pub deferred: Option<Overlay>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cancelled: Option<Overlay>,
+}
+
+impl Overlays {
+    /// Whether any overlay is set.
+    pub fn any(&self) -> bool {
+        self.blocked.is_some() || self.deferred.is_some() || self.cancelled.is_some()
+    }
 }
 
 /// The events that move a task forward or hold it.
@@ -617,14 +651,76 @@ fn check_round_current(failures: &mut Vec<GateFailure>, task: &Task) {
         );
         return;
     };
-    let entered = crate::parse_rfc3339(&task.status_since);
-    let filed = crate::parse_rfc3339(&round.at);
     gate(
         failures,
         "review.round_current",
-        matches!((entered, filed), (Some(entered), Some(filed)) if filed >= entered),
+        filed_since_entry(task, round),
         "the latest external round was not filed since the task entered code-review",
     );
+}
+
+/// Whether `round` was filed at or after the task entered its status. A round
+/// filed before that entry is stale.
+fn filed_since_entry(task: &Task, round: &Round) -> bool {
+    let entered = crate::parse_rfc3339(&task.status_since);
+    let filed = crate::parse_rfc3339(&round.at);
+    matches!((entered, filed), (Some(entered), Some(filed)) if filed >= entered)
+}
+
+/// Why the task waits on a human, if it does: the human lane, minus the tasks
+/// carrying an overlay. A blocked, deferred or cancelled task is not waiting
+/// on a human (`docs/tui/screens.md`, "Derived, never stored").
+pub fn needs_you(task: &Task) -> Option<Reason> {
+    if task.overlays.any() {
+        return None;
+    }
+    match task.status {
+        Status::Groomed => Some(Reason::Approve),
+        Status::CodeReview => Some(Reason::Review),
+        Status::NeedsHuman => Some(Reason::Escalated),
+        _ => None,
+    }
+}
+
+/// A task's review state, derived from its rounds and findings
+/// (`docs/tasks/task-model.md` § 12).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewState {
+    /// A finding is open.
+    OpenFindings,
+    /// In `code-review`, with no external round filed since the task entered it.
+    PendingReview,
+    /// The latest external round is filed, and no finding is open.
+    Clean,
+}
+
+impl ReviewState {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ReviewState::OpenFindings => "open-findings",
+            ReviewState::PendingReview => "pending-review",
+            ReviewState::Clean => "clean",
+        }
+    }
+}
+
+/// The review state of `task`, or `None` when the task is not in review: no
+/// external round is filed and no finding is open.
+///
+/// The rules are checked in order. An open finding is `open-findings`. A
+/// `code-review` task whose latest external round predates its entry, or that
+/// has none, is `pending-review`. A task whose latest external round is filed
+/// is `clean`.
+pub fn review_state(task: &Task) -> Option<ReviewState> {
+    if task.open_findings() > 0 {
+        return Some(ReviewState::OpenFindings);
+    }
+    let latest = latest_external(task);
+    let current = latest.is_some_and(|round| filed_since_entry(task, round));
+    if task.status == Status::CodeReview && !current {
+        return Some(ReviewState::PendingReview);
+    }
+    latest.map(|_| ReviewState::Clean)
 }
 
 /// The session that filed the latest external round makes the move.
@@ -709,5 +805,224 @@ impl CriterionStatus {
             CriterionStatus::Unproven => "unproven",
             CriterionStatus::Deferred => "deferred",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::task::{Finding, FindingStatus, Round, RoundKind, Severity, Task};
+
+    const ENTERED: &str = "2026-11-20T10:00:00Z";
+    const BEFORE: &str = "2026-11-19T10:00:00Z";
+    const AFTER: &str = "2026-11-21T10:00:00Z";
+
+    fn task(status: Status) -> Task {
+        let mut task = Task::new("TSK01", "a task");
+        task.status = status;
+        task.status_since = ENTERED.to_string();
+        task
+    }
+
+    fn round(kind: RoundKind, at: &str) -> Round {
+        Round {
+            n: 1,
+            kind,
+            at: at.to_string(),
+            ..Round::default()
+        }
+    }
+
+    fn finding(status: FindingStatus) -> Finding {
+        Finding {
+            id: "FIND-01".to_string(),
+            severity: Severity::High,
+            status,
+            ..Finding::default()
+        }
+    }
+
+    fn overlay() -> Option<Overlay> {
+        Some(Overlay {
+            reason: "waiting".to_string(),
+            by: "luiz".to_string(),
+            at: AFTER.to_string(),
+        })
+    }
+
+    #[test]
+    fn each_status_is_in_the_lane_the_model_names() {
+        for status in [Status::Groomed, Status::CodeReview, Status::NeedsHuman] {
+            assert_eq!(status.lane(), Some(Lane::Human), "{status:?}");
+        }
+        for status in [Status::Approved, Status::Executing, Status::Remediating] {
+            assert_eq!(status.lane(), Some(Lane::Agent), "{status:?}");
+        }
+        assert_eq!(Status::Draft.lane(), None);
+        assert_eq!(Status::Done.lane(), None);
+    }
+
+    #[test]
+    fn a_lane_has_its_word() {
+        assert_eq!(Lane::Human.as_str(), "human");
+        assert_eq!(Lane::Agent.as_str(), "agent");
+    }
+
+    #[test]
+    fn an_overlay_is_any_of_the_three() {
+        assert!(!Overlays::default().any());
+        for overlays in [
+            Overlays {
+                blocked: overlay(),
+                ..Overlays::default()
+            },
+            Overlays {
+                deferred: overlay(),
+                ..Overlays::default()
+            },
+            Overlays {
+                cancelled: overlay(),
+                ..Overlays::default()
+            },
+        ] {
+            assert!(overlays.any(), "{overlays:?}");
+        }
+    }
+
+    #[test]
+    fn each_human_status_needs_you_for_its_reason() {
+        assert_eq!(needs_you(&task(Status::Groomed)), Some(Reason::Approve));
+        assert_eq!(needs_you(&task(Status::CodeReview)), Some(Reason::Review));
+        assert_eq!(
+            needs_you(&task(Status::NeedsHuman)),
+            Some(Reason::Escalated)
+        );
+    }
+
+    #[test]
+    fn an_agent_or_parked_status_does_not_need_you() {
+        for status in [
+            Status::Draft,
+            Status::Approved,
+            Status::Executing,
+            Status::Remediating,
+            Status::Done,
+        ] {
+            assert_eq!(needs_you(&task(status)), None, "{status:?}");
+        }
+    }
+
+    #[test]
+    fn a_task_with_an_overlay_does_not_need_you() {
+        let overlays = [
+            Overlays {
+                blocked: overlay(),
+                ..Overlays::default()
+            },
+            Overlays {
+                deferred: overlay(),
+                ..Overlays::default()
+            },
+            Overlays {
+                cancelled: overlay(),
+                ..Overlays::default()
+            },
+        ];
+        for overlays in overlays {
+            let mut groomed = task(Status::Groomed);
+            groomed.overlays = overlays;
+            assert_eq!(needs_you(&groomed), None, "{:?}", groomed.overlays);
+        }
+    }
+
+    #[test]
+    fn a_task_outside_review_has_no_review_state() {
+        assert_eq!(review_state(&task(Status::Draft)), None);
+        assert_eq!(review_state(&task(Status::Executing)), None);
+        assert_eq!(review_state(&task(Status::Done)), None);
+    }
+
+    #[test]
+    fn a_code_review_with_no_external_round_is_pending() {
+        assert_eq!(
+            review_state(&task(Status::CodeReview)),
+            Some(ReviewState::PendingReview)
+        );
+    }
+
+    #[test]
+    fn a_self_round_does_not_end_the_wait() {
+        let mut pending = task(Status::CodeReview);
+        pending
+            .review
+            .rounds
+            .push(round(RoundKind::SelfReview, AFTER));
+        assert_eq!(review_state(&pending), Some(ReviewState::PendingReview));
+    }
+
+    #[test]
+    fn a_round_filed_before_the_entry_is_stale() {
+        let mut stale = task(Status::CodeReview);
+        stale.review.rounds.push(round(RoundKind::External, BEFORE));
+        assert_eq!(review_state(&stale), Some(ReviewState::PendingReview));
+    }
+
+    #[test]
+    fn a_round_filed_since_the_entry_is_clean() {
+        let mut filed = task(Status::CodeReview);
+        filed.review.rounds.push(round(RoundKind::External, AFTER));
+        assert_eq!(review_state(&filed), Some(ReviewState::Clean));
+    }
+
+    #[test]
+    fn a_round_filed_at_the_entry_is_current() {
+        let mut same = task(Status::CodeReview);
+        same.review.rounds.push(round(RoundKind::External, ENTERED));
+        assert_eq!(review_state(&same), Some(ReviewState::Clean));
+    }
+
+    #[test]
+    fn a_round_with_no_readable_time_is_not_current() {
+        let mut unread = task(Status::CodeReview);
+        unread.review.rounds.push(round(RoundKind::External, ""));
+        assert_eq!(review_state(&unread), Some(ReviewState::PendingReview));
+    }
+
+    #[test]
+    fn an_open_finding_is_open_findings_whatever_the_status() {
+        let mut open = task(Status::Remediating);
+        open.review.findings.push(finding(FindingStatus::Open));
+        assert_eq!(review_state(&open), Some(ReviewState::OpenFindings));
+
+        let mut stale = task(Status::CodeReview);
+        stale.review.rounds.push(round(RoundKind::External, BEFORE));
+        stale.review.findings.push(finding(FindingStatus::Open));
+        assert_eq!(review_state(&stale), Some(ReviewState::OpenFindings));
+    }
+
+    #[test]
+    fn a_fixed_or_dismissed_finding_is_not_open() {
+        let mut fixed = task(Status::CodeReview);
+        fixed.review.rounds.push(round(RoundKind::External, AFTER));
+        fixed.review.findings.push(finding(FindingStatus::Fixed));
+        fixed
+            .review
+            .findings
+            .push(finding(FindingStatus::Dismissed));
+        assert_eq!(review_state(&fixed), Some(ReviewState::Clean));
+    }
+
+    #[test]
+    fn a_filed_round_with_no_open_finding_is_clean_outside_code_review() {
+        let mut done = task(Status::Done);
+        done.review.rounds.push(round(RoundKind::External, BEFORE));
+        assert_eq!(review_state(&done), Some(ReviewState::Clean));
+    }
+
+    #[test]
+    fn each_review_state_has_its_word() {
+        assert_eq!(ReviewState::OpenFindings.as_str(), "open-findings");
+        assert_eq!(ReviewState::PendingReview.as_str(), "pending-review");
+        assert_eq!(ReviewState::Clean.as_str(), "clean");
     }
 }
