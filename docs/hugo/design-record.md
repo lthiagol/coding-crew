@@ -90,7 +90,7 @@ does not claim a task, run a round or write the journal: a start is the first
 step towards hugo driving the loop, not the loop. Outside herdr the key says why.
 This settles whether hugo drives the loop or only shows it, which the pick above
 left open. The states are in [screens.md](screens.md#starting-the-orchestrator).
-The loop's design, proposed as unit O1, is in [orchestrator.md](orchestrator.md).
+The loop's design, unit O1, is in [orchestrator.md](orchestrator.md), accepted 2026-11-24 with every recommended ruling (Q1–Q14).
 
 ## The rulings the review made
 

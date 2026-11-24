@@ -1,6 +1,6 @@
 # The orchestrator's job
 
-Proposed, unit O1, 2026-11-24. The human accepts it; O2 builds from it. Nothing
+Accepted, unit O1, 2026-11-24: the human took every recommendation of § Open questions. O2 builds from it. Nothing
 here is built yet: the shipped skills (`crates/hugo/skills/`) still describe the
 herdr-crew loop.
 
@@ -277,7 +277,11 @@ is, replaced by a talita call or a hugo action, or dropped.
 
 ## Open questions
 
-Each one needs the human's ruling. The recommendation is the first option.
+**Ruled 2026-11-24 by the human: every recommended option.** Q1 A · Q2 C · Q3 A ·
+Q4 A · Q5 C, with A until talita changes, and ADR 0005's line amended to the
+crew rule (the orchestrator reviews in the two- and one-agent crews) · Q6 A ·
+Q7 B · Q8 A · Q9 A then B · Q10 A · Q11 A · Q12 A · Q13 A · Q14 A. The text
+below keeps the options as they were weighed.
 
 **Q1 — Who commits, and on which branch?**
 - (A) **Orchestrator**: one commit per task at `done`, on the checked-out branch, by name (`commit.sh`). *Recommended.*
