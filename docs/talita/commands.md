@@ -350,14 +350,15 @@ The reads (`run show`, `queue show`) need no identity.
 
 Written fields are set by these verbs; derived fields (queue `status`,
 `claimable`, `round`, `budget`, `findings`, `severities`) are recomputed from
-the task files on every write, a task verb's included. None of these verbs
+the task files on every write, a task verb's included. Every write of the
+record stamps `updated_at` with the instant it uses. None of these verbs
 touches a task file or the journal.
 
 | Verb | Synopsis | Writes |
 |---|---|---|
 | `run start` | `run start [--task <TSK>…]` | new `runtime.json`: `started_at` now, the queue from `--task` in order, an empty crew, `stamp.runs: true`. Refuses `run.active` if a record with `runs: true` exists (remedy `talita run stop --why <t>`); `task.not_found` for an unknown id |
 | `run stop` | `run stop --why <t>` | `stamp {runs: false, why}`; every crew row `idle`, keeping its hold |
-| `run show` | `run show` | the record, plus `stale` (read) |
+| `run show` | `run show` | the record, plus `stale` against its `updated_at` (read) |
 | `run refresh` | `run refresh` | recomputes every derived field and writes the record. Repair after a crash |
 | `crew join` | `crew join <actor> --role builder\|reviewer\|orchestrator --model <m>` | new crew row `{role, model, actor, state: idle}` |
 | `crew leave` | `crew leave <actor>` | removes the row |
@@ -373,11 +374,12 @@ Outputs: `run start|stop|refresh` and `run show` carry `{"runtime": <record>}`
 `{"queue": [items]}`. A verb that writes the record names `runtime.json` in
 `wrote`, and so does every task write while the record exists.
 
-**Stale.** `run show` reports `stale: true` when the record's last write — the
-file's modification time — is older than the longest lease the crew holds. A
-lease's length is its claim's `lease_expires_at` minus its `at`; a lease that
-has already expired still counts, and a record that holds no lease is never
-stale.
+**Stale.** `run show` reports `stale: true` when the time since the record's
+`updated_at` — the instant of its last write — passes the longest lease the
+crew holds. A lease's length is its claim's `lease_expires_at` minus its `at`;
+a lease that has already expired still counts, and a record with no `updated_at`
+or no held lease is never stale. One whose `updated_at` does not parse is
+stale, as a malformed lease reads expired.
 
 Errors: `run.absent` (3), `run.active` (4), `crew.unknown` (3),
 `crew.exists` (4). A record that does not parse refuses the write with

@@ -328,6 +328,45 @@ fn age_record(dir: &Path, by: Duration) {
         .expect("the times");
 }
 
+/// The record's last write, as talita stamped it.
+fn last_write(dir: &Path) -> String {
+    let record = record(dir);
+    let at = record["updated_at"]
+        .as_str()
+        .unwrap_or_else(|| panic!("the record names no last write: {record}"))
+        .to_string();
+    assert!(
+        coding_crew_core::parse_rfc3339(&at).is_some(),
+        "the last write does not parse: {at}"
+    );
+    at
+}
+
+/// Rewrite the record's last write by hand: the instant talita would stamp.
+fn stamp_record(dir: &Path, at: &str) {
+    let path = store(dir).runtime_path();
+    let mut record = record(dir);
+    record["updated_at"] = json!(at);
+    fs::write(&path, serde_json::to_vec_pretty(&record).expect("json")).expect("the record");
+}
+
+/// Drop the record's last write, as a record written before the field.
+fn forget_last_write(dir: &Path) {
+    let path = store(dir).runtime_path();
+    let mut record = record(dir);
+    record
+        .as_object_mut()
+        .expect("a record")
+        .remove("updated_at");
+    fs::write(&path, serde_json::to_vec_pretty(&record).expect("json")).expect("the record");
+}
+
+/// The instant `minutes` before now, RFC 3339.
+fn minutes_ago(minutes: i64) -> String {
+    let now = coding_crew_core::parse_rfc3339(&coding_crew_core::now_rfc3339()).expect("now");
+    coding_crew_core::clock::format_rfc3339(now - minutes * 60)
+}
+
 // ---- run
 
 #[test]
@@ -418,7 +457,7 @@ fn run_stop_stamps_and_idles_every_row_and_keeps_their_holds() {
 }
 
 #[test]
-fn run_show_measures_staleness_against_the_longest_lease() {
+fn run_show_measures_staleness_from_the_records_last_write() {
     let dir = project("stale");
     refused(
         talita(&dir, &[], &["run", "show"]),
@@ -454,8 +493,14 @@ fn run_show_measures_staleness_against_the_longest_lease() {
     assert_eq!(shown["data"]["stale"], false, "{shown}");
     assert_eq!(shown["data"]["runtime"]["crew"][0]["holds"], id, "{shown}");
 
-    // The claim is two hours long: a record three hours old is stale.
+    // The file's modification time is not the record's last write: a clone, a
+    // checkout or a copy leaves an old file over a run that wrote a minute ago.
     age_record(&dir, Duration::from_secs(3 * 3_600));
+    let shown = applied(talita(&dir, &[], &["run", "show"]), "run show");
+    assert_eq!(shown["data"]["stale"], false, "{shown}");
+
+    // The claim is two hours long: a last write three hours old is stale.
+    stamp_record(&dir, &minutes_ago(3 * 60));
     let shown = applied(talita(&dir, &[], &["run", "show"]), "run show");
     assert_eq!(shown["data"]["stale"], true, "{shown}");
 
@@ -467,6 +512,12 @@ fn run_show_measures_staleness_against_the_longest_lease() {
     let shown = applied(talita(&dir, &[], &["run", "show"]), "run show");
     assert_eq!(shown["data"]["stale"], false, "{shown}");
 
+    // A record written before the field names no last write, and is not
+    // guessed at.
+    forget_last_write(&dir);
+    let shown = applied(talita(&dir, &[], &["run", "show"]), "run show");
+    assert_eq!(shown["data"]["stale"], false, "{shown}");
+
     // An expired lease still counts: a record older than its length is stale
     // even though nobody holds a live lease any more.
     edit(&dir, &id, |task| {
@@ -474,9 +525,108 @@ fn run_show_measures_staleness_against_the_longest_lease() {
         claim.at = "2026-11-01T09:00:00Z".to_string();
         claim.lease_expires_at = "2026-11-01T10:00:00Z".to_string();
     });
-    age_record(&dir, Duration::from_secs(90 * 60));
+    stamp_record(&dir, &minutes_ago(90));
     let shown = applied(talita(&dir, &[], &["run", "show"]), "run show");
     assert_eq!(shown["data"]["stale"], true, "{shown}");
+
+    // A last write that does not parse is stale: a corrupt record cannot hold
+    // a run alive, as a malformed lease reads expired.
+    stamp_record(&dir, "2026-11-11 17:30");
+    let shown = applied(talita(&dir, &[], &["run", "show"]), "run show");
+    assert_eq!(shown["data"]["stale"], true, "{shown}");
+}
+
+#[test]
+fn every_write_of_the_record_stamps_its_last_write() {
+    let dir = project("stamp");
+    let a = create(&dir, "First");
+    let b = create(&dir, "Second");
+
+    let started = applied(
+        talita(&dir, &ORCH, &["run", "start", "--task", &a]),
+        "run start",
+    );
+    // The write's instant is the record's: `start` began and wrote once.
+    assert_eq!(last_write(&dir), started["data"]["runtime"]["started_at"]);
+
+    // Every run, crew and queue verb that writes the record stamps it.
+    applied(
+        talita(
+            &dir,
+            &ORCH,
+            &[
+                "crew",
+                "join",
+                "builder-1",
+                "--role",
+                "builder",
+                "--model",
+                "M1",
+            ],
+        ),
+        "crew join",
+    );
+    last_write(&dir);
+    applied(
+        talita(
+            &dir,
+            &ORCH,
+            &[
+                "crew",
+                "join",
+                "reviewer-1",
+                "--role",
+                "reviewer",
+                "--model",
+                "M2",
+            ],
+        ),
+        "crew join",
+    );
+    last_write(&dir);
+    applied(
+        talita(&dir, &ORCH, &["crew", "assign", "builder-1", &a]),
+        "crew assign",
+    );
+    last_write(&dir);
+    applied(
+        talita(&dir, &ORCH, &["crew", "idle", "builder-1"]),
+        "crew idle",
+    );
+    last_write(&dir);
+    applied(
+        talita(&dir, &ORCH, &["crew", "stall", "builder-1"]),
+        "crew stall",
+    );
+    last_write(&dir);
+    applied(talita(&dir, &ORCH, &["queue", "add", &b]), "queue add");
+    last_write(&dir);
+    applied(talita(&dir, &ORCH, &["queue", "drop", &b]), "queue drop");
+    last_write(&dir);
+    applied(talita(&dir, &ORCH, &["run", "refresh"]), "run refresh");
+    last_write(&dir);
+    applied(
+        talita(&dir, &ORCH, &["run", "stop", "--why", "the queue is done"]),
+        "run stop",
+    );
+    last_write(&dir);
+    applied(talita(&dir, &ORCH, &["run", "start"]), "run start");
+    last_write(&dir);
+
+    // A task write's refresh stamps the record too: an old last write moves on.
+    stamp_record(&dir, "2026-01-01T00:00:00Z");
+    applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &["task", "retitle", &a, "--title", "Stamped"],
+        ),
+        "task retitle",
+    );
+    let old = coding_crew_core::parse_rfc3339("2026-01-01T00:00:00Z").expect("the old instant");
+    let at = last_write(&dir);
+    let now = coding_crew_core::parse_rfc3339(&at).expect("the stamped instant");
+    assert!(now > old, "the task write kept {at}");
 }
 
 // ---- crew
@@ -1464,11 +1614,17 @@ fn the_mock_states_record_is_the_mocks_record() {
     let mut mock: Value =
         serde_json::from_str(&fs::read_to_string(fixture.join("runtime.json")).expect("the mock"))
             .expect("a runtime record");
-    // The run's start and the rows' since are this run's instants; every
-    // other field is the mock's.
+    // The fixture carries its own last write.
+    assert!(
+        mock["updated_at"].is_string(),
+        "the mock names no last write: {mock}"
+    );
+    // The run's instants — its start, its last write and the rows' since — are
+    // this run's; every other field is the mock's.
     let mut written = written;
     for value in [&mut written, &mut mock] {
         value["started_at"] = json!("");
+        value["updated_at"] = json!("");
         for member in value["crew"].as_array_mut().expect("the crew") {
             member.as_object_mut().expect("a row").remove("since");
         }

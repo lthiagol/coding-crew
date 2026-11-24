@@ -1774,35 +1774,41 @@ def runtime_record(tasks):
     second external round, after one round that raised findings. The budget
     is the rounds the task in flight has used of its own limit, and the
     findings are its open ones.
+
+    The record's last write is the last hold it tells — the reviewer took the
+    task in flight when it went back to review — derived from the fixtures,
+    never the clock.
     """
     by_id = {item["id"]: item for item in tasks}
     flight = by_id[IN_FLIGHT]
+    crew = [
+        {
+            "role": "orchestrator",
+            "model": ORCHESTRATOR_MODEL,
+            "actor": "orchestrator-01",
+            "state": "idle",
+        },
+        {
+            "role": "builder",
+            "model": RUNNER_MODEL,
+            "actor": flight["claim"]["by"],
+            "holds": IN_FLIGHT,
+            "since": flight["claim"]["at"],
+            "state": "idle",
+        },
+        {
+            "role": "reviewer",
+            "model": REVIEWER_MODEL,
+            "actor": flight["review"]["rounds"][-1]["reviewer"],
+            "holds": IN_FLIGHT,
+            "since": flight["status_since"],
+            "state": "reviewing",
+        },
+    ]
     return {
         "started_at": minutes_before(by_id[RUN_QUEUE[0]]["claim"]["at"], 30),
-        "crew": [
-            {
-                "role": "orchestrator",
-                "model": ORCHESTRATOR_MODEL,
-                "actor": "orchestrator-01",
-                "state": "idle",
-            },
-            {
-                "role": "builder",
-                "model": RUNNER_MODEL,
-                "actor": flight["claim"]["by"],
-                "holds": IN_FLIGHT,
-                "since": flight["claim"]["at"],
-                "state": "idle",
-            },
-            {
-                "role": "reviewer",
-                "model": REVIEWER_MODEL,
-                "actor": flight["review"]["rounds"][-1]["reviewer"],
-                "holds": IN_FLIGHT,
-                "since": flight["status_since"],
-                "state": "reviewing",
-            },
-        ],
+        "updated_at": max(member["since"] for member in crew if member.get("since")),
+        "crew": crew,
         "queue": [
             {
                 "id": task_id,
@@ -1910,6 +1916,14 @@ def check_runtime(record, tasks):
     for member in record["crew"]:
         if member.get("since"):
             assert started < stamp(member["since"]), member
+
+    # The last write is derived from the fixtures: after the run began, and at
+    # or after every hold the record tells.
+    updated = stamp(record["updated_at"])
+    assert updated > started, record["updated_at"]
+    for member in record["crew"]:
+        if member.get("since"):
+            assert updated >= stamp(member["since"]), member
 
 
 def build():

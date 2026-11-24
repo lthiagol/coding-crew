@@ -3,9 +3,8 @@
 //! derived fields every talita write recomputes (ADR 0018).
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::Path;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use coding_crew_core::claim::claim_failures;
 use coding_crew_core::runtime::EarlierRound;
@@ -55,7 +54,8 @@ pub fn after_task_write(
         return Ok(false);
     };
     apply(&mut record, effect, actor, task, now);
-    write(lock, record, now)
+    write(lock, record, now)?;
+    Ok(true)
 }
 
 /// Recompute the record and write it, with no crew-row side effect. The item
@@ -64,14 +64,18 @@ pub fn refreshed(lock: &ProjectLock<'_>) -> Result<bool, Failure> {
     let Some(record) = read(lock)? else {
         return Ok(false);
     };
-    write(lock, record, &coding_crew_core::now_rfc3339())
+    write(lock, record, &coding_crew_core::now_rfc3339())?;
+    Ok(true)
 }
 
-/// The record with its derived fields recomputed from the task files, saved.
-fn write(lock: &ProjectLock<'_>, record: Runtime, now: &str) -> Result<bool, Failure> {
+/// The record with the last write stamped and its derived fields recomputed
+/// from the task files, saved. Every write of the record goes through here, so
+/// the stamp and the write use one instant.
+fn write(lock: &ProjectLock<'_>, mut record: Runtime, now: &str) -> Result<Runtime, Failure> {
+    record.updated_at = Some(now.to_string());
     let record = derived(record, &lock.list()?, now);
     lock.write_runtime(&record)?;
-    Ok(true)
+    Ok(record)
 }
 
 /// Apply a task verb's side effect to the crew rows (ADR 0018). A row is the
@@ -229,6 +233,7 @@ pub fn start(call: &Call, ids: &[String]) -> Result<Done, Failure> {
     let now = coding_crew_core::now_rfc3339();
     let record = Runtime {
         started_at: now.clone(),
+        updated_at: None,
         crew: Vec::new(),
         queue,
         round: None,
@@ -240,9 +245,7 @@ pub fn start(call: &Call, ids: &[String]) -> Result<Done, Failure> {
             why: None,
         },
     };
-    let record = derived(record, &lock.list()?, &now);
-    lock.write_runtime(&record)?;
-    Ok(done_record(record))
+    Ok(done_record(write(&lock, record, &now)?))
 }
 
 /// `run stop`: the stamp stops the run; every row is idle and keeps its hold.
@@ -259,9 +262,7 @@ pub fn stop(call: &Call, why: &str) -> Result<Done, Failure> {
         member.state = AgentState::Idle;
     }
     let now = coding_crew_core::now_rfc3339();
-    let record = derived(record, &lock.list()?, &now);
-    lock.write_runtime(&record)?;
-    Ok(done_record(record))
+    Ok(done_record(write(&lock, record, &now)?))
 }
 
 /// `run show`: the record, and whether its last write has gone stale.
@@ -278,24 +279,27 @@ pub fn refresh(call: &Call) -> Result<Done, Failure> {
     let lock = call.project.store.lock()?;
     let record = require(&lock)?;
     let now = coding_crew_core::now_rfc3339();
-    let record = derived(record, &lock.list()?, &now);
-    lock.write_runtime(&record)?;
-    Ok(done_record(record))
+    Ok(done_record(write(&lock, record, &now)?))
 }
 
-/// The record is stale when its last write, the file's modification time, is
-/// older than the longest lease the crew holds (ADR 0018). A record with no
-/// held lease is never stale.
+/// The record is stale when its last write is older than the longest lease
+/// the crew holds (ADR 0018). A record that names no last write, or holds no
+/// lease, is never stale. A last write that does not parse is stale: a corrupt
+/// record cannot hold a run alive, as a malformed lease reads expired.
 fn stale(record: &Runtime, store: &Store) -> bool {
     let Some(lease) = longest_lease(record, store) else {
         return false;
     };
-    let Ok(modified) = fs::metadata(store.runtime_path()).and_then(|meta| meta.modified()) else {
+    let Some(written) = record.updated_at.as_deref() else {
         return false;
     };
-    SystemTime::now()
-        .duration_since(modified)
-        .is_ok_and(|age| age > lease)
+    let Some(updated) = coding_crew_core::parse_rfc3339(written) else {
+        return true;
+    };
+    let Some(now) = coding_crew_core::parse_rfc3339(&coding_crew_core::now_rfc3339()) else {
+        return false;
+    };
+    u64::try_from(now - updated).is_ok_and(|age| Duration::from_secs(age) > lease)
 }
 
 /// The longest lease the crew holds: a held task's claim's `lease_expires_at`
@@ -345,9 +349,7 @@ pub fn join(call: &Call, actor: &str, role: &str, model: &str) -> Result<Done, F
         state: AgentState::Idle,
     });
     let now = coding_crew_core::now_rfc3339();
-    let record = derived(record, &lock.list()?, &now);
-    lock.write_runtime(&record)?;
-    Ok(done_crew(record))
+    Ok(done_crew(write(&lock, record, &now)?))
 }
 
 /// `crew leave`: removes the row.
@@ -362,9 +364,7 @@ pub fn leave(call: &Call, actor: &str) -> Result<Done, Failure> {
         .ok_or_else(|| crew_unknown(actor))?;
     record.crew.remove(at);
     let now = coding_crew_core::now_rfc3339();
-    let record = derived(record, &lock.list()?, &now);
-    lock.write_runtime(&record)?;
-    Ok(done_crew(record))
+    Ok(done_crew(write(&lock, record, &now)?))
 }
 
 /// `crew assign`: the row holds the task, `since` now, and its role's state.
@@ -385,9 +385,7 @@ pub fn assign(call: &Call, actor: &str, id: &str) -> Result<Done, Failure> {
         FlowRole::Reviewer => AgentState::Reviewing,
         _ => AgentState::Executing,
     };
-    let record = derived(record, &lock.list()?, &now);
-    lock.write_runtime(&record)?;
-    Ok(done_crew(record))
+    Ok(done_crew(write(&lock, record, &now)?))
 }
 
 /// `crew idle`: idle, keeping the hold.
@@ -411,9 +409,7 @@ fn set_state(call: &Call, actor: &str, verb: &str, state: AgentState) -> Result<
         .ok_or_else(|| crew_unknown(actor))?;
     member.state = state;
     let now = coding_crew_core::now_rfc3339();
-    let record = derived(record, &lock.list()?, &now);
-    lock.write_runtime(&record)?;
-    Ok(done_crew(record))
+    Ok(done_crew(write(&lock, record, &now)?))
 }
 
 // ---- queue
@@ -469,9 +465,7 @@ pub fn queue_add(call: &Call, ids: &[String], before: Option<&str>) -> Result<Do
         None => record.queue.extend(fresh),
     }
     let now = coding_crew_core::now_rfc3339();
-    let record = derived(record, &lock.list()?, &now);
-    lock.write_runtime(&record)?;
-    Ok(done_queue(record))
+    Ok(done_queue(write(&lock, record, &now)?))
 }
 
 /// `queue drop`: removes the ids the queue holds; the rest changes nothing.
@@ -481,9 +475,7 @@ pub fn queue_drop(call: &Call, ids: &[String]) -> Result<Done, Failure> {
     let mut record = require(&lock)?;
     record.queue.retain(|item| !ids.contains(&item.id));
     let now = coding_crew_core::now_rfc3339();
-    let record = derived(record, &lock.list()?, &now);
-    lock.write_runtime(&record)?;
-    Ok(done_queue(record))
+    Ok(done_queue(write(&lock, record, &now)?))
 }
 
 /// `queue show`: the queue as the last write left it. A project with no

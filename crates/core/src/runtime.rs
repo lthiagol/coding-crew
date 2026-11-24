@@ -6,8 +6,8 @@
 //! reason: the work folder holds one file per work unit.
 //!
 //! What it holds is settled in `docs/tasks/task-model.md` § 11.2: the run's
-//! start, the crew, the run's queue, the task in flight and its rounds, the
-//! round budget, the open findings and the stamp.
+//! start and the record's last write, the crew, the run's queue, the task in
+//! flight and its rounds, the round budget, the open findings and the stamp.
 
 use std::fs;
 use std::path::Path;
@@ -24,6 +24,10 @@ use crate::task::RoundKind;
 pub struct Runtime {
     /// When this run began, RFC 3339.
     pub started_at: String,
+    /// The record's last write, RFC 3339. Absent on a record written before
+    /// the field: it has no known last write, and is never stale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
     /// One entry per agent of the flow.
     #[serde(default)]
     pub crew: Vec<CrewMember>,
@@ -289,6 +293,7 @@ mod tests {
     fn record(crew: Vec<CrewMember>, queue: Vec<QueueItem>) -> Runtime {
         Runtime {
             started_at: "2026-11-16T12:00Z".to_string(),
+            updated_at: None,
             crew,
             queue,
             round: None,
@@ -306,6 +311,7 @@ mod tests {
     fn a_record_reads_its_parts_in_file_order() {
         let text = r#"{
           "started_at": "2026-11-16T12:00Z",
+          "updated_at": "2026-11-16T13:40Z",
           "crew": [
             {"role": "orchestrator", "model": "opencode-go/glm-5.3#high", "state": "idle"},
             {"role": "runner", "model": "opencode-go/deepseek-v4.1-flash#high",
@@ -319,6 +325,7 @@ mod tests {
         }"#;
         let runtime: Runtime = serde_json::from_str(text).expect("a runtime record");
         assert_eq!(runtime.crew.len(), 2);
+        assert_eq!(runtime.updated_at.as_deref(), Some("2026-11-16T13:40Z"));
         assert_eq!(runtime.crew[0].role, FlowRole::Orchestrator);
         assert_eq!(runtime.crew[0].holds, None);
         assert_eq!(runtime.crew[1].state, AgentState::Executing);
@@ -346,9 +353,13 @@ mod tests {
         assert!(runtime.queue.is_empty());
         assert_eq!(runtime.round, None);
         assert_eq!(runtime.findings, 0);
+        // A record written before the field has no known last write.
+        assert_eq!(runtime.updated_at, None);
         // The stamp carries no why when it runs.
         let json = serde_json::to_string(&runtime).expect("a record");
         assert!(!json.contains("why"), "{json}");
+        // Nor does the record name a last write it does not hold.
+        assert!(!json.contains("updated_at"), "{json}");
     }
 
     #[test]

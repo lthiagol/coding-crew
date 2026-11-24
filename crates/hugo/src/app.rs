@@ -3226,6 +3226,7 @@ mod tests {
     fn runtime() -> Runtime {
         Runtime {
             started_at: "2026-11-09T08:30Z".to_string(),
+            updated_at: None,
             crew: vec![
                 member(
                     FlowRole::Orchestrator,
@@ -4739,6 +4740,7 @@ mod tests {
         ] {
             let runtime = Runtime {
                 started_at: "2026-11-09T08:30Z".to_string(),
+                updated_at: None,
                 crew,
                 queue: Vec::new(),
                 round: None,

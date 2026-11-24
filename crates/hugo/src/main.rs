@@ -678,6 +678,7 @@ mod tests {
         let record = |crew: Vec<CrewMember>| {
             RuntimeRead::Record(Runtime {
                 started_at: "2026-11-09T08:30Z".to_string(),
+                updated_at: None,
                 crew,
                 queue: Vec::new(),
                 round: None,

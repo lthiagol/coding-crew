@@ -657,6 +657,7 @@ The file is one object.
 | field | rule |
 |---|---|
 | `started_at` | when this run began, RFC 3339 |
+| `updated_at` | the record's last write, RFC 3339; absent on a record written before the field |
 | `crew` | one entry per agent of the flow |
 | `queue` | the run's tasks in queue order: an `id`, a `status` and a `claimable` each, never a task's title, note or intent. A held task and a done one are in it; the pane draws the waiting ones, and offers the waiting ones that are `claimable` |
 | `round` | the task in flight: the `task`, the `stage` (`self` or `external`), the round's `number`, and `earlier`, the rounds before it on the same task, oldest first |
@@ -718,10 +719,12 @@ With no task in flight there is no `round`, the budget is
 `{spent: 0, total: 0}`, `findings` is 0 and `severities` is absent. The task in
 flight is the first crew row, in crew order, that holds a task.
 
-**Stale.** The record's last write is its file's modification time, and `run
-show` reports the record stale when that write is older than the longest lease
-the crew holds: a held task's claim's `lease_expires_at` minus its `at`. An
-expired lease still counts; a record with no held lease is never stale.
+**Stale.** The record's last write is its `updated_at`, and `run show` reports
+the record stale when the time since it passes the longest lease the crew
+holds: a held task's claim's `lease_expires_at` minus its `at`. An expired
+lease still counts; a record with no `updated_at`, or with no held lease, is
+never stale, and one whose `updated_at` does not parse is stale, as a claim's
+malformed lease is expired.
 
 The record is optional like the journal: a project without one has no runtime,
 not a broken one.
@@ -979,4 +982,4 @@ work is in `TODO.md`.
 | the journal and runtime writers | `crates/core/src/store.rs` — `ProjectLock::write_activity`, `write_runtime`; atomic, under the lock |
 | the work folder path | the store reads `coding-crew/work/`, as [ADR 0002](../decisions/0002-work-folder.md) decides; [ADR 0010](../decisions/0010-project-boundary.md) stops discovery at the nearest project's `coding-crew/` folder |
 | smaller tasks (`ITM*`) | `crates/core/src/item.rs` — shaping, dismissal, promotion; `Store::promote_item` writes the item first |
-| the schema additions: `revision`, `review.re_reviews[]`, `Round.session`, `Evidence.manual`, `Question.instructed_by`, crew `actor`, the journal kinds and its `model` and `harness` | `crates/core/src/task.rs`, `runtime.rs`, `activity.rs`. Optional on read; written by the verbs that own them (crew `actor` waits for T12's runtime writer) |
+| the schema additions: `revision`, `review.re_reviews[]`, `Round.session`, `Evidence.manual`, `Question.instructed_by`, crew `actor`, the record's `updated_at`, the journal kinds and its `model` and `harness` | `crates/core/src/task.rs`, `runtime.rs`, `activity.rs`. Optional on read; written by the verbs that own them (crew `actor` waits for T12's runtime writer) |
