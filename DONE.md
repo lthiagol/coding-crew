@@ -2041,6 +2041,29 @@ read as never stale, and it now reads as expired, as a malformed lease does.
 By the opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug
 `mm`), two rounds. Commit `00b2845`.
 
+### 2026-11-24 · talita T14, the docs and the skills
+
+The last talita unit. The skill docs' CLI tables name the verbs that exist, in
+the noun–verb grammar, and their gates follow the task model's § 3.3 word for
+word; roles.md gains the identity table (the flags, the env variables, a flag
+beating the env, `project init` the one write that needs none); the drift
+table's eleven `doc fix` rows are closed; hugo's three flow skills call talita
+at the points `docs/talita/README.md`'s sequence diagram shows — the
+orchestrator runs the record, the builder works the task, the reviewer files
+its round — and the orchestrator skill's "Record" step says the task folder is
+the memory once talita writes. A new test pins the docs to the grammar: no doc
+outside the two that name the old verbs on purpose names a flat one.
+
+By the opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug
+`mm`), three rounds: round 1 clean, and the builder's report named the stale
+sentences it left — talita's README still said nothing was built, the roadmap
+still said nothing was scheduled, hugo's design record still said the queue
+holds unclaimed work, ADR 0006 still called the verification command
+undecided — which round 2 fixed; round 3 found the roadmap claiming ticks its
+table did not carry. One drift stays open and placed: `commands.md`'s `task
+list` synopsis lists `--lane` and `--needs-you`, which the binary lacks — the
+T6 follow-up in `TODO.md`. Commit `bb883c0`.
+
 ---
 
 ## Lessons
