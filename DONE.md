@@ -2109,6 +2109,28 @@ talita's grammar. O2 is built; the live run of one task from `approved` to
 `done` is check L5. Commits `64b7243`, `dd4aa8a`, `2659050`, `d01790a`,
 `aaaeba8`.
 
+### 2026-11-24 · L5, the orchestrator live, and L5a
+
+hugo's `s` on a sandbox copy of `examples/quillnote` (its own git repo, the
+queue holding TSK05) with an opencode crew — orchestrator
+`minimax-coding-plan/MiniMax-M3`, builder `opencode-go/deepseek-v4.1-flash`
+(max), reviewer `opencode-go/glm-5.3` (high). The first run took TSK05 to
+`done` in five minutes, one clean round, and found five defects, fixed by L5a:
+the start prompt lost before opencode took input (the start now confirms the
+agent left idle and re-sends once); the skill naming herdr-crew's `commit.sh`;
+the run records left dirty (the human's ruling: committed with each task, and a
+`chore:` commit at run stop); builder and reviewer events with no `model`
+(their start env now carries `TALITA_MODEL`/`TALITA_HARNESS`); hugo after a
+stopped run claiming a crew size and reading "0 of 0". L5a by the Haiku/Opus
+crew, three rounds; commit `1a8a445`. The re-run on a fresh copy: the prompt
+arrived by itself; four external rounds (spec-compliance, edge-cases,
+security, empirical), four medium findings fixed, the fifth review clean; hugo
+showed the crew, the round, the budget and the open findings live; the journal
+carries each role's model and harness; two commits, the tree clean. One defect
+open: the skill's agent ids are fixed `cc-…`, which collided with this
+repository's own herdr-crew reviewer (the orchestrator renamed its reviewer
+`cc-reviewer-l5b`).
+
 ---
 
 ## Lessons

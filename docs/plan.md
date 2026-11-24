@@ -142,7 +142,7 @@ Each needs a human, a machine or a font this one lacks.
 | L2 | **raul's freeze, live** (unit 69) | raul on a large work folder in a real terminal takes key bursts without lag; the key drain in `crates/raul/src/main.rs` is watched working |
 | L3 | **The Tasks nerd glyph** (unit 60) | U+F0AE7 is seen in a nerd font at one column, or replaced |
 | L4 | **The Windows lock** (unit 87) | the store's `File::try_lock` is run on Windows by two writers |
-| L5 | **The orchestrator, live** (O2) | hugo's `s` on a sandbox project drives one approved task to `done` with a builder and a reviewer, and the main pane shows the crew, round, budget and findings from talita's `runtime.json` |
+| L5 | **The orchestrator, live** (O2) ✓ 2026-11-24 | hugo's `s` on a sandbox project drives one approved task to `done` with a builder and a reviewer, and the main pane shows the crew, round, budget and findings from talita's `runtime.json` |
 
 ## Grooming
 

@@ -60,10 +60,11 @@ defects the review found are in the known-issues block of
   be removed.
 - Crew: Haiku builders (effort high), Opus reviewer (effort medium), herdr-crew
   slug `cc` on `main`, `cc2` in the worktree for parallel units.
-- O2 is built, not yet run live: check L5 in `docs/plan.md`.
-- Waiting on the human: push; L5 (hugo's `s` on a sandbox, one task to
-  `done`); then DF, this repository on its own `coding-crew/`; unit 101 waits
-  for the `v0.1.0` tag. Ask; don't pick.
+- O2 is built and ran live (L5, then L5a's fixes and a clean re-run); see `DONE.md`.
+- hugo's config holds the opencode trio for L5; the human's own is
+  `~/.config/coding-crew/config.toml.bak-2026-11-24`.
+- Waiting on the human: DF, this repository on its own `coding-crew/`; the
+  agent-id follow-up below; unit 101 waits for the `v0.1.0` tag. Ask; don't pick.
 - Lesson: a Haiku builder hit a permission prompt on a Python heredoc editing
   the Makefile (the classifier misread `$$` as `rm`); auto mode allowed it in
   time. When `unit.sh` stops on a blocked builder that then finishes, resume
@@ -80,14 +81,14 @@ queue (T5 → T6 → T7 → T10 → T11 → T13, then the `examples/` dogfood) s
 after T6: T5 and T6 are closed. Since then the opencode crew (deepseek-v4.1-flash builder, glm-5.3
 reviewer, slug `oc`) fixed the macOS catalogue failure and built T7. The long-path sweep is closed. T13 is closed too: a MiniMax orchestrator on branch
 `mm/talita` (a trial of an opencode orchestrator) ran the opencode crew again — deepseek-v4.1-flash builder,
-glm-5.3 reviewer, slug `mm` — and the review was clean in one round. T10 is closed too, on the same branch and the same crew, one clean round. T11 is closed as well: the journal writer, two rounds — the review found the two-file window a failed journal write leaves, now on the record in ADR 0018, and the cancel row of `commands.md`. T8 is closed: the claims, one clean round; the crew-row side effects wait for T12. T9 is closed too: the steps at work and the evidence, two rounds — the review found the override on a deferred criterion, masked by the deferral, and a stale `--expect-revision` checked only after the command had run. The dogfood run is closed too: two sandbox projects under `examples/`, written by talita alone, and `examples/DOGFOOD.md` with nine entries. Unit T11a is closed: `task approve --instructed-by` writes the human's name into the `approved` note, and the fifth round's escalation is ruled intended (2026-11-23). Unit DF1 is closed too: the six `examples/DOGFOOD.md` entries of the run — the finish and escalate remedies, the human's route, `task list --overlay`, the readiness's `overlay.clear`, and `project init`'s identity — are fixed. Unit DF2 is closed as well: `question answer --instructed-by` writes the human on the question's own `instructed_by`, and every journal event carries the call's optional `--model`/`--harness` (their envs too); the sandboxes' journals and task files are untouched. All nine `examples/DOGFOOD.md` entries are closed: six fixed by DF1, one by T11a, one ruled intended, one closed by DF2's ruling on the actor. T12 is closed too: the runtime writer — `run`, `crew` and `queue` write `runtime.json`, every talita write recomputes its derived fields, the task verbs make their crew rows certain, and the record talita writes for the mock's state is the mock's record, field for field (only the run's `started_at` and the rows' `since` are this run's). Unit T12a is closed too: the record's last write is its own optional `updated_at` — talita stamps it on every write of the record, `run show` measures staleness from it against the longest lease the crew holds, a record without it is never stale, and the mock carries it through the generator. T14 is closed too: the skill docs and the flow skills speak talita's noun–verb grammar, the drift table's doc-fix rows are closed, and a test pins the docs to the grammar. On 2026-11-24 the second dogfood run (DF3) and its fixes (DF4–DF6), the follow-ups F1 and F2, and O1 and O2 closed; their record is in `DONE.md`. Next: L5, the orchestrator live, then DF. Unit 101 waits for the human's `v0.1.0` tag.
+glm-5.3 reviewer, slug `mm` — and the review was clean in one round. T10 is closed too, on the same branch and the same crew, one clean round. T11 is closed as well: the journal writer, two rounds — the review found the two-file window a failed journal write leaves, now on the record in ADR 0018, and the cancel row of `commands.md`. T8 is closed: the claims, one clean round; the crew-row side effects wait for T12. T9 is closed too: the steps at work and the evidence, two rounds — the review found the override on a deferred criterion, masked by the deferral, and a stale `--expect-revision` checked only after the command had run. The dogfood run is closed too: two sandbox projects under `examples/`, written by talita alone, and `examples/DOGFOOD.md` with nine entries. Unit T11a is closed: `task approve --instructed-by` writes the human's name into the `approved` note, and the fifth round's escalation is ruled intended (2026-11-23). Unit DF1 is closed too: the six `examples/DOGFOOD.md` entries of the run — the finish and escalate remedies, the human's route, `task list --overlay`, the readiness's `overlay.clear`, and `project init`'s identity — are fixed. Unit DF2 is closed as well: `question answer --instructed-by` writes the human on the question's own `instructed_by`, and every journal event carries the call's optional `--model`/`--harness` (their envs too); the sandboxes' journals and task files are untouched. All nine `examples/DOGFOOD.md` entries are closed: six fixed by DF1, one by T11a, one ruled intended, one closed by DF2's ruling on the actor. T12 is closed too: the runtime writer — `run`, `crew` and `queue` write `runtime.json`, every talita write recomputes its derived fields, the task verbs make their crew rows certain, and the record talita writes for the mock's state is the mock's record, field for field (only the run's `started_at` and the rows' `since` are this run's). Unit T12a is closed too: the record's last write is its own optional `updated_at` — talita stamps it on every write of the record, `run show` measures staleness from it against the longest lease the crew holds, a record without it is never stale, and the mock carries it through the generator. T14 is closed too: the skill docs and the flow skills speak talita's noun–verb grammar, the drift table's doc-fix rows are closed, and a test pins the docs to the grammar. On 2026-11-24 the second dogfood run (DF3) and its fixes (DF4–DF6), the follow-ups F1 and F2, and O1 and O2 closed; their record is in `DONE.md`. L5 passed the same day, after L5a. Next: DF. Unit 101 waits for the human's `v0.1.0` tag.
 
 | phase | units | needs |
 |---|---|---|
 | 1 · cleanup | ~~95 hugo on PATH~~ · ~~96 docs drift~~ · ~~97 consistency~~ · ~~98 test hardening~~ · ~~99 rulings in the UI~~ | nothing; ready |
 | 2 · distribution | ~~100 version and releases~~ · 101 Homebrew formulae | 101 needs a first tag. The taps exist: `lthiagol/homebrew-tap`, `lthiagol/homebrew-dev`; the `homebrew` project skill publishes to them |
 | 3 · talita | ~~T5–T14~~ | closed |
-| 3 · the orchestrator | ~~O1 its job, designed~~ · ~~O2 its job, built~~ | L5, the live run |
+| 3 · the orchestrator | ~~O1 its job, designed~~ · ~~O2 its job, built~~ · ~~L5 live~~ | nothing |
 | 3 · dogfooding | DF this repository on its own `coding-crew/` | T12 and O2 |
 | 4 · live checks | L1–L4 in `docs/plan.md` § Live checks | a human, a machine or a font |
 
@@ -277,6 +278,12 @@ themes and a theme file on disk (`docs/plan.md` § Deferred).
 
 ## THE FOLLOW-UPS
 
+- 2026-11-24 · hugo's orchestrator skill names its agents `cc-reviewer` and
+  `cc-b-<tsk>-<k>`, fixed. On L5's re-run they collided with this
+  repository's herdr-crew reviewer (slug `cc`); the orchestrator improvised
+  `cc-reviewer-l5b`. Give the ids a prefix unique to the run or the project
+  (e.g. from `TALITA_SESSION` or the project folder), in the skill and
+  `docs/hugo/orchestrator.md`.
 - 2026-11-23 · the fixtures hold no code-review task before its first
   external round (unit 92's follow-up, placed in T10). T10 covers that state
   in talita's own tests; the mock still holds no such task, because it
@@ -296,7 +303,7 @@ grooming. A new follow-up goes here, dated, until it is placed.
 - **The orchestrator's job** is built (O2): hugo starts the orchestrator with
   its talita session, the shipped skills run the loop of
   `docs/hugo/orchestrator.md`, and talita writes the journal and
-  `runtime.json`. It has not yet driven a task live: L5.
+  `runtime.json`. It drove a task live on 2026-11-24 (L5).
 
 **Waits on a live run:** L1–L5 in `docs/plan.md` § Live checks.
 
