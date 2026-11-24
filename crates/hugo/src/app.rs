@@ -1594,6 +1594,9 @@ impl App {
         // so the session's picks reach the agents it starts.
         let mut env = start.env;
         env.push((config::CREW_ENV.to_string(), config::encode_crew(config)));
+        // The orchestrator's talita identity: a session minted now, for this
+        // start (ADR 0015, Q7).
+        env.extend(launch::orchestrator_identity());
         Ok(LaunchRequest {
             kind: harness.kind.to_string(),
             args: start.args,
@@ -5628,6 +5631,34 @@ mod tests {
     }
 
     #[test]
+    fn s_hands_the_orchestrator_its_talita_identity_with_a_session_it_minted() {
+        // The tab carries the orchestrator's identity, so its talita calls
+        // need no session of their own: hugo mints it at `s` (Q7).
+        let home = scratch("talita-identity");
+        let mut window = on_orchestrator(Some(home.clone()));
+        window.queued = vec!["TSK29".to_string()];
+        window.root = Some(home.clone());
+        let env_of = |window: &App| {
+            window
+                .launch_request()
+                .expect("a request")
+                .env
+                .into_iter()
+                .collect::<std::collections::HashMap<_, _>>()
+        };
+        let first = env_of(&window);
+        assert_eq!(first["TALITA_ACTOR"], "orchestrator");
+        assert_eq!(first["TALITA_ROLE"], "orchestrator");
+        assert!(
+            first["TALITA_SESSION"].starts_with("ses-orchestrator-orchestrator-"),
+            "{first:?}"
+        );
+        // Each `s` is a start of its own: its session is not the last one's.
+        assert_ne!(first["TALITA_SESSION"], env_of(&window)["TALITA_SESSION"]);
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
     fn each_crew_size_sets_the_roles_the_sidebar_draws_and_the_roles_s_starts() {
         // Sizes 1, 2 and 3 take the session's crew to their roles. The sidebar
         // draws those roles' heads and no others, and `s` hands the
@@ -6008,12 +6039,13 @@ mod tests {
                 "auto"
             ]
         );
-        // The only environment the start carries is the session's crew.
+        // The environment the start carries is the session's crew and the
+        // orchestrator's talita identity, and nothing else.
         assert!(
             requests[0]
                 .env
                 .iter()
-                .all(|(key, _)| key == config::CREW_ENV),
+                .all(|(key, _)| key == config::CREW_ENV || key.starts_with("TALITA_")),
             "{:?}",
             requests[0].env
         );

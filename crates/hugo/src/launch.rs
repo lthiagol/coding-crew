@@ -13,12 +13,18 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::Value;
 
+use coding_crew_core::actor::{Role, mint_session};
 use coding_crew_core::bounded::{self, Answer};
 
 use crate::skill::shell_word;
 
 /// The label of the orchestrator's tab, and the name of its agent in herdr.
 pub const ORCHESTRATOR: &str = "orchestrator";
+
+/// The environment talita reads the orchestrator's identity from (ADR 0015).
+const ENV_ACTOR: &str = "TALITA_ACTOR";
+const ENV_ROLE: &str = "TALITA_ROLE";
+const ENV_SESSION: &str = "TALITA_SESSION";
 
 /// The code herdr answers with when no agent has the name asked for.
 const AGENT_NOT_FOUND: &str = "agent_not_found";
@@ -75,6 +81,24 @@ pub trait Launcher: Send + Sync {
 
     /// Open a tab, start the orchestrator in it, and prompt it.
     fn start_orchestrator(&self, req: &LaunchRequest) -> Result<Launched>;
+}
+
+/// The orchestrator's talita identity, for its tab's environment. hugo mints
+/// the session at `s` (Q7), so the agent never handles it: the actor is the
+/// agent's name in herdr, and the role is the orchestrator's. Each call mints
+/// a fresh session.
+pub fn orchestrator_identity() -> Vec<(String, String)> {
+    vec![
+        (ENV_ACTOR.to_string(), ORCHESTRATOR.to_string()),
+        (
+            ENV_ROLE.to_string(),
+            Role::Orchestrator.as_str().to_string(),
+        ),
+        (
+            ENV_SESSION.to_string(),
+            mint_session(Role::Orchestrator.as_str(), ORCHESTRATOR),
+        ),
+    ]
 }
 
 /// The launcher hugo uses when it runs inside herdr. `None` outside herdr: the
@@ -407,6 +431,44 @@ mod tests {
             .expect("a readiness timeout");
         let timeout = Duration::from_millis(args[flag + 1].parse().expect("milliseconds"));
         assert!(AGENT_START_BOUND > timeout, "{timeout:?}");
+    }
+
+    #[test]
+    fn the_orchestrator_is_minted_a_session_and_named_in_its_tab() {
+        // The env hugo builds: the actor and role talita reads, and a session
+        // minted as `talita session new` mints it.
+        let env = orchestrator_identity();
+        let value = |key: &str| {
+            env.iter()
+                .find(|(name, _)| name == key)
+                .map(|(_, value)| value.clone())
+                .unwrap_or_else(|| panic!("{key} is not in {env:?}"))
+        };
+        assert_eq!(value("TALITA_ACTOR"), "orchestrator");
+        assert_eq!(value("TALITA_ROLE"), "orchestrator");
+        let session = value("TALITA_SESSION");
+        let suffix = session
+            .strip_prefix("ses-orchestrator-orchestrator-")
+            .unwrap_or_else(|| panic!("{session}"));
+        assert_eq!(suffix.len(), 12, "{session}");
+        assert!(
+            suffix.chars().all(|c| matches!(c, 'a'..='z' | '2'..='7')),
+            "{session}"
+        );
+        assert_eq!(env.len(), 3, "{env:?}");
+    }
+
+    #[test]
+    fn each_start_mints_a_fresh_orchestrator_session() {
+        let session = |env: Vec<(String, String)>| {
+            env.into_iter()
+                .find(|(key, _)| key == "TALITA_SESSION")
+                .map(|(_, value)| value)
+        };
+        assert_ne!(
+            session(orchestrator_identity()),
+            session(orchestrator_identity())
+        );
     }
 
     #[test]

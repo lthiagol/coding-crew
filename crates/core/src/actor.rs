@@ -1,3 +1,8 @@
+use std::collections::hash_map::RandomState;
+use std::hash::{BuildHasher, Hasher};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use serde::{Deserialize, Serialize};
 
 /// Who acts on a task. Humans carry no role.
@@ -90,4 +95,33 @@ impl FlowRole {
             FlowRole::Orchestrator => "orchestrator",
         }
     }
+}
+
+/// A fresh working session, minted as `talita session new` mints it: writes
+/// nothing, and the id is `ses-<role>-<actor>-<12 random base32>` (ADR 0015).
+pub fn mint_session(role: &str, actor: &str) -> String {
+    format!("ses-{role}-{actor}-{}", random_base32())
+}
+
+/// Twelve base32 characters (RFC 4648 alphabet, lower case): 60 random bits.
+fn random_base32() -> String {
+    const ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    // `RandomState` is seeded from the OS's randomness.
+    let mut hasher = RandomState::new().build_hasher();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    hasher.write_u128(nanos);
+    hasher.write_u32(std::process::id());
+    hasher.write_u64(COUNTER.fetch_add(1, Ordering::Relaxed));
+    let mut bits = hasher.finish();
+    (0..12)
+        .map(|_| {
+            let c = ALPHABET[(bits & 31) as usize] as char;
+            bits >>= 5;
+            c
+        })
+        .collect()
 }

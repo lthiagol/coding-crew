@@ -361,8 +361,10 @@ the error on the failure slot, as raul names a file it cannot read.
 starts the agent the orchestrator row names, on that row's harness and model,
 and prompts it to run `hugo --skill orchestrator` over the queue's tasks, in
 order. The tab's environment carries the session's crew, in `HUGO_CREW`, so
-the skill prints the crew the session runs. The loop is the orchestrator's:
-hugo starts it and does not run it.
+the skill prints the crew the session runs, and the orchestrator's talita
+identity: `TALITA_ACTOR`, `TALITA_ROLE` and a `TALITA_SESSION` hugo mints at
+each `s` (ADR 0015). The loop is the orchestrator's: hugo starts it and does
+not run it.
 
 `HUGO_CREW` is one line of JSON: an object with `agents` (the crew's agents,
 in order), `round_limit`, `order` (the steps, in order) and `raul`, each as the

@@ -19,3 +19,7 @@ anyhow.workspace = true
 crossterm.workspace = true
 ratatui.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+# The tests write a runtime record through talita's verbs, then hugo reads it.
+coding-crew-talita = { path = "../talita" }

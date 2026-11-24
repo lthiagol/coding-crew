@@ -1,10 +1,6 @@
 //! `session new|show` (ADR 0015). Neither writes anything.
 
-use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hasher};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use coding_crew_core::actor::mint_session;
 use serde_json::json;
 
 use crate::envelope::Done;
@@ -54,33 +50,10 @@ pub fn new(identity: &Resolved) -> Result<Done, Failure> {
             format!("actor `{actor}` holds whitespace"),
         ));
     }
-    let session = format!("ses-{}-{actor}-{}", role.as_str(), random_base32());
+    let session = mint_session(role.as_str(), actor);
     let env = format!(
         "{ENV_ACTOR}={actor} {ENV_ROLE}={} {ENV_SESSION}={session}",
         role.as_str()
     );
     Ok(Done::data(json!({ "session": session, "env": env })))
-}
-
-/// Twelve base32 characters (RFC 4648 alphabet, lower case): 60 random bits.
-fn random_base32() -> String {
-    const ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    // `RandomState` is seeded from the OS's randomness.
-    let mut hasher = RandomState::new().build_hasher();
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    hasher.write_u128(nanos);
-    hasher.write_u32(std::process::id());
-    hasher.write_u64(COUNTER.fetch_add(1, Ordering::Relaxed));
-    let mut bits = hasher.finish();
-    (0..12)
-        .map(|_| {
-            let c = ALPHABET[(bits & 31) as usize] as char;
-            bits >>= 5;
-            c
-        })
-        .collect()
 }
