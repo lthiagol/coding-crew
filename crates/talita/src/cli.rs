@@ -14,7 +14,7 @@ use crate::parts::{self, StepFields};
 use crate::project::{self, Project};
 use crate::review::RoundFlags;
 use crate::write::{Call, Ran};
-use crate::{claim, evidence, item, journal, lifecycle, review, session, task};
+use crate::{claim, evidence, item, journal, lifecycle, review, runtime, session, task};
 
 /// Task Administration, Lifecycle & Interaction Terminal Application — the CLI
 /// tool of coding-crew. Every call prints one JSON object on stdout.
@@ -124,6 +124,21 @@ enum Noun {
     Item {
         #[command(subcommand)]
         verb: ItemVerb,
+    },
+    /// The flow's run: start it, stop it, read it, repair it.
+    Run {
+        #[command(subcommand)]
+        verb: RunVerb,
+    },
+    /// The agents of the flow.
+    Crew {
+        #[command(subcommand)]
+        verb: CrewVerb,
+    },
+    /// The run's tasks, in the order they are taken.
+    Queue {
+        #[command(subcommand)]
+        verb: QueueVerb,
     },
     /// The project's journal: what happened, oldest first.
     Journal {
@@ -607,6 +622,78 @@ enum JournalVerb {
 }
 
 #[derive(Debug, Subcommand)]
+enum RunVerb {
+    /// A new record: the run begins.
+    Start {
+        #[arg(long = "task", value_name = "TSK")]
+        tasks: Vec<String>,
+    },
+    /// Stop the run; the reason is required.
+    Stop {
+        #[arg(long)]
+        why: String,
+    },
+    /// The record, and whether its last write has gone stale.
+    Show,
+    /// Recompute the derived fields; the repair after a crash.
+    Refresh,
+}
+
+#[derive(Debug, Subcommand)]
+enum CrewVerb {
+    /// Add an agent to the crew.
+    Join {
+        #[arg(id = "crew-actor", value_name = "ACTOR")]
+        actor: String,
+        /// builder, reviewer or orchestrator.
+        #[arg(long)]
+        role: String,
+        #[arg(long)]
+        model: String,
+    },
+    /// Remove an agent from the crew.
+    Leave {
+        #[arg(id = "crew-actor", value_name = "ACTOR")]
+        actor: String,
+    },
+    /// Give an agent a task: its hold, its since, and its state.
+    Assign {
+        #[arg(id = "crew-actor", value_name = "ACTOR")]
+        actor: String,
+        #[arg(value_name = "TSK")]
+        id: String,
+    },
+    /// The agent is idle; it keeps its hold.
+    Idle {
+        #[arg(id = "crew-actor", value_name = "ACTOR")]
+        actor: String,
+    },
+    /// The agent cannot go on.
+    Stall {
+        #[arg(id = "crew-actor", value_name = "ACTOR")]
+        actor: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum QueueVerb {
+    /// Append tasks, or insert them before one.
+    Add {
+        #[arg(required = true, num_args = 1.., value_name = "TSK")]
+        ids: Vec<String>,
+        #[arg(long, value_name = "TSK")]
+        before: Option<String>,
+    },
+    /// Remove tasks; an id the queue does not hold changes nothing.
+    Drop {
+        #[arg(required = true, num_args = 1.., value_name = "TSK")]
+        ids: Vec<String>,
+    },
+    /// The queue, with its derived status and claimable flag.
+    Show,
+}
+
+#[derive(Debug, Subcommand)]
 enum SessionVerb {
     /// Mint a session id for --as and --role. Writes nothing.
     New,
@@ -656,11 +743,11 @@ pub fn run(args: Vec<OsString>) -> i32 {
             return envelope::emit(&called(&args), &Err(failure));
         }
     };
-    let (command, result) = dispatch(&talita);
+    let (command, result) = dispatch(&talita, first_role(&args));
     envelope::emit(command, &result)
 }
 
-fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
+fn dispatch(talita: &Talita, caller_role: Option<String>) -> (&'static str, Result<Done, Failure>) {
     let flags = Flags {
         actor: talita.actor.clone(),
         role: talita.role.clone(),
@@ -953,6 +1040,61 @@ fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
             }
         }
         Noun::Item { verb } => item_verb(verb, project_flag, identity),
+        Noun::Run { verb } => {
+            let run = writer(project_flag, identity, None);
+            match verb {
+                RunVerb::Start { tasks } => ("run start", run(&|c| runtime::start(c, tasks))),
+                RunVerb::Stop { why } => ("run stop", run(&|c| runtime::stop(c, why))),
+                RunVerb::Show => (
+                    "run show",
+                    project::locate(project_flag).and_then(|p| runtime::show(&p)),
+                ),
+                RunVerb::Refresh => ("run refresh", run(&|c| runtime::refresh(c))),
+            }
+        }
+        Noun::Crew { verb } => match verb {
+            CrewVerb::Join { actor, role, model } => {
+                // The subcommand's `--role` names the crew's role. clap gives
+                // both flags one id, so the crew's value wins the global; the
+                // caller's own flag is the first one said.
+                let caller = Resolved::from_flags(&Flags {
+                    role: caller_role,
+                    ..flags.clone()
+                });
+                let run = writer(project_flag, caller, None);
+                ("crew join", run(&|c| runtime::join(c, actor, role, model)))
+            }
+            CrewVerb::Leave { actor } => {
+                let run = writer(project_flag, identity, None);
+                ("crew leave", run(&|c| runtime::leave(c, actor)))
+            }
+            CrewVerb::Assign { actor, id } => {
+                let run = writer(project_flag, identity, None);
+                ("crew assign", run(&|c| runtime::assign(c, actor, id)))
+            }
+            CrewVerb::Idle { actor } => {
+                let run = writer(project_flag, identity, None);
+                ("crew idle", run(&|c| runtime::idle(c, actor)))
+            }
+            CrewVerb::Stall { actor } => {
+                let run = writer(project_flag, identity, None);
+                ("crew stall", run(&|c| runtime::stall(c, actor)))
+            }
+        },
+        Noun::Queue { verb } => {
+            let run = writer(project_flag, identity, None);
+            match verb {
+                QueueVerb::Add { ids, before } => (
+                    "queue add",
+                    run(&|c| runtime::queue_add(c, ids, before.as_deref())),
+                ),
+                QueueVerb::Drop { ids } => ("queue drop", run(&|c| runtime::queue_drop(c, ids))),
+                QueueVerb::Show => (
+                    "queue show",
+                    project::locate(project_flag).and_then(|p| runtime::queue_show(&p)),
+                ),
+            }
+        }
         Noun::Journal { verb } => match verb {
             JournalVerb::Show {
                 task,
@@ -1144,6 +1286,27 @@ fn item_verb(
         }
         ItemVerb::Promote { id } => ("item promote", run(&|c| item::promote(c, id))),
     }
+}
+
+/// The caller's role on a `crew join` call: its `--role` before the crew
+/// row's. A `crew join` always carries the row's flag after the verb, so the
+/// first of two is the caller's; one is the row's alone, and the env decides.
+fn first_role(args: &[OsString]) -> Option<String> {
+    let mut roles = Vec::new();
+    let mut args = args.iter().skip(1);
+    while let Some(arg) = args.next() {
+        let arg = arg.to_string_lossy();
+        if arg == "--role" {
+            if let Some(value) = args.next() {
+                roles.push(value.to_string_lossy().into_owned());
+            }
+        } else if let Some(value) = arg.strip_prefix("--role=") {
+            roles.push(value.to_string());
+        } else if VALUE_FLAGS.contains(&arg.as_ref()) {
+            args.next();
+        }
+    }
+    (roles.len() > 1).then(|| roles[0].clone())
 }
 
 /// The noun and verb as called, best effort, for a call that did not parse.

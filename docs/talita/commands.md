@@ -1,6 +1,6 @@
 # talita — command reference
 
-Accepted 2026-11-22. Built: `session`, `project` (T5); `task` create and content, `show` and `list` without `review_state`, `lane`, `--lane` and `--needs-you`, `scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`, `note` (T6); the `task` lifecycle verbs and overlays (T7); the `claim` verbs (T8); the `step` and `criterion` work verbs and the `evidence` verbs (T9); the `round`, `finding` and `comment` verbs (T10); the journal writer and `journal show` (T11); the `item` verbs (T13). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
+Accepted 2026-11-22. Built: `session`, `project` (T5); `task` create and content, `show` and `list` without `review_state`, `lane`, `--lane` and `--needs-you`, `scope`, `criterion add|revise|remove`, `step add|revise|remove`, `question`, `note` (T6); the `task` lifecycle verbs and overlays (T7); the `claim` verbs (T8); the `step` and `criterion` work verbs and the `evidence` verbs (T9); the `round`, `finding` and `comment` verbs (T10); the journal writer and `journal show` (T11); the runtime writer, `run`, `crew` and `queue` (T12); the `item` verbs (T13). The grammar is [ADR 0012](../decisions/0012-noun-verb-grammar.md);
 the output and errors [ADR 0014](../decisions/0014-output-and-errors.md);
 identity [ADR 0015](../decisions/0015-identity.md). Gate names are task-model
 § 3.3's. "TM" is `docs/tasks/task-model.md`, "LC" `crates/core/src/lifecycle.rs`.
@@ -344,29 +344,44 @@ Errors: `item.not_open` (4), `item.is_idea` (4, remedy: shape it first),
 
 ## run, crew, queue — the runtime record
 
-[ADR 0018](../decisions/0018-runtime-and-journal-writers.md). Orchestrator.
+[ADR 0018](../decisions/0018-runtime-and-journal-writers.md). Orchestrator:
+a write with another agent role is `role.wrong`; a human is `actor.not_agent`.
+The reads (`run show`, `queue show`) need no identity.
+
 Written fields are set by these verbs; derived fields (queue `status`,
-`claimable`, `round`, `budget`, `findings`, `severities`, crew `holds` from
-claims) are recomputed from the task files on every write. None of these
-verbs touches a task file or the journal.
+`claimable`, `round`, `budget`, `findings`, `severities`) are recomputed from
+the task files on every write, a task verb's included. None of these verbs
+touches a task file or the journal.
 
 | Verb | Synopsis | Writes |
 |---|---|---|
-| `run start` | `run start [--task <TSK>…]` | new `runtime.json`: `started_at`, queue, `stamp.runs: true`. Refuses `run.active` if a record with `runs: true` exists (remedy `run stop`) |
-| `run stop` | `run stop --why <t>` | `stamp {runs: false, why}`; crew states idle |
-| `run show` | `run show` | the record, plus `stale: true` when no write touched it within the longest live lease (read) |
-| `run refresh` | `run refresh` | recomputes every derived field. Repair after a crash |
+| `run start` | `run start [--task <TSK>…]` | new `runtime.json`: `started_at` now, the queue from `--task` in order, an empty crew, `stamp.runs: true`. Refuses `run.active` if a record with `runs: true` exists (remedy `talita run stop --why <t>`); `task.not_found` for an unknown id |
+| `run stop` | `run stop --why <t>` | `stamp {runs: false, why}`; every crew row `idle`, keeping its hold |
+| `run show` | `run show` | the record, plus `stale` (read) |
+| `run refresh` | `run refresh` | recomputes every derived field and writes the record. Repair after a crash |
 | `crew join` | `crew join <actor> --role builder\|reviewer\|orchestrator --model <m>` | new crew row `{role, model, actor, state: idle}` |
 | `crew leave` | `crew leave <actor>` | removes the row |
-| `crew assign` | `crew assign <actor> <TSK>` | `holds`, `since`, state `executing` (builder) or `reviewing` (reviewer) |
+| `crew assign` | `crew assign <actor> <TSK>` | `holds`, `since` now, state `executing` (builder, orchestrator) or `reviewing` (reviewer) |
 | `crew idle` | `crew idle <actor>` | state `idle`, keeps `holds` |
 | `crew stall` | `crew stall <actor>` | state `blocked` (the agent cannot go on). Word chosen so it is not read as the task overlay |
-| `queue add` | `queue add <TSK>… [--before <TSK>]` | appends (or inserts) ids |
-| `queue drop` | `queue drop <TSK>…` | removes ids |
+| `queue add` | `queue add <TSK>… [--before <TSK>]` | appends (or inserts) ids, each once; every id the run took stays |
+| `queue drop` | `queue drop <TSK>…` | removes the ids it holds; the rest changes nothing |
 | `queue show` | `queue show` | the queue with derived status and claimable (read) |
 
+Outputs: `run start|stop|refresh` and `run show` carry `{"runtime": <record>}`
+(`run show` adds `"stale"`); the crew verbs `{"crew": [rows]}`; the queue verbs
+`{"queue": [items]}`. A verb that writes the record names `runtime.json` in
+`wrote`, and so does every task write while the record exists.
+
+**Stale.** `run show` reports `stale: true` when the record's last write — the
+file's modification time — is older than the longest lease the crew holds. A
+lease's length is its claim's `lease_expires_at` minus its `at`; a lease that
+has already expired still counts, and a record that holds no lease is never
+stale.
+
 Errors: `run.absent` (3), `run.active` (4), `crew.unknown` (3),
-`crew.exists` (4).
+`crew.exists` (4). A record that does not parse refuses the write with
+`store.unreadable` (7); a project without one has no runtime, not a broken one.
 
 ## journal
 

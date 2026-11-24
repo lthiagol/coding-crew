@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 use crate::envelope::Done;
 use crate::error::{Code, Failure, GateDetail};
+use crate::runtime::SideEffect;
 use crate::write::{Call, NewEvent, required_text, text};
 
 /// One lifecycle move under the project lock: core's gates, talita's codes,
@@ -24,7 +25,13 @@ fn apply(
     instructed_by: Option<&str>,
     grant_rounds: u32,
 ) -> Result<Done, Failure> {
-    call.task_journaled(id, |task, actor| {
+    let effect = match event {
+        Event::Finish | Event::ReReview => SideEffect::Idle,
+        Event::PassReview | Event::Escalate => SideEffect::ReleaseIdle,
+        Event::Cancel => SideEffect::Release,
+        _ => SideEffect::None,
+    };
+    call.task_journaled_with(id, effect, |task, actor| {
         match event {
             Event::Unblock if task.overlays.blocked.is_none() => {
                 return Err(overlay_absent(id, "blocked"));

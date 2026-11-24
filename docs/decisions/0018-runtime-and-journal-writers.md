@@ -120,8 +120,12 @@ describes the pane, not the record.
 
 ### Staleness
 
-No heartbeat. `run show` reports `stale: true` when the record's last write
-is older than the longest live lease of any task the crew holds (default 2 h).
+No heartbeat. The record's last write is **the file's modification time**; no
+field records it. `run show` reports `stale: true` when that write is older
+than **the longest lease the crew holds** — the length of a held task's claim,
+`lease_expires_at` minus its `at`. A lease that has already expired still
+counts: that is the crashed case. A record that holds no lease is not stale,
+and with the default two-hour lease a run that wrote a minute ago never is.
 The orchestrator calls `run stop --why` on every exit it controls. A crashed
 run stays `runs: true` until the next `run start`, which refuses
 (`run.active`) and names `run stop` as the remedy. Liveness in hugo is later.
@@ -148,6 +152,10 @@ run stays `runs: true` until the next `run start`, which refuses
   actor and the session).
 - Settled 2026-11-22: Items are not journaled; later.
 - Settled 2026-11-22: Dead runs: `run show` reports `stale`, `run start` refuses an active record; a heartbeat is later.
+- Settled 2026-11-23: Staleness is measured from the record file's
+  modification time against the longest lease the crew holds — the lease's
+  length, never its remaining time — and `run start` writes a new record (the
+  human's ruling, the orchestrator's call for the mtime).
 - Settled 2026-11-22: Crew `model` is the model alone; harness and effort stay in the configuration.
 
 ## Consequences

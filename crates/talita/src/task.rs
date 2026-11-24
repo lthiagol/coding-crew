@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use coding_crew_core::claim::claim_failures;
 use coding_crew_core::lifecycle::{TransitionContext, check};
-use coding_crew_core::store::{ACTIVITY_FILE, by_number};
+use coding_crew_core::store::{ACTIVITY_FILE, RUNTIME_FILE, by_number};
 use coding_crew_core::task::{Effort, Priority, slugify};
 use coding_crew_core::{Actor, ActorKind, Event, EventKind, Role, Section, Status, Task, TaskKind};
 use serde_json::{Value, json};
@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 use crate::envelope::Done;
 use crate::error::{Code, Failure};
 use crate::project::Project;
+use crate::runtime;
 use crate::write::{
     Call, NewEvent, append_journal, own, read_journal, refuse_cancelled, refuse_frozen,
     require_pre_approval, text, title, work_file,
@@ -122,17 +123,21 @@ pub fn create(
         lock.save(p)?;
         wrote.push(work_file(&lock.task_path(p)));
     }
+    let now = coding_crew_core::now_rfc3339();
     let journal_kinds = append_journal(
         &lock,
         &mut journal,
         &task.id,
         &call.actor,
         &call.ran,
-        &coding_crew_core::now_rfc3339(),
+        &now,
         vec![NewEvent::new(EventKind::Created)],
     )?;
     if !journal_kinds.is_empty() {
         wrote.push(ACTIVITY_FILE.to_string());
+    }
+    if runtime::refreshed(&lock)? {
+        wrote.push(RUNTIME_FILE.to_string());
     }
     Ok(Done {
         data: json!({

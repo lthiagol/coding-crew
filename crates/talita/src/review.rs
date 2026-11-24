@@ -18,6 +18,7 @@ use crate::envelope::Done;
 use crate::error::{Code, Failure, GateDetail};
 use crate::parts;
 use crate::project::Project;
+use crate::runtime::SideEffect;
 use crate::task::word;
 use crate::write::{Call, NewEvent, next_part_id, own, part_not_found, required_text, text};
 
@@ -80,7 +81,11 @@ pub fn round_file(call: &Call, id: &str, flags: RoundFlags<'_>) -> Result<Done, 
             "talita round file {id} --kind self --focus <f> --verdict ok|changes-needed"
         )));
     }
-    call.task_journaled(id, |task, actor| {
+    let effect = match spec.kind {
+        RoundKind::External => SideEffect::Idle,
+        RoundKind::SelfReview => SideEffect::None,
+    };
+    call.task_journaled_with(id, effect, |task, actor| {
         check_filing(task, actor, &spec, id)?;
         Ok(file(task, actor, spec))
     })

@@ -5,7 +5,7 @@ use std::io::Read;
 use std::time::Duration;
 
 use coding_crew_core::ownership::{authorize, owner};
-use coding_crew_core::store::{ACTIVITY_FILE, WORK_DIR};
+use coding_crew_core::store::{ACTIVITY_FILE, RUNTIME_FILE, WORK_DIR};
 use coding_crew_core::{
     Activity, ActivityError, ActivityEvent, Actor, EventKind, OwnershipError, ProjectLock, Section,
     Status, StoreError, Task,
@@ -15,6 +15,7 @@ use serde_json::{Value, json};
 use crate::envelope::Done;
 use crate::error::{Code, Failure};
 use crate::project::Project;
+use crate::runtime::{self, SideEffect};
 
 /// The model and the harness that ran a call; both optional (ADR 0018).
 #[derive(Debug, Clone, Default)]
@@ -74,6 +75,17 @@ impl Call<'_> {
         id: &str,
         change: impl FnOnce(&mut Task, &Actor) -> Result<(Value, Vec<NewEvent>), Failure>,
     ) -> Result<Done, Failure> {
+        self.task_journaled_with(id, SideEffect::None, change)
+    }
+
+    /// The same write, leaving the crew-row side effect ADR 0018 names in the
+    /// record, in the same locked call.
+    pub fn task_journaled_with(
+        &self,
+        id: &str,
+        effect: SideEffect,
+        change: impl FnOnce(&mut Task, &Actor) -> Result<(Value, Vec<NewEvent>), Failure>,
+    ) -> Result<Done, Failure> {
         let lock = self.project.store.lock()?;
         let mut journal = read_journal(&lock)?;
         let mut task = lock.load(id)?;
@@ -106,6 +118,9 @@ impl Call<'_> {
         )?;
         if !kinds.is_empty() {
             wrote.push(ACTIVITY_FILE.to_string());
+        }
+        if runtime::after_task_write(&lock, effect, &self.actor, &task.id, &now)? {
+            wrote.push(RUNTIME_FILE.to_string());
         }
         if let Value::Object(map) = &mut data {
             map.insert("id".into(), json!(task.id));

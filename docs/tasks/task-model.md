@@ -649,8 +649,7 @@ add no state.
 ```
 
 The runtime record sits beside the journal, outside `work/`, for the journal's
-reason. It is **provisional**: nothing writes it yet, and the flow's writer
-settles the shape when it lands. Its types live in
+reason. talita is its only writer (ADR 0018). Its types live in
 `crates/core/src/runtime.rs`, so the writer and the reader share them.
 
 The file is one object.
@@ -696,6 +695,33 @@ one per role. A held task belongs to the crew, not the queue.
 The queue is the run's, not the unclaimed work's alone: a writer lists the
 tasks in the order the run takes them, so the pane can show what waits and how
 much is done. A mark in hugo lasts the session only; nothing about it reaches the record.
+
+The record mixes two kinds of fields. `started_at`, the `stamp` and the crew
+rows are the run's; the queue's `status` and `claimable`, the `round`, the
+`budget`, the `findings` and the `severities` are derived from the task files.
+talita recomputes the derived fields on every write while the record exists,
+a task verb's included, so no `claimable` is older than the last write:
+
+- `queue[].status` is the task file's status; `queue[].claimable` is the
+  claim rule of [§ 3.6](#36-claims) applied to it.
+- `round` is present while a crew row holds a task: that task, its `stage` —
+  `external` while a reviewer row is `reviewing` it or the task is
+  `remediating`, and `self` otherwise — its `number` — the external rounds
+  filed plus one for `external`, `0` for `self` — and `earlier`, the external
+  rounds filed on it, oldest first, with the findings each raised.
+- `budget.spent` is the `number` for `external` and the external rounds filed
+  for `self`; `total` is the task's `review.max_rounds`. Self rounds never
+  consume the budget.
+- `findings` and `severities` are the task in flight's open findings.
+
+With no task in flight there is no `round`, the budget is
+`{spent: 0, total: 0}`, `findings` is 0 and `severities` is absent. The task in
+flight is the first crew row, in crew order, that holds a task.
+
+**Stale.** The record's last write is its file's modification time, and `run
+show` reports the record stale when that write is older than the longest lease
+the crew holds: a held task's claim's `lease_expires_at` minus its `at`. An
+expired lease still counts; a record with no held lease is never stale.
 
 The record is optional like the journal: a project without one has no runtime,
 not a broken one.

@@ -12,13 +12,14 @@ use serde_json::{Value, json};
 use crate::envelope::Done;
 use crate::error::{Code, Failure, GateDetail};
 use crate::project::Project;
+use crate::runtime::SideEffect;
 use crate::write::{Call, NewEvent, duration, required_text};
 
 /// `claim take`: take a claimable task, or take over an expired claim. The
 /// takeover is journaled with the holder it replaced.
 pub fn take(call: &Call, id: &str, lease: Option<&str>) -> Result<Done, Failure> {
     let lease = lease_arg(lease)?;
-    call.task_journaled(id, |task, actor| {
+    call.task_journaled_with(id, SideEffect::Take, |task, actor| {
         let now = coding_crew_core::now_rfc3339();
         let before = task.claim.clone();
         // The dependency gate reads the plan, as `task start` does.
@@ -58,7 +59,7 @@ pub fn release(call: &Call, id: &str, reason: Option<&str>) -> Result<Done, Fail
         .map(|value| required_text("--reason", value))
         .transpose()?
         .ok_or_else(|| Failure::new(Code::InputInvalid, "--reason is required"))?;
-    call.task_journaled(id, |task, actor| {
+    call.task_journaled_with(id, SideEffect::Release, |task, actor| {
         let now = coding_crew_core::now_rfc3339();
         claim::release(task, actor, &reason, &now)
             .map_err(|error| refused(error, "claim release", id))?;

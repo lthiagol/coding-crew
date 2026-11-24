@@ -1,7 +1,7 @@
 //! `item create|show|list|shape|dismiss|promote`: the work that is not a
 //! task yet — an idea, a bug or a small feature, in `ITM*`.
 
-use coding_crew_core::store::{ACTIVITY_FILE, by_number};
+use coding_crew_core::store::{ACTIVITY_FILE, RUNTIME_FILE, by_number};
 use coding_crew_core::{
     Actor, ActorKind, EventKind, Item, ItemError, ItemKind, ItemStatus, Note, Role, Store,
     StoreError,
@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use crate::envelope::Done;
 use crate::error::{Code, Failure};
 use crate::project::Project;
+use crate::runtime;
 use crate::write::{
     Call, NewEvent, append_journal, read_journal, required_text, text, title, work_file,
 };
@@ -140,6 +141,10 @@ pub fn create(
     item.scope = scope;
     item.tags = tags;
     lock.save_item(&item)?;
+    let mut wrote = vec![item_file(call, &item)];
+    if runtime::refreshed(&lock)? {
+        wrote.push(RUNTIME_FILE.to_string());
+    }
     Ok(Done {
         data: json!({
             "id": item.id,
@@ -148,7 +153,7 @@ pub fn create(
             "status": item.status.as_str(),
             "slug": item.slug,
         }),
-        wrote: vec![item_file(call, &item)],
+        wrote,
         journal: Vec::new(),
     })
 }
@@ -219,13 +224,17 @@ pub fn shape(call: &Call, id: &str, kind: &str, scope: &[String]) -> Result<Done
     item.shape(kind, scope)
         .map_err(|error| item_failure(id, error))?;
     lock.save_item(&item)?;
+    let mut wrote = vec![item_file(call, &item)];
+    if runtime::refreshed(&lock)? {
+        wrote.push(RUNTIME_FILE.to_string());
+    }
     Ok(Done {
         data: json!({
             "id": item.id,
             "kind": item.kind.as_str(),
             "scope": item.scope,
         }),
-        wrote: vec![item_file(call, &item)],
+        wrote,
         journal: Vec::new(),
     })
 }
@@ -242,13 +251,17 @@ pub fn dismiss(call: &Call, id: &str, reason: &str) -> Result<Done, Failure> {
     item.dismiss(reason)
         .map_err(|error| item_failure(id, error))?;
     lock.save_item(&item)?;
+    let mut wrote = vec![item_file(call, &item)];
+    if runtime::refreshed(&lock)? {
+        wrote.push(RUNTIME_FILE.to_string());
+    }
     Ok(Done {
         data: json!({
             "id": item.id,
             "status": item.status.as_str(),
             "dismissed_reason": item.dismissed_reason,
         }),
-        wrote: vec![item_file(call, &item)],
+        wrote,
         journal: Vec::new(),
     })
 }
@@ -286,13 +299,14 @@ pub fn promote(call: &Call, id: &str) -> Result<Done, Failure> {
     lock.save_item(&item)?;
     lock.save(&mut task)?;
     let mut wrote = vec![item_path, work_file(&lock.task_path(&task))];
+    let now = coding_crew_core::now_rfc3339();
     let kinds = append_journal(
         &lock,
         &mut journal,
         &task.id,
         &call.actor,
         &call.ran,
-        &coding_crew_core::now_rfc3339(),
+        &now,
         vec![NewEvent::note(
             EventKind::Created,
             format!("from {}", item.id),
@@ -300,6 +314,9 @@ pub fn promote(call: &Call, id: &str) -> Result<Done, Failure> {
     )?;
     if !kinds.is_empty() {
         wrote.push(ACTIVITY_FILE.to_string());
+    }
+    if runtime::refreshed(&lock)? {
+        wrote.push(RUNTIME_FILE.to_string());
     }
     Ok(Done {
         data: json!({
