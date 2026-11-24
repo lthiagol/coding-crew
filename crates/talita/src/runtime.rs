@@ -12,7 +12,7 @@ use coding_crew_core::store::RUNTIME_FILE;
 use coding_crew_core::{
     Actor, ActorKind, AgentState, Budget, CrewMember, Finding, FindingStatus, FlowRole,
     ProjectLock, Role, RoundKind, Runtime, RuntimeError, RuntimeRound, Severities, Severity, Stamp,
-    Status, Store, Task,
+    Status, Store, StoreError, Task,
 };
 use serde_json::json;
 
@@ -425,19 +425,7 @@ pub fn queue_add(call: &Call, ids: &[String], before: Option<&str>) -> Result<Do
         tasks.insert(id.as_str(), lock.load(id)?);
     }
     let at = match before {
-        Some(before) => Some(
-            record
-                .queue
-                .iter()
-                .position(|item| item.id == before)
-                .ok_or_else(|| {
-                    Failure::new(
-                        Code::TaskNotFound,
-                        format!("the queue does not hold {before}"),
-                    )
-                    .remedy("talita queue show")
-                })?,
-        ),
+        Some(before) => Some(queue_position(&lock, &record, before)?),
         None => None,
     };
     let mut fresh = Vec::new();
@@ -466,6 +454,32 @@ pub fn queue_add(call: &Call, ids: &[String], before: Option<&str>) -> Result<Do
     }
     let now = coding_crew_core::now_rfc3339();
     Ok(done_queue(write(&lock, record, &now)?))
+}
+
+/// The position `queue add --before` names. A task the queue holds is one;
+/// a task the project holds but the queue does not is `queue.not_queued`, and
+/// the remedy queues it first; a task the project does not hold is not found.
+fn queue_position(
+    lock: &ProjectLock<'_>,
+    record: &Runtime,
+    before: &str,
+) -> Result<usize, Failure> {
+    if let Some(at) = record.queue.iter().position(|item| item.id == before) {
+        return Ok(at);
+    }
+    match lock.load(before) {
+        Ok(_) => Err(Failure::new(
+            Code::QueueNotQueued,
+            format!("the queue does not hold {before}, which the project does"),
+        )
+        .remedy(format!("talita queue add {before}"))),
+        Err(StoreError::NotFound(_)) => Err(Failure::new(
+            Code::TaskNotFound,
+            format!("{before} is not in the project"),
+        )
+        .remedy("talita task list")),
+        Err(error) => Err(error.into()),
+    }
 }
 
 /// `queue drop`: removes the ids the queue holds; the rest changes nothing.

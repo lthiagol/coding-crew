@@ -32,11 +32,7 @@ pub fn locate(flag: Option<&Path>) -> Result<Project, Failure> {
         Some(root) => {
             let data = root.join(DATA_DIR);
             if !data.is_dir() {
-                return Err(Failure::new(
-                    Code::ProjectNotFound,
-                    format!("{} holds no {DATA_DIR} folder", root.display()),
-                )
-                .remedy(format!("talita project init --path {}", root.display())));
+                return Err(missing(&root));
             }
             data
         }
@@ -56,6 +52,26 @@ pub fn locate(flag: Option<&Path>) -> Result<Project, Failure> {
         root,
         data,
     })
+}
+
+/// `project.not_found` for a root that holds no `coding-crew/`. When a project
+/// encloses the root, the remedy names it, so a caller does not make a nested
+/// one (ADR 0010); otherwise it is the init that makes one here.
+fn missing(root: &Path) -> Failure {
+    let failure = Failure::new(
+        Code::ProjectNotFound,
+        format!("{} holds no {DATA_DIR} folder", root.display()),
+    );
+    match enclosing(root) {
+        Some(outer) => failure.remedy(format!("talita --project {} project show", outer.display())),
+        None => failure.remedy(format!("talita project init --path {}", root.display())),
+    }
+}
+
+/// The root of the nearest project above `root`, if one encloses it.
+fn enclosing(root: &Path) -> Option<PathBuf> {
+    let store = Store::discover(root.parent()?).ok()?;
+    store.root().parent()?.parent().map(Path::to_path_buf)
 }
 
 /// `project init`: creates `<dir>/coding-crew/work/`. The directory is

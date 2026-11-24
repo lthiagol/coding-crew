@@ -6,9 +6,10 @@
 use std::collections::BTreeMap;
 
 use coding_crew_core::lifecycle::{Event, TransitionContext, TransitionError, transition};
-use coding_crew_core::{EventKind, Status, StepStatus, Task};
+use coding_crew_core::{Actor, EventKind, Status, StepStatus, Task};
 use serde_json::{Value, json};
 
+use crate::claim;
 use crate::envelope::Done;
 use crate::error::{Code, Failure, GateDetail};
 use crate::parts::settle_calls;
@@ -53,7 +54,7 @@ fn apply(
             reason: overlay_reason,
         };
         transition(task, event, actor, &ctx, &now)
-            .map_err(|error| refused(error, verb, id, event, task))?;
+            .map_err(|error| refused(error, verb, id, event, task, actor))?;
 
         // `human.instructed` is the task model's gate, checked here: the flag
         // must name the human who decided (ADR 0015). The status is checked
@@ -216,8 +217,22 @@ fn data(
 }
 
 /// The failure of a refused transition, with the role or every failing gate.
-fn refused(error: TransitionError, verb: &str, id: &str, event: Event, task: &Task) -> Failure {
+/// A finish by someone other than the claim's holder is the holder's refusal
+/// (`claim.not_holder`), not the gates' (ADR 0020).
+fn refused(
+    error: TransitionError,
+    verb: &str,
+    id: &str,
+    event: Event,
+    task: &Task,
+    actor: &Actor,
+) -> Failure {
     match error {
+        TransitionError::Gates(_)
+            if event == Event::Finish && task.claim.is_some() && !claim::holds(task, actor) =>
+        {
+            claim::not_holder(task, id)
+        }
         TransitionError::WrongRole { role, .. } => Failure::new(
             Code::RoleWrong,
             format!("{verb} needs the {} role", role.as_str()),

@@ -14,6 +14,7 @@ use crate::error::{Code, Failure, GateDetail};
 use crate::project::Project;
 use crate::runtime::SideEffect;
 use crate::write::{Call, NewEvent, duration, required_text};
+use coding_crew_core::Actor;
 
 /// `claim take`: take a claimable task, or take over an expired claim. The
 /// takeover is journaled with the holder it replaced.
@@ -30,7 +31,7 @@ pub fn take(call: &Call, id: &str, lease: Option<&str>) -> Result<Done, Failure>
             .collect();
         let done = |dependency: &str| statuses.get(dependency) == Some(&Status::Done);
         claim::take(task, actor, lease, Some(&done), &now)
-            .map_err(|error| refused(error, "claim take", id))?;
+            .map_err(|error| refused(error, "claim take", id, task))?;
         let event = match before {
             Some(claim) => {
                 NewEvent::note(EventKind::Claimed, format!("took over from {}", claim.by))
@@ -47,7 +48,7 @@ pub fn renew(call: &Call, id: &str, lease: Option<&str>) -> Result<Done, Failure
     call.task(id, |task, actor| {
         let now = coding_crew_core::now_rfc3339();
         claim::renew(task, actor, lease, &now)
-            .map_err(|error| refused(error, "claim renew", id))?;
+            .map_err(|error| refused(error, "claim renew", id, task))?;
         Ok(held(task, &now))
     })
 }
@@ -62,7 +63,7 @@ pub fn release(call: &Call, id: &str, reason: Option<&str>) -> Result<Done, Fail
     call.task_journaled_with(id, SideEffect::Release, |task, actor| {
         let now = coding_crew_core::now_rfc3339();
         claim::release(task, actor, &reason, &now)
-            .map_err(|error| refused(error, "claim release", id))?;
+            .map_err(|error| refused(error, "claim release", id, task))?;
         Ok((
             held(task, &now),
             vec![NewEvent::note(EventKind::Released, reason.clone())],
@@ -84,6 +85,35 @@ fn lease_arg(lease: Option<&str>) -> Result<Duration, Failure> {
     }
 }
 
+/// Whether `actor` holds the task's claim: the same actor, in the same session
+/// (ADR 0020). An unrecorded session never matches. `task finish` reads this
+/// rule too.
+pub fn holds(task: &Task, actor: &Actor) -> bool {
+    task.claim.as_ref().is_some_and(|claim| {
+        claim.by == actor.id && claim.session.is_some() && claim.session == actor.session
+    })
+}
+
+/// The refusal for a call by someone other than the holder. It names the
+/// holder and points at the claim's read; with no claim, at the take.
+pub fn not_holder(task: &Task, id: &str) -> Failure {
+    match &task.claim {
+        Some(claim) => Failure::new(
+            Code::ClaimNotHolder,
+            format!(
+                "only the holder, in its session, may do this: {id} is held by {}",
+                claim.by
+            ),
+        )
+        .remedy(format!("talita claim show {id}")),
+        None => Failure::new(
+            Code::ClaimNotHolder,
+            format!("only the holder, in its session, may do this: {id} has no claim"),
+        )
+        .remedy(format!("talita claim take {id}")),
+    }
+}
+
 /// What the four verbs return: the claim, if any, and its liveness.
 fn held(task: &Task, now: &str) -> Value {
     let live = task
@@ -93,8 +123,9 @@ fn held(task: &Task, now: &str) -> Value {
     json!({ "claim": task.claim, "live": live })
 }
 
-/// core's refusal, as talita's code (ADR 0014).
-fn refused(error: ClaimError, verb: &str, id: &str) -> Failure {
+/// core's refusal, as talita's code (ADR 0014). `task` is the task as the call
+/// found it: a holder's refusal names it.
+fn refused(error: ClaimError, verb: &str, id: &str, task: &Task) -> Failure {
     let message = error.to_string();
     match error {
         ClaimError::NotAnAgent => {
@@ -132,9 +163,7 @@ fn refused(error: ClaimError, verb: &str, id: &str) -> Failure {
                 .collect();
             failure
         }
-        ClaimError::NotHolder => {
-            Failure::new(Code::ClaimNotHolder, message).remedy(format!("talita claim take {id}"))
-        }
+        ClaimError::NotHolder => not_holder(task, id),
         ClaimError::ReasonMissing => Failure::new(Code::InputInvalid, message),
         ClaimError::BadStamp(_) => Failure::new(Code::Internal, message),
         ClaimError::LeaseTooLong => Failure::new(Code::InputInvalid, message),

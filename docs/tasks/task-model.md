@@ -351,7 +351,9 @@ in a session; its lease is an RFC 3339 instant.
   session from then on: it may not remediate, the old one may.
 - The holder of an expired claim renews before `start`; `start` refuses an
   expired lease. An expired claim with no taker still belongs to its holder,
-  so `finish` checks the holder and session, not the lease.
+  so `finish` checks the holder and session, not the lease. A `finish` by
+  anyone else is refused `claim.not_holder` (talita: exit 5, naming the holder),
+  not with the gates.
 - A claim stays through `code-review`, `remediating` and `done`, and is not
   renewed there.
 

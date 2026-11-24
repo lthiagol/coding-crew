@@ -463,3 +463,110 @@ fn project_check_reports_and_writes_nothing() {
         .collect();
     assert_eq!(before.len(), after.len());
 }
+
+#[test]
+fn project_show_from_a_subfolder_names_the_enclosing_project() {
+    let dir = scratch("enclosed");
+    init(&dir);
+    let nested = dir.join("src/deep");
+    fs::create_dir_all(&nested).unwrap();
+
+    // Run from outside, with the subfolder as the root: the enclosing project
+    // is named, and no second `coding-crew/` is suggested.
+    let envelope = refused(
+        talita(&dir, &[], &["--project", "src/deep", "project", "show"]),
+        "project show",
+        "project.not_found",
+        3,
+    );
+    let remedy = envelope["error"]["remedy"].as_str().unwrap();
+    assert!(
+        remedy.starts_with("talita --project ") && remedy.contains(dir.to_str().unwrap()),
+        "{envelope}"
+    );
+    assert!(!remedy.contains("project init"), "{envelope}");
+
+    // The remedy is a call: running it as written works.
+    let words: Vec<&str> = remedy.split(' ').collect();
+    assert_eq!(words[..2], ["talita", "--project"], "{envelope}");
+    assert_eq!(words[3..], ["project", "show"], "{envelope}");
+    applied(
+        talita(&dir, &[], &["--project", words[2], "project", "show"]),
+        "project show",
+    );
+}
+
+#[test]
+fn a_task_verb_typed_at_the_top_level_names_its_noun() {
+    let dir = scratch("misplaced-verb");
+    // Every task verb with an id takes <TSK>; create and list take none.
+    let with_id = [
+        "show",
+        "retitle",
+        "describe",
+        "prioritize",
+        "estimate",
+        "tag",
+        "depend",
+        "undepend",
+        "groom",
+        "approve",
+        "start",
+        "finish",
+        "pass-review",
+        "request-changes",
+        "re-review",
+        "escalate",
+        "resume",
+        "reopen",
+        "block",
+        "unblock",
+        "defer",
+        "undefer",
+        "cancel",
+    ];
+    for verb in with_id {
+        let envelope = refused(
+            talita(&dir, &[], &[verb, "TSK04"]),
+            &format!("{verb} TSK04"),
+            "usage.invalid",
+            2,
+        );
+        assert_eq!(
+            envelope["error"]["remedy"],
+            format!("talita task {verb} <TSK>"),
+            "{envelope}"
+        );
+    }
+    for verb in ["create", "list"] {
+        let envelope = refused(talita(&dir, &[], &[verb]), verb, "usage.invalid", 2);
+        assert_eq!(
+            envelope["error"]["remedy"],
+            format!("talita task {verb}"),
+            "{envelope}"
+        );
+    }
+    let envelope = refused(
+        talita(&dir, &[], &["frobnicate"]),
+        "frobnicate",
+        "usage.invalid",
+        2,
+    );
+    assert_eq!(envelope["error"]["remedy"], "talita --help", "{envelope}");
+
+    // Under another noun a task verb is not the fix: the remedy is the help.
+    for args in [
+        &["crew", "show"][..],
+        &["run", "list"],
+        &["project", "list"],
+        &["claim", "finish", "TSK04"],
+    ] {
+        let envelope = refused(
+            talita(&dir, &[], args),
+            &args[..2].join(" "),
+            "usage.invalid",
+            2,
+        );
+        assert_eq!(envelope["error"]["remedy"], "talita --help", "{envelope}");
+    }
+}

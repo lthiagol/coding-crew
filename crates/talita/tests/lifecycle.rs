@@ -1230,3 +1230,59 @@ fn a_human_is_pointed_at_the_creators_route() {
         "{refusal}"
     );
 }
+
+#[test]
+fn a_non_holders_finish_is_the_holders_refusal_not_the_gates() {
+    let dir = project("finish-holder");
+    let id = at_work_with_a_round(&dir, "Held by the runner");
+
+    // Another runner, and the holder's own actor in another session: both
+    // are refused as non-holders, naming the holder, with no gate list.
+    let other = refused(
+        talita(&dir, &RUNNER2, &["task", "finish", &id]),
+        "task finish",
+        "claim.not_holder",
+        5,
+    );
+    let message = other["error"]["message"].as_str().unwrap();
+    assert!(message.contains("held by runner-1"), "{other}");
+    assert_eq!(other["error"]["remedy"], format!("talita claim show {id}"));
+    assert!(other["error"]["gates"].is_null(), "{other}");
+
+    let elsewhere = refused(
+        talita(
+            &dir,
+            &[
+                ("TALITA_ACTOR", "runner-1"),
+                ("TALITA_ROLE", "runner"),
+                ("TALITA_SESSION", "ses-elsewhere"),
+            ],
+            &["task", "finish", &id],
+        ),
+        "task finish",
+        "claim.not_holder",
+        5,
+    );
+    assert!(
+        elsewhere["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("held by runner-1"),
+        "{elsewhere}"
+    );
+
+    // The holder still meets the gates: no evidence yet.
+    refused(
+        talita(&dir, &RUNNER, &["task", "finish", &id]),
+        "task finish",
+        "gate.refused",
+        4,
+    );
+    // The role comes first: a reviewer is told its role, not the holder.
+    refused(
+        talita(&dir, &REVIEWER, &["task", "finish", &id]),
+        "task finish",
+        "role.wrong",
+        5,
+    );
+}

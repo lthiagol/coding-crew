@@ -4,8 +4,8 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use clap::error::ErrorKind;
-use clap::{Parser, Subcommand};
+use clap::error::{ContextKind, ContextValue, ErrorKind};
+use clap::{CommandFactory, Parser, Subcommand};
 
 use crate::envelope::{self, Done};
 use crate::error::{Code, Failure};
@@ -745,7 +745,7 @@ pub fn run(args: Vec<OsString>) -> i32 {
                 return 0;
             }
             let failure = Failure::new(Code::UsageInvalid, error.render().to_string().trim_end())
-                .remedy("talita --help");
+                .remedy(parse_remedy(&error, &args));
             return envelope::emit(&called(&args), &Err(failure));
         }
     };
@@ -1319,8 +1319,37 @@ fn first_role(args: &[OsString]) -> Option<String> {
     (roles.len() > 1).then(|| roles[0].clone())
 }
 
+/// The remedy for a call that did not parse. A task verb called at the top
+/// level is pointed at its noun: `talita task <verb>` (ADR 0012). Anything else
+/// names `--help`.
+fn parse_remedy(error: &clap::Error, args: &[OsString]) -> String {
+    let Some(ContextValue::String(word)) = error.get(ContextKind::InvalidSubcommand) else {
+        return "talita --help".to_string();
+    };
+    // A task verb is pointed at `talita task` only where it was typed first;
+    // under another noun (`crew show`) the remedy is the help.
+    if positionals(args).first() != Some(word) {
+        return "talita --help".to_string();
+    }
+    let task = Talita::command();
+    let Some(verb) = task
+        .find_subcommand("task")
+        .and_then(|noun| noun.find_subcommand(word))
+    else {
+        return "talita --help".to_string();
+    };
+    let takes_id = verb.get_positionals().next().is_some();
+    format!("talita task {word}{}", if takes_id { " <TSK>" } else { "" })
+}
+
 /// The noun and verb as called, best effort, for a call that did not parse.
 fn called(args: &[OsString]) -> String {
+    let words = positionals(args);
+    words.iter().take(2).cloned().collect::<Vec<_>>().join(" ")
+}
+
+/// The words of a call that are not global flags or their values.
+fn positionals(args: &[OsString]) -> Vec<String> {
     let mut words = Vec::new();
     let mut skip = false;
     for arg in args.iter().skip(1) {
@@ -1331,10 +1360,7 @@ fn called(args: &[OsString]) -> String {
             skip = VALUE_FLAGS.contains(&arg.as_ref());
         } else {
             words.push(arg.into_owned());
-            if words.len() == 2 {
-                break;
-            }
         }
     }
-    words.join(" ")
+    words
 }

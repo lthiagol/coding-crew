@@ -23,6 +23,10 @@ talita [global flags] <noun> <verb> <ids…> [flags]
 
 - Flags beat env. Read verbs (`show`, `list`, `journal show`) need no identity.
 - `human` is not a role: it marks the actor as `kind: human` (ADR 0015).
+- **Task verbs at the top level.** `re-review TSK` is `usage.invalid` (2),
+  and its remedy is the noun's call: `talita task re-review <TSK>`. Every task
+  verb gets the same remedy. Typed under another noun (`crew show`), the
+  remedy is `talita --help`.
 - **Text values.** Any text flag takes `@<path>` to read a file, `@-` for stdin.
   Text is stored verbatim (ADR 0009). A title is one line.
 - **Durations.** `30m`, `2h`, `1d`.
@@ -64,7 +68,7 @@ Pinned to talita's code enum by a test:
 |---:|---|---|
 | 1 | internal | `internal` |
 | 2 | usage or input | `usage.invalid`, `input.invalid` |
-| 3 | not found | `project.not_found`, `task.not_found`, `part.not_found`, `item.not_found`, `run.absent`, `crew.unknown` |
+| 3 | not found | `project.not_found`, `task.not_found`, `part.not_found`, `item.not_found`, `run.absent`, `crew.unknown`, `queue.not_queued` |
 | 4 | refused by a rule | `status.wrong`, `gate.refused`, `section.frozen`, `task.cancelled`, `review.verdict_mismatch`, `review.budget_spent`, `finding.closed`, `question.resolved`, `claim.held`, `claim.not_claimable`, `criterion.covered`, `criterion.not_failed`, `criterion.deferred`, `depends.cycle`, `overlay.absent`, `item.not_open`, `item.is_idea`, `item.already_shaped`, `evidence.timeout`, `project.exists`, `run.active`, `crew.exists` |
 | 5 | identity | `identity.missing`, `role.wrong`, `actor.not_agent`, `section.not_owned`, `claim.not_holder` |
 | 6 | conflict | `conflict.lock`, `conflict.revision` |
@@ -83,7 +87,7 @@ Common errors, on every verb: `usage.invalid` (2), `input.invalid` (2),
 | Verb | Synopsis | Who | Does |
 |---|---|---|---|
 | `init` | `project init [--path <dir>]` | any | creates `<dir>/coding-crew/work/` with no identity. Refuses `project.exists` if a `coding-crew/` is already there. Writes no task, no journal |
-| `show` | `project show` | read | paths, counts by status and kind, whether journal and runtime exist, schema version |
+| `show` | `project show` | read | paths, counts by status and kind, whether journal and runtime exist, schema version. With `--project` naming a folder that holds no `coding-crew/`, `project.not_found` (3) has the remedy `talita --project <root> project show`, `<root>` the enclosing project's; `project init` is named only when no project encloses it |
 | `check` | `project check` | read | parses every file; reports unreadable files, duplicate ids, `parent`/`children[]` mismatches, dangling `depends_on`, stored criterion status ≠ derived. Writes nothing. Repair: later |
 
 No write verb creates `coding-crew/` implicitly: today's `talita create`
@@ -132,7 +136,7 @@ reports every failing gate, not only the first ([decision 6](decisions.md)).
 | `groom` | `task groom <TSK>` | draft → groomed | creator | `intent.outcome_present` · `criteria.present` · `criteria.verified` (every criterion has a `verification`) · `scope.out_of_scope_declared` | — | `groomed` |
 | `approve` | `task approve <TSK> [--instructed-by <human>]` | groomed → approved | creator | `questions.resolved` · `criteria.covered` · `steps.done_when_present` (step rules skipped for a small task) | `planned_by` = acting session; freezes intent, scope, criteria | `approved` (note: `instructed by <human>`, when given) |
 | `start` | `task start <TSK>` | approved → executing | runner | `task.claimed` (holder, lease live) · `dependencies.satisfied` | — | `started` |
-| `finish` | `task finish <TSK>` | executing → code-review | runner, claim holder | `steps.settled` · `evidence.attached` · `criteria.proven` · `self_round.filed` · `task.claimed` (new on finish) | crew: builder idle | `review_requested` |
+| `finish` | `task finish <TSK>` | executing → code-review | runner, claim holder (else `claim.not_holder`) | `steps.settled` · `evidence.attached` · `criteria.proven` · `self_round.filed` · `task.claimed` (new on finish) | crew: builder idle | `review_requested` |
 | `pass-review` | `task pass-review <TSK>` | code-review → done | reviewer | `review.verdict_ok` · `review.no_open_findings` · `review.within_budget` · `review.independent` · `review.round_current` (new) · `review.round_owner` (new) | crew: holds cleared; queue: done | `completed` |
 | `request-changes` | `task request-changes <TSK>` | code-review → remediating | reviewer | `review.verdict_changes_needed` · `review.findings_exist` · `review.budget_left` · `review.independent` · `review.round_current` · `review.round_owner` | — | `changes_requested` |
 | `re-review` | `task re-review <TSK>` | remediating → code-review | runner | `review.findings_closed` · `remediation.session_distinct` | appends `review.re_reviews[] {at, after_round, by, session}`; crew: builder idle | `remediated` |
@@ -149,7 +153,9 @@ session.
 TM § 3.2 but not in LC; talita checks it as "the flag names a human".
 
 Errors: `status.wrong` (4), `gate.refused` (4, `gates[]` lists each failing
-gate), `role.wrong` (5).
+gate), `role.wrong` (5). A `finish` by someone other than the claim's holder,
+in its session, is `claim.not_holder` (5) and names the holder; its remedy is
+`talita claim show <TSK>`.
 
 ### Overlays
 
@@ -246,7 +252,9 @@ command-proven criterion. `evidence run` on a criterion with no verification is
 | `show` | `claim show <TSK>` | read | the claim and whether it is live | — |
 
 Errors: `claim.held` (4, a live claim by another), `claim.not_claimable`
-(4, with the failing condition), `claim.not_holder` (5).
+(4, with the failing condition), `claim.not_holder` (5). `claim.not_holder`
+names the holder in its message and its remedy is `claim show`; with no claim
+at all, the remedy is `claim take`.
 
 ## round
 
@@ -358,7 +366,7 @@ touches a task file or the journal.
 
 | Verb | Synopsis | Writes |
 |---|---|---|
-| `run start` | `run start [--task <TSK>…]` | new `runtime.json`: `started_at` now, the queue from `--task` in order, an empty crew, `stamp.runs: true`. Refuses `run.active` if a record with `runs: true` exists (remedy `talita run stop --why <t>`); `task.not_found` for an unknown id |
+| `run start` | `run start [--task <TSK>]…` | new `runtime.json`: `started_at` now, the queue from the `--task` flags in order (one id each: `--task TSK01 --task TSK02`), an empty crew, `stamp.runs: true`. Refuses `run.active` if a record with `runs: true` exists (remedy `talita run stop --why <t>`); `task.not_found` for an unknown id |
 | `run stop` | `run stop --why <t>` | `stamp {runs: false, why}`; every crew row `idle`, keeping its hold |
 | `run show` | `run show` | the record, plus `stale` against its `updated_at` (read) |
 | `run refresh` | `run refresh` | recomputes every derived field and writes the record. Repair after a crash |
@@ -367,7 +375,7 @@ touches a task file or the journal.
 | `crew assign` | `crew assign <actor> <TSK>` | `holds`, `since` now, state `executing` (builder, orchestrator) or `reviewing` (reviewer) |
 | `crew idle` | `crew idle <actor>` | state `idle`, keeps `holds` |
 | `crew stall` | `crew stall <actor>` | state `blocked` (the agent cannot go on). Word chosen so it is not read as the task overlay |
-| `queue add` | `queue add <TSK>… [--before <TSK>]` | appends (or inserts) ids, each once; every id the run took stays |
+| `queue add` | `queue add <TSK>… [--before <TSK>]` | appends (or inserts) ids, each once; every id the run took stays. `--before` must name a queued task: one the project holds but the queue does not is `queue.not_queued` (3), remedy `queue add` of it; one the project does not hold is `task.not_found` (3) |
 | `queue drop` | `queue drop <TSK>…` | removes the ids it holds; the rest changes nothing |
 | `queue show` | `queue show` | the queue with derived status and claimable (read) |
 

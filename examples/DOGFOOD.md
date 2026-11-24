@@ -151,12 +151,14 @@ it is not repeated.
 - command: `talita --project examples/tidewatch --as jo --role runner --session ses-jo-tw claim renew TSK04`
 - happened: Re-run (refused, nothing written). Exit 5, `claim.not_holder`; remedy `talita claim take TSK04`. While ravi's lease runs, `claim take` by jo is refused `claim.held` ("the task is held by a live claim of ravi", as in the run's race). Today it is refused `claim.not_claimable` because TSK04 is blocked.
 - expected: a remedy that names the holder, or `talita claim show TSK04`, not a take that a live lease refuses.
+- fixed: unit DF5 — `claim renew` and `claim release` by a non-holder are `claim.not_holder` (5) naming the holder; the remedy is `talita claim show <TSK>`, or `claim take` when nothing holds the task.
 - severity: low
 
 #### A non-holder's `finish` is refused with the holder's gate, and the remedy asks for work it cannot do
 - command: `talita --project examples/quillnote --as ines --role runner --session ses-ines-qn task finish TSK03.1`
 - happened: Re-run (refused, nothing written). Exit 4, `gate.refused`. Gates: `self_round.filed`, and `task.claimed` twice ("the task is claimed by someone else"; "only the claiming session may finish the task"). Remedy `talita round file TSK03.1 --kind self --focus spec-compliance --verdict ok`. On the first run the remedy was `talita step done TSK03.1 <STP>`. A non-holder can file neither a self round nor a step, since both are the working runner's.
 - expected: exit 5, `claim.not_holder`, naming the holder (tomas) as the other claim verbs do.
+- fixed: unit DF5 — a `task finish` by someone other than the claim's holder, in its session, is `claim.not_holder` (5) naming the holder, with no gate list.
 - severity: medium
 
 ### Adoption
@@ -173,12 +175,14 @@ it is not repeated.
 - command: `talita --project examples/railyard --as oz --role orchestrator --session ses-oz-ry run start --task TSK01 TSK02`
 - happened: Re-run (usage error, nothing written). Exit 2, "unexpected argument 'TSK02'"; remedy `talita --help`. commands.md § run says `run start [--task <TSK>…]`. The working form is `--task TSK01 --task TSK02`.
 - expected: the list the doc gives, or the doc shows the repeated flag.
+- fixed: unit DF5 — commands.md § run shows the repeated flag, `run start [--task <TSK>]…`, one id each (`--task TSK01 --task TSK02`); the binary is unchanged.
 - severity: medium
 
 #### `project show` from a subfolder suggests a nested `project init`
 - command: `talita --project examples/quillnote/src project show`
 - happened: Re-run (read). Exit 3, `project.not_found`: "examples/quillnote/src holds no coding-crew folder". Remedy `talita project init --path examples/quillnote/src`, which would make a second `coding-crew/` inside the first project's source tree.
 - expected: a remedy that names the project root, such as `--project examples/quillnote`.
+- fixed: unit DF5 — a `--project` root that holds no `coding-crew/` is `project.not_found` with a remedy naming the enclosing project's root as `--project`; `project init` is named only when no project encloses it.
 - severity: medium
 
 #### `task list --lane` and `--needs-you` are not in the binary
@@ -192,10 +196,12 @@ it is not repeated.
 - command: `talita --project examples/quillnote --as ines --role runner --session ses-ines-qn re-review TSK04`
 - happened: Re-run (usage error, nothing written). Exit 2, "unrecognized subcommand 're-review'"; remedy `talita --help`, which does not show the verb. The verb is `talita task re-review`.
 - expected: a remedy that names `talita task re-review <TSK>`.
+- fixed: unit DF5 — a task verb typed at the top level is `usage.invalid` (2) with the remedy `talita task <verb> <TSK>` (no `<TSK>` for `create` and `list`), for every task verb.
 - severity: low
 
 #### `queue add --before` reports a task that exists as not found
 - command: `talita --project examples/quillnote --as kai --role orchestrator --session ses-kai-qn queue add TSK02 --before TSK05`
 - happened: Re-run (refused, nothing written). Exit 3, `task.not_found`: "the queue does not hold TSK05". TSK05 exists (approved, not queued). `queue add TSK02 --before TSK99` gets the same code and message for a task that does not exist.
 - expected: a message that tells "not in the project" from "not in the queue", for example a code of its own for the queue case.
+- fixed: unit DF5 — `queue add --before` on a task the project holds but the queue does not is `queue.not_queued` (3), remedy `talita queue add <TSK>`; a task the project does not hold is `task.not_found`, "is not in the project".
 - severity: low

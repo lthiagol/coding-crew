@@ -17,6 +17,7 @@ pub enum Code {
     PartNotFound,
     RunAbsent,
     CrewUnknown,
+    QueueNotQueued,
     StatusWrong,
     GateRefused,
     SectionFrozen,
@@ -52,7 +53,7 @@ pub enum Code {
 
 impl Code {
     #[cfg(test)]
-    pub const ALL: [Code; 39] = [
+    pub const ALL: [Code; 40] = [
         Code::Internal,
         Code::UsageInvalid,
         Code::InputInvalid,
@@ -61,6 +62,7 @@ impl Code {
         Code::PartNotFound,
         Code::RunAbsent,
         Code::CrewUnknown,
+        Code::QueueNotQueued,
         Code::StatusWrong,
         Code::GateRefused,
         Code::SectionFrozen,
@@ -104,6 +106,7 @@ impl Code {
             Code::PartNotFound => "part.not_found",
             Code::RunAbsent => "run.absent",
             Code::CrewUnknown => "crew.unknown",
+            Code::QueueNotQueued => "queue.not_queued",
             Code::StatusWrong => "status.wrong",
             Code::GateRefused => "gate.refused",
             Code::SectionFrozen => "section.frozen",
@@ -148,7 +151,8 @@ impl Code {
             | Code::PartNotFound
             | Code::ItemNotFound
             | Code::RunAbsent
-            | Code::CrewUnknown => 3,
+            | Code::CrewUnknown
+            | Code::QueueNotQueued => 3,
             Code::StatusWrong
             | Code::GateRefused
             | Code::SectionFrozen

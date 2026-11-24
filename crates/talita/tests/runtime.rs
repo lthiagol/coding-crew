@@ -856,11 +856,31 @@ fn the_queue_verbs_add_insert_skip_and_drop() {
         "task.not_found",
         3,
     );
-    refused(
+    // A task the project holds but the queue does not is its own refusal,
+    // and the remedy queues it; a task the project does not hold is not found.
+    let held = refused(
+        talita(&dir, &ORCH, &["queue", "add", &b, "--before", &a]),
+        "queue add",
+        "queue.not_queued",
+        3,
+    );
+    assert_eq!(held["error"]["remedy"], format!("talita queue add {a}"));
+    assert!(
+        held["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains(&format!("the queue does not hold {a}")),
+        "{held}"
+    );
+    let missing = refused(
         talita(&dir, &ORCH, &["queue", "add", &c, "--before", "TSK99"]),
         "queue add",
         "task.not_found",
         3,
+    );
+    assert_eq!(
+        missing["error"]["message"], "TSK99 is not in the project",
+        "{missing}"
     );
 
     // A project with no record has an empty queue and no add.

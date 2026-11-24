@@ -527,3 +527,60 @@ fn claim_show_reads_the_claim_and_its_liveness() {
     assert_eq!(gone["data"]["claim"], Value::Null);
     assert_eq!(gone["data"]["live"], false);
 }
+
+#[test]
+fn a_non_holder_is_told_who_holds_the_claim() {
+    let dir = project("who-holds");
+    let id = ready(&dir, "Named holder");
+
+    // Unclaimed: there is no holder to name, so the remedy is the take.
+    let unclaimed = refused(
+        talita(&dir, &RUNNER2, &["claim", "renew", &id]),
+        "claim renew",
+        "claim.not_holder",
+        5,
+    );
+    assert_eq!(
+        unclaimed["error"]["remedy"],
+        format!("talita claim take {id}"),
+        "{unclaimed}"
+    );
+
+    applied(talita(&dir, &RUNNER, &["claim", "take", &id]), "claim take");
+
+    // Held: the refusal names the holder, and the remedy reads the claim, not
+    // a take that the live lease would refuse.
+    let renew = refused(
+        talita(&dir, &RUNNER2, &["claim", "renew", &id]),
+        "claim renew",
+        "claim.not_holder",
+        5,
+    );
+    assert!(
+        renew["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("held by runner-1"),
+        "{renew}"
+    );
+    assert_eq!(renew["error"]["remedy"], format!("talita claim show {id}"));
+
+    let release = refused(
+        talita(
+            &dir,
+            &RUNNER2,
+            &["claim", "release", &id, "--reason", "not mine"],
+        ),
+        "claim release",
+        "claim.not_holder",
+        5,
+    );
+    assert!(
+        release["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("held by runner-1"),
+        "{release}"
+    );
+    assert!(read(&dir, &id).claim.is_some(), "a refusal keeps the claim");
+}
