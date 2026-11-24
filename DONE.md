@@ -1958,6 +1958,42 @@ where a question's answer names its human is a question for the human. By the
 opencode crew (deepseek-v4.1-flash builder, glm-5.3 reviewer, slug `mm`),
 review 1 clean, one round. Commit `87a5cdf`.
 
+### 2026-11-23 · unit DF1, the caller's next call
+
+The six dogfood entries that left the caller guessing. A remedy now names the
+call that unblocks, never the verb that was just refused (ADR 0014): `task
+finish` on a criterion that failed without a reason is answered by `criterion
+explain … --failure-reason` — the evidence has already run and failed — and the
+review gates that refuse `task escalate` are answered by `round file --input
+<round>`; every remedy names the part the gate's detail names. A human refused
+a role-gated verb is pointed at the creator's route (`task approve <TSK>
+--instructed-by <human>`), and every other verb names the role that owns it.
+`task list --overlay blocked|deferred|cancelled` filters on the overlays;
+`--status cancelled` still refuses, and its remedy names the filter. The
+readiness list carries `overlay.clear`, from the one rule in core that `claim
+take` reads. `project init` needs no identity: it writes no task and no
+journal, so there is nothing to attribute (ADR 0015, the human's ruling of
+2026-11-23). By the opencode crew (deepseek-v4.1-flash builder, glm-5.3
+reviewer, slug `mm`), two rounds: round 1's only finding was the brief's own
+file list being narrower than its item — the section-ownership path and
+`question answer` sit outside it — and the deviation was accepted. Commit
+`b73779b`.
+
+### 2026-11-23 · unit DF2, the record carries who ran it
+
+A question's answer names its human, in the question's own optional
+`instructed_by`: questions are not journaled, so the question is where the
+name can live (ADR 0015, the human's ruling of 2026-11-23). The journal's
+`by` stays the role word and the actor is not recorded — the role and the
+model are what matter, and the harness is an extra: every event gained an
+optional `model` and an optional `harness`, from `--model`/`--harness` or
+`TALITA_MODEL`/`TALITA_HARNESS`, flag over env, both optional, so a write
+that names neither works and its events carry neither (ADR 0018, the "later"
+it deferred). `session show` reports them with their source. The sandboxes'
+journals and task files read unchanged. By the opencode crew (deepseek-v4.1-flash
+builder, glm-5.3 reviewer, slug `mm`), review 1 clean, one round. Commit
+`64c5d6e`.
+
 ---
 
 ## Lessons
