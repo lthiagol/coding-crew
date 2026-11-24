@@ -1,6 +1,6 @@
 # coding-crew — orchestration state
 
-Updated 2026-11-23 by the orchestrator, after grooming.
+Updated 2026-11-24, at a session handoff.
 Branch `main`, remote `https://github.com/lthiagol/coding-crew.git`.
 The gate is `make check` (`make ci` is an alias): `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`,
@@ -51,6 +51,27 @@ Round files do not survive the machine; copy what matters into this file or the 
 The hugo proposals' rulings are in `docs/hugo/design-record.md`, and the
 defects the review found are in the known-issues block of
 `docs/hugo/tui-proposals/index.html`.
+
+### Where the last session stopped (2026-11-24)
+
+- `main` = `origin/main` = `bb0da62`, CI green on Ubuntu and macOS. `mm/talita`
+  is level with it; nothing is in flight, no crew tab is open.
+- The talita roadmap is closed (T5–T14, plus T11a, T12a, DF1, DF2). The
+  dogfood sandboxes are `examples/pantry` and `examples/ledgerline`; every
+  `examples/DOGFOOD.md` entry is closed.
+- Waiting on the human: tag `v0.1.0` and publish Homebrew (unit 101), or O2
+  via the crew, or neither. Ask; don't pick.
+- The MiniMax trial: an opencode orchestrator (`minimax-coding-plan/MiniMax-M3`,
+  thinking on) drove the opencode crew (builder `opencode-go/deepseek-v4.1-flash`
+  at max, reviewer `opencode-go/glm-5.3` at high, slug `mm`) on branch
+  `mm/talita`; the human's session merged each unit into `main` and pushed. It
+  closed about a dozen units clean. Lessons: run `unit.sh` in the background;
+  a session past ~75% context stalls, so restart it with a handoff; a
+  dismissed question dialog reads to it as approval, so answer the dialog
+  instead of dismissing it; its briefs listed too few files, so ask for every
+  file a unit reaches.
+- Known gap: `commands.md` lists `task list --lane` and `--needs-you`, which
+  talita lacks (the T6 follow-up below).
 
 ---
 
