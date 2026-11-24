@@ -1,119 +1,214 @@
 # Skill: orchestrator
 
-You run the build loop. You decide, design and dispatch. The crew above lists
-the roles present: dispatch each of them. A role it marks `none` is yours: with
-no builder you write the code, with no reviewer you review it.
+You run the build loop: you brief, dispatch, and close each task. The crew above
+names the agents present. A role it marks `none` is yours: no builder, you
+build; no reviewer, you review.
 
-## Before you start
+Your identity is in the env hugo set: `TALITA_ACTOR` (you), `TALITA_ROLE`
+(`orchestrator`), `TALITA_SESSION`. Each call carries them. Crew and run
+verbs are yours alone.
 
-1. Check you are inside herdr: `test "${HERDR_ENV:-}" = 1`. If not, stop and
-   say so. Run `herdr --skill` once to learn the CLI.
-2. Read the project's `AGENTS.md` (or `CLAUDE.md`), `TODO.md` and the plan.
-3. The tasks to run are the ones you were given, in that order. If none were
-   given, take the automation's queue in order (`talita queue show`).
-4. Keep a round folder outside the repository (a scratch or temp dir). Every
-   brief, report and review lives there as a file.
+## Preflight
 
-## The crew
+1. `test "${HERDR_ENV:-}" = 1`, or stop and say so. Run `herdr --skill` once.
+2. Read `AGENTS.md` (or `CLAUDE.md`), `TODO.md` and the plan. Do not write
+   `TODO.md`: the tasks are the run's record.
+3. `talita project show`. Not managed: stop; the human runs `talita project init`.
+4. `talita run show`:
+   - `stale: true`: `talita run stop --why "previous run stale"`.
+   - `runs: true`, `stale: false`: a run is live. If herdr names another agent
+     `orchestrator`, stop. If none is named, `talita run stop --why "previous orchestrator gone"`.
+5. Keep a round folder outside the repository: `<round>/<TSK>/`. Every brief,
+   report and review is a file there.
 
-- **Reviewer, cleared per task.** If the crew lists a reviewer, start it once,
-  in its own tab, on the reviewer's harness, model and effort above. It keeps
-  its context through one task's rounds, so it does not re-raise what it
-  settled; send it `/clear` before the next task's first review, because a long
-  context is re-sent on every prompt and the old tasks add nothing. A
-  whole-codebase review always starts clean. If the crew marks the reviewer
-  `none`, you review, in your own context, and `/clear` before each task's
-  first review.
-- **Builder, fresh per job.** If the crew lists a builder, start a new builder
-  tab for every build or fix job, on the builder's harness, model and effort
-  above, and close its tab when its report is in. A builder's context is small:
-  one job, one brief. If the crew marks the builder `none`, you build each job
-  yourself, and `/clear` before the review that follows, so the review does not
-  carry the build's reasoning.
-- **Never two builds at once** unless the machine has room: builds compete for
-  CPU and memory.
-
-Start an agent. The crew's `start env` and `start args` are shell words, already
-quoted: paste them as printed.
+## Open the run
 
 ```sh
-R=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$PWD" --label <name> --env <start env word, when the crew names one>)
-# read .result.root_pane.pane_id and .result.tab.tab_id from R
-herdr agent start <name> --kind <start kind> --pane <pane> -- <start args>
-herdr agent prompt <name> "Read <brief path> and do the job it describes."
+talita run start --task TSK04 --task TSK07     # the tasks given, in this order
+talita crew join "$TALITA_ACTOR" --role orchestrator --model <m>
 ```
 
-Wait for a job by its **report file**, not by the agent's state alone: an
-agent can look idle between turns. Poll `herdr agent get <name>` every few
-seconds until the report file exists and the agent is not `working`. If it is
-`blocked`, read the pane (`herdr agent read <name> --source visible`) and
-decide; never answer a permission prompt you do not understand.
-
-Close a builder's tab by its **tab** id once its report is in:
-`herdr tab close <tab-id>`.
-
-## The run
-
-talita holds the run, and the record is what hugo reads. Act as your own actor,
-in your own session: `talita session new --as <actor> --role orchestrator`
-mints one and prints the `TALITA_*` environment to export. Every write below
-carries it; a flag beats its env.
-
-At the start, open the run with the queue in order and join the crew — yourself
-and each role the crew above lists:
-
-```sh
-talita run start --task <TSK>…                 # the queue, in this order
-talita crew join <you> --role orchestrator --model <m>
-talita crew join <builder> --role builder --model <m>
-talita crew join <reviewer> --role reviewer --model <m>
-```
-
-Mint each agent's session before you start it — `talita session new --as
-<builder-1> --role runner`, and `--as <reviewer-1> --role reviewer` — and pass
-the session it prints in the agent's `TALITA_SESSION`.
-
-Before an agent works a task it does not claim — a reviewer, or a builder on a
-fix job — assign it: `talita crew assign <agent> <TSK>`. A builder's `claim
-take` puts the build in its row by itself. An agent that stops without a task
-verb settling its row is idled with `talita crew idle <agent>`; one that cannot
-go on is `talita crew stall <agent>`.
-
-When the queue is done, `talita run stop --why <t>`.
+Read `hugo --skill reviewer` and `hugo --skill builder` before your first review
+or build, if the crew leaves that role to you.
 
 ## The loop, per task
 
-1. **Brief.** Write the job: what to build, the done-when line, the spec it
-   follows, the files it may touch, and `REPORT=<path>`. Point at docs rather
-   than retyping them.
-2. **Build.** A fresh builder takes the brief and claims the task itself
-   (`hugo --skill builder` holds its rules). With no builder in the crew, you
-   build it.
-3. **Review.** Assign the task to the reviewer and prompt it with the job, the
-   report and an `OUTFILE` (`hugo --skill reviewer` holds its rules). It files
-   the round and ends with `VERDICT: CLEAN` or `VERDICT: FINDINGS <n>`. With no
-   reviewer in the crew, you review it, under the same rules, and write the
-   same verdict.
-4. **Fix.** On findings, a fresh builder fixes exactly those findings; then
-   the reviewer re-reviews that change. Assign the task to each of them before
-   it starts. With no builder or no reviewer, you do the part the crew marks
-   `none`.
-5. Repeat 3–4 until the verdict is clean, **at most the review-round limit
-   above**. Clean earlier is done earlier. Out of rounds is `needs-human`:
-   stop that task, write down why, and move on.
-6. **Commit.** Stage by name — never `git add -A` or `git add .` — and write
-   a conventional commit. Run the project's gate before you claim anything.
-7. **Record.** Once talita writes, the task folder is the memory: the task
-   carries its intent, steps, evidence, rounds and findings, and `talita task
-   show <TSK>`, `talita round show <TSK>` and `talita journal show --task
-   <TSK>` read it back. Round files do not survive; what matters is already on
-   the task. `TODO.md` is the project's own state, not your notebook.
+### Pick
+
+- `talita queue show`. An item `executing`, `code-review` or `remediating` comes
+  first, in queue order: resume it (§ Resume). Otherwise take the first item with
+  `claimable: true`. Skip one that is not claimable; name it in the report.
+- `talita task show <TSK>`: read the done-when criteria, steps and scope.
+- If `review.max_rounds` differs from the round limit above, skip the task and
+  name both values in the report.
+- Nothing claimable and nothing in flight: § Stop.
+
+### Resume
+
+A task left `executing`, `code-review` or `remediating` by a dead or earlier
+orchestrator. `talita round show <TSK>` gives its rounds.
+
+- `executing`: a resumed or reopened task has no claim. `talita claim show <TSK>`:
+  a live lease means a builder may still run; wait for it to pass (§ When it goes
+  wrong). No claim, or an expired one: take it at Build with a new builder session
+  and `talita claim take <TSK> --lease 2h`. Skip `task start`. Continue at the
+  first step not done.
+- `code-review`, no external round filed for this build: Review, next round.
+  An external round filed with no verdict: only the session that filed it may give
+  the verdict. Re-prompt that reviewer if its pane lives; else stop for the human.
+- `remediating`: Fix, then Review with the next round.
+
+### Brief
+
+Write `<round>/<TSK>/brief<n>.md`: the task id, the files it may touch, the
+decisions already made, and `REPORT=<round>/<TSK>/report<n>.md`. Criteria come
+from `talita task show`. Point at docs; do not retype them.
+
+A review brief also names `OUTFILE=<round>/<TSK>/review<n>.md`,
+`INPUT=<round>/<TSK>/round<n>.json` and `FOCUS`. Focus: round 1 `spec-compliance`;
+each later round the first unused of `edge-cases`, `security`, `empirical`,
+`design`.
+
+### Build
+
+Builder ids: `cc-b-<tsk>-<k>` in herdr (`cc-b-tsk04-0`), `b-<tsk>-<k>` in a
+1-agent crew. `k` starts at 0 for each task; each fix job takes the next.
+
+With a builder in the crew:
+
+```sh
+talita session new --as cc-b-tsk04-0 --role runner      # prints the session; writes nothing
+talita crew join cc-b-tsk04-0 --role builder --model <m>
+R=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$PWD" --label cc-b-tsk04-0 --no-focus \
+  --env TALITA_ACTOR=cc-b-tsk04-0 --env TALITA_ROLE=runner --env TALITA_SESSION=<s> <each start env word>)
+# .result.root_pane.pane_id and .result.tab.tab_id from R
+herdr agent start cc-b-tsk04-0 --kind <start kind> --pane <pane> -- <start args>
+herdr agent prompt cc-b-tsk04-0 "Run hugo --skill builder and follow it. Brief: <path>."
+```
+
+Start env and start args are shell words, already quoted: paste them as printed.
+
+Wait for the job's report file. Poll `herdr agent get <name>` until
+`<round>/<TSK>/report<n>.md` exists. If the agent is `blocked`, read
+`herdr agent read <name> --source visible` and decide. Never answer a prompt you do
+not understand. Once REPORT exists, `talita task show <TSK>`: `code-review` means
+the build is done. Any other status means the builder refused or a gate refused
+its finish: read REPORT and go to § When it goes wrong. Then close its tab by id:
+`herdr tab close <tab-id>`.
+
+With no builder in the crew, you build under `hugo --skill builder`'s rules, with
+the builder's identity by flag, one fresh session per job:
+
+```sh
+talita session new --as b-tsk04-0 --role runner
+talita crew join b-tsk04-0 --role builder --model <m>
+# each builder call: --as b-tsk04-0 --role runner --session <s>
+```
+
+### Review
+
+Two kinds of reviewer. Each keeps one session for the run; each round's writes
+come from that one session.
+
+- **Reviewer in the crew** (3-agent): once per run, `talita session new --as cc-reviewer --role reviewer`,
+  `talita crew join cc-reviewer --role reviewer --model <m>`, then a tab with
+  `TALITA_ACTOR=cc-reviewer TALITA_ROLE=reviewer TALITA_SESSION=<s>` and the start
+  env, `herdr agent start`, and the prompt `Run hugo --skill reviewer and follow it. Task: <TSK>. Brief: <path>.`
+  Before each later task's first review, send it `/clear`; its session stays.
+- **Reviewer marked `none`** (2- and 1-agent): you review. Once per run,
+  `talita session new --as "$TALITA_ACTOR" --role reviewer` prints `<s>`. Every
+  review call carries `--role reviewer --session <s>`; the crew and run verbs keep
+  your orchestrator role. Your row is the review row. Review only the diff and the
+  task; ignore what you remember of the build. Do not clear your own context.
+
+Each round:
+
+```sh
+talita crew assign <reviewer> <TSK>                  # 3-agent: cc-reviewer
+talita crew assign "$TALITA_ACTOR" <TSK> --review    # 2- and 1-agent: your row reviews
+talita crew leave <builder>                          # the build row is done; the review row holds the task
+```
+
+Skip the last line when the builder's row is already gone. The reviewer does the
+rest under its skill (`talita task show`, the diff, OUTFILE, `round file`, one
+verdict verb). With no reviewer in the crew, you do the same under the reviewer
+skill's calls.
+
+Wait for OUTFILE and for the status to move to `done`, `remediating` or
+`needs-human` (3-agent). In the 2- and 1-agent crews your review is synchronous.
+
+### Fix
+
+Fresh builder, `cc-b-<tsk>-<k+1>` (or `b-<tsk>-<k+1>` in a 1-agent crew): the
+`session new`, `crew join`, tab and prompt of Build, with `brief<n>.md` naming the
+REPORT. The findings are on the task (`talita task show <TSK>`).
+
+```sh
+talita crew assign <fix-builder> <TSK>
+```
+
+Wait for REPORT. Status `code-review` means the fix is done; any other status
+means a refusal: read REPORT and go to § When it goes wrong. Close the tab; then
+`talita crew leave <fix-builder>`. Back to Review with round `n+1`.
+
+### Pass and commit
+
+- Status `done`. The pass released every row holding the task.
+- List the paths the task changed. Check the list holds only this task's work.
+- Run `make check`. If it fails, stop the run: `talita run stop --why "make check failed after <TSK>"`,
+  and say so in the report.
+- Commit by name: `commit.sh "<subject>" "<body names <TSK>>" -- <paths>` (herdr-crew's),
+  or `git add -- <paths>` then `git commit`. Conventional subject. Never `git add -A` or `git add .`.
+- Back to Pick.
+
+### Needs a human
+
+Status `needs-human`: the budget is spent and findings stay open. Write the reason
+in the report. Do not request changes. Continue with the next claimable task; the
+escalated task's dependents stay unclaimable. The human resumes or reopens the
+task from a creator session.
+
+## Stop
+
+No claimable task left and nothing in flight:
+
+```sh
+talita run stop --why "queue done"    # or the reason
+```
+
+Report to the human: done, needs-human, and skipped tasks with reasons. Leave the
+pane up.
+
+Stop early, with `talita run stop --why "<reason>"` and a report to the human, when:
+a builder or reviewer is blocked; `make check` fails at Pass and commit; `talita
+project show` finds no project; `run start` refuses an active run; or a second
+orchestrator is named in herdr.
+
+## When it goes wrong
+
+- **Agent blocked** (a dialog, a permission prompt): `talita crew stall <agent>`,
+  `talita run stop --why "<agent> blocked"`, ask the human. Never answer the prompt.
+- **Builder dead, lease live**: wait until `talita claim show <TSK>` shows the
+  lease has passed.
+- **Builder dead, lease passed**: `talita crew leave <dead>`; Build with a new
+  session; `talita claim take <TSK> --lease 2h`; skip `task start`; continue at the
+  first step not done.
+- **Reviewer blocked or gone before `round file`**: re-prompt it if its pane lives;
+  else a new reviewer session under a new id, `crew join`, and Review.
+- **Reviewer gone after `round file`, before its verdict**: re-prompt the same
+  reviewer if its pane lives; else stop for the human. A replacement cannot give
+  the verdict.
+- **Task not claimable** (blocked, deferred, dependency not done): skip it in
+  order; name it in the report.
+- **Builder refuses for a reason the docs settle**: `talita task block <TSK> --reason "…"`;
+  continue.
+- **Same findings on an unchanged tree after a fix**: stop for the human.
+- **A refusal from talita**: read `error.gates` and `error.remedy`. Act on the remedy if
+  it is yours; otherwise stop. Never force it.
 
 ## Deciding
 
-- A finding that needs a design decision the docs do not settle is yours to
-  decide when it is small and reversible; record the decision. When it
-  changes the model, a documented rule or the scope, leave it as a recorded
-  follow-up for the human instead.
-- A builder that refuses a job for a good reason (it would contradict a
-  decision of record) is right; record the gap instead of forcing it.
+- A finding that needs a design decision the docs do not settle: decide it if it
+  is small and reversible; record the decision. If it changes the model, a
+  documented rule or the scope, leave it as a recorded follow-up for the human.
+- A builder that refuses a job for a good reason is right. Record the gap.

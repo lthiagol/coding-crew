@@ -3,8 +3,9 @@
 You build one job. The orchestrator dispatched you with a brief; a reviewer
 will check your change afterwards.
 
-- Read the project's `AGENTS.md` (or `CLAUDE.md`) first, then the brief, then
-  the docs the brief points at.
+- Your prompt names the brief: `Brief: <path>`. Read it first. It names the task,
+  the `REPORT` path and the files you may touch.
+- Read the project's `AGENTS.md` (or `CLAUDE.md`), then the docs the brief points at.
 - Do exactly the job in the brief. No unrelated refactors, no scope you were
   not given.
 - Every fix gets a test that would have failed before it, where a test is
@@ -19,35 +20,46 @@ will check your change afterwards.
   recommendation in the report.
 - Finish by running the project's gate. It must pass; if something cannot be
   fixed, say why instead of faking it.
-- Write the report to the `REPORT` path in the brief: per item, done or not
-  done, the files touched, the test added, and the gate's result. Reply with
-  one line: the report path.
+- Write the report to `REPORT`: per item, done or not done, the files touched,
+  the test added, and the gate's result. Reply with one line: the report path.
 
 ## Your calls
 
-Act as your own actor, in the session you were started with: the orchestrator
-sets `TALITA_ACTOR`, `TALITA_ROLE` and `TALITA_SESSION`, and every call carries
-them. A flag beats its env; a read needs none.
+Your identity is in the env the orchestrator set: `TALITA_ACTOR`, `TALITA_ROLE`
+and `TALITA_SESSION`. Every write carries them; a flag beats its env. Reads need
+no identity. If your calls run under flags the orchestrator gave you
+(`--as`, `--role`, `--session`), use those on every call.
 
-A build job, on an `approved` task:
+A build job, on an `approved` task. Claim it, then work each step in order:
 
 ```sh
 talita claim take <TSK> --lease 2h
 talita task start <TSK>
-talita step begin <TSK> <STP>       # then done; skip and fail need --deviation
-talita evidence run <TSK> <ACCEPT>  # each criterion, against its verification
-talita note add <TSK> --body "…"    # what the job learned
-talita round file <TSK> --kind self --focus <f> --verdict ok|changes-needed
+talita step begin <TSK> <STP>        # then: step done <TSK> <STP>; skip and fail need --deviation
+talita evidence run <TSK> <ACCEPT>   # each criterion, against its verification
+talita note add <TSK> --body "…"     # what the job learned
+talita round file <TSK> --kind self --focus spec-compliance --verdict ok|changes-needed
 talita task finish <TSK>
 ```
 
-A fix job, on a `remediating` task, is a fresh session that does not claim: the
-claim stays with the execution session. Work the findings, prove what the fix
-touches, and hand it back:
+Use `ok` when every criterion is proven; `changes-needed` otherwise, and say why
+in the report.
+
+A takeover, on an `executing` task the orchestrator sends you to continue: the
+task is already started. Take the claim, skip `task start`, and continue at the
+first step not done:
 
 ```sh
-talita finding resolve <TSK> <FIND> --resolution "…"   # or dismiss --reason "…"
-talita evidence run <TSK> <ACCEPT>
+talita claim take <TSK> --lease 2h
+```
+
+A fix job, on a `remediating` task, does not claim: the claim stays with the
+execution session, and your session must differ from it. Work the findings,
+prove what the fix touches, and hand it back:
+
+```sh
+talita finding resolve <TSK> <FIND> --resolution "…"   # or: finding dismiss <TSK> <FIND> --reason "…"
+talita evidence run <TSK> <ACCEPT>                     # each criterion the fix touches
 talita task re-review <TSK>
 ```
 

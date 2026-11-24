@@ -1,8 +1,8 @@
 # The orchestrator's job
 
-Accepted, unit O1, 2026-11-24: the human took every recommendation of § Open questions. O2 builds from it. Nothing
-here is built yet: the shipped skills (`crates/hugo/skills/`) still describe the
-herdr-crew loop.
+Accepted, unit O1, 2026-11-24: the human took every recommendation of § Open questions. O2 builds from it:
+talita's side is built (O2a: Q5, Q8, Q12), hugo's identity (O2b: Q7), and the shipped skills
+(`crates/hugo/skills/`, O2c) follow this loop.
 
 Sources: [roles](../roles/roles.md), [task model](../tasks/task-model.md) §§ 3–4
 and 11.2, [talita commands](../talita/commands.md), ADRs
@@ -23,10 +23,9 @@ and 11.2, [talita commands](../talita/commands.md), ADRs
 
 ## Identity
 
-- The orchestrator mints its session once with `talita session new --as orch-1 --role orchestrator`
-  (writes nothing). A shell keeps no env between calls, so every talita call
-  carries `TALITA_ACTOR`, `TALITA_ROLE` and `TALITA_SESSION`, as env or flags. Q7
-  asks whether hugo mints it instead.
+- hugo mints the orchestrator's session at `s` (Q7, built in O2b) and puts
+  `TALITA_ACTOR=orchestrator`, `TALITA_ROLE=orchestrator` and `TALITA_SESSION` in
+  its tab. Every talita call carries them, as env or flags.
 - **`crew join --role` names the crew's role** (`builder`, `reviewer`,
   `orchestrator`), not the caller's. The caller's role comes from `TALITA_ROLE`.
   Do not pass the caller's role as `--role` on a `crew` call.
@@ -42,14 +41,15 @@ and 11.2, [talita commands](../talita/commands.md), ADRs
 | builder, build job | `session new --as <b> --role runner` | one job |
 | builder, fix job | `session new --as <b> --role runner` | one job; differs from the claim's session by construction |
 | reviewer | `session new --as <r> --role reviewer` | the run; one session files every round and gives every verdict, as `review.round_owner` needs |
+| orchestrator, reviewing (2- and 1-agent crews) | `session new --as orchestrator --role reviewer` | the run; its review verbs carry `--role reviewer --session <s>` by flag, as the review verbs need the reviewer role |
 
 ## The crew
 
 | agents | builds | reviews | crew rows the orchestrator joins |
 |---|---|---|---|
 | 3 (one per role) | builder | reviewer | orchestrator; reviewer once per run; a builder per job |
-| 2 (orchestrator and builder) | builder | orchestrator, as reviewer (Q5) | orchestrator; builder per job; a reviewer row for its review session |
-| 1 (orchestrator alone) | a builder actor per job, acted for by the orchestrator | a reviewer actor, acted for by the orchestrator | orchestrator; a builder row per job; a reviewer row |
+| 2 (orchestrator and builder) | builder | orchestrator, as reviewer (Q5) | orchestrator; builder per job. The orchestrator's row reviews |
+| 1 (orchestrator alone) | a builder actor per job, acted for by the orchestrator | the orchestrator, acted for by itself | orchestrator; a builder row per job. The orchestrator's row reviews |
 
 A role the crew leaves out is `none`, and the orchestrator does that part itself.
 
@@ -59,15 +59,16 @@ acts under each role's identity by flag, one fresh session per act:
   b-tsk04-0 --role builder --model <m>`; the builder's calls with
   `TALITA_ACTOR=b-tsk04-0 TALITA_ROLE=runner TALITA_SESSION=<s>`; `crew leave` at S5.
   A fix job is `b-tsk04-1`, and so on: `crew join` refuses an id it already holds.
-- Review: `rev-1`, once per run, as in S5.
-- The orchestrator's own row is never the builder or the reviewer (Q5), so the
-  pane shows the stage the same way as in the 3- and 2-agent crews.
+- Review: the orchestrator's row, `crew assign <orchestrator> TSK04 --review` (Q5, built in O2a).
+  Its review verbs carry `--role reviewer --session <s>`, with `<s>` from
+  `talita session new --as orchestrator --role reviewer`, once per run. The pane
+  shows the stage the same way as in the 3- and 2-agent crews.
 
 Row side effects (ADR 0018, `runtime.rs`): `claim take` holds the task and sets
 the row executing; `task finish`, `task re-review` and an external `round file`
 set it idle and keep the hold; `task pass-review` and `task escalate` release
-every row holding the task. A reviewer row is `reviewing` only after
-`crew assign`. The orchestrator's row is never a reviewer (Q5).
+every row holding the task. A reviewer row, or the orchestrator's row under
+`crew assign --review`, is `reviewing` only after `crew assign`.
 
 ## The loop
 
@@ -88,7 +89,7 @@ Each step names who acts, the talita calls, what the pane shows from
 
 - `talita run start --task TSK04 --task TSK07` — the tasks hugo handed over, in order.
   It starts with an empty crew: a dead run's rows and holds go; its claims stay in the task files.
-- `talita crew join orch-1 --role orchestrator --model <m>`.
+- `talita crew join orchestrator --role orchestrator --model <m>` (the actor is hugo's `TALITA_ACTOR`).
 - Pane: queue waiting, orchestrator idle, stamp running.
 
 ### S2 Pick — orchestrator
@@ -106,10 +107,12 @@ Reached from S2 for an in-flight task, left by a dead or earlier orchestrator.
 `talita task show TSK07` gives the status; `talita round show TSK07` gives the
 rounds filed so far.
 
-- `executing`: `talita claim show TSK07`. A live lease: the builder may still run;
-  wait for the lease to pass, as § When it goes wrong says. Expired or absent: a
-  takeover as S4, with a new builder session and `talita claim take TSK07 --lease 2h`.
-  Skip `task start`; continue at the first step not done.
+- `executing`: `talita claim show TSK07`. A resumed or reopened task has no claim
+  (Q8, built in O2a), so `claim show` reports none. A live lease: the builder may
+  still run; wait for the lease to pass, as § When it goes wrong says. Absent or
+  expired: a takeover as S4, with a new builder session and
+  `talita claim take TSK07 --lease 2h`. Skip `task start`; continue at the first
+  step not done.
 - `code-review`, no external round filed for this build: S5 from the next round.
   An external round filed with no verdict: only the session that filed it may give
   the verdict (`review.round_owner`). Re-prompt that reviewer if its pane lives;
@@ -148,12 +151,15 @@ After finish: builder idle, still holding.
 ### S5 Review — reviewer
 
 Orchestrator:
-- Once per run: `talita session new --as rev-1 --role reviewer`, then
-  `talita crew join rev-1 --role reviewer --model <m>`; start the reviewer agent
+- Once per run: `talita session new --as cc-reviewer --role reviewer`, then
+  `talita crew join cc-reviewer --role reviewer --model <m>`; start the reviewer agent
   and prompt it with `Run hugo --skill reviewer and follow it. Task: TSK04. Brief: <path>.`
   Between tasks, `/clear` the reviewer, as herdr-crew does; its session stays.
-- Each round: `talita crew assign rev-1 TSK04`, then `talita crew leave cc-b-tsk04-0`
-  (the build row is no longer needed; the reviewer's row now holds the task).
+  In the 2- and 1-agent crews there is no reviewer agent: the orchestrator reviews
+  under the reviewer role by flag, with its own review session (see Identity).
+- Each round: `talita crew assign cc-reviewer TSK04` (in the 2- and 1-agent crews,
+  `talita crew assign orchestrator TSK04 --review`), then `talita crew leave cc-b-tsk04-0`
+  (the build row is no longer needed; the review row now holds the task).
 
 Reviewer:
 - `talita task show TSK04`, then the diff. Writes `review<n>.md` (the OUTFILE, in
@@ -180,7 +186,6 @@ Orchestrator: `talita session new --as cc-b-tsk04-1 --role runner`,
 `talita crew join cc-b-tsk04-1 --role builder --model <m>`,
 `talita crew assign cc-b-tsk04-1 TSK04`, the tab with env, and the prompt
 `Run hugo --skill builder and follow it. Brief: <path>.` with `brief<n>.md`. The findings are on the task: `talita task show TSK04`.
-
 Builder:
 - per finding: `talita finding resolve TSK04 FIND-01 --resolution "…"`, or
   `talita finding dismiss TSK04 FIND-01 --reason "…"`
@@ -189,7 +194,7 @@ Builder:
 - REPORT, one reply line.
 
 Orchestrator: wait for REPORT and status `code-review`; close the tab; `talita crew leave cc-b-tsk04-1`;
-`talita crew assign rev-1 TSK04`; back to S5 with round `n+1`.
+back to S5 with round `n+1` (the review row is assigned there).
 
 Pane: `remediating` shows the external stage, numbered for the next round; the
 findings count falls as they close.
@@ -278,7 +283,7 @@ is, replaced by a talita call or a hugo action, or dropped.
 ## Open questions
 
 **Ruled 2026-11-24 by the human: every recommended option.** Q1 A · Q2 C · Q3 A ·
-Q4 A · Q5 C, with A until talita changes, and ADR 0005's line amended to the
+Q4 A · Q5 C (built in O2a), and ADR 0005's line amended to the
 crew rule (the orchestrator reviews in the two- and one-agent crews) · Q6 A ·
 Q7 B · Q8 A · Q9 A then B · Q10 A · Q11 A · Q12 A · Q13 A · Q14 A. The text
 below keeps the options as they were weighed.

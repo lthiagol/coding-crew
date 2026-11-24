@@ -134,6 +134,113 @@ fn is_noun_verb(rest: &str, verb: &str) -> bool {
     }
 }
 
+/// Every `talita <noun> <verb>` a skill names is a pair the command reference
+/// documents, and each skill names at least one. The skills are what the
+/// agents type, so a call the grammar does not have is a call that fails.
+#[test]
+fn every_talita_call_in_a_skill_is_in_the_grammar() {
+    let root = repo_root();
+    let commands =
+        fs::read_to_string(root.join("docs/talita/commands.md")).expect("the command reference");
+    let mut skills = Vec::new();
+    markdown_files(&root.join("crates/hugo/skills"), &mut skills);
+    assert_eq!(skills.len(), 3, "the skills were not found: {skills:?}");
+
+    let mut hits = Vec::new();
+    for file in &skills {
+        let text =
+            fs::read_to_string(file).unwrap_or_else(|error| panic!("{}: {error}", file.display()));
+        let relative = file.strip_prefix(&root).unwrap_or(file);
+        let mut calls = 0;
+        for (number, line) in text.lines().enumerate() {
+            for (noun, verb) in talita_calls(line) {
+                calls += 1;
+                if !documents(&commands, noun, verb) {
+                    hits.push(format!(
+                        "{}:{}: talita {noun} {verb} — {}",
+                        relative.display(),
+                        number + 1,
+                        line.trim()
+                    ));
+                }
+            }
+        }
+        assert!(calls > 0, "{} names no talita call", relative.display());
+    }
+
+    assert!(
+        hits.is_empty(),
+        "{} skill lines name a talita call the grammar does not document:\n{}",
+        hits.len(),
+        hits.join("\n")
+    );
+}
+
+/// The `talita <noun> <verb>` pairs a line names. A flag after `talita`, or a
+/// word that is not a lowercase word, names no pair.
+fn talita_calls(line: &str) -> Vec<(&str, &str)> {
+    const WORD: &str = "talita ";
+    let mut calls = Vec::new();
+    let mut from = 0;
+    while let Some(offset) = line[from..].find(WORD) {
+        let start = from + offset;
+        from = start + WORD.len();
+        if !bounded(line, start, start + WORD.len() - 1) {
+            continue;
+        }
+        let mut words = line[from..]
+            .split_whitespace()
+            .map(|word| word.trim_matches(|c: char| !c.is_alphanumeric() && c != '-'));
+        if let (Some(noun), Some(verb)) = (words.next(), words.next())
+            && is_lower_word(noun)
+            && is_lower_word(verb)
+        {
+            calls.push((noun, verb));
+        }
+    }
+    calls
+}
+
+/// A lowercase word, as the grammar's nouns and verbs are written.
+fn is_lower_word(word: &str) -> bool {
+    word.starts_with(|c: char| c.is_ascii_lowercase())
+        && word.chars().all(|c| c.is_ascii_lowercase() || c == '-')
+}
+
+/// Whether the command reference names `noun verb` as a whole phrase.
+fn documents(commands: &str, noun: &str, verb: &str) -> bool {
+    let pair = format!("{noun} {verb}");
+    let mut from = 0;
+    while let Some(offset) = commands[from..].find(&pair) {
+        let start = from + offset;
+        let end = start + pair.len();
+        if bounded(commands, start, end) {
+            return true;
+        }
+        from = end;
+    }
+    false
+}
+
+#[test]
+fn the_scan_reads_a_talita_call_as_a_noun_and_a_verb() {
+    assert_eq!(
+        talita_calls("`talita task finish TSK04`"),
+        [("task", "finish")]
+    );
+    assert_eq!(
+        talita_calls("talita claim take <TSK> --lease 2h; then talita evidence run <TSK>"),
+        [("claim", "take"), ("evidence", "run")]
+    );
+    assert!(talita_calls("talita --help").is_empty());
+    assert!(talita_calls("notalita task finish").is_empty());
+    assert!(talita_calls("talita Task Finish").is_empty());
+    assert!(documents("`task finish <TSK>`", "task", "finish"));
+    assert!(!documents("`task finished <TSK>`", "task", "finish"));
+    assert!(documents("`finding resolve <TSK>`", "finding", "resolve"));
+    assert!(!documents("`begin finding resolve`", "finding", "re"));
+}
+
 #[test]
 fn the_scan_tells_a_flat_verb_from_the_grammar() {
     assert!(names_flat_verb("`talita create \"A task\"`", "create"));

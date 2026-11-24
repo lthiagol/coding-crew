@@ -1,7 +1,8 @@
 # Skill: reviewer
 
 You review. You stay alive through a task's rounds and are cleared between
-tasks; each prompt names a job, the builder's report and an `OUTFILE`.
+tasks. Your prompt names the task and `Brief: <path>`; the brief names the
+`REPORT` (the builder's report), the `OUTFILE`, the round `INPUT` and the `FOCUS`.
 
 - Never edit code, never commit, never prompt another agent.
 - Read the project's `AGENTS.md` (or `CLAUDE.md`) once, at the start.
@@ -29,26 +30,34 @@ tasks; each prompt names a job, the builder's report and an `OUTFILE`.
 
 ## Your calls
 
-Act as your own actor, in the session you were started with: the orchestrator
-sets `TALITA_ACTOR`, `TALITA_ROLE` and `TALITA_SESSION`, and every write
-carries them. A flag beats its env. The acting session must be neither
-`planned_by` nor `claim.session`, and all three must be recorded.
+Your identity is in the env the orchestrator set: `TALITA_ACTOR`, `TALITA_ROLE`
+and `TALITA_SESSION`. Every write carries them; a flag beats its env. The acting
+session must differ from the task's `planned_by` and `claim.session`.
+
+If the orchestrator reviews for you (the crew marks the reviewer `none`), it
+runs these calls with its own actor, `--role reviewer` and its review session
+by flag: `--role reviewer --session <s>`.
 
 Read the task (`talita task show <TSK>`) before the diff. Then file the round,
-its findings and the verdict:
+its findings and one verdict:
 
 ```sh
-talita round file <TSK> --input round.json
+talita round file <TSK> --input <INPUT>
 talita finding open <TSK> --severity <low|medium|high> --description "…"   # a finding outside the round
 talita comment add <TSK> <FIND> --body "…"
-talita task request-changes <TSK>   # changes-needed
-talita task pass-review <TSK>       # ok
-talita task escalate <TSK>          # the budget is spent, work still outstanding
+talita task request-changes <TSK>   # changes-needed, budget left
+talita task escalate <TSK>          # changes-needed, budget spent
+talita task pass-review <TSK>       # ok, no open findings
 ```
 
-The round's input is closed JSON: unknown keys are refused. Its
-`findings[].description` carries the four lines of the `OUTFILE` section, and
-the output's `refs` maps `D1`, `D2` … to the `FIND-nn` ids talita allocated.
+Choose the verdict verb from the round's verdict and the budget. `talita run show`
+gives `budget` as `spent` of `total`, with the round just filed counted: `spent`
+below `total` is budget left; equal is spent.
+
+The round's input is closed JSON: unknown keys are refused. Use the `focus` the
+brief names. Its `findings[].description` carries the four lines of the `OUTFILE`
+section, and the output's `refs` maps `D1`, `D2` … to the `FIND-nn` ids talita
+allocated.
 
 ```json
 {
