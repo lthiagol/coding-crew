@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use coding_crew_core::lifecycle;
 use coding_crew_core::store::{ACTIVITY_FILE, activity_path, by_number};
 use coding_crew_core::{Activity, ActivityError, Item, ItemKind, Status, Task};
 
@@ -198,23 +199,12 @@ impl Work {
             .collect()
     }
 
-    /// The tasks whose next action is the human's.
-    ///
-    /// The human lane, minus the tasks carrying an overlay: a task that is
-    /// blocked or deferred is not waiting on a human.
+    /// The tasks whose next action is the human's, with the reason each
+    /// waits. The rule is core's: `lifecycle::needs_you`.
     pub fn needs_you(&self) -> Vec<(&Task, Reason)> {
         self.tasks
             .iter()
-            .filter(|task| !has_overlay(task))
-            .filter_map(|task| {
-                let reason = match task.status {
-                    Status::Groomed => Reason::Approve,
-                    Status::CodeReview => Reason::Review,
-                    Status::NeedsHuman => Reason::Escalated,
-                    _ => return None,
-                };
-                Some((task, reason))
-            })
+            .filter_map(|task| lifecycle::needs_you(task).map(|reason| (task, reason)))
             .collect()
     }
 
@@ -315,9 +305,7 @@ pub const KINDS: [ItemKind; 3] = [ItemKind::Idea, ItemKind::Feature, ItemKind::B
 
 /// Whether the task carries any overlay.
 pub fn has_overlay(task: &Task) -> bool {
-    task.overlays.blocked.is_some()
-        || task.overlays.deferred.is_some()
-        || task.overlays.cancelled.is_some()
+    task.overlays.any()
 }
 
 /// Whether a claim is live — held, and not expired.

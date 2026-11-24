@@ -29,7 +29,8 @@ pub use config::{Agent, CONFIG_FILE, Config, ConfigError, Gate, OrderStep};
 pub use harness::{Harness, Invocation, Models};
 pub use item::{Item, ItemError, ItemKind, ItemStatus};
 pub use lifecycle::{
-    Event, GateFailure, Overlay, Overlays, Reason, Status, TransitionContext, TransitionError,
+    Event, GateFailure, Lane, Overlay, Overlays, Reason, ReviewState, Status, TransitionContext,
+    TransitionError,
 };
 pub use markdown::{escape_literal, item_to_markdown, task_to_markdown};
 pub use ownership::{Owner, OwnershipError, Section};

@@ -900,12 +900,20 @@ exist. See [hugo's design record](../hugo/design-record.md#ruling-2026-11-22-hug
 | view | derived from |
 |---|---|
 | criterion status | the criterion's latest evidence |
-| review state | `pending-review` · `open-findings` · `clean` — from the rounds and the findings |
-| lanes | the human lane and the agent lane — from the status, the overlays and the claims (see [vocabulary.md](../vocabulary.md#the-lanes-are-derived)) |
+| review state | `open-findings` · `pending-review` · `clean` — from the rounds and the findings, by the rule below |
+| lanes | the human lane and the agent lane — from the status; the overlays narrow the human lane to Needs you ([screens.md](../tui/screens.md)) (see [vocabulary.md](../vocabulary.md#the-lanes-are-derived)) |
 | board views | the lanes, grouped and sorted |
 | children progress | the children's own statuses |
 | readiness to claim | would `start` be accepted right now, and if not, which gate refuses it — `overlay.clear` among them, from the claim's own rule (§ 3.3) |
 | who reviews | the crew's roles — § 11.2: a reviewer, else the orchestrator, else the human |
+
+The review state is the first of these that holds, and absent when none does:
+
+- `open-findings`: a finding is open, whatever the status.
+- `pending-review`: the task is in `code-review`, and no external round is filed since it entered `code-review`.
+- `clean`: the latest external round is filed, and no finding is open.
+
+A task with none of these is not in review.
 
 A stored lane is a lane that can disagree with the status it was derived from.
 These are views, and they are recomputed on read.
