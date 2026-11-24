@@ -561,6 +561,124 @@ fn a_frozen_section_is_refused_with_the_child_task_remedy() {
 }
 
 #[test]
+fn the_list_filters_on_the_overlays_and_cancelled_is_no_status() {
+    let dir = project("overlay-filter");
+    let blocked = create(&dir, "Blocked");
+    let deferred = create(&dir, "Deferred");
+    let cancelled = create(&dir, "Cancelled");
+    let plain = create(&dir, "Plain");
+    applied(
+        talita(
+            &dir,
+            &HUMAN,
+            &["task", "block", &blocked, "--reason", "waiting on a key"],
+        ),
+        "task block",
+    );
+    applied(
+        talita(
+            &dir,
+            &HUMAN,
+            &["task", "defer", &deferred, "--reason", "later"],
+        ),
+        "task defer",
+    );
+    applied(
+        talita(
+            &dir,
+            &HUMAN,
+            &["task", "cancel", &cancelled, "--reason", "dropped"],
+        ),
+        "task cancel",
+    );
+
+    let ids = |envelope: &Value| -> Vec<String> {
+        envelope["data"]
+            .as_array()
+            .expect("a list")
+            .iter()
+            .map(|row| row["id"].as_str().expect("an id").to_string())
+            .collect()
+    };
+    for (overlay, id) in [
+        ("blocked", &blocked),
+        ("deferred", &deferred),
+        ("cancelled", &cancelled),
+    ] {
+        let listed = applied(
+            talita(&dir, &[], &["task", "list", "--overlay", overlay]),
+            "task list",
+        );
+        assert_eq!(ids(&listed), vec![id.clone()], "{listed}");
+        assert!(
+            !ids(&listed).contains(&plain),
+            "{overlay}: the plain task stays out"
+        );
+        assert!(
+            listed["data"][0]["overlays"][overlay].is_object(),
+            "{listed}: the row carries its overlay"
+        );
+    }
+
+    // Repeated, a task matches when it carries any of the named overlays.
+    let either = applied(
+        talita(
+            &dir,
+            &[],
+            &[
+                "task",
+                "list",
+                "--overlay",
+                "blocked",
+                "--overlay",
+                "deferred",
+            ],
+        ),
+        "task list",
+    );
+    assert_eq!(ids(&either), vec![blocked.clone(), deferred.clone()]);
+
+    let unknown = refused(
+        talita(&dir, &[], &["task", "list", "--overlay", "stuck"]),
+        "task list",
+        "input.invalid",
+        2,
+    );
+    let remedy = unknown["error"]["remedy"].as_str().expect("a remedy");
+    for word in ["blocked", "deferred", "cancelled"] {
+        assert!(remedy.contains(word), "{remedy}");
+    }
+
+    // Cancellation is an overlay, not a status; its refusal names the filter.
+    let cancelled_status = refused(
+        talita(&dir, &[], &["task", "list", "--status", "cancelled"]),
+        "task list",
+        "input.invalid",
+        2,
+    );
+    assert!(
+        cancelled_status["error"]["remedy"]
+            .as_str()
+            .unwrap()
+            .contains("talita task list --overlay cancelled"),
+        "{cancelled_status}"
+    );
+
+    // The readiness names the overlay the claim stops on.
+    let shown = applied(talita(&dir, &[], &["task", "show", &deferred]), "task show");
+    let gates = shown["data"]["derived"]["start_readiness"]["gates"]
+        .as_array()
+        .expect("a gate list");
+    assert!(
+        gates
+            .iter()
+            .any(|gate| gate["gate"] == "overlay.clear"
+                && gate["detail"] == "the task is deferred"),
+        "{shown}"
+    );
+}
+
+#[test]
 fn steps_after_approval_need_the_working_runner_and_a_deviation() {
     let dir = project("steps-after");
     create(&dir, "Work");

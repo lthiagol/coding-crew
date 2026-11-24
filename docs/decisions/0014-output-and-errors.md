@@ -50,10 +50,18 @@ running talita through raul's route.
 | `warnings` | optional, list of `{code, message}`; never a refusal |
 | `error.code` | stable, dotted, from the table below |
 | `error.gates` | for `gate.refused`: every failing gate, by its task-model name |
-| `error.remedy` | when one exists: the talita command that unblocks |
+| `error.remedy` | when one exists: the talita command that unblocks — never the verb that was just refused |
 
 stderr carries nothing on a normal run; a panic is the only thing that lands
 there.
+
+**A remedy is the next call.** It names the command that clears the refusal,
+with the part the gate's detail names: `task finish` refused by
+`ACCEPT-01 failed without a reason` is answered by
+`talita criterion explain … ACCEPT-01 --failure-reason <t>`, not by the
+`evidence run` that just failed. A remedy never names the call that was
+refused. A role-gated verb refused to a human names the creator's route with
+`--instructed-by`, or the role that owns the verb.
 
 ### Error codes and exit codes
 

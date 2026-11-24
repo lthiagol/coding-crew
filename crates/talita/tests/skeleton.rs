@@ -228,17 +228,16 @@ fn usage_errors_print_the_envelope() {
 }
 
 #[test]
-fn project_init_creates_the_work_folder_once() {
+fn project_init_creates_the_work_folder_with_no_identity() {
     let dir = scratch("init");
-    let envelope = applied(
-        talita(
-            &dir,
-            &[],
-            &["project", "init", "--as", "luiz", "--role", "human"],
-        ),
-        "project init",
-    );
+    // No --as, --role or --session: init writes no task and no journal, so
+    // there is nothing to attribute (ADR 0015).
+    let envelope = applied(talita(&dir, &[], &["project", "init"]), "project init");
     assert_eq!(envelope["wrote"], serde_json::json!(["work/"]));
+    assert!(
+        envelope["journal"].as_array().unwrap().is_empty(),
+        "{envelope}"
+    );
     assert_eq!(envelope["data"]["project"], dir.to_str().unwrap());
     assert!(dir.join("coding-crew/work").is_dir());
     assert_eq!(
@@ -246,10 +245,8 @@ fn project_init_creates_the_work_folder_once() {
         0
     );
 
-    let mut args = vec!["project", "init"];
-    args.extend(AGENT);
     refused(
-        talita(&dir, &[], &args),
+        talita(&dir, &[], &["project", "init"]),
         "project init",
         "project.exists",
         4,
@@ -258,9 +255,12 @@ fn project_init_creates_the_work_folder_once() {
     let other = scratch("init-path");
     let target = other.join("sub");
     fs::create_dir(&target).unwrap();
-    let mut args = vec!["project", "init", "--path", target.to_str().unwrap()];
-    args.extend(AGENT);
-    applied(talita(&other, &[], &args), "project init");
+    let path = target.to_str().unwrap();
+    let envelope = applied(
+        talita(&other, &[], &["project", "init", "--path", path]),
+        "project init",
+    );
+    assert_eq!(envelope["data"]["project"], target.to_str().unwrap());
     assert!(target.join("coding-crew/work").is_dir());
     assert!(!other.join("coding-crew").exists());
 }
@@ -268,28 +268,7 @@ fn project_init_creates_the_work_folder_once() {
 #[test]
 fn project_init_refusals() {
     let dir = scratch("init-refused");
-    let envelope = refused(
-        talita(&dir, &[], &["project", "init"]),
-        "project init",
-        "identity.missing",
-        5,
-    );
-    assert!(
-        envelope["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("session")
-    );
-    refused(
-        talita(
-            &dir,
-            &[],
-            &["project", "init", "--as", "creator-1", "--role", "creator"],
-        ),
-        "project init",
-        "identity.missing",
-        5,
-    );
+    // A role word that is not one is still input, even though init needs none.
     refused(
         talita(
             &dir,
@@ -305,9 +284,16 @@ fn project_init_refusals() {
     // A file where the directory should be: an I/O failure is `internal`.
     let blocker = dir.join("blocker");
     fs::write(&blocker, "").unwrap();
-    let mut args = vec!["project", "init", "--path", blocker.to_str().unwrap()];
-    args.extend(AGENT);
-    refused(talita(&dir, &[], &args), "project init", "internal", 1);
+    refused(
+        talita(
+            &dir,
+            &[],
+            &["project", "init", "--path", blocker.to_str().unwrap()],
+        ),
+        "project init",
+        "internal",
+        1,
+    );
 }
 
 #[test]

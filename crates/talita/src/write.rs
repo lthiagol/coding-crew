@@ -4,7 +4,7 @@
 use std::io::Read;
 use std::time::Duration;
 
-use coding_crew_core::ownership::authorize;
+use coding_crew_core::ownership::{authorize, owner};
 use coding_crew_core::store::{ACTIVITY_FILE, WORK_DIR};
 use coding_crew_core::{
     Activity, ActivityError, ActivityEvent, Actor, EventKind, OwnershipError, ProjectLock, Section,
@@ -182,8 +182,13 @@ pub fn refuse_cancelled(task: &Task) -> Result<(), Failure> {
 pub fn own(section: Section, actor: &Actor, task: &Task) -> Result<(), Failure> {
     authorize(section, actor, task.status).map_err(|error| match error {
         OwnershipError::NoOwner(_) => Failure::new(Code::Internal, error.to_string()),
-        OwnershipError::NotAnAgent(_) => Failure::new(Code::ActorNotAgent, error.to_string())
-            .remedy("an agent with the owning role writes it"),
+        OwnershipError::NotAnAgent(_) => {
+            let remedy = owner(section, task.status)
+                .and_then(|owning| owning.role())
+                .map(|role| format!("act as --role {}", role.as_str()))
+                .unwrap_or_else(|| "an agent with the owning role writes it".to_string());
+            Failure::new(Code::ActorNotAgent, error.to_string()).remedy(remedy)
+        }
         OwnershipError::NotOwned { role, .. } => {
             Failure::new(Code::SectionNotOwned, error.to_string())
                 .remedy(format!("act as --role {}", role.as_str()))

@@ -58,13 +58,30 @@ pub fn parse_kind(value: &str) -> Result<TaskKind, Failure> {
 
 pub fn parse_status(value: &str) -> Result<Status, Failure> {
     serde_json::from_value(json!(value)).map_err(|_| {
-        Failure::new(
+        let failure = Failure::new(
             Code::InputInvalid,
             format!(
                 "status `{value}` is not one of draft, groomed, approved, executing, code-review, remediating, needs-human, done"
             ),
-        )
+        );
+        if value == "cancelled" {
+            failure.remedy("talita task list --overlay cancelled")
+        } else {
+            failure
+        }
     })
+}
+
+/// The overlay words `task list --overlay` filters on (task-model § 3.4).
+pub fn parse_overlay(value: &str) -> Result<&str, Failure> {
+    match value {
+        "blocked" | "deferred" | "cancelled" => Ok(value),
+        other => Err(Failure::new(
+            Code::InputInvalid,
+            format!("overlay `{other}` is not one of blocked, deferred, cancelled"),
+        )
+        .remedy("talita task list --overlay blocked|deferred|cancelled")),
+    }
 }
 
 /// `task create`: a new task in `draft`; with `--parent`, the child `TSKnn.m`.
@@ -198,6 +215,11 @@ fn start_readiness(task: &Task, done: &dyn Fn(&str) -> bool, now: &str) -> Value
             .unwrap_or_default(),
         Role::Runner,
     );
+    // The overlays the claim stops on are start's too: one rule in core, so
+    // the readiness and `claim take` agree.
+    for failure in coding_crew_core::claim::overlay_failures(task) {
+        gates.push(json!({ "gate": failure.gate, "detail": failure.message }));
+    }
     let ctx = TransitionContext {
         dependency_done: Some(done),
         reason: None,
@@ -211,6 +233,7 @@ fn start_readiness(task: &Task, done: &dyn Fn(&str) -> bool, now: &str) -> Value
 /// The filters of `task list`.
 pub struct ListFilter {
     pub statuses: Vec<String>,
+    pub overlays: Vec<String>,
     pub kind: Option<String>,
     pub claimable: bool,
     pub tags: Vec<String>,
@@ -222,6 +245,11 @@ pub fn list(project: &Project, filter: &ListFilter) -> Result<Done, Failure> {
         .statuses
         .iter()
         .map(|s| parse_status(s))
+        .collect::<Result<_, _>>()?;
+    let overlays: Vec<&str> = filter
+        .overlays
+        .iter()
+        .map(|s| parse_overlay(s))
         .collect::<Result<_, _>>()?;
     let kind = filter.kind.as_deref().map(parse_kind).transpose()?;
     let mut tasks = project.store.list()?;
@@ -236,6 +264,14 @@ pub fn list(project: &Project, filter: &ListFilter) -> Result<Done, Failure> {
     let rows: Vec<Value> = tasks
         .iter()
         .filter(|t| statuses.is_empty() || statuses.contains(&t.status))
+        .filter(|t| {
+            overlays.is_empty()
+                || overlays.iter().any(|overlay| match *overlay {
+                    "blocked" => t.overlays.blocked.is_some(),
+                    "deferred" => t.overlays.deferred.is_some(),
+                    _ => t.overlays.cancelled.is_some(),
+                })
+        })
         .filter(|t| kind.is_none_or(|k| t.kind == k))
         .filter(|t| filter.tags.iter().all(|tag| t.meta.tags.contains(tag)))
         .filter_map(|t| {

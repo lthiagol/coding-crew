@@ -116,6 +116,11 @@ fn check_filing(task: &Task, actor: &Actor, spec: &RoundSpec, id: &str) -> Resul
             }
             let filed = task.external_rounds() as u32;
             if filed >= task.review.max_rounds {
+                let next = if task.review.verdict == Some(Verdict::Ok) {
+                    format!("talita task pass-review {id}")
+                } else {
+                    format!("talita task escalate {id}")
+                };
                 return Err(Failure::new(
                     Code::ReviewBudgetSpent,
                     format!(
@@ -123,7 +128,7 @@ fn check_filing(task: &Task, actor: &Actor, spec: &RoundSpec, id: &str) -> Resul
                         task.review.max_rounds
                     ),
                 )
-                .remedy(format!("talita task show {id}")));
+                .remedy(next));
             }
             match spec.verdict {
                 Verdict::Ok if task.open_findings() > 0 || !spec.findings.is_empty() => {
@@ -139,7 +144,9 @@ fn check_filing(task: &Task, actor: &Actor, spec: &RoundSpec, id: &str) -> Resul
                             }
                         ),
                     )
-                    .remedy(format!("talita round file {id} --kind external --focus <f> --verdict changes-needed")));
+                    .remedy(format!(
+                        "talita round file {id} --input <round>: file it changes-needed, with its finding"
+                    )));
                 }
                 Verdict::ChangesNeeded if spec.findings.is_empty() => {
                     return Err(Failure::new(
@@ -302,7 +309,7 @@ pub fn finding_open(
                 ),
             )
             .remedy(format!(
-                "talita round file {id} --kind external --focus <f> --verdict changes-needed --input <path>"
+                "talita round file {id} --input <round>: file it changes-needed, with its finding"
             )));
         }
         let fid = next_part_id("FIND", task.review.findings.iter().map(|f| f.id.as_str()));
@@ -506,9 +513,8 @@ fn gate_refusal(verb: &str, id: &str, failures: Vec<GateFailure>) -> Failure {
     let remedy = gates
         .first()
         .map(|gate| match gate.gate.as_str() {
-            "review.independent" | "review.round_owner" => {
-                "talita session new --as <actor> --role reviewer".to_string()
-            }
+            "review.independent" => "talita session new --as <actor> --role reviewer".to_string(),
+            "review.round_owner" => format!("talita round file {id} --input <round>"),
             "remediation.session_distinct" => {
                 "talita session new --as <actor> --role runner".to_string()
             }

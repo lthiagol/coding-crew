@@ -109,7 +109,8 @@ impl Resolved {
 
     /// The actor of a write. Refuses `identity.missing` for a missing actor
     /// or role, and for an agent without a session. A human's session is not
-    /// recorded.
+    /// recorded. `project init` is the one write that needs no identity: it
+    /// writes no task and no journal.
     pub fn writer(&self) -> Result<Actor, Failure> {
         let mut missing = Vec::new();
         if self.actor.is_none() {

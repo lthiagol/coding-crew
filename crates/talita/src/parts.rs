@@ -637,7 +637,15 @@ pub fn answer(
         return Err(Failure::new(Code::InputInvalid, "--instructed-by is empty"));
     }
     call.task(id, |task, actor| {
-        own(Section::QuestionAnswer, actor, task)?;
+        if let Err(mut failure) = own(Section::QuestionAnswer, actor, task) {
+            // A human's route is the creator's, with the human's name (ADR 0015).
+            if failure.code == Code::ActorNotAgent {
+                failure.remedy = Some(format!(
+                    "a creator agent records it: talita question answer {id} {qid} --answer <t> --instructed-by <human>"
+                ));
+            }
+            return Err(failure);
+        }
         let Some(question) = task.questions.iter_mut().find(|q| q.id == qid) else {
             return Err(part_not_found(task, qid));
         };

@@ -12,8 +12,8 @@ use std::process::{Command, Stdio};
 
 use coding_crew_core::claim::{self, DEFAULT_LEASE};
 use coding_crew_core::{
-    Actor, Evidence, Finding, FindingStatus, Focus, Role, Round, RoundKind, Severity, Status,
-    StepStatus, Store, Task, Verdict,
+    Actor, CriterionStatus, Evidence, Finding, FindingStatus, Focus, Role, Round, RoundKind,
+    Severity, Status, StepStatus, Store, Task, Verdict,
 };
 use serde_json::Value;
 
@@ -913,5 +913,209 @@ fn overlays_ride_beside_the_status_and_cancel_releases_a_live_claim() {
     assert_eq!(
         task.overlays.cancelled.as_ref().unwrap().reason,
         "superseded"
+    );
+}
+
+/// A task at work with its step settled and a self round filed; the evidence
+/// is the test's to write.
+fn at_work_with_a_round(dir: &Path, title: &str) -> String {
+    let id = create(dir, title);
+    groom(dir, &id);
+    approve(dir, &id);
+    start(dir, &id);
+    edit(dir, &id, |task| task.steps[0].status = StepStatus::Done);
+    applied(
+        talita(
+            dir,
+            &RUNNER,
+            &[
+                "round",
+                "file",
+                &id,
+                "--kind",
+                "self",
+                "--focus",
+                "spec-compliance",
+                "--verdict",
+                "ok",
+            ],
+        ),
+        "round file",
+    );
+    id
+}
+
+#[test]
+fn task_finish_names_the_call_that_clears_its_gate() {
+    let dir = project("finish-remedy");
+
+    // A criterion that failed without a reason: `criterion explain`, naming
+    // the criterion the gate's detail names. The evidence was already run.
+    let failed = at_work_with_a_round(&dir, "Fail without a reason");
+    edit(&dir, &failed, |task| {
+        task.acceptance_criteria[0].verification = "false".to_string();
+    });
+    applied(
+        talita(&dir, &RUNNER, &["evidence", "run", &failed, "ACCEPT-01"]),
+        "evidence run",
+    );
+    let refusal = refused(
+        talita(&dir, &RUNNER, &["task", "finish", &failed]),
+        "task finish",
+        "gate.refused",
+        4,
+    );
+    assert_eq!(gates(&refusal), vec!["criteria.proven"]);
+    let remedy = refusal["error"]["remedy"].as_str().expect("a remedy");
+    assert!(
+        remedy.contains("talita criterion explain") && remedy.contains("ACCEPT-01"),
+        "{remedy}"
+    );
+    assert!(remedy.contains("--failure-reason"), "{remedy}");
+    assert!(
+        !remedy.contains("evidence run"),
+        "the run already happened: {remedy}"
+    );
+
+    // A criterion with no evidence: `evidence run`, with the criterion's id.
+    let bare = at_work_with_a_round(&dir, "No evidence");
+    let refusal = refused(
+        talita(&dir, &RUNNER, &["task", "finish", &bare]),
+        "task finish",
+        "gate.refused",
+        4,
+    );
+    assert_eq!(gates(&refusal), vec!["evidence.attached"]);
+    let remedy = refusal["error"]["remedy"].as_str().expect("a remedy");
+    assert_eq!(
+        remedy,
+        format!("talita evidence run {bare} ACCEPT-01"),
+        "{refusal}"
+    );
+
+    // A criterion deferred without a deferral: `criterion undefer`.
+    let parked = at_work_with_a_round(&dir, "Deferred without a deferral");
+    edit(&dir, &parked, |task| {
+        task.acceptance_criteria[0].status = CriterionStatus::Deferred;
+    });
+    let refusal = refused(
+        talita(&dir, &RUNNER, &["task", "finish", &parked]),
+        "task finish",
+        "gate.refused",
+        4,
+    );
+    assert_eq!(gates(&refusal), vec!["criteria.proven"]);
+    let remedy = refusal["error"]["remedy"].as_str().expect("a remedy");
+    assert_eq!(
+        remedy,
+        format!("talita criterion undefer {parked} ACCEPT-01"),
+        "{refusal}"
+    );
+}
+
+#[test]
+fn task_escalate_names_the_round_to_file_not_itself() {
+    let dir = project("escalate-remedy");
+    let id = create(&dir, "Escalate too early");
+    groom(&dir, &id);
+    approve(&dir, &id);
+    start(&dir, &id);
+    finish(&dir, &id);
+    // One changes-needed round: the verdict is set, so the budget is the only
+    // gate that refuses the escalation.
+    file_round(&dir, &id, 1, Verdict::ChangesNeeded, Some("FIND-01"));
+
+    let refusal = refused(
+        talita(&dir, &REVIEWER, &["task", "escalate", &id]),
+        "task escalate",
+        "gate.refused",
+        4,
+    );
+    assert_eq!(gates(&refusal), vec!["review.budget_exhausted"]);
+    let remedy = refusal["error"]["remedy"].as_str().expect("a remedy");
+    assert!(
+        remedy.contains("talita round file") && remedy.contains("--input"),
+        "{remedy}"
+    );
+    assert!(
+        !remedy.contains("task escalate"),
+        "the remedy names the call that was refused: {remedy}"
+    );
+}
+
+#[test]
+fn a_human_is_pointed_at_the_creators_route() {
+    let dir = project("human-route");
+    let id = create(&dir, "A human's decision");
+    groom(&dir, &id);
+    let question = applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &["question", "ask", &id, "--question", "which?"],
+        ),
+        "question ask",
+    )["data"]["question"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // `question answer` is the creator's, with the human's name.
+    let refusal = refused(
+        talita(
+            &dir,
+            &HUMAN,
+            &["question", "answer", &id, &question, "--answer", "this"],
+        ),
+        "question answer",
+        "actor.not_agent",
+        5,
+    );
+    let remedy = refusal["error"]["remedy"].as_str().expect("a remedy");
+    assert!(
+        remedy.contains("talita question answer")
+            && remedy.contains("--instructed-by")
+            && remedy.contains(&question),
+        "{remedy}"
+    );
+
+    // `task approve`: the creator agent acts with the human's name.
+    let refusal = refused(
+        talita(&dir, &HUMAN, &["task", "approve", &id]),
+        "task approve",
+        "actor.not_agent",
+        5,
+    );
+    let remedy = refusal["error"]["remedy"].as_str().expect("a remedy");
+    assert!(
+        remedy.contains("talita task approve")
+            && remedy.contains(&id)
+            && remedy.contains("--instructed-by"),
+        "{remedy}"
+    );
+    assert!(
+        !remedy.contains("act as an agent"),
+        "the human is told to be what was refused: {remedy}"
+    );
+
+    // `task start` has no human route: it names the role that owns it.
+    applied(
+        talita(
+            &dir,
+            &CREATOR,
+            &["question", "answer", &id, &question, "--answer", "this"],
+        ),
+        "question answer",
+    );
+    approve(&dir, &id);
+    let refusal = refused(
+        talita(&dir, &HUMAN, &["task", "start", &id]),
+        "task start",
+        "actor.not_agent",
+        5,
+    );
+    assert_eq!(
+        refusal["error"]["remedy"], "act as --role runner",
+        "{refusal}"
     );
 }

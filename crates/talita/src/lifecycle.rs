@@ -44,7 +44,8 @@ fn apply(
             dependency_done: Some(&done),
             reason: overlay_reason,
         };
-        transition(task, event, actor, &ctx, &now).map_err(|error| refused(error, verb, id))?;
+        transition(task, event, actor, &ctx, &now)
+            .map_err(|error| refused(error, verb, id, event))?;
 
         // `human.instructed` is the task model's gate, checked here: the flag
         // must name the human who decided (ADR 0015). The status is checked
@@ -206,7 +207,7 @@ fn data(
 }
 
 /// The failure of a refused transition, with the role or every failing gate.
-fn refused(error: TransitionError, verb: &str, id: &str) -> Failure {
+fn refused(error: TransitionError, verb: &str, id: &str, event: Event) -> Failure {
     match error {
         TransitionError::WrongRole { role, .. } => Failure::new(
             Code::RoleWrong,
@@ -215,7 +216,7 @@ fn refused(error: TransitionError, verb: &str, id: &str) -> Failure {
         .remedy(format!("act as --role {}", role.as_str())),
         TransitionError::NotAnAgent => {
             Failure::new(Code::ActorNotAgent, format!("{verb} is an agent's act"))
-                .remedy("act as an agent: --role creator, runner or reviewer")
+                .remedy(human_route(id, event))
         }
         TransitionError::WrongStatus { status, .. } => Failure::new(
             Code::StatusWrong,
@@ -239,11 +240,32 @@ fn refused(error: TransitionError, verb: &str, id: &str) -> Failure {
     }
 }
 
+/// A human's route to a role-gated verb (ADR 0015): the creator agent records
+/// the decision with the human's name. The verbs that take `--instructed-by`
+/// name that call; every other verb names the role that owns it.
+fn human_route(id: &str, event: Event) -> String {
+    match event {
+        Event::Approve => {
+            format!("a creator agent records it: talita task approve {id} --instructed-by <human>")
+        }
+        Event::ResumeWork => format!(
+            "a creator agent records it: talita task resume {id} --instructed-by <human> --reason <t>"
+        ),
+        Event::Reopen => format!(
+            "a creator agent records it: talita task reopen {id} --instructed-by <human> --reason <t>"
+        ),
+        _ => event
+            .required_role()
+            .map(|role| format!("act as --role {}", role.as_str()))
+            .unwrap_or_else(|| format!("talita task show {id}")),
+    }
+}
+
 fn gate_refusal(verb: &str, id: &str, gates: Vec<GateDetail>) -> Failure {
     let count = gates.len();
     let remedy = gates
         .first()
-        .map(|gate| gate_remedy(verb, id, &gate.gate))
+        .map(|gate| gate_remedy(verb, id, gate))
         .unwrap_or_else(|| format!("talita task show {id}"));
     let mut failure = Failure::new(
         Code::GateRefused,
@@ -257,9 +279,11 @@ fn gate_refusal(verb: &str, id: &str, gates: Vec<GateDetail>) -> Failure {
     failure
 }
 
-/// The command that moves a failing gate forward, when one exists.
-fn gate_remedy(verb: &str, id: &str, gate: &str) -> String {
-    match gate {
+/// The command that moves a failing gate forward, when one exists. A remedy
+/// names the call that unblocks, never the verb that was just refused.
+fn gate_remedy(verb: &str, id: &str, gate: &GateDetail) -> String {
+    let criterion = criterion_of(&gate.detail).unwrap_or("<ACCEPT>");
+    match gate.gate.as_str() {
         "intent.outcome_present" => format!("talita task describe {id} --outcome <t>"),
         "criteria.present" => {
             format!("talita criterion add {id} --description <t> --verification <t>")
@@ -272,8 +296,14 @@ fn gate_remedy(verb: &str, id: &str, gate: &str) -> String {
         "steps.done_when_present" => format!("talita step revise {id} <STP> --done-when <t>"),
         "task.claimed" => format!("talita claim take {id}"),
         "steps.settled" => format!("talita step done {id} <STP>"),
+        "criteria.proven" if gate.detail.contains("without a reason") => {
+            format!("talita criterion explain {id} {criterion} --failure-reason <t>")
+        }
+        "criteria.proven" if gate.detail.contains("without a deferral") => {
+            format!("talita criterion undefer {id} {criterion}")
+        }
         "evidence.attached" | "criteria.proven" => {
-            format!("talita evidence run {id} <ACCEPT>")
+            format!("talita evidence run {id} {criterion}")
         }
         "self_round.filed" => {
             format!("talita round file {id} --kind self --focus spec-compliance --verdict ok")
@@ -284,23 +314,31 @@ fn gate_remedy(verb: &str, id: &str, gate: &str) -> String {
         "review.findings_closed" | "review.no_open_findings" => {
             format!("talita finding resolve {id} <FIND> --resolution <t>")
         }
-        "review.verdict_ok"
-        | "review.verdict_changes_needed"
+        "review.verdict_changes_needed"
+        | "review.budget_exhausted"
         | "review.round_current"
-        | "review.round_owner" => {
-            format!("talita round file {id} --kind external --focus <f> --verdict <v>")
+        | "review.round_owner" => format!("talita round file {id} --input <round>"),
+        "review.verdict_ok" => {
+            format!("talita round file {id} --kind external --focus <f> --verdict ok")
         }
         "review.independent" => "talita session new --as <actor> --role reviewer".to_string(),
         "remediation.session_distinct" => {
             "talita session new --as <actor> --role runner".to_string()
         }
-        "review.budget_exhausted" => format!("talita task escalate {id}"),
         "overlay.reason_present" => format!("talita {verb} {id} --reason <t>"),
         "human.instructed" => {
             format!("talita {verb} {id} --instructed-by <human> --reason <t>")
         }
         _ => format!("talita task show {id}"),
     }
+}
+
+/// The criterion a gate's detail names, when it names one. Core's details
+/// begin with the criterion's id.
+fn criterion_of(detail: &str) -> Option<&str> {
+    let first = detail.split_whitespace().next()?;
+    let number = first.strip_prefix("ACCEPT-")?;
+    (number.chars().all(|c| c.is_ascii_digit()) && !number.is_empty()).then_some(first)
 }
 
 fn overlay_absent(id: &str, overlay: &str) -> Failure {

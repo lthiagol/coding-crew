@@ -142,6 +142,9 @@ enum TaskVerb {
     List {
         #[arg(long = "status")]
         statuses: Vec<String>,
+        /// blocked, deferred or cancelled; may be given more than once.
+        #[arg(long = "overlay")]
+        overlays: Vec<String>,
         #[arg(long)]
         kind: Option<String>,
         #[arg(long)]
@@ -663,7 +666,7 @@ fn dispatch(talita: &Talita) -> (&'static str, Result<Done, Failure>) {
         Noun::Project { verb } => match verb {
             ProjectVerb::Init { path } => (
                 "project init",
-                identity.and_then(|id| project::init(path.as_deref(), project_flag, &id)),
+                identity.and_then(|_| project::init(path.as_deref(), project_flag)),
             ),
             ProjectVerb::Show => (
                 "project show",
@@ -1012,6 +1015,7 @@ fn task_verb(
         TaskVerb::Show { id } => ("task show", read(&|p| task::show(p, id))),
         TaskVerb::List {
             statuses,
+            overlays,
             kind,
             claimable,
             tags,
@@ -1022,6 +1026,7 @@ fn task_verb(
                     p,
                     &task::ListFilter {
                         statuses: statuses.clone(),
+                        overlays: overlays.clone(),
                         kind: kind.clone(),
                         claimable: *claimable,
                         tags: tags.clone(),

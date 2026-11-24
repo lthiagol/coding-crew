@@ -35,6 +35,12 @@ talita [global flags] <noun> <verb> <ids…> [flags]
   refreshes its derived fields (ADR 0018).
 - **Who.** `creator`, `runner`, `reviewer`, `orchestrator` are agent roles;
   `any` includes humans. Role-gated verbs refuse a human (`actor.not_agent`).
+- **A human's decision.** A human decides; a creator agent writes it down. The
+  four verbs that take `--instructed-by` — `task approve`, `task resume`,
+  `task reopen`, `question answer` — point a refused human at that call. Every
+  other role-gated verb names the role that owns it.
+- **No identity.** `project init` is the one write that needs no identity: it
+  writes no task and no journal (ADR 0015). Every other write carries it.
 - **Ownership** (roles.md): intent, scope, criteria, meta = creator;
   questions: any role asks, the creator answers; steps = creator before
   approval, runner after; claim, evidence = runner; review = reviewer, except a finding's outcome = runner; notes =
@@ -74,7 +80,7 @@ Common errors, on every verb: `usage.invalid` (2), `input.invalid` (2),
 
 | Verb | Synopsis | Who | Does |
 |---|---|---|---|
-| `init` | `project init [--path <dir>]` | any | creates `<dir>/coding-crew/work/`. Refuses `project.exists` if a `coding-crew/` is already there. Writes no task, no journal |
+| `init` | `project init [--path <dir>]` | any | creates `<dir>/coding-crew/work/` with no identity. Refuses `project.exists` if a `coding-crew/` is already there. Writes no task, no journal |
 | `show` | `project show` | read | paths, counts by status and kind, whether journal and runtime exist, schema version |
 | `check` | `project check` | read | parses every file; reports unreadable files, duplicate ids, `parent`/`children[]` mismatches, dangling `depends_on`, stored criterion status ≠ derived. Writes nothing. Repair: later |
 
@@ -88,10 +94,15 @@ falls back to the cwd (inv-existing § 1); that fallback goes.
 | Verb | Synopsis | Output |
 |---|---|---|
 | `show` | `task show <TSK>` | `{task: <file as stored>, derived: {criteria: {ACCEPT-01: "passed"…}, review_state, lane, claimable, start_readiness: {ok, gates[]}, children_progress}}` |
-| `list` | `task list [--status <s>…] [--kind <k>] [--claimable] [--lane human\|agent] [--needs-you] [--tag <t>]` | `[{id, title, status, overlays, kind, claim?, claimable}]`, id order (numeric, not string) |
+| `list` | `task list [--status <s>…] [--overlay blocked\|deferred\|cancelled] [--kind <k>] [--claimable] [--lane human\|agent] [--needs-you] [--tag <t>]` | `[{id, title, status, overlays, kind, claim?, claimable}]`, id order (numeric, not string) |
 
 Derived values are computed with core's one rule each (TM § 12), so talita
 and raul cannot disagree.
+
+`--overlay` may be given more than once; a task matches when it carries any
+of the named overlays, as `--status` does. Cancellation is an overlay, not a
+status: `--status cancelled` is `input.invalid`, and its remedy names
+`talita task list --overlay cancelled`.
 
 ### Create and content (creator, before approval)
 

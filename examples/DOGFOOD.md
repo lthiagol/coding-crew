@@ -29,12 +29,14 @@ not re-run for this list; its entry quotes the run that hit it.
 - command: `talita --project examples/pantry --as ravi --role runner --session ses-ravi-pantry task finish TSK03`
 - happened: Not re-run (it writes). Refused, exit 4, `criteria.proven`: "ACCEPT-01 failed without a reason"; remedy `talita evidence run TSK03 <ACCEPT>`. The evidence had just been run and failed; running it again records the same failure.
 - expected: `talita criterion explain TSK03 ACCEPT-01 --failure-reason …`, the only call that clears the gate.
+- fixed: unit DF1 — the remedy names the criterion the failing gate's detail names and the call that clears it: `criterion explain … --failure-reason` when the criterion failed without one, `evidence run` when it has no evidence, `criterion undefer` when it is deferred without a deferral. It never names `evidence run` for a criterion that already failed.
 - severity: medium
 
 ### `task escalate` names the call it just refused
 - command: `talita --project examples/pantry --as nadia --role reviewer --session ses-nadia-pantry task escalate TSK05`
 - happened: Not re-run (it writes). After jo's fourth re-review, refused exit 4: `review.budget_exhausted` ("the review round budget is not exhausted") and `review.round_current` ("the latest external round was not filed since the task entered code-review"); remedy `talita task escalate TSK05`, the same call, refused again.
 - expected: the remedy to name the round that must be filed first (`talita round file TSK05 --input <round>`), or `task show`; not the verb whose own gates just refused.
+- fixed: unit DF1 — `review.budget_exhausted`, `review.verdict_changes_needed`, `review.round_current` and `review.round_owner` name `talita round file <TSK> --input <round>` for `escalate` as for `pass-review` and `request-changes`; no refusal names the verb it refused.
 - severity: medium
 
 ## Identity
@@ -43,12 +45,14 @@ not re-run for this list; its entry quotes the run that hit it.
 - command: `talita --project examples/pantry --as hannah --role human task approve TSK09`
 - happened: Not re-run (it writes). `actor.not_agent`, exit 5, "task approve is an agent's act"; remedy "act as an agent: --role creator, runner or reviewer".
 - expected: the route ADR 0015 gives a human: ask the creator to run `task approve TSK09 --instructed-by hannah`. The remedy tells the human to be the thing talita just refused.
+- fixed: unit DF1 — a human refused `task approve` is pointed at `talita task approve TSK09 --instructed-by hannah` (and the matching call for `resume`, `reopen` and `question answer`); every other role-gated verb names the role that owns it.
 - severity: low
 
 ### `project init` asks for identity the table calls "any"
 - command: `talita project init --path examples/pantry`
 - happened: Not re-run (it writes). `identity.missing`, exit 5: "a write needs its actor (--as or TALITA_ACTOR), role (--role or TALITA_ROLE), session (--session or TALITA_SESSION)".
 - expected: the folder. commands.md marks the verb "Who: any"; the conventions say every write carries identity, and the table does not repeat it.
+- fixed: unit DF1 — `project init` needs no identity: it writes no task and no journal, so there is nothing to attribute (ADR 0015, the human's ruling of 2026-11-23).
 - severity: low
 
 ## Status and overlays
@@ -57,12 +61,14 @@ not re-run for this list; its entry quotes the run that hit it.
 - command: `talita --project examples/ledgerline task list --status cancelled`
 - happened: `input.invalid`, exit 2, "status `cancelled` is not one of draft, groomed, approved, executing, code-review, remediating, needs-human, done". TSK11, cancelled by hugo, is listed as `groomed` with an `overlays.cancelled` entry, and raul's counts put it under groomed.
 - expected: a filter for the terminal overlay — the model makes cancellation an overlay — so a caller tallying by status does not count a terminal task as live work.
+- fixed: unit DF1 — `task list --overlay cancelled` lists it; `--overlay blocked` and `--overlay deferred` filter the other two, and `--status cancelled` names `--overlay cancelled` in its remedy.
 - severity: low
 
 ### `start_readiness` does not see the overlay that stops the claim
 - command: `talita --project examples/ledgerline task show TSK08`
 - happened: `derived.claimable` is false, but `derived.start_readiness.gates` names only `task.claimed` ("task is not claimed"); the deferred overlay is absent, so the readiness list reads as "claim it and go". `claim take TSK08` then refuses `claim.not_claimable`: "TSK08 cannot be claimed: the task is deferred" (a write; not re-run).
 - expected: the readiness list to name `overlay.clear`, the gate `claim take` reports, so the two derived answers agree.
+- fixed: unit DF1 — `derived.start_readiness.gates` carries `overlay.clear` with core's detail ("the task is deferred"), from the same rule `claim take` reads.
 - severity: low
 
 ## The journal

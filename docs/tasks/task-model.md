@@ -870,7 +870,7 @@ exist. See [hugo's design record](../hugo/design-record.md#ruling-2026-11-22-hug
 | lanes | the human lane and the agent lane — from the status, the overlays and the claims (see [vocabulary.md](../vocabulary.md#the-lanes-are-derived)) |
 | board views | the lanes, grouped and sorted |
 | children progress | the children's own statuses |
-| readiness to claim | would `start` be accepted right now, and if not, which gate refuses it |
+| readiness to claim | would `start` be accepted right now, and if not, which gate refuses it — `overlay.clear` among them, from the claim's own rule (§ 3.3) |
 | who reviews | the crew's roles — § 11.2: a reviewer, else the orchestrator, else the human |
 
 A stored lane is a lane that can disagree with the status it was derived from.

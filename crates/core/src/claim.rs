@@ -75,16 +75,7 @@ pub fn claim_failures(
             format!("the task is {}, not approved", task.status.as_str()),
         ));
     }
-    let overlays = [
-        ("blocked", task.overlays.blocked.is_some()),
-        ("deferred", task.overlays.deferred.is_some()),
-        ("cancelled", task.overlays.cancelled.is_some()),
-    ];
-    for (kind, set) in overlays {
-        if set {
-            failures.push(gate("overlay.clear", format!("the task is {kind}")));
-        }
-    }
+    failures.extend(overlay_failures(task));
     if let Some(held) = live_claim(task, now) {
         failures.push(gate(
             "claim.held",
@@ -110,6 +101,20 @@ pub fn claim_failures(
         }
     }
     failures
+}
+
+/// Every overlay that stops a claim, as `overlay.clear` gates (task-model
+/// § 3.3). `claim take` and the readiness view both read this rule.
+pub fn overlay_failures(task: &Task) -> Vec<GateFailure> {
+    [
+        ("blocked", task.overlays.blocked.is_some()),
+        ("deferred", task.overlays.deferred.is_some()),
+        ("cancelled", task.overlays.cancelled.is_some()),
+    ]
+    .into_iter()
+    .filter(|(_, set)| *set)
+    .map(|(kind, _)| gate("overlay.clear", format!("the task is {kind}")))
+    .collect()
 }
 
 /// Whether an agent could claim `task` now. See [`claim_failures`].
@@ -361,6 +366,45 @@ mod tests {
             at: NOW.to_string(),
         });
         assert_eq!(claim_failures(&task, None, NOW)[0].gate, "overlay.clear");
+    }
+
+    #[test]
+    fn the_overlay_rule_names_each_overlay_the_claim_stops_on() {
+        let mut task = approved();
+        assert!(overlay_failures(&task).is_empty());
+        task.overlays.blocked = Some(crate::Overlay {
+            reason: "waiting".to_string(),
+            by: "creator-1".to_string(),
+            at: NOW.to_string(),
+        });
+        task.overlays.deferred = Some(crate::Overlay {
+            reason: "later".to_string(),
+            by: "creator-1".to_string(),
+            at: NOW.to_string(),
+        });
+        task.overlays.cancelled = Some(crate::Overlay {
+            reason: "dropped".to_string(),
+            by: "creator-1".to_string(),
+            at: NOW.to_string(),
+        });
+        let failures = overlay_failures(&task);
+        let details: Vec<&str> = failures
+            .iter()
+            .map(|failure| failure.message.as_str())
+            .collect();
+        assert_eq!(
+            details,
+            vec![
+                "the task is blocked",
+                "the task is deferred",
+                "the task is cancelled"
+            ]
+        );
+        assert!(
+            failures
+                .iter()
+                .all(|failure| failure.gate == "overlay.clear")
+        );
     }
 
     #[test]

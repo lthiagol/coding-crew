@@ -35,13 +35,17 @@ actor on every role-gated event.
 
 | Part | Flag | Env | Required |
 |---|---|---|---|
-| actor id | `--as` | `TALITA_ACTOR` | every write |
-| role | `--role` | `TALITA_ROLE` | every write: `creator`, `runner` (or `builder`), `reviewer`, `orchestrator`, or `human` |
+| actor id | `--as` | `TALITA_ACTOR` | every write but `project init` |
+| role | `--role` | `TALITA_ROLE` | every write but `project init`: `creator`, `runner` (or `builder`), `reviewer`, `orchestrator`, or `human` |
 | session | `--session` | `TALITA_SESSION` | every agent write |
 
 Flags beat env. A write missing a part is `identity.missing` (exit 5), never
 a default. `talita session show` prints what a call would resolve to and
 from where. Reads need no identity.
+
+One write needs none: `project init`. It creates `<dir>/coding-crew/work/` and
+writes no task and no journal, so there is nothing to attribute (the human's
+ruling, 2026-11-23). Every other write needs the parts above.
 
 `--role human` means `kind: human` with no role — humans carry no role
 (roles.md). A human's session is optional and not recorded.
@@ -124,6 +128,8 @@ talita never reads `HUGO_SESSION`. hugo renames it `HUGO_CREW` so
 - Settled 2026-11-22: `HUGO_SESSION` is renamed `HUGO_CREW`.
 - Settled 2026-11-22: `planned_by` is set at `task approve`, to the approving session.
 - Settled 2026-11-22: The human's name lives in the journal note only; a task field waits until raul needs it.
+- Settled 2026-11-23: `project init` is the one write that needs no identity;
+  it writes no task and no journal.
 
 ## Consequences
 

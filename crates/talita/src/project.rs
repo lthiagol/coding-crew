@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 
 use crate::envelope::Done;
 use crate::error::{Code, Failure};
-use crate::identity::{ENV_PROJECT, Resolved, resolve};
+use crate::identity::{ENV_PROJECT, resolve};
 
 /// A located project: its root, its `coding-crew/` folder and its store.
 pub struct Project {
@@ -60,12 +60,8 @@ pub fn locate(flag: Option<&Path>) -> Result<Project, Failure> {
 
 /// `project init`: creates `<dir>/coding-crew/work/`. The directory is
 /// `--path`, else `--project`/`TALITA_PROJECT`, else the current directory.
-pub fn init(
-    path: Option<&Path>,
-    project_flag: Option<&Path>,
-    identity: &Resolved,
-) -> Result<Done, Failure> {
-    identity.writer()?;
+/// It writes no task and no journal, so it needs no identity (ADR 0015).
+pub fn init(path: Option<&Path>, project_flag: Option<&Path>) -> Result<Done, Failure> {
     let root = match path
         .map(Path::to_path_buf)
         .or_else(|| given_root(project_flag))
